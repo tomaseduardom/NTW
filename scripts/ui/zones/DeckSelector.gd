@@ -1278,13 +1278,8 @@ func _process_cover_image_queue() -> void:
 				return
 			if result != HTTPRequest.RESULT_SUCCESS or code != 200:
 				return
-			var image := Image.new()
-			var err := image.load_webp_from_buffer(body)
-			if err != OK:
-				err = image.load_png_from_buffer(body)
-			if err != OK:
-				err = image.load_jpg_from_buffer(body)
-			if err != OK:
+			var image: Image = CardDatabase.decode_image_buffer(body)
+			if image == null:
 				return
 			tex_rect.texture = ImageTexture.create_from_image(image)
 		)

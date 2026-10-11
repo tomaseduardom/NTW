@@ -801,17 +801,11 @@ func _on_image_request_completed(result: int, response_code: int, headers: Packe
 		emit_signal("card_image_loaded", card_id, null)  # notificar fallo → carta muestra dorso
 		return
 
-	var image = Image.new()
-	var error = image.load_webp_from_buffer(body)
-
-	if error != OK:
-		error = image.load_png_from_buffer(body)
-
-	if error != OK:
-		error = image.load_jpg_from_buffer(body)
-
-	if error != OK:
-		printerr("[CardDatabase] NEGRO — Error decodificando id='%s' error=%d" % [card_id, error])
+	var image: Image = decode_image_buffer(body)
+	if image == null:
+		printerr("[CardDatabase] NEGRO — Error decodificando id='%s' (%d bytes, formato no reconocido)" % [
+			card_id, body.size()
+		])
 		emit_signal("card_image_loaded", card_id, null)
 		return
 
@@ -942,18 +936,11 @@ func run_smoke_test() -> void:
 				return
 
 			# Intentar los tres formatos en orden
-			var img = Image.new()
-			var err = img.load_webp_from_buffer(body)
-			var fmt = "webp"
-			if err != OK:
-				err = img.load_png_from_buffer(body)
-				fmt = "png"
-			if err != OK:
-				err = img.load_jpg_from_buffer(body)
-				fmt = "jpg"
+			var fmt: String = image_buffer_format(body)
+			var img: Image = decode_image_buffer(body)
 
-			if err != OK:
-				printerr("[CardDatabase] ✗ TEST 3 FAIL — %d bytes descargados pero decode falló (err=%d)" % [body.size(), err])
+			if img == null:
+				printerr("[CardDatabase] ✗ TEST 3 FAIL — %d bytes descargados pero decode falló" % body.size())
 				printerr("[CardDatabase]   Primeros 16 bytes (hex): %s" % body.slice(0, min(16, body.size())).hex_encode())
 				printerr("[CardDatabase]   Primeros bytes (utf8): '%s'" % body.slice(0, min(64, body.size())).get_string_from_utf8())
 				printerr("[CardDatabase]   → Respuesta no es imagen (¿redirect HTML? ¿formato raro?)")
@@ -982,3 +969,32 @@ func run_smoke_test() -> void:
 		http.queue_free()
 
 	print("[CardDatabase] TEST 3 en curso (esperando respuesta HTTP)...")
+
+
+## Detecta el formato real por los bytes mágicos (2026-10-11): antes se
+## probaba webp → png → jpg a ciegas, y cada intento fallido imprimía
+## ERRORs del motor en la consola (ERR_FILE_CORRUPT, "Not a PNG file")
+## aunque la imagen terminara cargando bien como JPG.
+static func image_buffer_format(body: PackedByteArray) -> String:
+	if body.size() >= 12 and body.slice(0, 4).get_string_from_ascii() == "RIFF" 			and body.slice(8, 12).get_string_from_ascii() == "WEBP":
+		return "webp"
+	if body.size() >= 8 and body[0] == 0x89 and body[1] == 0x50 and body[2] == 0x4E and body[3] == 0x47:
+		return "png"
+	if body.size() >= 3 and body[0] == 0xFF and body[1] == 0xD8 and body[2] == 0xFF:
+		return "jpg"
+	return ""
+
+
+## Decodifica según image_buffer_format(); null si no es una imagen
+## reconocible (p.ej. una página HTML de error con código 200).
+static func decode_image_buffer(body: PackedByteArray) -> Image:
+	var image := Image.new()
+	var err: int = ERR_FILE_UNRECOGNIZED
+	match image_buffer_format(body):
+		"webp":
+			err = image.load_webp_from_buffer(body)
+		"png":
+			err = image.load_png_from_buffer(body)
+		"jpg":
+			err = image.load_jpg_from_buffer(body)
+	return image if err == OK else null

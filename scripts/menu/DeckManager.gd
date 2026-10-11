@@ -439,13 +439,8 @@ func _load_cover_image(container: Control, url: String) -> void:
 	add_child(http)  # Agregar al DeckManager, no al container
 	http.request_completed.connect(func(result, code, _headers, body):
 		if result == HTTPRequest.RESULT_SUCCESS and code == 200:
-			var image = Image.new()
-			var err = image.load_webp_from_buffer(body)
-			if err != OK:
-				err = image.load_png_from_buffer(body)
-			if err != OK:
-				err = image.load_jpg_from_buffer(body)
-			if err == OK:
+			var image: Image = CardDatabase.decode_image_buffer(body)
+			if image != null:
 				var texture = ImageTexture.create_from_image(image)
 				if is_instance_valid(texture_rect):
 					texture_rect.texture = texture

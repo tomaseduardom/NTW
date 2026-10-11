@@ -63,6 +63,7 @@ func _start_hand_sync() -> void:
 	# sincronizan de una, como si cada una se hubiera agregado ahora mismo.
 	for c in _main._opponent_fan.cards:
 		_on_hand_card_added(c)
+	_sync_cards_already_in_play()
 	# Contadores de Castillo (§47): públicos para ambos (solo el tamaño, nunca
 	# el contenido). Mismo momento que la mano — el mulligan baraja y redibuja
 	# antes de game_started, así que el primer conteo útil es este.
@@ -79,6 +80,28 @@ func _on_castillo_counts_changed(player_deck_size: int, opponent_deck_size: int)
 		"own": opponent_deck_size,
 		"rival": player_deck_size,
 	})
+
+
+## Cartas que YA estaban en juego antes de conectarnos (2026-10-11, bug real
+## reportado por el usuario: "no puedo ver los oros iniciales"): el Oro
+## Inicial se coloca con add_child() directo en GameBootstrap._setup_oro_
+## inicial(), sin pasar por EffectController.on_card_entered_play, así que
+## nunca viajaba al Remoto. Snapshot de las 5 zonas en juego de ambos lados
+## al empezar la partida — move_card es idempotente por card_id del lado
+## Remoto, así que no duplica nada si alguna ya se había enviado.
+func _sync_cards_already_in_play() -> void:
+	var containers := {
+		0: ["player_gold", "player_oro_pagado", "player_field", "player_linea_ataque", "player_linea_apoyo"],
+		1: ["opponent_gold", "opponent_oro_pagado", "opponent_field", "opponent_linea_ataque", "opponent_linea_apoyo"],
+	}
+	for player_id in containers:
+		for prop in containers[player_id]:
+			var container: Node = _main.get(prop)
+			if not container:
+				continue
+			for child in container.get_children():
+				if child.get("card_data") != null and child.get("current_zone") != null:
+					_on_card_entered_play(player_id, child, int(child.current_zone))
 
 
 func _on_hand_card_added(card: Node) -> void:
