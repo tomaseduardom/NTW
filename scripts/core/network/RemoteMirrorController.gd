@@ -47,6 +47,12 @@ var _hand_actions: Dictionary = {}
 ## card_id de un Aliado propio en juego que puede atacar -> si está marcado
 ## como atacante (Fase de Ataque del Remoto, 2026-10-11).
 var _attack_candidates: Dictionary = {}
+## Bloqueo en el tablero (2026-10-11): blocker_id -> [attacker_id válidos],
+## blocker_id -> attacker_id asignado, y el bloqueador que espera que se
+## elija su atacante ("" si ninguno).
+var _block_options: Dictionary = {}
+var _block_pairs: Dictionary = {}
+var _block_pending_blocker: String = ""
 
 
 func setup(main: Node) -> void:
@@ -68,6 +74,7 @@ func _on_message(data: Dictionary) -> void:
 			_clear_remote_paso()
 			_clear_hand_actions()
 			_clear_attack_candidates()
+			_clear_board_blocking()
 			# 2026-09-23, bug real reportado por el usuario: cualquier prompt
 			# real que llegue (mulligan/vigilia/ataque/etc.) tiene que tapar
 			# la pantalla "ESPERANDO JUGADOR" que dejó el duelo de dados — sin
@@ -117,6 +124,8 @@ func _on_message(data: Dictionary) -> void:
 			if int(data.get("window_id", -2)) == _priority_window_id:
 				_close_current_overlay()
 				_clear_remote_paso()
+				_clear_hand_actions()
+				_clear_board_blocking()
 			if not _pending_vigilia.is_empty() and not _current_overlay:
 				_show_vigilia_prompt(_pending_vigilia)
 		"castillo_counts":
@@ -406,6 +415,7 @@ func _send_intent_and_close(intent: Dictionary) -> void:
 	_clear_remote_paso()
 	_clear_hand_actions()
 	_clear_attack_candidates()
+	_clear_board_blocking()
 
 
 # =============================================================================
@@ -886,7 +896,7 @@ func _show_priority_prompt(data: Dictionary) -> void:
 		_send_intent_and_close(intent)
 
 	if not blockers.is_empty():
-		var confirm_blocks: Callable = _build_blockers_panel(attackers, blockers, respond)
+		var confirm_blocks: Callable = _start_board_blocking(attackers, blockers, respond)
 		_set_remote_paso(button_text, true, confirm_blocks)
 	else:
 		var pass_action := func(): respond.call({"action": "pass"})
@@ -943,56 +953,6 @@ func _countdown_button_text(btn: Button, base_text: String, seconds: int) -> voi
 		await get_tree().create_timer(1.0).timeout
 
 
-func _build_blockers_panel(attackers: Array, blockers: Array, respond: Callable) -> Callable:
-	"""Un selector por cada Aliado propio que puede bloquear: 'No bloquea' o
-	el atacante al que bloquea. Devuelve la acción de confirmar (la usan el
-	botón del panel y el botón de paso del HUD)."""
-	var vbox := _build_overlay("Bloqueo — elige tus bloqueadores")
-	var attacker_names: Dictionary = {}
-	for a in attackers:
-		attacker_names[str(a.get("card_id", ""))] = str(a.get("nombre", "?"))
-	if not attackers.is_empty():
-		var a_lbl := Label.new()
-		a_lbl.text = "Atacan:"
-		vbox.add_child(a_lbl)
-		_build_card_row(vbox, attackers)
-
-	var selectors: Dictionary = {}  # blocker_id -> {option: OptionButton, ids: Array}
-	for b in blockers:
-		var blocker_id: String = str(b.get("card_id", ""))
-		var row := HBoxContainer.new()
-		vbox.add_child(row)
-		var lbl := Label.new()
-		lbl.text = "%s →" % str(b.get("nombre", "?"))
-		lbl.custom_minimum_size = Vector2(200, 0)
-		row.add_child(lbl)
-		var option := OptionButton.new()
-		option.add_item("No bloquea")
-		var ids: Array = [""]
-		for attacker_id in b.get("can_block", []):
-			option.add_item("Bloquea a %s" % attacker_names.get(str(attacker_id), "?"))
-			ids.append(str(attacker_id))
-		row.add_child(option)
-		selectors[blocker_id] = {"option": option, "ids": ids}
-
-	var confirm := func():
-		var pairs: Array = []
-		var used_attackers: Dictionary = {}
-		for blocker_id in selectors:
-			var sel: Dictionary = selectors[blocker_id]
-			var attacker_id: String = sel.ids[sel.option.selected]
-			if attacker_id.is_empty() or used_attackers.has(attacker_id):
-				continue  # un atacante solo puede tener un bloqueador
-			used_attackers[attacker_id] = true
-			pairs.append({"blocker_id": blocker_id, "attacker_id": attacker_id})
-		respond.call({"action": "blocks", "pairs": pairs})
-
-	var sep := HSeparator.new()
-	vbox.add_child(sep)
-	_add_row_button(vbox, "Confirmar bloqueos", confirm)
-	return confirm
-
-
 # =============================================================================
 # MANO FÍSICA COMO ÚNICA FORMA DE JUGAR (2026-10-11)
 # =============================================================================
@@ -1030,13 +990,19 @@ func _clear_hand_actions() -> void:
 
 
 func on_card_clicked(card: Node) -> void:
-	"""Clic simple en el cliente Remoto: marcar/desmarcar atacante."""
+	"""Clic simple en el cliente Remoto: marcar/desmarcar atacante, o elegir
+	bloqueador y a quién bloquea."""
 	var card_id: String = ""
-	for id in _attack_candidates:
-		if _card_nodes.get(id, null) == card:
+	for id in _card_nodes:
+		if _card_nodes[id] == card:
 			card_id = id
 			break
 	if card_id.is_empty():
+		return
+	if not _block_options.is_empty():
+		_on_board_block_click(card_id)
+		return
+	if not _attack_candidates.has(card_id):
 		return
 	var selected: bool = not _attack_candidates[card_id]
 	_attack_candidates[card_id] = selected
@@ -1056,3 +1022,112 @@ func _clear_attack_candidates() -> void:
 			node.can_interact = false
 			node.modulate = Color.WHITE
 	_attack_candidates = {}
+
+
+# =============================================================================
+# BLOQUEO EN EL TABLERO (2026-10-11, a pedido del usuario) — mismo gesto que
+# el Anfitrión (CardInteractionModule._declare_blocker()): clic en tu Aliado
+# brillante; si puede bloquear a un solo atacante libre se asigna directo,
+# si no los atacantes posibles brillan en rojo y eliges con otro clic. Clic
+# en un bloqueador ya asignado lo libera. El botón de paso confirma.
+# =============================================================================
+func _start_board_blocking(attackers: Array, blockers: Array, respond: Callable) -> Callable:
+	for b in blockers:
+		var blocker_id: String = str(b.get("card_id", ""))
+		var node: Node = _card_nodes.get(blocker_id, null)
+		if not node or not is_instance_valid(node):
+			continue
+		var valid: Array = []
+		for attacker_id in b.get("can_block", []):
+			valid.append(str(attacker_id))
+		_block_options[blocker_id] = valid
+	_refresh_block_glows()
+	_main._update_debug("Te atacan %d Aliado(s). Clic en tus Aliados brillantes para bloquear, luego Confirmar." % (
+		attackers.size()))
+	return func():
+		var pairs: Array = []
+		for blocker_id in _block_pairs:
+			pairs.append({"blocker_id": blocker_id, "attacker_id": _block_pairs[blocker_id]})
+		respond.call({"action": "blocks", "pairs": pairs})
+
+
+func _on_board_block_click(card_id: String) -> void:
+	if _block_options.has(card_id):
+		_block_pending_blocker = ""
+		if _block_pairs.has(card_id):
+			_block_pairs.erase(card_id)
+			_main._update_debug("%s ya no bloquea" % _mirror_name(card_id))
+			_refresh_block_glows()
+			return
+		var free: Array = _free_attackers_for(card_id)
+		if free.is_empty():
+			_main._update_debug("%s no puede bloquear a ningún atacante libre" % _mirror_name(card_id))
+		elif free.size() == 1:
+			_assign_block(card_id, free[0])
+		else:
+			_block_pending_blocker = card_id
+			_main._update_debug("%s bloquea — elige a qué atacante rival" % _mirror_name(card_id))
+		_refresh_block_glows()
+		return
+	if not _block_pending_blocker.is_empty() and card_id in _free_attackers_for(_block_pending_blocker):
+		_assign_block(_block_pending_blocker, card_id)
+		_block_pending_blocker = ""
+		_refresh_block_glows()
+
+
+func _free_attackers_for(blocker_id: String) -> Array:
+	var free: Array = []
+	for attacker_id in _block_options.get(blocker_id, []):
+		if not (attacker_id in _block_pairs.values()):
+			free.append(attacker_id)
+	return free
+
+
+func _assign_block(blocker_id: String, attacker_id: String) -> void:
+	_block_pairs[blocker_id] = attacker_id
+	_main._update_debug("%s bloquea a %s" % [_mirror_name(blocker_id), _mirror_name(attacker_id)])
+
+
+func _mirror_name(card_id: String) -> String:
+	var node: Node = _card_nodes.get(card_id, null)
+	if node and is_instance_valid(node) and node.get("card_name") != null:
+		return str(node.card_name)
+	return "Aliado"
+
+
+func _refresh_block_glows() -> void:
+	"""Celeste: tus Aliados que pueden bloquear (sin asignar); tinte azul: ya
+	asignados; rojo: los atacantes elegibles para el bloqueador pendiente."""
+	var targets: Array = [] if _block_pending_blocker.is_empty() else _free_attackers_for(_block_pending_blocker)
+	for blocker_id in _block_options:
+		var node: Node = _card_nodes.get(blocker_id, null)
+		if not node or not is_instance_valid(node):
+			continue
+		node.can_interact = true
+		var assigned: bool = _block_pairs.has(blocker_id)
+		node.modulate = Color(0.4, 0.7, 1.0, 1.0) if assigned else Color.WHITE
+		node.set_activatable(not assigned, CardBadges.GLOW_COLOR_CELESTE, &"remote_blocker")
+		for attacker_id in _block_options[blocker_id]:
+			var a_node: Node = _card_nodes.get(attacker_id, null)
+			if not a_node or not is_instance_valid(a_node):
+				continue
+			var is_target: bool = attacker_id in targets
+			a_node.can_interact = is_target
+			a_node.set_activatable(is_target, CardBadges.GLOW_COLOR_RED, &"remote_block_target")
+
+
+func _clear_board_blocking() -> void:
+	for blocker_id in _block_options:
+		var node: Node = _card_nodes.get(blocker_id, null)
+		if node and is_instance_valid(node):
+			node.set_activatable(false, CardBadges.GLOW_COLOR_CELESTE, &"remote_blocker")
+			node.can_interact = false
+			node.modulate = Color.WHITE
+		for attacker_id in _block_options[blocker_id]:
+			var a_node: Node = _card_nodes.get(attacker_id, null)
+			if a_node and is_instance_valid(a_node):
+				a_node.set_activatable(false, CardBadges.GLOW_COLOR_RED, &"remote_block_target")
+				a_node.can_interact = false
+	_block_options = {}
+	_block_pairs = {}
+	_block_pending_blocker = ""

@@ -5548,3 +5548,28 @@ dice "Pasar [P]".
 
 **Verificado:** compila con autoloads, sin advertencias nuevas de gdlint.
 Sin verificar en partida real todavía.
+
+## 51. El Remoto bloquea en el tablero, sin popup (2026-10-11)
+
+**A pedido del usuario**, continuación de §50. En el prompt de prioridad de
+Bloqueo (§48) se reemplazó el panel de selectores (`_build_blockers_panel()`,
+eliminado) por el mismo gesto que usa el Anfitrión
+(`CardInteractionModule._declare_blocker()`):
+
+- Tus Aliados que pueden bloquear brillan en celeste (`&"remote_blocker"`).
+- Clic en uno: si puede bloquear a un solo atacante libre, se asigna
+  directo; si hay varios, los atacantes elegibles brillan en rojo
+  (`&"remote_block_target"`) y eliges con otro clic.
+- Un bloqueador asignado queda con tinte azul; clic sobre él lo libera.
+- Un atacante solo puede tener un bloqueador (`_free_attackers_for()`).
+- El botón de paso del HUD ("Confirmar bloqueos [P]") manda los pares; el
+  Anfitrión los revalida igual que antes (`_apply_remote_blocks()`).
+
+Estado en `_block_options`/`_block_pairs`/`_block_pending_blocker`, limpiado
+(brillos, tintes y `can_interact`) al mandar cualquier intent, al llegar un
+prompt nuevo o con `priority_closed`. `on_card_clicked()` ahora busca la
+carta entre todas las espejadas (`_card_nodes`) para poder clickear también
+los atacantes del rival.
+
+**Verificado:** compila con autoloads, sin advertencias nuevas de gdlint.
+Sin verificar en partida real todavía.
