@@ -63,6 +63,22 @@ func _start_hand_sync() -> void:
 	# sincronizan de una, como si cada una se hubiera agregado ahora mismo.
 	for c in _main._opponent_fan.cards:
 		_on_hand_card_added(c)
+	# Contadores de Castillo (§47): públicos para ambos (solo el tamaño, nunca
+	# el contenido). Mismo momento que la mano — el mulligan baraja y redibuja
+	# antes de game_started, así que el primer conteo útil es este.
+	if _main.get("_zone_manager") and _main._zone_manager:
+		_main._zone_manager.castillo_counts_changed.connect(_on_castillo_counts_changed)
+		_on_castillo_counts_changed(_main.player_deck.size(), _main.opponent_deck.size())
+
+
+func _on_castillo_counts_changed(player_deck_size: int, opponent_deck_size: int) -> void:
+	# "own"/"rival" relativos al RECEPTOR: el Remoto es el jugador 1 del
+	# Anfitrión, así que su Castillo propio es opponent_deck.
+	NetworkClient.send_message({
+		"op": "castillo_counts",
+		"own": opponent_deck_size,
+		"rival": player_deck_size,
+	})
 
 
 func _on_hand_card_added(card: Node) -> void:

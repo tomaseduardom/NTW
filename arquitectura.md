@@ -5407,3 +5407,27 @@ garantía de "siempre viene de la mano" que sí tienen las 5 de Vigilia.
 **Verificado con headless check — sin errores de parseo. Build nuevo
 exportado y copiado al Escritorio (`MitosOnline.zip`). Sin verificar en
 partida real todavía.**
+
+## 47. Contador del Castillo propio y rival para el Remoto (2026-10-10)
+
+**Cierra la Fase 2 del plan `2026-09-20-remote-multiplayer-parity.md`** (la
+mano ya estaba cubierta por §45; faltaba el Castillo).
+
+- **`ZoneManager.gd`**: nueva señal `castillo_counts_changed(player_deck_size,
+  opponent_deck_size)`, emitida desde `_update_castillo_counts()` — el mismo
+  punto único que ya refresca la UI local, el revelado del tope y el chequeo
+  de victoria, así que cubre todos sus llamadores sin tocarlos.
+- **`GameStateBroadcaster.gd`**: se conecta en `_start_hand_sync()` (tras
+  `game_started`, igual que la mano) y manda el conteo inicial de una. Nuevo
+  op `{"op":"castillo_counts","own":N,"rival":M}`, relativo al receptor
+  (`own` = `opponent_deck` del Anfitrión). Solo viaja el tamaño, nunca el
+  contenido.
+- **`RemoteMirrorController.gd`**: aplica el op con
+  `UIManager.sync_castillo_counts(own, rival)`.
+
+**Límite conocido:** igual que en la UI local, un sitio que modifique
+`player_deck`/`opponent_deck` sin llamar a `_update_castillo_counts()` no
+actualiza el contador (ni en el Anfitrión ni en el Remoto).
+
+**Verificado con headless check (`--editor --quit`) — sin errores. Sin
+verificar en partida real todavía.**

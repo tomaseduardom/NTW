@@ -92,6 +92,8 @@ func _on_message(data: Dictionary) -> void:
 			_apply_hand_card_added(data)
 		"hand_card_removed":
 			_apply_hand_card_removed(data)
+		"castillo_counts":
+			UIManager.sync_castillo_counts(int(data.get("own", 0)), int(data.get("rival", 0)))
 		"dice_roll":
 			_show_dice_roll_mirror(data)
 
