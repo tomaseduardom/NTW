@@ -195,6 +195,10 @@ func setup_public_zone_viewers() -> void:
 
 		panel.gui_input.connect(func(ev):
 			if ev is InputEventMouseButton and ev.button_index == MOUSE_BUTTON_LEFT and ev.pressed:
+				# Con el selector de zonas activo (ZoneBrowsePicker), el clic en
+				# el panel abre SU visor, no este (2026-10-11).
+				if _main._zone_browse_picker and _main._zone_browse_picker.is_active():
+					return
 				_show_zone_popup(label, pid, ztype)
 		)
 

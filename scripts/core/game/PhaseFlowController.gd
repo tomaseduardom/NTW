@@ -497,6 +497,11 @@ func _human_pass_after(delay: float, scheduled_for_generation: int) -> void:
 # =============================================================================
 func _on_paso_pressed() -> void:
 	"""El jugador presiona ¿Paso? — pasa prioridad o avanza fase."""
+	# 2026-10-11: con el selector de zonas abierto, el botón confirma la
+	# selección (en ambas pantallas — el Remoto también lo corre localmente).
+	if _main._zone_browse_picker and _main._zone_browse_picker.is_active():
+		_main._zone_browse_picker.on_paso_pressed()
+		return
 	# 2026-10-11: en el cliente Remoto no corre GameManager propio — el botón
 	# (y el atajo P) mandan la decisión al Anfitrión por red.
 	if NetworkClient.room_code != "" and not NetworkClient.is_host:

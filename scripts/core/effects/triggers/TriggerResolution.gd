@@ -289,6 +289,9 @@ func _resolve_look_and_play_patterns(card: Node, full_ability_text: String, isol
 		return true
 	if await _main._look_and_play.try_execute_search_oro_castillo_or_cementerio_pattern(full_ability_text, card, controller_id):
 		return true
+	if await _main._look_and_play.try_execute_search_up_to_n_castillo_and_or_cementerio_play_discount_pattern(
+			full_ability_text, card, controller_id):
+		return true
 	if await _main._look_and_play.try_execute_reveal_until_ally_and_gold_pattern(full_ability_text, controller_id, card):
 		return true
 	if await _main._look_and_play.try_execute_reveal_until_weapon_or_totem_and_ally_pattern(full_ability_text, controller_id, card):

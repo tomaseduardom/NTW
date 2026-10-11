@@ -37,13 +37,12 @@ func try_execute_search_ally_castillo_or_cementerio_then_buff_pattern(ability_te
 	if not main:
 		return true
 
-	var search_castillo: bool = await SelectionManager.await_two_choice(
-		main, "¿Dónde buscar un Aliado?", "Tu Castillo", "Tu Cementerio", controller_id)
-	var zone := Constants.Zone.CASTILLO if search_castillo else Constants.Zone.CEMENTERIO
+	var zones: Array = [Constants.Zone.CASTILLO, Constants.Zone.CEMENTERIO]  # selector de ambas zonas (2026-10-11)
 
 	if await TriggerSystem.open_response_window(card, str(card.card_name), controller_id):
 		return true
-	await ActionModule.search(controller_id, zone, {"type": Constants.CardType.ALIADO}, 1, true, false, false, card, Constants.Zone.MANO)
+	await ActionModule.search_zones(controller_id, zones, {"type": Constants.CardType.ALIADO}, 1, true, false, false, card,
+		Constants.Zone.MANO)
 
 	var strength_rx := RegEx.new()
 	strength_rx.compile("aliados ganan (\\d+|una|dos|tres) de fuerza")
@@ -100,15 +99,14 @@ func try_execute_search_ally_cost_max_free_play_pattern(ability_text: String, ca
 		return true
 
 	var max_cost: int = int(m.get_string(1))
-	var search_castillo: bool = await SelectionManager.await_two_choice(
-		main, "¿Dónde buscar un Aliado?", "Tu Castillo", "Tu Cementerio", controller_id)
-	var zone := Constants.Zone.CASTILLO if search_castillo else Constants.Zone.CEMENTERIO
+	var zones: Array = [Constants.Zone.CASTILLO, Constants.Zone.CEMENTERIO]  # selector de ambas zonas (2026-10-11)
 
 	if await TriggerSystem.open_response_window(card, str(card.card_name), controller_id):
 		return true
 	var hand_before: Array = hand_container.cards.duplicate()
-	var result: Dictionary = await ActionModule.search(
-		controller_id, zone, {"type": Constants.CardType.ALIADO, "cost_max": max_cost}, 1, true, false, false, card, Constants.Zone.MANO)
+	var result: Dictionary = await ActionModule.search_zones(
+		controller_id, zones, {"type": Constants.CardType.ALIADO, "cost_max": max_cost}, 1, true, false, false, card,
+		Constants.Zone.MANO)
 	if result.get("selected", []).is_empty():
 		main._update_debug("No se encontró ningún Aliado ahí")
 		return true
@@ -142,12 +140,11 @@ func try_execute_search_oro_castillo_or_cementerio_pattern(ability_text: String,
 	var main := _main.get_node_or_null("/root/Main")
 	if not main:
 		return true
-	var search_castillo: bool = await SelectionManager.await_two_choice(
-		main, "¿Dónde buscar un Oro?", "Tu Castillo", "Tu Cementerio", controller_id)
-	var zone := Constants.Zone.CASTILLO if search_castillo else Constants.Zone.CEMENTERIO
+	var zones: Array = [Constants.Zone.CASTILLO, Constants.Zone.CEMENTERIO]  # selector de ambas zonas (2026-10-11)
 	if await TriggerSystem.open_response_window(card, str(card.card_name), controller_id):
 		return true
-	await ActionModule.search(controller_id, zone, {"type": Constants.CardType.ORO}, 1, true, false, false, card, Constants.Zone.MANO)
+	await ActionModule.search_zones(controller_id, zones, {"type": Constants.CardType.ORO}, 1, true, false, false, card,
+		Constants.Zone.MANO)
 	return true
 
 
@@ -1106,3 +1103,37 @@ func try_execute_septimo_sello_pattern(ability_text: String, card: Node, control
 	return true
 
 
+func try_execute_search_up_to_n_castillo_and_or_cementerio_play_discount_pattern(ability_text: String, card: Node,
+		controller_id: int) -> bool:
+	"""'Puedes buscar en tu Castillo y/o Cementerio hasta dos Armas. Puedes
+	jugarlas reduciendo su coste en un Oro, hasta un mínimo de 1, y/o
+	ponerlas en tu mano' (Arturo de Bretaña, id 21135 — 2026-10-11, texto de
+	la API de ShadowForge vía cache). Antes no lo tomaba nadie: el regex
+	genérico de SEARCH dice 'busca en', no 'buscar en'. Selector de ambas
+	zonas a la vez, se pueden mezclar (a pedido del usuario); por cada carta,
+	jugarla con el descuento o dejarla en la mano."""
+	var lower := ability_text.to_lower()
+	var rx := RegEx.new()
+	rx.compile("buscar en tu castillo y/o cementerio hasta (\\w+) (aliados|armas|t[oó]tems|talismanes|oros)\\.")
+	var m := rx.search(lower)
+	if not m:
+		return false
+	var amount: int = UniversalCardParser._parse_amount(m.get_string(1))
+	var type_by_word := {
+		"aliados": Constants.CardType.ALIADO, "armas": Constants.CardType.ARMA, "tótems": Constants.CardType.TOTEM,
+		"totems": Constants.CardType.TOTEM, "talismanes": Constants.CardType.TALISMAN, "oros": Constants.CardType.ORO,
+	}
+	var card_type: int = type_by_word.get(m.get_string(2), Constants.CardType.ARMA)
+	var may_play: bool = "puedes jugarlas" in lower
+	var cost_reduction: int = 0
+	var red_rx := RegEx.new()
+	red_rx.compile("reduciendo su coste en (\\w+) oro")
+	var red_m := red_rx.search(lower)
+	if red_m:
+		cost_reduction = UniversalCardParser._parse_amount(red_m.get_string(1))
+
+	if await TriggerSystem.open_response_window(card, str(card.card_name), controller_id):
+		return true
+	await ActionModule.search_zones(controller_id, [Constants.Zone.CASTILLO, Constants.Zone.CEMENTERIO],
+		{"type": card_type}, amount, true, false, may_play, card, Constants.Zone.MANO, false, -1, cost_reduction)
+	return true

@@ -118,6 +118,8 @@ func _on_message(data: Dictionary) -> void:
 					_show_name_card_prompt(data)
 				"priority":
 					_show_priority_prompt(data)
+				"zone_pick":
+					_show_zone_pick_prompt(data)
 		"move_card":
 			_apply_move_card(data)
 		"remove_card":
@@ -1291,3 +1293,24 @@ func _clear_board_pick() -> void:
 	_pick_targets = {}
 	_pick_multi = {}
 	SelectionManager.cancel_castillo_pick()
+
+
+# =============================================================================
+# SELECTOR DE ZONAS (ActionSearch._delegate_zone_pick_to_remote(), 2026-10-11)
+# — el Remoto corre el mismo ZoneBrowsePicker que el Anfitrión, en su propia
+# pantalla ('is_own' ya viene relativo a él), y devuelve los índices elegidos.
+# =============================================================================
+func _show_zone_pick_prompt(data: Dictionary) -> void:
+	var pools: Array = []
+	for p in data.get("pools", []):
+		var cards: Array = []
+		for c in p.get("cards", []):
+			cards.append({"data": c.get("data", {}), "eligible": bool(c.get("eligible", false))})
+		# JSON trae los números como float — la zona se usa como clave de Dictionary.
+		pools.append({"is_own": bool(p.get("is_own", true)), "zone": int(p.get("zone", 0)), "cards": cards})
+	if not _main._zone_browse_picker:
+		NetworkClient.send_message({"op": "intent", "kind": "zone_pick_choice", "picks": []})
+		return
+	var picks: Array = await _main._zone_browse_picker.pick(str(data.get("title", "Buscar")), pools,
+		int(data.get("min_selections", 0)), int(data.get("max_selections", 1)), bool(data.get("distinct_names", false)))
+	NetworkClient.send_message({"op": "intent", "kind": "zone_pick_choice", "picks": picks})

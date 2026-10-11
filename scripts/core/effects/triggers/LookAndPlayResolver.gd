@@ -150,6 +150,12 @@ func try_execute_search_oro_castillo_or_cementerio_pattern(ability_text: String,
 	return await _search_own_zone.try_execute_search_oro_castillo_or_cementerio_pattern(ability_text, card, controller_id)
 
 
+func try_execute_search_up_to_n_castillo_and_or_cementerio_play_discount_pattern(ability_text: String, card: Node,
+		controller_id: int) -> bool:
+	return await _search_own_zone.try_execute_search_up_to_n_castillo_and_or_cementerio_play_discount_pattern(
+		ability_text, card, controller_id)
+
+
 func try_execute_raise_up_to_one_ally_or_gold_from_cemetery_pattern(ability_text: String, controller_id: int, card: Node = null) -> bool:
 	return await _search_own_zone.try_execute_raise_up_to_one_ally_or_gold_from_cemetery_pattern(ability_text, controller_id, card)
 

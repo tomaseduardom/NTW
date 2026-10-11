@@ -5614,3 +5614,63 @@ abierta (era el eco del clic que eligió un objetivo).
 
 **Verificado:** compila con autoloads, sin advertencias nuevas de gdlint.
 Sin verificar en partida real todavía.
+
+## 53. Selector de zonas en el tablero para buscar en Castillo/Cementerio (2026-10-11)
+
+**A pedido del usuario:** "el mazo y el castillo también tiene que ser un
+selector y no un popup, además si la opción es en el castillo y/o
+cementerio la idea es poder ver el castillo, luego hacer click afuera, ver
+el cementerio y después confirmar toda la acción" (ejemplo: Arturo de
+Bretaña). Decidido con el usuario: **para ambos jugadores**, y en "Castillo
+y/o Cementerio" **se pueden mezclar zonas** en la misma acción — esto
+reemplaza la regla anterior del proyecto ("y/o" = elegir una sola zona
+primero con un popup).
+
+**`ZoneBrowsePicker` (nuevo, `scripts/ui/zones/`)**, instanciado en Main:
+- Las zonas que participan brillan en el tablero; clic abre un visor con
+  TODAS las cartas de esa zona (elegibles en celeste, el resto atenuadas;
+  el Castillo se muestra ordenado para no revelar el orden del mazo).
+- Clic en una carta la marca/desmarca (borde dorado); clic afuera cierra el
+  visor **sin perder lo elegido**; se puede abrir la otra zona.
+- El botón de paso del HUD ("Confirmar (n) [P]") o el del visor confirma
+  toda la acción. Respeta mínimo/máximo y "distinto nombre".
+- Mientras está activo, `PhaseFlowController._on_paso_pressed()` lo atiende
+  primero y `ZoneViewerModule` no abre su visor normal del Cementerio.
+
+**`ActionSearch.search_zones()`** (fachada `ActionModule.search_zones()`):
+búsqueda sobre varias zonas del mismo jugador; `search()` ahora la usa con
+una sola zona, así que las ~39 búsquedas existentes pasan al selector sin
+tocarlas. Siempre abre el selector (antes, con ≤ N coincidencias, se
+tomaban todas sin mostrar nada). Por red: prompt `zone_pick` con las zonas
+completas (`is_own` relativo al Remoto) → el Remoto corre el mismo
+selector → `zone_pick_choice` con índices, revalidados por el Anfitrión
+(`_validated_picks()`). El bot local sigue tomando las primeras elegibles.
+Se baraja el Castillo si participó, aunque la carta salga de otra zona.
+
+**"Puedes jugarla" ahora pregunta** (`_put_found_card_into_play()`):
+"Jugarla (coste N)" o "Ponerla en tu mano", también para el Remoto, con
+descuento opcional (`cost_reduction`, piso 1 de PaymentManager).
+
+**Arturo de Bretaña (21135)** — no lo tomaba nadie (el regex genérico de
+SEARCH dice "busca en", no "buscar en", y el ejecutor genérico habría
+buscado solo en el Cementerio, 1 carta, y además Oros por el "en un Oro"
+del descuento). Patrón nuevo
+`try_execute_search_up_to_n_castillo_and_or_cementerio_play_discount_
+pattern()` (SearchOwnZonePatterns): ambas zonas, hasta N del tipo, jugar
+con descuento o a la mano. Texto confirmado contra la API de ShadowForge.
+No se tocó el regex global: hay ~89 cartas con "buscar en" y muchas tienen
+un coste previo ("puedes Descartar una carta para buscar") que el ejecutor
+genérico se saltaría.
+
+**Convertidos a ambas zonas sin popup:** los 3 patrones "Castillo o
+Cementerio" de SearchOwnZonePatterns (Aliado + buff, Aliado de coste ≤ N
+gratis, Oro a la mano). Quedan con el popup viejo de zona: duelo espacial
+(elige zona y dueño), BanishOpponentPatterns (Ignis/Titán) y las
+habilidades activadas de AbilityButtonPatternsB/SearchAbilityHandler_JV.
+
+**Arreglo de paso:** `ActionModule._put_found_card_into_play()` no existía
+pero BanishOpponentPatterns ya la llamaba — se agregó la fachada.
+
+**Verificado:** compila con autoloads; regex de Arturo probado en Godot
+contra el texto real (n=dos, tipo=armas, descuento=un). Sin verificar en
+partida real todavía.

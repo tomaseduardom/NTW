@@ -85,6 +85,7 @@ var _gold_manager: GoldManager             = null
 var _mulligan_ctrl: MulliganController     = null
 var _card_inspector: CardInspectionLayer   = null
 var _zone_viewer: ZoneViewerModule         = null
+var _zone_browse_picker: ZoneBrowsePicker   = null
 var _selection: SelectionModule            = null
 var _zone_manager: ZoneManager             = null
 var _phase_flow: PhaseFlowController       = null
@@ -185,6 +186,9 @@ func _ready() -> void:
 
 	_zone_viewer = ZoneViewerModule.new(); _zone_viewer.name = "ZoneViewerModule"
 	add_child(_zone_viewer); _zone_viewer.setup(self)
+
+	_zone_browse_picker = ZoneBrowsePicker.new(); _zone_browse_picker.name = "ZoneBrowsePicker"
+	add_child(_zone_browse_picker); _zone_browse_picker.setup(self)
 
 	_selection = SelectionModule.new(); _selection.name = "SelectionModule"
 	add_child(_selection); _selection.setup(self)

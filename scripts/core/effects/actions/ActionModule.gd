@@ -143,6 +143,22 @@ func search(player_id: int, zone: int, filter: Dictionary, amount: int = 1, can_
 	return await _action_search.search(player_id, zone, filter, amount, can_fail, skip_validation, may_play, source_card, destination, distinct_names, chooser_id)
 
 
+## Búsqueda en varias zonas a la vez con el selector del tablero (2026-10-11,
+## ver ActionSearch.search_zones()).
+func search_zones(player_id: int, zones: Array, filter: Dictionary, amount: int = 1, can_fail: bool = true,
+		skip_validation: bool = false, may_play: bool = false, source_card: Node = null,
+		destination: int = Constants.Zone.MANO, distinct_names: bool = false, chooser_id: int = -1,
+		cost_reduction: int = 0) -> Dictionary:
+	return await _action_search.search_zones(player_id, zones, filter, amount, can_fail, skip_validation, may_play,
+		source_card, destination, distinct_names, chooser_id, cost_reduction)
+
+
+## BanishOpponentPatterns ya llamaba a esto vía ActionModule, pero la fachada
+## no existía (2026-10-11).
+func _put_found_card_into_play(main: Node, player_id: int, card_data: Dictionary, may_play: bool) -> Node:
+	return await _action_search._put_found_card_into_play(main, player_id, card_data, may_play)
+
+
 # =============================================================================
 # MILL - Moler cartas (implementación en ActionMill.gd)
 # =============================================================================

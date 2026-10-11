@@ -30,10 +30,9 @@ func _get_searchable_zone_data(player_id: int, zone: int) -> Variant:
 
 func search(player_id: int, zone: int, filter: Dictionary, amount: int = 1, can_fail: bool = true, skip_validation: bool = false, may_play: bool = false, source_card: Node = null, destination: int = Constants.Zone.MANO, distinct_names: bool = false, chooser_id: int = -1) -> Dictionary:
 	"""Busca cartas en el Castillo o Cementerio que cumplan el filtro (DAR
-	Sección 8). El jugador elige cuáles llevarse (o todas, si hay menos que
-	amount). Si may_play es true, cada carta encontrada se juega de inmediato
-	pagando su coste normal en vez de ir a la mano (si no se puede pagar,
-	queda en la mano igual — nunca se pierde la carta encontrada).
+	Sección 8). El jugador elige cuáles llevarse. Si may_play es true, por
+	cada carta encontrada se ofrece jugarla (pagando su coste) o dejarla en
+	la mano (si no se puede pagar, queda en la mano — nunca se pierde).
 
 	Args:
 		player_id: ID del jugador dueño de la zona buscada (el destino
@@ -44,9 +43,7 @@ func search(player_id: int, zone: int, filter: Dictionary, amount: int = 1, can_
 			HACE la elección — no siempre es player_id. 'Busca en el Castillo
 			OPONENTE y destiérralas' tiene player_id=oponente (es SU zona/
 			destino) pero quien elige qué desterrar es el CONTROLADOR de la
-			habilidad, no la víctima. Default -1 = usar player_id (todo
-			llamador existente que no lo pasa sigue viéndose exactamente
-			igual que antes de agregar este parámetro).
+			habilidad, no la víctima. Default -1 = usar player_id.
 		zone: Zona donde buscar (CASTILLO o CEMENTERIO — únicas zonas con datos)
 		filter: Filtro de cartas {type, raza, cost_max, cost_min, strength_min,
 			name_contains, keyword}
@@ -60,50 +57,71 @@ func search(player_id: int, zone: int, filter: Dictionary, amount: int = 1, can_
 		distinct_names: Si true, las cartas elegidas no pueden repetir nombre
 			entre sí (2026-08-25, p.ej. necro-titan: 'busca... dos cartas de
 			distinto nombre').
-		may_play: Si true, intenta jugar cada carta encontrada en vez de solo
+		may_play: Si true, ofrece jugar cada carta encontrada en vez de solo
 			guardarla en mano (DAR: 'puedes ponerla en juego pagando su coste')
 		source_card: Carta que causa la búsqueda (para triggers/log)
 
-	Returns: {success, selected, matching, searched_zone}
+	Returns: {success, selected, matching, searched_zone, searched_zones}
 	"""
+	return await search_zones(player_id, [zone], filter, amount, can_fail, skip_validation, may_play, source_card,
+		destination, distinct_names, chooser_id)
+
+
+func search_zones(player_id: int, zones: Array, filter: Dictionary, amount: int = 1, can_fail: bool = true,
+		skip_validation: bool = false, may_play: bool = false, source_card: Node = null,
+		destination: int = Constants.Zone.MANO, distinct_names: bool = false, chooser_id: int = -1,
+		cost_reduction: int = 0) -> Dictionary:
+	"""Como search(), pero sobre VARIAS zonas del mismo jugador a la vez
+	(2026-10-11, a pedido del usuario — p.ej. Arturo de Bretaña: 'busca en
+	tu Castillo y/o Cementerio hasta dos Armas'): el jugador mira cada zona
+	en el selector del tablero (ZoneBrowsePicker), puede mezclar cartas de
+	ambas y confirma una sola vez. Reemplaza al viejo "¿Dónde buscar?"
+	(Castillo o Cementerio) + lista de una sola zona.
+	'cost_reduction': con may_play, descuento al jugarla ('reduciendo su
+	coste en un Oro'), con el piso 1 de siempre de PaymentManager."""
+	var first_zone: int = zones[0] if not zones.is_empty() else Constants.Zone.CASTILLO
 	var result = {
 		"success": true,
 		"selected": [],
 		"matching": [],
-		"searched_zone": zone,
-		"must_shuffle": zone == Constants.Zone.CASTILLO
+		"searched_zone": first_zone,
+		"searched_zones": zones,
+		"must_shuffle": Constants.Zone.CASTILLO in zones
 	}
 
-	# DAR Sección 6: Validar estado del juego
-	if not skip_validation:
-		var validation = _main._validator._validate_search(player_id, zone, filter, amount)
-		if not validation.valid:
-			result.success = can_fail
-			result.error = validation.reason
-			result.validation_failed = true
-			print("[ActionModule] SEARCH rechazado: %s" % validation.reason)
-			return result
-		if not validation.warnings.is_empty():
-			result.warnings = validation.warnings
-
-	var zone_data = _get_searchable_zone_data(player_id, zone)
-	if zone_data == null:
-		push_warning("[ActionModule] SEARCH: zona no buscable (%s)" % zone)
-		result.success = false
-		result.error = "unsupported_zone"
+	# DAR Sección 6: validar cada zona; las que no se pueden buscar se omiten.
+	var zone_infos: Array = []  # [{zone, data, matching}]
+	var last_reason: String = "unsupported_zone"
+	for zone in zones:
+		if not skip_validation:
+			var validation = _main._validator._validate_search(player_id, zone, filter, amount)
+			if not validation.valid:
+				last_reason = validation.reason
+				print("[ActionModule] SEARCH en zona %s rechazado: %s" % [zone, validation.reason])
+				continue
+			if not validation.warnings.is_empty():
+				result.warnings = validation.warnings
+		var zone_data = _get_searchable_zone_data(player_id, zone)
+		if zone_data == null:
+			push_warning("[ActionModule] SEARCH: zona no buscable (%s)" % zone)
+			continue
+		zone_infos.append({"zone": zone, "data": zone_data, "matching": []})
+	if zone_infos.is_empty():
+		result.success = can_fail
+		result.error = last_reason
+		result.validation_failed = true
 		return result
 
 	_main._begin_trigger_collection()
 
-	_main.emit_signal("action_search_started", player_id, zone, filter)
+	for info in zone_infos:
+		_main.emit_signal("action_search_started", player_id, info.zone, filter)
+		info.matching = _main._apply_card_filter(info.data, filter)
+		result.matching.append_array(info.matching)
 
-	# Aplicar filtro sobre los datos de la zona
-	var matching: Array = _main._apply_card_filter(zone_data, filter)
-	result.matching = matching
+	_main.emit_signal("action_search_revealed", player_id, result.matching)
 
-	_main.emit_signal("action_search_revealed", player_id, matching)
-
-	if matching.is_empty():
+	if result.matching.is_empty():
 		result.success = can_fail
 		if not can_fail:
 			result.error = "no_matching_cards"
@@ -111,19 +129,25 @@ func search(player_id: int, zone: int, filter: Dictionary, amount: int = 1, can_
 		await _main._end_trigger_collection_and_resolve()
 		return result
 
-	# Si hay cartas, el jugador debe elegir (o se toman todas si hay ≤ amount)
-	var to_select = mini(amount, matching.size())
+	var to_select = mini(amount, result.matching.size())
 	var effective_chooser: int = chooser_id if chooser_id >= 0 else player_id
-	var selected_data: Array = await _select_search_results(matching, to_select, distinct_names, effective_chooser)
-	result.selected = selected_data
+	var min_count: int = 0 if can_fail else to_select
+	var picks: Array = await _pick_from_zones(player_id, zone_infos, to_select, min_count, distinct_names,
+		effective_chooser, source_card)
 
+	var selected_data: Array = []
+	for p in picks:
+		selected_data.append(p.data)
+	result.selected = selected_data
 	_main.emit_signal("action_search_selected", player_id, selected_data)
 
 	var main := _main.get_node_or_null("/root/Main")
-	for card_data in selected_data:
+	for p in picks:
+		var card_data: Dictionary = p.data
+		var from_zone: int = p.zone
 		# Remover de la zona de origen (misma referencia que Main.player_deck/
 		# player_cemetery — ver _get_searchable_zone_data).
-		zone_data.erase(card_data)
+		p.zone_data.erase(card_data)
 		card_data["esta_oculta"] = false
 
 		if destination == Constants.Zone.DESTIERRO:
@@ -131,7 +155,7 @@ func search(player_id: int, zone: int, filter: Dictionary, amount: int = 1, can_
 			# nodo Card (2026-08-25, p.ej. Rey de Amarillo).
 			CardManager.add_to_exile(player_id, card_data)
 			_main._notify_trigger("on_search_found", {
-				"player_id": player_id, "card": card_data, "from_zone": zone
+				"player_id": player_id, "card": card_data, "from_zone": from_zone
 			})
 		elif destination == Constants.Zone.RESERVA_ORO and main and main._gold_manager:
 			# Va directo a la Reserva de Oro, sin pasar por la mano ni pagar
@@ -139,7 +163,7 @@ func search(player_id: int, zone: int, filter: Dictionary, amount: int = 1, can_
 			# Castillo y ponlo en tu Reserva').
 			var card_node = await main._gold_manager.put_gold_directly_in_reserva(player_id, card_data)
 			_main._notify_trigger("on_search_found", {
-				"player_id": player_id, "card": card_node, "from_zone": zone
+				"player_id": player_id, "card": card_node, "from_zone": from_zone
 			})
 		elif destination == Constants.Zone.CEMENTERIO:
 			# Va directo al Cementerio, sin pasar por la mano ni crear un
@@ -148,7 +172,7 @@ func search(player_id: int, zone: int, filter: Dictionary, amount: int = 1, can_
 			# patrón que DESTIERRO de arriba.
 			CardManager.add_to_cemetery(player_id, card_data)
 			_main._notify_trigger("on_search_found", {
-				"player_id": player_id, "card": card_data, "from_zone": zone
+				"player_id": player_id, "card": card_data, "from_zone": from_zone
 			})
 		elif destination == Constants.Zone.ORO_PAGADO and main and main._gold_manager:
 			# Va directo al Oro Pagado (ya-gastado), sin pasar por la mano
@@ -157,35 +181,32 @@ func search(player_id: int, zone: int, filter: Dictionary, amount: int = 1, can_
 			# usando put_gold_directly_in_pagado() en vez de _in_reserva().
 			var card_node = await main._gold_manager.put_gold_directly_in_pagado(player_id, card_data)
 			_main._notify_trigger("on_search_found", {
-				"player_id": player_id, "card": card_node, "from_zone": zone
+				"player_id": player_id, "card": card_node, "from_zone": from_zone
 			})
 		elif main:
-			var card_node = await _put_found_card_into_play(main, player_id, card_data, may_play)
+			var card_node = await _put_found_card_into_play(main, player_id, card_data, may_play, cost_reduction)
 			_main._notify_trigger("on_search_found", {
-				"player_id": player_id, "card": card_node, "from_zone": zone
+				"player_id": player_id, "card": card_node, "from_zone": from_zone
 			})
 
-	# Barajar si buscó en el Castillo (DAR: siempre se baraja tras buscar en el mazo)
+	# Barajar si buscó en el Castillo (DAR: siempre se baraja tras buscar en el
+	# mazo, aunque al final la carta elegida haya salido de otra zona).
 	if result.must_shuffle:
-		zone_data.shuffle()
+		var deck = _get_searchable_zone_data(player_id, Constants.Zone.CASTILLO)
+		if deck != null:
+			deck.shuffle()
 		AnimationQueue.add_command(AnimationQueue.CommandType.CUSTOM, {
 			"callable": Callable(AnimationQueue, "animate_shuffle").bind(player_id),
 			"description": "Barajar mazo"
 		})
 
 	# 2026-09-14, a pedido del usuario (La Ouija): buscar en el Castillo saca
-	# cartas del tope y después lo baraja (arriba), pero a diferencia de
-	# CASI todo el resto del código que toca player_deck (ZoneManager.
-	# draw_card(), la propia habilidad de La Ouija en DSR_SearchGoldCombos.gd,
-	# y ~20 sitios más en los archivos de triggers), esta función genérica
-	# — la que de verdad usan la mayoría de las cartas "busca en tu
-	# Castillo" — nunca llamaba a ZoneManager._update_castillo_counts(), el
-	# único punto de verdad real para refrescar tanto el contador visible
-	# del Castillo como el revelado del tope de La Ouija (ver
-	# ZoneViewerModule.refresh_castillo_top_reveal()). Resultado: con La
-	# Ouija en juego, buscar dejaba la carta revelada vieja en pantalla
-	# hasta que algo MÁS disparara el refresco por otro lado.
-	if zone == Constants.Zone.CASTILLO and main and main.get("_zone_manager"):
+	# cartas y después lo baraja (arriba), pero esta función genérica nunca
+	# llamaba a ZoneManager._update_castillo_counts(), el único punto de
+	# verdad real para refrescar tanto el contador visible del Castillo como
+	# el revelado del tope de La Ouija (ver ZoneViewerModule.
+	# refresh_castillo_top_reveal()).
+	if result.must_shuffle and main and main.get("_zone_manager"):
 		main._zone_manager._update_castillo_counts()
 
 	_main.emit_signal("action_search_completed", player_id, result)
@@ -195,83 +216,93 @@ func search(player_id: int, zone: int, filter: Dictionary, amount: int = 1, can_
 	return result
 
 
-func _select_search_results(matching: Array, to_select: int, distinct_names: bool = false, player_id: int = 0) -> Array:
-	"""Abre el overlay de selección (SelectionManager) y espera a que el
-	jugador elija. Si hay ≤ to_select coincidencias, se toman todas sin
-	abrir UI (salvo con distinct_names, ver más abajo). Si el jugador
-	cancela, no se toma ninguna.
+func _pick_from_zones(player_id: int, zone_infos: Array, to_select: int, min_count: int, distinct_names: bool,
+		chooser: int, source_card: Node) -> Array:
+	"""Elección real de las cartas (2026-10-11): siempre con ZoneBrowsePicker
+	— en la pantalla del Anfitrión si elige él, por red si elige un Remoto
+	real (el Remoto corre el mismo selector y devuelve índices), o automática
+	para el bot local. Devuelve [{zone, zone_data, data}]."""
+	var main := _main.get_node_or_null("/root/Main")
+	var title: String = "Buscar"
+	if source_card and source_card.get("card_name") != null:
+		title = "%s: elige hasta %d carta(s)" % [str(source_card.card_name), to_select]
 
-	IMPORTANTE: con max_selections == 1, SelectionManager cierra en el
-	primer clic y emite 'card_selected' (un solo Dictionary) en vez de
-	'selection_completed' (un Array) — hay que escuchar ambas señales o el
-	await se queda colgado para siempre.
+	# Pools completos (todas las cartas de cada zona, elegibles marcadas) —
+	# el jugador ve la zona entera, como al buscar en un mazo físico.
+	var pools: Array = []
+	for info in zone_infos:
+		var cards: Array = []
+		for d in info.data:
+			cards.append({"data": d, "eligible": info.matching.has(d)})
+		pools.append({"is_own": player_id == chooser, "zone": info.zone, "cards": cards})
 
-	'player_id' (2026-09-30, Fase 3 del plan de paridad remota — pasado como
-	chooser_id a open_search(), ver ese comentario en SelectionManager.gd):
-	de quién es esta búsqueda, para que si es el jugador 1 Y es un Remoto
-	real, la elección se le pregunte a él por red en vez de al Anfitrión."""
-	if distinct_names:
-		# No se puede usar el atajo "tomar todas" ni un multi-select de un
-		# solo tiro: aunque matching.size() <= to_select, puede haber
-		# nombres repetidos entre esas pocas coincidencias. Se elige de a
-		# una (2026-08-25, p.ej. necro-titan: 'dos cartas de distinto
-		# nombre'), sacando del resto cualquier carta que comparta nombre
-		# con la ya elegida antes de ofrecer la siguiente ronda.
-		var picked: Array = []
-		var pool: Array = matching.duplicate()
-		while picked.size() < to_select and not pool.is_empty():
-			var one := await _select_search_results(pool, 1, false, player_id)
-			if one.is_empty():
-				break  # el jugador canceló esta ronda — se queda con lo ya elegido
-			var chosen: Dictionary = one[0]
-			picked.append(chosen)
-			var chosen_name = chosen.get("nombre", chosen.get("name", ""))
-			pool = pool.filter(func(c): return c.get("nombre", c.get("name", "")) != chosen_name)
-		return picked
+	var raw_picks: Array = []  # [[pool_idx, card_idx]]
+	var is_remote: bool = chooser == 1 and NetworkClient.room_code != "" and NetworkClient.is_host
+	if is_remote:
+		raw_picks = await _delegate_zone_pick_to_remote(title, pools, min_count, to_select, distinct_names)
+	elif chooser == 1 or not main or not main.get("_zone_browse_picker") or not main._zone_browse_picker:
+		# Bot local (o sin selector disponible): las primeras elegibles.
+		for pi in range(pools.size()):
+			for ci in range(pools[pi].cards.size()):
+				if raw_picks.size() < to_select and pools[pi].cards[ci].eligible:
+					raw_picks.append([pi, ci])
+	else:
+		raw_picks = await main._zone_browse_picker.pick(title, pools, min_count, to_select, distinct_names)
 
-	if to_select >= matching.size():
-		return matching.duplicate()
-
-	var sel_mgr = SelectionManager
-
-	# state es Dictionary a propósito (2026-08-22): los lambdas de GDScript
-	# capturan variables locales POR VALOR — reasignar 'picked'/'resolved'
-	# DENTRO del lambda solo movía la copia local del lambda, la de afuera
-	# nunca se enteraba y 'while not resolved' colgaba para siempre en
-	# silencio (confirmado con un test aislado en Godot).
-	var state := {"resolved": false, "picked": []}
-	var on_completed := func(cards: Array):
-		state.picked = cards
-		state.resolved = true
-	var on_single_selected := func(card_data: Dictionary):
-		state.picked = [card_data]
-		state.resolved = true
-	var on_cancelled := func():
-		state.resolved = true
-
-	sel_mgr.selection_completed.connect(on_completed, CONNECT_ONE_SHOT)
-	sel_mgr.card_selected.connect(on_single_selected, CONNECT_ONE_SHOT)
-	sel_mgr.selection_cancelled.connect(on_cancelled, CONNECT_ONE_SHOT)
-	sel_mgr.open_search(matching, to_select, Callable(), player_id)
-
-	while not state.resolved:
-		await _main.get_tree().process_frame
-
-	if sel_mgr.selection_completed.is_connected(on_completed):
-		sel_mgr.selection_completed.disconnect(on_completed)
-	if sel_mgr.card_selected.is_connected(on_single_selected):
-		sel_mgr.card_selected.disconnect(on_single_selected)
-	if sel_mgr.selection_cancelled.is_connected(on_cancelled):
-		sel_mgr.selection_cancelled.disconnect(on_cancelled)
-
-	return state.picked
+	return _validated_picks(raw_picks, pools, zone_infos, to_select, distinct_names)
 
 
-func _put_found_card_into_play(main: Node, player_id: int, card_data: Dictionary, may_play: bool) -> Node:
-	"""Instancia la carta encontrada y la mete en juego: a la mano, o jugada
-	de inmediato (pagando su coste normal) si may_play lo pide y se puede
-	pagar. Mismo patrón que ZoneManager.draw_card()/MulliganController — la
-	única forma real de que una carta aparezca en la mano/campo de verdad."""
+func _validated_picks(raw_picks: Array, pools: Array, zone_infos: Array, to_select: int, distinct_names: bool) -> Array:
+	"""Revalida lo elegido (por red puede llegar cualquier cosa): índices
+	válidos, solo elegibles, sin repetir, tope to_select, nombres distintos."""
+	var picks: Array = []
+	var seen: Dictionary = {}
+	var names: Dictionary = {}
+	for rp in raw_picks:
+		if not (rp is Array) or rp.size() != 2:
+			continue
+		var pi: int = int(rp[0])
+		var ci: int = int(rp[1])
+		if pi < 0 or pi >= pools.size() or ci < 0 or ci >= pools[pi].cards.size():
+			continue
+		var key := "%d:%d" % [pi, ci]
+		if seen.has(key) or not pools[pi].cards[ci].eligible or picks.size() >= to_select:
+			continue
+		var data: Dictionary = pools[pi].cards[ci].data
+		var card_name := str(data.get("nombre", data.get("name", "")))
+		if distinct_names and names.has(card_name):
+			continue
+		seen[key] = true
+		names[card_name] = true
+		picks.append({"zone": zone_infos[pi].zone, "zone_data": zone_infos[pi].data, "data": data})
+	return picks
+
+
+func _delegate_zone_pick_to_remote(title: String, pools: Array, min_count: int, max_count: int,
+		distinct_names: bool) -> Array:
+	"""Contraparte en red del selector: el Remoto lo corre en su pantalla
+	(RemoteMirrorController._show_zone_pick_prompt()). 'is_own' ya viene
+	relativo al Remoto (chooser == 1)."""
+	NetworkClient.send_message({
+		"op": "prompt", "kind": "zone_pick",
+		"title": title,
+		"pools": pools,
+		"min_selections": min_count,
+		"max_selections": max_count,
+		"distinct_names": distinct_names,
+	})
+	var intent: Dictionary = await NetworkClient.await_intent(["zone_pick_choice"])
+	return intent.get("picks", [])
+
+
+func _put_found_card_into_play(main: Node, player_id: int, card_data: Dictionary, may_play: bool,
+		cost_reduction: int = 0) -> Node:
+	"""Instancia la carta encontrada y la mete en la mano. Con may_play
+	(2026-10-11: ahora pregunta — 'puedes jugarla' es opcional, y Arturo de
+	Bretaña dice 'puedes jugarlas... y/o ponerlas en tu mano'), ofrece
+	jugarla de inmediato pagando su coste (con 'cost_reduction' si el efecto
+	lo da). Si no se puede pagar o se elige la mano, se queda en la mano —
+	nunca se pierde."""
 	var is_hidden := player_id != 0
 	var card_node = main._create_card(card_data, is_hidden)
 
@@ -284,10 +315,21 @@ func _put_found_card_into_play(main: Node, player_id: int, card_data: Dictionary
 		# comentario) — faltaba aquí también.
 		main._connect_card_signals(card_node)
 
-	if may_play and player_id == 0:
+	var can_decide: bool = player_id == 0 or main.get("_easy_bot") is RemotePlayerController
+	if may_play and can_decide:
 		await _main.get_tree().create_timer(0.3).timeout
+		if cost_reduction > 0:
+			PaymentManager.agregar_modificador_coste(card_node, -cost_reduction, func(c: Node) -> bool:
+				return c == card_node, false)
 		if PaymentManager.puede_jugar_carta(card_node, player_id):
-			await main._gold_manager.play_card(card_node)
-		# Si no puede pagarla, se queda en la mano — nunca se pierde.
+			var coste: int = PaymentManager.calcular_coste_real(card_node)
+			var card_name: String = str(card_data.get("nombre", "la carta"))
+			var play_it: bool = await SelectionManager.await_two_choice(main, card_name,
+				"Jugarla (coste %d)" % coste, "Ponerla en tu mano", player_id)
+			if play_it:
+				await main._gold_manager.play_card(card_node)
+		# Si no puede pagarla o eligió la mano, se queda en la mano.
+		if cost_reduction > 0:
+			PaymentManager.remover_modificador_coste(card_node)
 
 	return card_node
