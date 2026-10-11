@@ -19,6 +19,8 @@ class-variable-name: _?[a-z][a-z0-9]*(_[a-z0-9]+)*
 comparison-with-itself: null
 constant-name: _?[A-Z][A-Z0-9]*(_[A-Z0-9]+)*
 disable:
+  - class-definitions-order
+  - unused-argument
   - max-returns
   - no-elif-return
   - no-else-return
