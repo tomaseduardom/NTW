@@ -40,6 +40,10 @@ var _priority_window_id: int = -1
 ## prioridad lo tapa (p.ej. el Anfitrión responde a tu carta con un
 ## Talismán), se vuelve a mostrar al cerrarse esa ventana.
 var _pending_vigilia: Dictionary = {}
+## card_id de una carta de la mano física -> intent que manda su doble clic
+## (Vigilia: poner Oro/jugar carta; ventana de prioridad: Talismán de
+## respuesta). Vacío = ninguna carta de la mano se puede jugar ahora.
+var _hand_actions: Dictionary = {}
 
 
 func setup(main: Node) -> void:
@@ -59,6 +63,7 @@ func _on_message(data: Dictionary) -> void:
 		"prompt":
 			_close_current_overlay()
 			_clear_remote_paso()
+			_clear_hand_actions()
 			# 2026-09-23, bug real reportado por el usuario: cualquier prompt
 			# real que llegue (mulligan/vigilia/ataque/etc.) tiene que tapar
 			# la pantalla "ESPERANDO JUGADOR" que dejó el duelo de dados — sin
@@ -226,11 +231,10 @@ func _apply_remove_card(data: Dictionary) -> void:
 # de _apply_move_card()/_apply_remove_card() (las 5 zonas públicas en
 # juego), esto puebla player_hand de verdad, con Nodos que se quedan ahí
 # durante TODA la partida, no solo mientras un prompt puntual está abierto.
-# can_interact = false a propósito (mismo criterio que _build_card_display()
-# en §37): la acción real sigue pasando por los botones de los prompts
-# (vigilia, etc.), no por clickear la carta misma — un doble-click acá
-# llamaría GoldManager.play_card() LOCAL (el del propio cliente Remoto, sin
-# pasar por el protocolo de intents), que rompería todo.
+# 2026-10-11: can_interact = true — la mano física es ahora la ÚNICA forma de
+# jugar cartas desde la mano. CardInteractionModule desvía los clicks del
+# cliente Remoto a on_card_double_clicked() (nunca llegan a GoldManager.
+# play_card() local, que rompería todo al no pasar por el protocolo de intents).
 # =============================================================================
 func _apply_hand_card_added(data: Dictionary) -> void:
 	var card_data: Dictionary = data.get("data", {})
@@ -240,7 +244,7 @@ func _apply_hand_card_added(data: Dictionary) -> void:
 	var node: Node = _main._create_card(card_data, false)
 	node.owner_id = 0
 	node.controller_id = 0
-	node.can_interact = false
+	node.can_interact = true
 	node.drag_enabled = false
 	_main._connect_card_signals(node)
 	_main.player_hand.add_card(node)
@@ -394,6 +398,7 @@ func _send_intent_and_close(intent: Dictionary) -> void:
 	NetworkClient.send_message(intent)
 	_close_current_overlay()
 	_clear_remote_paso()
+	_clear_hand_actions()
 
 
 # =============================================================================
@@ -450,74 +455,25 @@ func _show_mulligan_prompt(data: Dictionary) -> void:
 # VIGILIA
 # =============================================================================
 func _show_vigilia_prompt(data: Dictionary) -> void:
-	# 2026-10-08 (ver arquitectura.md §46): las 5 categorías de abajo son
-	# SIEMPRE candidatas de la mano (RemotePlayerController._affordable_
-	# cards_in_hand() las junta de _opponent_fan) — ya no se repiten en una
-	# fila de cartas aparte (_build_card_row()) porque desde §45 la mano
-	# real y persistente del Remoto (player_hand) ya las muestra siempre,
-	# detrás de este mismo overlay. Los botones siguen siendo la acción
-	# real; esto solo saca la carta duplicada.
+	# 2026-10-11 (a pedido del usuario: "sigue saliendo el texto de la mano y
+	# al mismo tiempo la mano, la idea es siempre solo usar la mano física"):
+	# sin popup. Las cartas jugables de la mano real (player_hand, §45)
+	# brillan y se juegan con doble clic, igual que el Anfitrión; el botón de
+	# paso del HUD ("Atacar") termina la Vigilia. Ver on_card_double_clicked().
 	_pending_vigilia = data
-	var gold_reserva: int = int(data.get("gold_reserva", 0))
-	var gold_candidates: Array = data.get("gold_candidates", [])
-	var ally_candidates: Array = data.get("ally_candidates", [])
-	var weapon_candidates: Array = data.get("weapon_candidates", [])
-	var talisman_candidates: Array = data.get("talisman_candidates", [])
-	var totem_candidates: Array = data.get("totem_candidates", [])
-	var vbox := _build_overlay("Tu Vigilia — Oro disponible: %d" % gold_reserva)
-
-	if not gold_candidates.is_empty():
-		var gold_lbl := Label.new()
-		gold_lbl.text = "Poner Oro:"
-		vbox.add_child(gold_lbl)
-		for card in gold_candidates:
+	var actions: Dictionary = {}
+	for card in data.get("gold_candidates", []):
+		var card_id: String = str(card.get("card_id", ""))
+		actions[card_id] = {"op": "intent", "kind": "place_gold", "card_id": card_id}
+	for key in ["ally_candidates", "weapon_candidates", "talisman_candidates", "totem_candidates"]:
+		for card in data.get(key, []):
 			var card_id: String = str(card.get("card_id", ""))
-			_add_row_button(vbox, "Oro: %s" % str(card.get("nombre", "?")), func():
-				_send_intent_and_close({"op": "intent", "kind": "place_gold", "card_id": card_id}))
-
-	if not ally_candidates.is_empty():
-		var ally_lbl := Label.new()
-		ally_lbl.text = "Jugar Aliado:"
-		vbox.add_child(ally_lbl)
-		for card in ally_candidates:
-			var card_id: String = str(card.get("card_id", ""))
-			_add_row_button(vbox, "%s (coste %s)" % [str(card.get("nombre", "?")), str(card.get("coste", "?"))], func():
-				_send_intent_and_close({"op": "intent", "kind": "play_card", "card_id": card_id}))
-
-	if not weapon_candidates.is_empty():
-		var weapon_lbl := Label.new()
-		weapon_lbl.text = "Jugar Arma:"
-		vbox.add_child(weapon_lbl)
-		for card in weapon_candidates:
-			var card_id: String = str(card.get("card_id", ""))
-			_add_row_button(vbox, "%s (coste %s)" % [str(card.get("nombre", "?")), str(card.get("coste", "?"))], func():
-				_send_intent_and_close({"op": "intent", "kind": "play_card", "card_id": card_id}))
-
-	if not talisman_candidates.is_empty():
-		var talisman_lbl := Label.new()
-		talisman_lbl.text = "Jugar Talismán:"
-		vbox.add_child(talisman_lbl)
-		for card in talisman_candidates:
-			var card_id: String = str(card.get("card_id", ""))
-			_add_row_button(vbox, "%s (coste %s)" % [str(card.get("nombre", "?")), str(card.get("coste", "?"))], func():
-				_send_intent_and_close({"op": "intent", "kind": "play_card", "card_id": card_id}))
-
-	if not totem_candidates.is_empty():
-		var totem_lbl := Label.new()
-		totem_lbl.text = "Jugar Tótem:"
-		vbox.add_child(totem_lbl)
-		for card in totem_candidates:
-			var card_id: String = str(card.get("card_id", ""))
-			_add_row_button(vbox, "%s (coste %s)" % [str(card.get("nombre", "?")), str(card.get("coste", "?"))], func():
-				_send_intent_and_close({"op": "intent", "kind": "play_card", "card_id": card_id}))
-
-	var sep := HSeparator.new()
-	vbox.add_child(sep)
-	_add_row_button(vbox, "Terminar Vigilia / Atacar", func():
-		_send_intent_and_close({"op": "intent", "kind": "end_vigilia"}))
+			actions[card_id] = {"op": "intent", "kind": "play_card", "card_id": card_id}
+	_set_hand_actions(actions)
+	_main._update_debug("Tu Vigilia — Oro disponible: %d. Doble clic en una carta brillante para jugarla." % int(
+		data.get("gold_reserva", 0)))
 	_set_remote_paso("Atacar [P]", false, func():
 		_send_intent_and_close({"op": "intent", "kind": "end_vigilia"}))
-
 
 # =============================================================================
 # ATAQUE
@@ -936,40 +892,37 @@ func _show_priority_prompt(data: Dictionary) -> void:
 		_set_remote_paso(button_text, true, confirm_blocks)
 	else:
 		var pass_action := func(): respond.call({"action": "pass"})
-		if not abilities.is_empty() or not talismans.is_empty():
-			_build_response_panel(str(data.get("context", "")), abilities, talismans, timeout, respond, pass_action)
+		# Talismanes: desde la mano física (brillan, doble clic). El panel solo
+		# aparece si hay habilidades activadas (están en el tablero, no en la mano).
+		var actions: Dictionary = {}
+		for card in talismans:
+			var card_id: String = str(card.get("card_id", ""))
+			actions[card_id] = {"op": "intent", "kind": "priority_response", "window_id": window_id,
+				"action": "play", "card_id": card_id}
+		_set_hand_actions(actions)
+		if not abilities.is_empty():
+			_build_response_panel(str(data.get("context", "")), abilities, timeout, respond, pass_action)
 		_set_remote_paso(button_text, true, pass_action)
 	_priority_window_id = window_id
 	if timeout > 0 and _main._game_hud:
 		_main._game_hud.start_paso_countdown(timeout)
 
 
-func _build_response_panel(context_name: String, abilities: Array, talismans: Array, timeout: int,
+func _build_response_panel(context_name: String, abilities: Array, timeout: int,
 		respond: Callable, pass_action: Callable) -> void:
 	var title := "¿Respondes? — %s" % context_name if not context_name.is_empty() else "¿Respondes?"
 	var vbox := _build_overlay(title)
 
-	if not talismans.is_empty():
-		var t_lbl := Label.new()
-		t_lbl.text = "Jugar Talismán:"
-		vbox.add_child(t_lbl)
-		_build_card_row(vbox, talismans)
-		for card in talismans:
-			var card_id: String = str(card.get("card_id", ""))
-			_add_row_button(vbox, "%s (coste %s)" % [str(card.get("nombre", "?")), str(card.get("coste", "?"))], func():
-				respond.call({"action": "play", "card_id": card_id}))
-
-	if not abilities.is_empty():
-		var a_lbl := Label.new()
-		a_lbl.text = "Usar habilidad:"
-		vbox.add_child(a_lbl)
-		_build_card_row(vbox, abilities)
-		for c in abilities:
-			var card_id: String = str(c.get("card_id", ""))
-			var ability_index: int = int(c.get("ability_index", 0))
-			var label_text: String = str(c.get("effect_text", c.get("cost_text", "Usar habilidad")))
-			_add_row_button(vbox, "Usar: %s" % label_text, func():
-				respond.call({"action": "ability", "card_id": card_id, "ability_index": ability_index}))
+	var a_lbl := Label.new()
+	a_lbl.text = "Usar habilidad:"
+	vbox.add_child(a_lbl)
+	_build_card_row(vbox, abilities)
+	for c in abilities:
+		var card_id: String = str(c.get("card_id", ""))
+		var ability_index: int = int(c.get("ability_index", 0))
+		var label_text: String = str(c.get("effect_text", c.get("cost_text", "Usar habilidad")))
+		_add_row_button(vbox, "Usar: %s" % label_text, func():
+			respond.call({"action": "ability", "card_id": card_id, "ability_index": ability_index}))
 
 	var sep := HSeparator.new()
 	vbox.add_child(sep)
@@ -1040,3 +993,39 @@ func _build_blockers_panel(attackers: Array, blockers: Array, respond: Callable)
 	vbox.add_child(sep)
 	_add_row_button(vbox, "Confirmar bloqueos", confirm)
 	return confirm
+
+
+# =============================================================================
+# MANO FÍSICA COMO ÚNICA FORMA DE JUGAR (2026-10-11)
+# =============================================================================
+func on_card_double_clicked(card: Node) -> void:
+	"""Llamado por CardInteractionModule en el cliente Remoto en vez de su
+	lógica local de jugar cartas."""
+	var card_id: String = ""
+	for id in _hand_card_nodes:
+		if _hand_card_nodes[id] == card:
+			card_id = id
+			break
+	if card_id.is_empty():
+		return  # carta del tablero espejado — no se juega con doble clic
+	if not _hand_actions.has(card_id):
+		_main._update_debug("No puedes jugar esa carta ahora")
+		return
+	_send_intent_and_close(_hand_actions[card_id])
+
+
+func _set_hand_actions(actions: Dictionary) -> void:
+	_clear_hand_actions()
+	_hand_actions = actions
+	for card_id in _hand_actions:
+		var node: Node = _hand_card_nodes.get(card_id, null)
+		if node and is_instance_valid(node):
+			node.set_activatable(true, CardBadges.GLOW_COLOR_CELESTE, &"remote_playable")
+
+
+func _clear_hand_actions() -> void:
+	for card_id in _hand_actions:
+		var node: Node = _hand_card_nodes.get(card_id, null)
+		if node and is_instance_valid(node):
+			node.set_activatable(false, CardBadges.GLOW_COLOR_CELESTE, &"remote_playable")
+	_hand_actions = {}

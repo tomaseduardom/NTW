@@ -5498,3 +5498,31 @@ Talismán en Guerra de Talismanes la guerra termina al vaciarse la pila
 **Verificado:** los 7 scripts compilan con autoloads (worktree limpio sin
 los cambios en curso de `SelectionDialogs.gd`). Sin verificar en partida
 real todavía.
+
+## 49. El Remoto juega desde la mano física, sin popup de texto (2026-10-11)
+
+**A pedido del usuario:** "sigue saliendo el texto de la mano y al mismo
+tiempo la mano, la idea es siempre solo usar la mano física".
+
+- **Vigilia del Remoto sin popup:** `_show_vigilia_prompt()` ya no construye
+  overlay. Las cartas jugables de `player_hand` (la mano real de §45) brillan
+  en celeste (`set_activatable(..., &"remote_playable")`) y se juegan con
+  doble clic; el botón de paso del HUD ("Atacar [P]") termina la Vigilia —
+  ahora sí se puede clickear, porque ya no hay overlay tapándolo.
+- **Talismanes de respuesta también desde la mano:** en el prompt de
+  prioridad (§48) los Talismanes jugables brillan en la mano. El panel solo
+  aparece si hay habilidades activadas (están en el tablero, no en la mano).
+- **`_hand_actions`** (card_id → intent): lo llenan Vigilia y prioridad, se
+  vacía al mandar cualquier intent o al llegar un prompt nuevo.
+- **La mano del Remoto pasa a `can_interact = true`.**
+  `CardInteractionModule._on_card_clicked()`/`_on_card_double_clicked()`
+  cortan en el cliente Remoto (nunca llega a `GoldManager.play_card()`
+  local); el doble clic se desvía a `RemoteMirrorController.
+  on_card_double_clicked()`.
+
+**Sin cambios:** Ataque (lista de Aliados con casillas), elegir portador de
+Arma y las selecciones de efectos siguen siendo popups — no son cartas de la
+mano.
+
+**Verificado:** compila con autoloads, sin advertencias nuevas de gdlint.
+Sin verificar en partida real todavía.

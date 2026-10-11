@@ -715,6 +715,10 @@ func check_deselect() -> void:
 # =============================================================================
 func _on_card_clicked(card: Node) -> void:
 	_card_clicked_this_frame = true
+	# 2026-10-11: el cliente Remoto no corre la partida — un click nunca debe
+	# llegar a la lógica local (atacar, bloquear, jugar). Ver on_card_double_clicked().
+	if NetworkClient.room_code != "" and not NetworkClient.is_host:
+		return
 	if is_selecting_target:
 		_resolve_target_selection(card)
 		return
@@ -780,6 +784,12 @@ func _on_card_clicked(card: Node) -> void:
 
 
 func _on_card_double_clicked(card: Node) -> void:
+	# 2026-10-11: en el cliente Remoto, jugar desde la mano física manda la
+	# jugada al Anfitrión (RemoteMirrorController), nunca GoldManager local.
+	if NetworkClient.room_code != "" and not NetworkClient.is_host:
+		if _main._remote_mirror:
+			_main._remote_mirror.on_card_double_clicked(card)
+		return
 	# Un click real en Godot (Card._on_gui_input) SIEMPRE dispara card_clicked
 	# primero (press 1, double_click=false) y LUEGO card_double_clicked (press
 	# 2 del mismo gesto, double_click=true) — confirmado con logging en vivo
