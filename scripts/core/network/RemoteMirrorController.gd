@@ -44,6 +44,9 @@ var _pending_vigilia: Dictionary = {}
 ## (Vigilia: poner Oro/jugar carta; ventana de prioridad: Talismán de
 ## respuesta). Vacío = ninguna carta de la mano se puede jugar ahora.
 var _hand_actions: Dictionary = {}
+## card_id de un Aliado propio en juego que puede atacar -> si está marcado
+## como atacante (Fase de Ataque del Remoto, 2026-10-11).
+var _attack_candidates: Dictionary = {}
 
 
 func setup(main: Node) -> void:
@@ -64,6 +67,7 @@ func _on_message(data: Dictionary) -> void:
 			_close_current_overlay()
 			_clear_remote_paso()
 			_clear_hand_actions()
+			_clear_attack_candidates()
 			# 2026-09-23, bug real reportado por el usuario: cualquier prompt
 			# real que llegue (mulligan/vigilia/ataque/etc.) tiene que tapar
 			# la pantalla "ESPERANDO JUGADOR" que dejó el duelo de dados — sin
@@ -188,8 +192,10 @@ func _apply_move_card(data: Dictionary) -> void:
 		# hay forma de que un click aquí dispare nada por red) — mostrarlas
 		# como no-interactivas evita clicks muertos confusos.
 		node.can_interact = false
+		node.drag_enabled = false
 		node.owner_id = 0 if own else 1
 		node.controller_id = 0 if own else 1
+		_main._connect_card_signals(node)
 		_card_nodes[card_id] = node
 
 	var container: Node = _container_for(own, zone)
@@ -399,6 +405,7 @@ func _send_intent_and_close(intent: Dictionary) -> void:
 	_close_current_overlay()
 	_clear_remote_paso()
 	_clear_hand_actions()
+	_clear_attack_candidates()
 
 
 # =============================================================================
@@ -479,42 +486,33 @@ func _show_vigilia_prompt(data: Dictionary) -> void:
 # ATAQUE
 # =============================================================================
 func _show_ataque_prompt(data: Dictionary) -> void:
+	# 2026-10-11 (a pedido del usuario): sin popup — los Aliados que pueden
+	# atacar brillan en tu Línea de Defensa (los Nodos espejados de
+	# _card_nodes, mismo card_id que manda el Anfitrión). Un clic los marca/
+	# desmarca como atacantes (tinte naranja, como en la pantalla del
+	# Anfitrión) y el botón de paso del HUD confirma. Ver on_card_clicked().
 	var attackable: Array = data.get("attackable", [])
-	var vbox := _build_overlay("Declara atacantes")
 	if attackable.is_empty():
-		var lbl := Label.new()
-		lbl.text = "No tienes ningún Aliado que pueda atacar."
-		vbox.add_child(lbl)
-		_add_row_button(vbox, "Continuar", func():
-			_send_intent_and_close({"op": "intent", "kind": "declare_attackers", "card_ids": []}))
+		_main._update_debug("No tienes ningún Aliado que pueda atacar.")
 		_set_remote_paso("Pasar [P]", false, func():
 			_send_intent_and_close({"op": "intent", "kind": "declare_attackers", "card_ids": []}))
 		return
 
-	_build_card_row(vbox, attackable)
-	var checkboxes: Dictionary = {}  # card_id -> CheckBox
 	for card in attackable:
 		var card_id: String = str(card.get("card_id", ""))
-		var row := HBoxContainer.new()
-		vbox.add_child(row)
-		var cb := CheckBox.new()
-		row.add_child(cb)
-		checkboxes[card_id] = cb
-		var lbl := Label.new()
-		lbl.text = "%s (Fuerza/coste %s)" % [str(card.get("nombre", "?")), str(card.get("coste", "?"))]
-		row.add_child(lbl)
-
-	var sep := HSeparator.new()
-	vbox.add_child(sep)
-	var confirm_attack := func():
+		var node: Node = _card_nodes.get(card_id, null)
+		if not node or not is_instance_valid(node):
+			continue
+		_attack_candidates[card_id] = false
+		node.can_interact = true
+		node.set_activatable(true, CardBadges.GLOW_COLOR_CELESTE, &"remote_attackable")
+	_main._update_debug("Clic en tus Aliados brillantes para elegir atacantes, luego Confirmar ataque.")
+	_set_remote_paso("Confirmar ataque [P]", false, func():
 		var chosen_ids: Array = []
-		for card_id in checkboxes:
-			if checkboxes[card_id].button_pressed:
+		for card_id in _attack_candidates:
+			if _attack_candidates[card_id]:
 				chosen_ids.append(card_id)
-		_send_intent_and_close({"op": "intent", "kind": "declare_attackers", "card_ids": chosen_ids})
-	_add_row_button(vbox, "Confirmar ataque", confirm_attack)
-	_set_remote_paso("Confirmar ataque [P]", false, confirm_attack)
-
+		_send_intent_and_close({"op": "intent", "kind": "declare_attackers", "card_ids": chosen_ids}))
 
 # =============================================================================
 # VENTANA DE RESPUESTA (habilidades activadas — Capa 2 de la Pila de
@@ -1029,3 +1027,32 @@ func _clear_hand_actions() -> void:
 		if node and is_instance_valid(node):
 			node.set_activatable(false, CardBadges.GLOW_COLOR_CELESTE, &"remote_playable")
 	_hand_actions = {}
+
+
+func on_card_clicked(card: Node) -> void:
+	"""Clic simple en el cliente Remoto: marcar/desmarcar atacante."""
+	var card_id: String = ""
+	for id in _attack_candidates:
+		if _card_nodes.get(id, null) == card:
+			card_id = id
+			break
+	if card_id.is_empty():
+		return
+	var selected: bool = not _attack_candidates[card_id]
+	_attack_candidates[card_id] = selected
+	card.modulate = Color(1.0, 0.62, 0.32, 1.0) if selected else Color.WHITE
+	var count: int = 0
+	for id in _attack_candidates:
+		if _attack_candidates[id]:
+			count += 1
+	_main._update_debug("Atacantes elegidos: %d" % count)
+
+
+func _clear_attack_candidates() -> void:
+	for card_id in _attack_candidates:
+		var node: Node = _card_nodes.get(card_id, null)
+		if node and is_instance_valid(node):
+			node.set_activatable(false, CardBadges.GLOW_COLOR_CELESTE, &"remote_attackable")
+			node.can_interact = false
+			node.modulate = Color.WHITE
+	_attack_candidates = {}

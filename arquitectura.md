@@ -5526,3 +5526,25 @@ mano.
 
 **Verificado:** compila con autoloads, sin advertencias nuevas de gdlint.
 Sin verificar en partida real todavía.
+
+## 50. El Remoto declara atacantes en el tablero, sin popup (2026-10-11)
+
+**A pedido del usuario**, continuación de §49: `_show_ataque_prompt()` ya no
+construye la lista con casillas. Los Aliados que pueden atacar (los Nodos
+espejados de `_card_nodes`, mismo card_id que manda el Anfitrión) brillan en
+celeste (`&"remote_attackable"`) y pasan a `can_interact = true` solo
+mientras dura el prompt. Un clic simple los marca/desmarca (tinte naranja,
+como el atacante del Anfitrión); el botón de paso del HUD ("Confirmar ataque
+[P]") manda `declare_attackers` con los marcados. Sin candidatos, el botón
+dice "Pasar [P]".
+
+- `_attack_candidates` (card_id → marcado) se limpia al mandar cualquier
+  intent o al llegar un prompt nuevo (brillo, tinte y `can_interact`).
+- `CardInteractionModule._on_card_clicked()` desvía el clic simple del
+  cliente Remoto a `RemoteMirrorController.on_card_clicked()`.
+- Las cartas espejadas del tablero ahora tienen sus señales conectadas
+  (`_connect_card_signals()` en `_apply_move_card()`), así que además se
+  pueden inspeccionar con clic derecho.
+
+**Verificado:** compila con autoloads, sin advertencias nuevas de gdlint.
+Sin verificar en partida real todavía.

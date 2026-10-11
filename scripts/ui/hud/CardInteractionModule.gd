@@ -718,6 +718,8 @@ func _on_card_clicked(card: Node) -> void:
 	# 2026-10-11: el cliente Remoto no corre la partida — un click nunca debe
 	# llegar a la lógica local (atacar, bloquear, jugar). Ver on_card_double_clicked().
 	if NetworkClient.room_code != "" and not NetworkClient.is_host:
+		if _main._remote_mirror:
+			_main._remote_mirror.on_card_clicked(card)
 		return
 	if is_selecting_target:
 		_resolve_target_selection(card)
