@@ -8,21 +8,29 @@ class_name GameStateBroadcaster
 ## ({"op":"move_card"/"remove_card",...}) para que RemoteMirrorController
 ## (del lado del cliente Remoto) pueda reflejar el tablero.
 ##
-## Alcance de este incremento (2026-09-11, Fase B): solo las 5 zonas
-## PÚBLICAS "en juego" (Constants.ZONES_IN_PLAY — Reserva de Oro, Oro
-## Pagado, Línea de Defensa/Ataque/Apoyo), las únicas con Nodos Card
-## visibles en el tablero (Cementerio/Destierro solo muestran un contador
-## de texto, sin cartas individuales visibles — no hace falta streaming
-## para eso todavía). Mano/Castillo (privados) quedan fuera a propósito: el
-## Remoto ya ve su PROPIA mano vía los prompts de RemotePlayerController
-## (mulligan/vigilia), y la mano/mazo del Anfitrión nunca deben viajar por
-## aquí de todos modos (niebla de guerra) — mandar solo un card_id sin data
-## para esos casos queda para un incremento posterior.
+## Alcance original (2026-09-11, Fase B): las 5 zonas PÚBLICAS "en juego"
+## (Constants.ZONES_IN_PLAY — Reserva de Oro, Oro Pagado, Línea de Defensa/
+## Ataque/Apoyo), las únicas con Nodos Card visibles en el tablero
+## (Cementerio/Destierro solo muestran un contador de texto, sin cartas
+## individuales visibles — no hace falta streaming para eso todavía).
+## Castillo (privado) queda fuera a propósito — ver GameManager/ZoneManager,
+## no tiene Nodos persistentes que mostrar de todos modos (solo un contador).
+##
+## 2026-10-08 (ver arquitectura.md §45, a pedido del usuario — "revisa la
+## mano para que se pueda ver durante toda la partida"): la Mano del
+## jugador 1 YA se transmite también, para que el Remoto tenga su propia
+## mano real y persistente (player_hand poblado todo el tiempo), no solo
+## una fila de cartas dentro de cada prompt puntual. La mano del Anfitrión
+## NUNCA viaja por aquí (fog of war real, no solo visual) — solo se
+## escuchan las señales de _opponent_fan (jugador 1), nunca las de
+## player_hand.
 
 var _active: bool = false
+var _main: Node = null
 
 
-func setup(_main: Node) -> void:
+func setup(main: Node) -> void:
+	_main = main
 	_active = NetworkClient.room_code != "" and NetworkClient.is_host
 	if not _active:
 		return
@@ -34,6 +42,41 @@ func setup(_main: Node) -> void:
 	# señal, que estaba declarada pero nunca se emitía hasta hoy (ver el fix
 	# en ActionReturnDiscard.gd).
 	EffectController.on_card_returned_to_deck.connect(_on_card_returned_to_deck)
+	# Recién tras game_started, no en setup() — _opponent_fan.add_card()/
+	# remove_card() YA se llaman durante el mulligan (RemotePlayerController.
+	# run_mulligan() dibuja ahí mismo mientras el jugador decide mantener/
+	# redibujar, antes de que la partida "empiece" de verdad) — escuchar
+	# desde el arranque le mostraría al Remoto cartas apareciendo en su mano
+	# PERMANENTE mientras todavía está decidiendo el mulligan. El mulligan en
+	# sí ya tiene su propio camino separado (RemoteMirrorController._show_
+	# mulligan_prompt(), §44) que no pasa por acá.
+	GameManager.game_started.connect(_start_hand_sync, CONNECT_ONE_SHOT)
+
+
+func _start_hand_sync() -> void:
+	if not _main or not _main.get("_opponent_fan") or not _main._opponent_fan:
+		return
+	_main._opponent_fan.card_added.connect(_on_hand_card_added)
+	_main._opponent_fan.card_removed.connect(_on_hand_card_removed)
+	# Estado inicial: la mano ya tiene las cartas que sobrevivieron el
+	# mulligan (nunca se avisaron porque recién ahora nos conectamos) — se
+	# sincronizan de una, como si cada una se hubiera agregado ahora mismo.
+	for c in _main._opponent_fan.cards:
+		_on_hand_card_added(c)
+
+
+func _on_hand_card_added(card: Node) -> void:
+	if not is_instance_valid(card):
+		return
+	var data: Dictionary = card.card_data.duplicate(true) if card.get("card_data") != null else {}
+	data["card_id"] = str(card.get_instance_id())
+	NetworkClient.send_message({"op": "hand_card_added", "data": data})
+
+
+func _on_hand_card_removed(card: Node) -> void:
+	if not is_instance_valid(card):
+		return
+	NetworkClient.send_message({"op": "hand_card_removed", "card_id": str(card.get_instance_id())})
 
 
 func _on_card_entered_play(player_id: int, card: Node, zone: int) -> void:

@@ -19,7 +19,9 @@ func setup(executor: TargetedEffectExecutor) -> void:
 	_executor = executor
 
 
-func try_execute_free_play_weapon_or_totem_cost1_hand_cemetery_pattern(ability_text: String, controller_id: int, card: Node = null) -> bool:
+func try_execute_free_play_weapon_or_totem_cost1_hand_cemetery_pattern(
+	ability_text: String, controller_id: int, card: Node = null
+) -> bool:
 	"""'Cuando entra en juego, juega un Arma o Tótem de coste 1 de tu mano
 	o Cementerio sin pagar su coste' (Shiji, myl_id 18196, edición
 	Escuadrón Mecha / reprint promo custom_mig_12). Pool combinado mano +
@@ -44,8 +46,12 @@ func try_execute_free_play_weapon_or_totem_cost1_hand_cemetery_pattern(ability_t
 
 	var hand_candidates: Array = []
 	for c in hand_container_shiji.cards:
-		if is_instance_valid(c) and c.get("card_type") in [Constants.CardType.ARMA, Constants.CardType.TOTEM] \
-				and c.get("card_cost") != null and int(c.card_cost) == 1:
+		if (
+			is_instance_valid(c)
+			and c.get("card_type") in [Constants.CardType.ARMA, Constants.CardType.TOTEM]
+			and c.get("card_cost") != null
+			and int(c.card_cost) == 1
+		):
 			hand_candidates.append(c)
 	var cemetery_data: Array = []
 	for d in CardManager.get_cemetery(controller_id):
@@ -114,7 +120,8 @@ func try_execute_free_play_weapon_or_totem_cost1_hand_cemetery_pattern(ability_t
 	var candidates: Array = hand_candidates + cemetery_nodes
 	var filter := func(c: Node) -> bool: return c in candidates
 	var picked_node: Node = await main._card_interaction.await_target(
-		"Juega un Arma o Tótem de coste 1 sin pagar su coste", filter, true, controller_id)
+		"Juega un Arma o Tótem de coste 1 sin pagar su coste", filter, true, controller_id
+	)
 	if is_instance_valid(cemetery_popup):
 		cemetery_popup.queue_free()
 
@@ -194,7 +201,9 @@ func try_execute_draw_gold_search_pattern(ability_text: String, controller_id: i
 	if min_cost > 0 and main._gold_manager:
 		var predicate := func(card_type: int, _card_race: String, card_cost: int) -> bool:
 			return card_type in [Constants.CardType.ALIADO, Constants.CardType.ARMA] and card_cost >= min_cost
-		main._gold_manager.generar_oro_virtual_restringido(1, predicate, "Aliados o Armas de coste %d o más" % min_cost, controller_id)
+		main._gold_manager.generar_oro_virtual_restringido(
+			1, predicate, "Aliados o Armas de coste %d o más" % min_cost, controller_id
+		)
 
 	if search_amount > 0:
 		await _executor._resolve_search_cemetery_to_hand(controller_id, search_amount)
@@ -217,7 +226,11 @@ func try_execute_draw_reveal_talisman_gold_pattern(ability_text: String, control
 	carta por carta para poder contar sus Talismanes.
 	Returns: true si el patrón aplicaba."""
 	var lower := ability_text.to_lower()
-	if not ("puedes mostrar tu mano" in lower and "genera un oro para jugar armas" in lower and "roba una carta adicional" in lower):
+	if not (
+		"puedes mostrar tu mano" in lower
+		and "genera un oro para jugar armas" in lower
+		and "roba una carta adicional" in lower
+	):
 		return false
 
 	var main := _executor._main.get_node_or_null("/root/Main")
@@ -237,7 +250,9 @@ func try_execute_draw_reveal_talisman_gold_pattern(ability_text: String, control
 		for c in hand_container_levisterio.cards:
 			if is_instance_valid(c) and c.card_type == Constants.CardType.TALISMAN:
 				talisman_count += 1
-		main._update_debug("Levisterio: mano mostrada (%d Talismán%s)" % [talisman_count, "" if talisman_count == 1 else "es"])
+		main._update_debug(
+			"Levisterio: mano mostrada (%d Talismán%s)" % [talisman_count, "" if talisman_count == 1 else "es"]
+		)
 		if talisman_count <= 1 and main._gold_manager:
 			var predicate := func(card_type: int, _card_race: String, _card_cost: int) -> bool:
 				return card_type == Constants.CardType.ARMA
@@ -247,7 +262,9 @@ func try_execute_draw_reveal_talisman_gold_pattern(ability_text: String, control
 	return true
 
 
-func try_execute_deck_top_or_bottom_to_hand_pattern(ability_text: String, controller_id: int, card: Node = null) -> bool:
+func try_execute_deck_top_or_bottom_to_hand_pattern(
+	ability_text: String, controller_id: int, card: Node = null
+) -> bool:
 	"""Detecta 'pon la primera o la última carta de tu Castillo en tu mano'
 	(La Ouija, 2026-08-31 — carta promocional de 'IMP - Chile Oscuro 2', sin
 	myl_id real, no está en la API externa; ver nota de fuente en
@@ -260,11 +277,13 @@ func try_execute_deck_top_or_bottom_to_hand_pattern(ability_text: String, contro
 	var lower := ability_text.to_lower()
 	if not ("primera o la última carta de tu castillo" in lower and "en tu mano" in lower):
 		return false
-	if controller_id != 0:
-		return false  # el bot no usa esta habilidad todavía
 
 	var main := _executor._main.get_node_or_null("/root/Main")
-	if not main or main.player_deck.is_empty():
+	if not main:
+		return true
+	var deck: Array = main.player_deck if controller_id == 0 else main.opponent_deck
+	var hand_container_ouija2 = main.player_hand if controller_id == 0 else main._opponent_fan
+	if deck.is_empty():
 		return true
 
 	# El revelado del tope (segunda mitad del texto de La Ouija: 'Juega
@@ -281,22 +300,19 @@ func try_execute_deck_top_or_bottom_to_hand_pattern(ability_text: String, contro
 		main._zone_viewer.refresh_castillo_top_reveal()
 
 	var choose_top: bool = true
-	if main.player_deck.size() > 1:
-		var top_card: Dictionary = main.player_deck.front()
-		var bottom_card: Dictionary = main.player_deck.back()
+	if deck.size() > 1:
+		var top_card: Dictionary = deck.front()
+		var bottom_card: Dictionary = deck.back()
 		choose_top = await SelectionManager.await_card_pair_choice(
-			main, "La Ouija",
-			top_card, bottom_card,
-			"Tope",
-			"Fondo",
-			true, false
+			main, "La Ouija", top_card, bottom_card, "Tope", "Fondo", true, false, controller_id
 		)
 
 	if await TriggerSystem.open_response_window(card, str(card.card_name) if card else "La Ouija", controller_id):
 		return true
-	var card_data: Dictionary = main.player_deck.pop_front() if choose_top else main.player_deck.pop_back()
+	var card_data: Dictionary = deck.pop_front() if choose_top else deck.pop_back()
 	var card_node: Node = main._create_card(card_data, false)
-	main.player_hand.add_card(card_node)
+	card_node.owner_id = controller_id
+	hand_container_ouija2.add_card(card_node)
 	main._connect_card_signals(card_node)
 	if main._zone_manager:
 		main._zone_manager._update_castillo_counts()

@@ -421,8 +421,12 @@ func try_execute_banish_top_by_ally_count_and_draw_pattern(ability_text: String,
 	var draw_amount: int = UniversalCardParser._parse_amount(m_draw.get_string(1)) if m_draw else 0
 
 	var deck_owner: int = controller_id
-	if banish_amount > 0 and controller_id == 0:
-		var look_own: bool = await SelectionManager.await_castillo_pick(main, "Espada del Juicio — destierra del tope")
+	if banish_amount > 0:
+		# 2026-10-07 (ver arquitectura.md §40): await_castillo_pick() ya
+		# tiene puente de red — antes esto se saltaba entero para el
+		# Remoto (controller_id == 0 fijo), asumiendo su propio Castillo
+		# sin preguntar en vez de ofrecerle la elección real.
+		var look_own: bool = await SelectionManager.await_castillo_pick(main, "Espada del Juicio — destierra del tope", controller_id)
 		deck_owner = controller_id if look_own else (1 - controller_id)
 
 	if await TriggerSystem.open_response_window(card, "Espada del Juicio", controller_id):

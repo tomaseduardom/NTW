@@ -612,7 +612,7 @@ func _choose_search_zone_owner(controller_id: int, zone: int, action_verb: Strin
 		return controller_id
 	var picked_own: bool
 	if zone == Constants.Zone.CASTILLO:
-		picked_own = await SelectionManager.await_castillo_pick(main, "¿En qué Castillo %s?" % action_verb)
+		picked_own = await SelectionManager.await_castillo_pick(main, "¿En qué Castillo %s?" % action_verb, controller_id)
 	else:
 		var zone_name: String = "Cementerio"
 		picked_own = await SelectionManager.await_two_choice(

@@ -176,14 +176,6 @@ func _activate_belta_self_banish_revive(source_card: Node, ability: Dictionary) 
 		return
 	var owner_id: int = source_card.owner_id if source_card.get("owner_id") != null else 0
 	var main := _inspector._main
-	if owner_id != 0:
-		# 2026-10-05: el efecto final resuelve con GoldManager.
-		# _play_card_to_field(), que registra 'played_ally_cost2plus:0' con
-		# el 0 fijo y saca la carta SIEMPRE de _main.player_hand.cards —
-		# mismo tipo de límite de un solo jugador que puede_pagar()/
-		# pagar_coste() (ver §22), esta vez en la ruta de "jugar la carta",
-		# no en el pago. Se deja sin desbloquear.
-		return  # el Remoto no puede usar esta habilidad todavía
 	if source_card.get("current_zone") != Constants.Zone.CEMENTERIO:
 		main._update_debug("Belta ya no está en tu Cementerio")
 		return
@@ -205,7 +197,7 @@ func _activate_belta_self_banish_revive(source_card: Node, ability: Dictionary) 
 	var filter := func(c: Node) -> bool:
 		return c.owner_id == owner_id and c.card_data != source_card.card_data
 	var picked: Array = await main._zone_viewer.open_cemetery_target_picker(
-		"Destierra 2 cartas de tu Cementerio para poner a Belta en juego", filter, 2, "cemetery", true)
+		"Destierra 2 cartas de tu Cementerio para poner a Belta en juego", filter, 2, "cemetery", true, false, owner_id)
 	if picked.size() < 2:
 		return
 
@@ -294,19 +286,15 @@ func _activate_crono_diamante_discard_ally_discount(source_card: Node, ability: 
 	if not is_instance_valid(source_card) or not _inspector._main._gold_manager:
 		return
 	var owner_id: int = source_card.owner_id if source_card.get("owner_id") != null else 0
-	if owner_id != 0 or not _inspector._main.player_hand or _inspector._main.player_hand.cards.is_empty():
-		# 2026-10-05: el efecto final llama gold_manager.play_card(ally_node)
-		# directo — esa función rechaza con "No es tu turno" cuando
-		# GameManager.active_player_id != 0 (hardcodeado), además de que
-		# puede_pagar() del descuento también es de un solo jugador (§22).
-		# Se deja sin desbloquear.
-		return  # el Remoto no puede usar esta habilidad todavía
+	var hand_container_crono = _inspector._main.player_hand if owner_id == 0 else _inspector._main._opponent_fan
+	if not hand_container_crono or hand_container_crono.cards.is_empty():
+		return
 
 	if not UniversalCardParser.turn_registry.was_used("played_ally_cost2plus:%d" % owner_id, 0, GameManager.current_turn):
 		_inspector._main._update_debug("Necesitas haber jugado un Aliado de coste 2 o más este turno")
 		return
 
-	var hand_cards: Array = _inspector._main.player_hand.cards.duplicate()
+	var hand_cards: Array = hand_container_crono.cards.duplicate()
 	var gold_manager: GoldManager = _inspector._main._gold_manager
 
 	var ally_candidates: Array = []
@@ -315,7 +303,7 @@ func _activate_crono_diamante_discard_ally_discount(source_card: Node, ability: 
 			continue
 		var base_cost: int = int(c.card_cost) if c.get("card_cost") != null else 0
 		var discounted_cost: int = maxi(base_cost - 1, 1)
-		if gold_manager.puede_pagar(discounted_cost, c.card_type, c.card_raza, base_cost):
+		if gold_manager.puede_pagar(discounted_cost, c.card_type, c.card_raza, base_cost, owner_id):
 			ally_candidates.append(c)
 	if ally_candidates.is_empty():
 		_inspector._main._update_debug("No tienes ningún Aliado que puedas pagar en la mano, ni con el descuento")
@@ -327,7 +315,7 @@ func _activate_crono_diamante_discard_ally_discount(source_card: Node, ability: 
 	# los dos modales de lista viejos.
 	var ally_filter := func(c: Node) -> bool: return c in ally_candidates
 	var ally_node: Node = await _inspector._main._card_interaction.await_target(
-		"Elige el Aliado a jugar con 1 Oro de descuento", ally_filter)
+		"Elige el Aliado a jugar con 1 Oro de descuento", ally_filter, true, owner_id)
 	if not ally_node or not is_instance_valid(ally_node):
 		return
 
@@ -338,7 +326,7 @@ func _activate_crono_diamante_discard_ally_discount(source_card: Node, ability: 
 		return
 
 	var discard_node: Node = await _inspector._main._card_interaction.await_target(
-		"Descarta 1 carta para jugar %s con 1 Oro de descuento" % str(ally_node.card_name), discard_filter)
+		"Descarta 1 carta para jugar %s con 1 Oro de descuento" % str(ally_node.card_name), discard_filter, true, owner_id)
 	if not discard_node or not is_instance_valid(discard_node):
 		return
 
@@ -439,12 +427,8 @@ func _activate_espada_ohiggins_shuffle_or_search_gold(source_card: Node, ability
 		return
 	var owner_id: int = source_card.owner_id if source_card.get("owner_id") != null else 0
 	var main := _inspector._main
-	if owner_id != 0 or not main._card_interaction:
-		# 2026-10-05: usa CardInteractionModule.await_target_or_castillo_
-		# pick() — un SÉPTIMO tipo de diálogo sin puente de red (carrera
-		# entre clickear una carta o el Castillo propio), sin chooser_id en
-		# su firma. Se deja documentado como gap nuevo (ver §22).
-		return  # el Remoto no puede usar esta habilidad todavía
+	if not main._card_interaction:
+		return
 
 	# 2026-09-12 (bug real reportado por el usuario: no dejaba elegir un
 	# Aliado del rival — 5 clicks seguidos rechazados como "objetivo no
@@ -462,7 +446,7 @@ func _activate_espada_ohiggins_shuffle_or_search_gold(source_card: Node, ability
 		return c.get("current_zone") in valid_zone_ids
 	var result: Dictionary = await main._card_interaction.await_target_or_castillo_pick(
 		"Elige una carta que no sea Oro para barajar, o clickea tu Castillo para buscar un Oro",
-		filter, "Espada de O'Higgins", true, true)
+		filter, "Espada de O'Higgins", true, true, owner_id)
 
 	if result.type == "card":
 		var target: Node = result.card

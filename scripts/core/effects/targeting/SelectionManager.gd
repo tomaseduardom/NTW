@@ -401,15 +401,18 @@ func open_selection(card_data_list: Array, mode: int, config: Dictionary = {}, c
 	])
 
 
-func open_reveal(card_data_list: Array, title: String = "Cartas Reveladas") -> void:
+func open_reveal(card_data_list: Array, title: String = "Cartas Reveladas", chooser_id: int = 0) -> void:
 	"""Atajo para mostrar cartas sin selección"""
 	open_selection(card_data_list, SelectionMode.REVEAL, {
 		"title": title,
 		"max_selections": 0,
 		"can_cancel": false
-	})
-	# En modo REVEAL, el botón confirmar cierra
-	_confirm_button.text = "Cerrar"
+	}, chooser_id)
+	# En modo REVEAL, el botón confirmar cierra (solo aplica al panel local
+	# — open_selection() ya devolvió sin tocar _confirm_button si delegó al
+	# Remoto por red).
+	if not (chooser_id == 1 and NetworkClient.room_code != "" and NetworkClient.is_host):
+		_confirm_button.text = "Cerrar"
 
 
 func open_exhumar(cemetery_cards: Array, max_select: int = 1) -> void:
@@ -487,8 +490,8 @@ func _delegate_selection_to_remote(card_data_list: Array, mode: int, config: Dic
 ## Los 5 diálogos modales (implementación en SelectionDialogs.gd) — la API
 ## externa dominante de este autoload (54x/52x/33x/4x/2x llamadas en todo
 ## el proyecto).
-func await_single_pick(candidates: Array, title: String, can_cancel: bool = true, min_selections: int = 1, filter: Callable = Callable()) -> Dictionary:
-	return await _dialogs.await_single_pick(candidates, title, can_cancel, min_selections, filter)
+func await_single_pick(candidates: Array, title: String, can_cancel: bool = true, min_selections: int = 1, filter: Callable = Callable(), chooser_id: int = 0) -> Dictionary:
+	return await _dialogs.await_single_pick(candidates, title, can_cancel, min_selections, filter, chooser_id)
 
 
 func await_two_choice(main: Node, title: String, option_a: String, option_b: String, chooser_id: int = 0) -> bool:
@@ -503,10 +506,11 @@ func await_card_pair_choice(
 	label_a: String = "Tope del Castillo",
 	label_b: String = "Fondo del Castillo",
 	face_down_b: bool = true,
-	face_down_a: bool = false
+	face_down_a: bool = false,
+	chooser_id: int = 0
 ) -> bool:
 	return await _dialogs.await_card_pair_choice(
-		main, title, card_data_a, card_data_b, label_a, label_b, face_down_b, face_down_a
+		main, title, card_data_a, card_data_b, label_a, label_b, face_down_b, face_down_a, chooser_id
 	)
 
 
@@ -514,8 +518,8 @@ func await_choice(main: Node, title: String, options: Array, chooser_id: int = 0
 	return await _dialogs.await_choice(main, title, options, chooser_id)
 
 
-func await_castillo_pick(main: Node, title: String) -> bool:
-	return await _dialogs.await_castillo_pick(main, title)
+func await_castillo_pick(main: Node, title: String, chooser_id: int = 0) -> bool:
+	return await _dialogs.await_castillo_pick(main, title, chooser_id)
 
 
 func start_castillo_pick(main: Node, title: String, callback: Callable) -> void:
@@ -526,8 +530,8 @@ func cancel_castillo_pick() -> void:
 	_dialogs.cancel_castillo_pick()
 
 
-func await_multi_pick(candidates: Array, title: String, max_selections: int, min_selections: int = 0, can_cancel: bool = true, filter: Callable = Callable()) -> Dictionary:
-	return await _dialogs.await_multi_pick(candidates, title, max_selections, min_selections, can_cancel, filter)
+func await_multi_pick(candidates: Array, title: String, max_selections: int, min_selections: int = 0, can_cancel: bool = true, filter: Callable = Callable(), chooser_id: int = 0) -> Dictionary:
+	return await _dialogs.await_multi_pick(candidates, title, max_selections, min_selections, can_cancel, filter, chooser_id)
 
 
 func close_selection() -> void:

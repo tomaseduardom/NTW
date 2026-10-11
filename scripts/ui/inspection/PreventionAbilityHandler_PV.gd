@@ -115,15 +115,6 @@ func _activate_perla_de_sangre_search_hand_or_play(source_card: Node, ability: D
 		return
 	var owner_id: int = source_card.owner_id if source_card.get("owner_id") != null else 0
 	var main := _inspector._main
-	if owner_id != 0:
-		# 2026-10-05: a diferencia del resto de este archivo, esta NO se
-		# desbloquea — usa SelectionManager.await_single_pick() (modal de
-		# lista con Dictionary crudos), un QUINTO tipo de diálogo sin puente
-		# de red (no es ninguno de los 4 sistemas de la Fase 3: no es open_
-		# selection/open_search, ni await_choice/await_two_choice, ni el
-		# picker de Zonas, ni CardInteractionModule) — se deja documentado
-		# como gap nuevo en vez de intentar un bridge improvisado sin probar.
-		return  # el Remoto no puede usar esta habilidad todavía
 	if source_card.get("current_zone") != Constants.Zone.RESERVA_ORO:
 		main._update_debug("%s ya no está en tu Reserva" % str(source_card.get("card_name")))
 		return
@@ -134,7 +125,7 @@ func _activate_perla_de_sangre_search_hand_or_play(source_card: Node, ability: D
 		main._update_debug("No tienes ningún Aliado en tu Castillo")
 		return
 	var picked_data: Dictionary = await SelectionManager.await_single_pick(
-		candidates, "Elige un Aliado de tu Castillo", false)
+		candidates, "Elige un Aliado de tu Castillo", false, 1, Callable(), owner_id)
 	if picked_data.is_empty():
 		return
 
@@ -154,13 +145,15 @@ func _activate_perla_de_sangre_search_hand_or_play(source_card: Node, ability: D
 	CardManager.shuffle_deck(owner_id)
 
 	var to_hand: bool = await SelectionManager.await_two_choice(
-		main, "Perla de Sangre", "Ponerlo en tu mano", "Jugarlo con 1 Oro de descuento (piso 1)")
+		main, "Perla de Sangre", "Ponerlo en tu mano", "Jugarlo con 1 Oro de descuento (piso 1)", owner_id)
 	var ally_node = main._create_card(picked_data, false)
+	ally_node.owner_id = owner_id
 	main._connect_card_signals(ally_node)
+	var hand_container_perla = main.player_hand if owner_id == 0 else main._opponent_fan
 	if to_hand:
-		main.player_hand.add_card(ally_node)
+		hand_container_perla.add_card(ally_node)
 	else:
-		main.player_hand.add_card(ally_node)
+		hand_container_perla.add_card(ally_node)
 		var applies_to_this_card := func(c: Node) -> bool:
 			return c == ally_node
 		PaymentManager.agregar_modificador_coste(ally_node, -1, applies_to_this_card, false)

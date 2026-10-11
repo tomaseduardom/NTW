@@ -307,12 +307,13 @@ func await_multi_target(prompt_prefix: String, candidates: Array, max_count: int
 	if not is_instance_valid(self):
 		return chosen
 	# 2026-09-30, Fase 3 del plan de paridad remota, cuarto sistema — mismo
-	# criterio que await_target(). SIMPLIFICACIÓN a propósito: la contraparte
-	# remota no enforcea 'lock_group_key'/'dynamic_filter' (ninguna de las
-	# conversiones hechas hasta ahora los necesita) — si se convierte un
-	# patrón que sí los usa de verdad, hay que volver a esto.
+	# criterio que await_target(). 2026-10-08: lock_group_key/dynamic_filter
+	# ya se le pasan a _delegate_multi_target_to_remote(), que los enforcea
+	# al recibir la respuesta completa (ver su propio comentario) en vez de
+	# en vivo por click — suficiente para que Tempilcahue/Ngenechén/asedio
+	# naval se puedan desbloquear de verdad (ver arquitectura.md §43).
 	if chooser_id == 1 and NetworkClient.room_code != "" and NetworkClient.is_host:
-		return await _delegate_multi_target_to_remote(prompt_prefix, candidates, max_count, cancellable)
+		return await _delegate_multi_target_to_remote(prompt_prefix, candidates, max_count, cancellable, lock_group_key, dynamic_filter)
 	var glow_of := func(c: Node) -> Color:
 		return glow_color_override if glow_color_override != null else _glow_color_for_owner(c)
 	var remaining: Array = candidates.duplicate()
@@ -424,13 +425,16 @@ func _delegate_target_to_remote(prompt: String, filter: Callable, cancellable: b
 	if candidates.is_empty():
 		return null
 
+	# 2026-10-07, a pedido del usuario ("no sale... el abanico de cartas
+	# está todo escrito"): antes mandaba solo nombre/coste curados — ahora
+	# el card_data completo (Nodos reales ya lo tienen cargado), para que
+	# RemoteMirrorController pueda dibujar la carta de verdad en vez de un
+	# botón de solo texto.
 	var payload: Array = []
 	for c in candidates:
-		payload.append({
-			"card_id": str(c.get_instance_id()),
-			"nombre": str(c.get("card_name")) if c.get("card_name") != null else "?",
-			"coste": c.get("card_cost") if c.get("card_cost") != null else "?",
-		})
+		var entry: Dictionary = c.card_data.duplicate(true) if c.get("card_data") != null else {}
+		entry["card_id"] = str(c.get_instance_id())
+		payload.append(entry)
 	NetworkClient.send_message({
 		"op": "prompt", "kind": "await_target",
 		"title": prompt,
@@ -449,21 +453,82 @@ func _delegate_target_to_remote(prompt: String, filter: Callable, cancellable: b
 	return null
 
 
-func _delegate_multi_target_to_remote(prompt_prefix: String, candidates: Array, max_count: int, cancellable: bool) -> Array:
+func _delegate_target_or_castillo_to_remote(prompt: String, filter: Callable, castillo_title: String, allow_cancel: bool, castillo_own_only: bool) -> Dictionary:
+	"""Contraparte en red de await_target_or_castillo_pick() (2026-10-07,
+	ver arquitectura.md §41) — junta las dos mitades de la carrera local
+	(cartas candidatas + Castillo propio/rival) en un solo prompt de texto,
+	ya que del lado del Remoto no hay carrera real entre dos interacciones
+	de UI simultáneas, solo una lista de opciones. Mismo criterio de
+	identificar candidatas que _delegate_target_to_remote()."""
+	var candidates: Array = []
+	for zone_name in ["player_field", "player_linea_ataque", "player_linea_apoyo",
+			"opponent_field", "opponent_linea_ataque", "opponent_linea_apoyo",
+			"player_gold", "opponent_gold", "player_oro_pagado", "opponent_oro_pagado"]:
+		var container = _main.get(zone_name)
+		if not container:
+			continue
+		for c in container.get_children():
+			if is_instance_valid(c) and filter.call(c):
+				candidates.append(c)
+	for hand_name in ["player_hand", "_opponent_fan"]:
+		var hand = _main.get(hand_name)
+		if not hand or not hand.get("cards"):
+			continue
+		for c in hand.cards:
+			if is_instance_valid(c) and filter.call(c):
+				candidates.append(c)
+
+	var payload: Array = []
+	for c in candidates:
+		var entry: Dictionary = c.card_data.duplicate(true) if c.get("card_data") != null else {}
+		entry["card_id"] = str(c.get_instance_id())
+		payload.append(entry)
+	NetworkClient.send_message({
+		"op": "prompt", "kind": "await_target_or_castillo",
+		"title": prompt,
+		"candidates": payload,
+		"castillo_title": castillo_title,
+		"castillo_own_only": castillo_own_only,
+		"cancellable": allow_cancel,
+	})
+	var intent: Dictionary = await NetworkClient.await_intent(["await_target_or_castillo_choice"])
+	var kind: String = str(intent.get("type", "none"))
+	if kind == "card":
+		var id_str: String = str(intent.get("card_id", ""))
+		if id_str.is_valid_int():
+			var obj: Object = instance_from_id(int(id_str))
+			if obj is Node and is_instance_valid(obj) and obj in candidates:
+				return {"type": "card", "card": obj}
+		return {"type": "none"}
+	if kind == "castillo":
+		return {"type": "castillo", "own": bool(intent.get("own", true))}
+	return {"type": "none"}
+
+
+func _delegate_multi_target_to_remote(prompt_prefix: String, candidates: Array, max_count: int, cancellable: bool, lock_group_key: Callable = Callable(), dynamic_filter: Callable = Callable()) -> Array:
 	"""Contraparte en red de await_multi_target() — ver _delegate_target_
 	to_remote() para el mismo criterio de identificar por get_instance_id().
-	No enforcea lock_group_key/dynamic_filter (ver nota en await_multi_
-	target())."""
+	2026-10-08, a pedido del usuario ("dale arreglemoslo" — ver
+	arquitectura.md §43): lock_group_key/dynamic_filter YA se enforcean,
+	pero del lado del ANFITRIÓN al recibir la respuesta completa, no en
+	vivo mientras el Remoto tilda checkboxes (no hay un mecanismo de re-
+	evaluar en cada click sin convertir esa UI en algo iterativo). Se
+	recorren los card_ids que mandó el Remoto EN EL ORDEN en que vinieron
+	y se van aceptando uno por uno solo si siguen pasando el mismo filtro
+	que usaría el panel local dado lo YA aceptado hasta ese punto — un pick
+	que lo violaría se descarta (no trunca el resto: una carta más cara
+	rechazada no bloquea otras más chicas que sí entren después), en vez
+	de confiar ciegamente en lo que mandó."""
 	var live_candidates: Array = candidates.filter(func(c): return is_instance_valid(c))
 	if live_candidates.is_empty():
 		return []
+	# 2026-10-07, mismo motivo/arreglo que _delegate_target_to_remote()
+	# (await_target) — card_data completo en vez de nombre/coste curados.
 	var payload: Array = []
 	for c in live_candidates:
-		payload.append({
-			"card_id": str(c.get_instance_id()),
-			"nombre": str(c.get("card_name")) if c.get("card_name") != null else "?",
-			"coste": c.get("card_cost") if c.get("card_cost") != null else "?",
-		})
+		var entry: Dictionary = c.card_data.duplicate(true) if c.get("card_data") != null else {}
+		entry["card_id"] = str(c.get_instance_id())
+		payload.append(entry)
 	NetworkClient.send_message({
 		"op": "prompt", "kind": "await_multi_target",
 		"title": prompt_prefix,
@@ -472,17 +537,29 @@ func _delegate_multi_target_to_remote(prompt_prefix: String, candidates: Array, 
 		"cancellable": cancellable,
 	})
 	var intent: Dictionary = await NetworkClient.await_intent(["await_multi_target_choice"])
+	var has_lock: bool = lock_group_key.is_valid()
+	var has_dynamic: bool = dynamic_filter.is_valid()
+	var locked_key = null
 	var result: Array = []
 	for id_str in intent.get("card_ids", []):
 		if not str(id_str).is_valid_int():
 			continue
 		var obj: Object = instance_from_id(int(str(id_str)))
-		if obj is Node and is_instance_valid(obj) and obj in live_candidates:
-			result.append(obj)
+		if not (obj is Node and is_instance_valid(obj) and obj in live_candidates):
+			continue
+		if max_count >= 0 and result.size() >= max_count:
+			break
+		if has_lock and result.size() > 0 and lock_group_key.call(obj) != locked_key:
+			continue
+		if has_dynamic and not dynamic_filter.call(result, obj):
+			continue
+		result.append(obj)
+		if has_lock and result.size() == 1:
+			locked_key = lock_group_key.call(obj)
 	return result
 
 
-func await_target_or_castillo_pick(prompt: String, filter: Callable, castillo_title: String, allow_cancel: bool = true, castillo_own_only: bool = false) -> Dictionary:
+func await_target_or_castillo_pick(prompt: String, filter: Callable, castillo_title: String, allow_cancel: bool = true, castillo_own_only: bool = false, chooser_id: int = 0) -> Dictionary:
 	"""Carrera entre clickear una carta real (que pase 'filter') y clickear
 	un Panel de Castillo entero (propio o rival) — extraído (2026-09-13, a
 	pedido del usuario, ver arquitectura.md §10.14/La Ouija) del mismo
@@ -506,7 +583,14 @@ func await_target_or_castillo_pick(prompt: String, filter: Callable, castillo_ti
 	Castillo rival se ignora (se re-arma el listener del Castillo, sigue
 	esperando) en vez de resolver la carrera con ese lado inválido.
 	Devuelve {type: "card", card: Node}, {type: "castillo", own: bool}, o
-	{type: "none"} si se canceló sin elegir nada."""
+	{type: "none"} si se canceló sin elegir nada.
+	'chooser_id' (2026-10-07, ver arquitectura.md §41): toda esta carrera
+	depende de Paneles y Nodos reales de ESTA pantalla — sin equivalente
+	directo para el Remoto. Se delega a _delegate_target_or_castillo_to_
+	remote(), que junta ambas opciones (cartas candidatas + Castillo
+	propio/rival) en un solo prompt de texto."""
+	if chooser_id == 1 and NetworkClient.room_code != "" and NetworkClient.is_host:
+		return await _delegate_target_or_castillo_to_remote(prompt, filter, castillo_title, allow_cancel, castillo_own_only)
 	if not is_instance_valid(self):
 		return {"type": "none"}
 	# 2026-09-23, bug real reportado ("Attempt to call function 'null::null

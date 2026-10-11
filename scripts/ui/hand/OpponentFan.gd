@@ -6,6 +6,16 @@ class_name OpponentFan
 ## de manera uniforme y elegante en el borde superior de la pantalla.
 
 signal hand_changed(count: int)
+## 2026-10-08 (ver arquitectura.md §45): GameStateBroadcaster se cuelga de
+## estas dos para transmitirle al Remoto conectado los cambios reales de SU
+## PROPIA mano (nunca la del Anfitrión — fuera de alcance, fog of war real)
+## — este Control es el único punto por donde pasa CUALQUIER cambio a la
+## mano del jugador 1 en todo el proyecto (decenas de llamadores, ningún
+## otro hook posible). card_removed se emite ANTES de queue_free() en
+## remove_card(destroy=true), así que el Node sigue siendo válido cuando
+## llega al listener.
+signal card_added(card: Node)
+signal card_removed(card: Node)
 
 @export var card_scale:    float = 0.50
 @export var card_overlap:  float = -40.0   ## Solapamiento base entre cartas
@@ -14,7 +24,14 @@ signal hand_changed(count: int)
 const CARD_W: float = 150.0  # Ancho base de carta (sin escalar)
 const CARD_H: float = 210.0  # Alto base de carta (sin escalar)
 
-var _cards: Array[Node] = []
+## 2026-10-07: pública (no "_cards") a propósito — mismo nombre que
+## DynamicHand.cards (la mano del Anfitrión), para que el patrón repetido en
+## todo el proyecto `hand_container = main.player_hand if owner_id == 0 else
+## main._opponent_fan` pueda seguir leyendo/escribiendo `hand_container.cards`
+## sin importar cuál de las dos sea — antes era `_cards` (privada) y ese
+## acceso crudo fallaba en tiempo de ejecución para cualquier carta del
+## Remoto (ver arquitectura.md §34).
+var cards: Array[Node] = []
 
 
 # =============================================================================
@@ -29,40 +46,51 @@ func _ready() -> void:
 # API PÚBLICA
 # =============================================================================
 func add_card(card: Node) -> void:
-	_cards.append(card)
+	cards.append(card)
 	add_child(card)
 	_init_card(card)
 	card.modulate.a = 0.0
 	_arrange()
-	emit_signal("hand_changed", _cards.size())
+	emit_signal("hand_changed", cards.size())
+	emit_signal("card_added", card)
 
 
 func remove_card(card: Node, destroy: bool = true) -> void:
-	if card not in _cards:
+	if card not in cards:
 		return
-	_cards.erase(card)
+	cards.erase(card)
+	emit_signal("card_removed", card)
 	if destroy:
 		card.queue_free()
 	else:
 		remove_child(card)
 	_arrange()
-	emit_signal("hand_changed", _cards.size())
+	emit_signal("hand_changed", cards.size())
 
 
 func clear_hand() -> void:
-	for card in _cards:
+	for card in cards:
 		if is_instance_valid(card):
+			emit_signal("card_removed", card)
 			card.queue_free()
-	_cards.clear()
+	cards.clear()
 	emit_signal("hand_changed", 0)
 
 
 func get_card_count() -> int:
-	return _cards.size()
+	return cards.size()
 
 
 func get_cards() -> Array[Node]:
-	return _cards
+	return cards
+
+
+func _arrange_cards(_animated: bool = true) -> void:
+	"""Alias de _arrange() con la firma de DynamicHand._arrange_cards()
+	(mismo motivo que la propiedad 'cards' arriba — compatibilidad con el
+	código que trata player_hand/_opponent_fan de forma intercambiable).
+	'_animated' se ignora: _arrange() de esta clase siempre anima igual."""
+	_arrange()
 
 
 # =============================================================================
@@ -85,7 +113,7 @@ func _init_card(card: Node) -> void:
 # DISPOSICIÓN HORIZONTAL RECTA (OPCIÓN 3)
 # =============================================================================
 func _arrange() -> void:
-	var n := _cards.size()
+	var n := cards.size()
 	if n == 0:
 		return
 
@@ -111,7 +139,7 @@ func _arrange() -> void:
 	var start_x := cx - total_w / 2.0
 
 	for i in range(n):
-		var card := _cards[i]
+		var card := cards[i]
 		var px := start_x + float(i) * step
 		var py := 8.0  # Posicionada limpiamente bajo el borde superior sin cortarse
 
@@ -128,12 +156,12 @@ func _arrange() -> void:
 
 func get_card_target_position(card: Node) -> Vector2:
 	"""Calcula la posición local de destino de una carta en la mano del oponente."""
-	var idx := _cards.find(card)
+	var idx := cards.find(card)
 	if idx < 0:
-		idx = _cards.size() - 1
+		idx = cards.size() - 1
 	if idx < 0:
 		idx = 0
-	var n := maxi(1, _cards.size())
+	var n := maxi(1, cards.size())
 	var cx := size.x / 2.0
 	if cx < 50.0:
 		var vp := get_viewport()

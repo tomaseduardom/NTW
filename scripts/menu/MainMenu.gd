@@ -27,8 +27,10 @@ func _ready() -> void:
 	exit_button.pressed.connect(_on_exit_pressed)
 
 	# 2026-09-22: el botón muestra si ya hay una sesión de ShadowForge
-	# guardada — no hace falta abrir la pantalla solo para chequearlo.
-	shadowforge_button.text = "SHADOWFORGE (conectado)" if ExternalApiClient.is_authenticated() else "SHADOWFORGE"
+	if ExternalApiClient.is_authenticated():
+		shadowforge_button.text = "SHADOWFORGE (conectado)"
+	else:
+		shadowforge_button.text = "SHADOWFORGE"
 
 	# Focus inicial en Play
 	play_button.grab_focus()

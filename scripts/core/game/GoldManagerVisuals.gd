@@ -90,9 +90,9 @@ func _update_container_gold_spacing(container: HBoxContainer) -> void:
 		return
 
 	var max_width: float = 330.0
-	var card_visual_width: float = 150.0 * Constants.GOLD_CARD_SCALE.x  # 120.0
+	var card_visual_width: float = 150.0 * Constants.GOLD_CARD_SCALE.x
 	var ideal_step: float = (max_width - card_visual_width) / float(count - 1)
-	var step: float = minf(ideal_step, 130.0)  # Límite en 130px para dejar 10px de espacio libre entre 2 cartas
+	var step: float = minf(ideal_step, card_visual_width + 10.0)  # Dejar 10px libres cuando hay pocas cartas
 	var final_sep: int = int(round(step - 150.0))
 	container.add_theme_constant_override("separation", final_sep)
 

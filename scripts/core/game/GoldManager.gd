@@ -287,7 +287,12 @@ func put_gold_directly_in_pagado(player_id: int, card_data: Dictionary) -> Node:
 
 
 func _place_card_as_gold(card: Node) -> void:
-	if card.get_parent() != _main.player_hand:
+	# controller_id, no owner_id (2026-10-07, ver arquitectura.md §38) — de
+	# qué lado del tablero/Reserva aparece es cuestión de control.
+	var player_id: int = card.controller_id
+	var hand_container = _main.player_hand if player_id == 0 else _main._opponent_fan
+	var gold_container = _main.player_gold if player_id == 0 else _main.opponent_gold
+	if card.get_parent() != hand_container:
 		_main._update_debug("Solo puedes colocar cartas de la mano como Oro")
 		return
 	if card.card_type != Constants.CardType.ORO:
@@ -302,13 +307,13 @@ func _place_card_as_gold(card: Node) -> void:
 		if _main._card_interaction: _main._card_interaction.is_placing_gold = false
 		return
 	var start_pos = card.global_position
-	var idx = _main.player_hand.cards.find(card)
+	var idx = hand_container.cards.find(card)
 	if idx >= 0:
-		_main.player_hand.cards.remove_at(idx)
-	_main.player_hand.remove_child(card)
-	_main.player_hand._arrange_cards()
+		hand_container.cards.remove_at(idx)
+	hand_container.remove_child(card)
+	hand_container._arrange_cards()
 	card.can_interact = false
-	_main.player_gold.add_child(card)
+	gold_container.add_child(card)
 	update_gold_containers_spacing()
 	card.top_level = false
 	card.set_zone(Constants.Zone.RESERVA_ORO)
@@ -336,10 +341,11 @@ func _place_card_as_gold(card: Node) -> void:
 	card.can_interact = true
 	TurnManager.oro_placed_this_turn = true
 	TurnManager.any_card_played_this_turn = true
-	_main.gold_cards.append(card)
-	GameState.agregar_oro_reserva(0, 1)
-	_register_gold_placed(0)
-	var oro_actual = GameState.get_oro_reserva(0)
+	if player_id == 0:
+		_main.gold_cards.append(card)
+	GameState.agregar_oro_reserva(player_id, 1)
+	_register_gold_placed(player_id)
+	var oro_actual = GameState.get_oro_reserva(player_id)
 	_main._update_debug("%s colocado como Oro (Reserva: %d)" % [card.card_name, oro_actual])
 	if _main._card_interaction: _main._card_interaction.is_placing_gold = false
 	_update_gold_display()
@@ -372,10 +378,12 @@ func _resolve_become_opponent_gold_copy(card: Node) -> void:
 	instance_id sigue siendo el propio de 'card' (Card.gd no lo toca), así
 	que ninguna referencia externa (contenedor, señales ya conectadas) se
 	rompe — solo cambia QUÉ carta representa visualmente y funcionalmente."""
-	if not _main.opponent_gold or not _main._card_interaction:
+	var player_id: int = card.controller_id
+	var rival_gold = _main.opponent_gold if player_id == 0 else _main.player_gold
+	if not rival_gold or not _main._card_interaction:
 		return
 	var candidates: Array = []
-	for c in _main.opponent_gold.get_children():
+	for c in rival_gold.get_children():
 		if is_instance_valid(c) and c != card:
 			candidates.append(c)
 	if candidates.is_empty():
@@ -383,7 +391,7 @@ func _resolve_become_opponent_gold_copy(card: Node) -> void:
 		return
 	var filter := func(c: Node) -> bool:
 		return c in candidates
-	var target: Node = await _main._card_interaction.await_target("Elige un Oro rival para copiar", filter)
+	var target: Node = await _main._card_interaction.await_target("Elige un Oro rival para copiar", filter, true, player_id)
 	if not target or not is_instance_valid(target):
 		return
 	var copied_data: Dictionary = target.card_data.duplicate(true)
@@ -522,6 +530,20 @@ func put_gold_directly_in_reserva(player_id: int, card_data: Dictionary) -> Node
 
 
 func play_card(card: Node) -> bool:
+	# player_id (2026-10-07, refactor de GoldManager.play_card() para que
+	# deje de asumir siempre jugador 0 — ver arquitectura.md §34): se deriva
+	# del controller_id real de la carta, no de un parámetro nuevo — todos
+	# los llamadores existentes (DropZone, BanishOpponentPatterns,
+	# ActionSearch, etc.) solo pasan 'card', así que esto no les cambia nada
+	# (sus cartas siempre tienen controller_id 0); el único camino que ahora
+	# puede llegar con controller_id 1 es el drag-and-drop del propio Remoto
+	# sobre su mano/zonas.
+	# controller_id, no owner_id (2026-10-07, ver arquitectura.md §38): quién
+	# paga/de quién es el turno que se chequea aquí es quien CONTROLA el
+	# juego de esta carta ahora mismo, no necesariamente su dueño real —
+	# divergen en Miguel ("juega una carta de tu mano o de un Cementerio",
+	# el Cementerio puede ser el rival, pero paga y juega el activador).
+	var player_id: int = card.controller_id
 	# Excepciones de fase (2026-08-28): por defecto TODO se restringe a
 	# Vigilia por los dos gateos de abajo (VIGILIA-only y ventana de
 	# prioridad activa — Guerra de Talismanes SIEMPRE tiene una abierta,
@@ -537,7 +559,7 @@ func play_card(card: Node) -> bool:
 	#     p.ej. Red de Plata) — esos ya quedan bloqueados en CUALQUIER fase
 	#     más abajo por _is_response_only_talisman(), así que no hace falta
 	#     repetir la exclusión aquí.
-	var phase_exception: bool = has_phase_exception(card.card_type)
+	var phase_exception: bool = has_phase_exception(card.card_type, player_id)
 	# Talismanes de velocidad instantánea (Anula/Cancela, p.ej. Red de Plata,
 	# Sacrificio Solar — ver _is_response_only_talisman()) son "de respuesta"
 	# en el sentido de DAR: se juegan EN CUALQUIER MOMENTO en el que el
@@ -570,7 +592,7 @@ func play_card(card: Node) -> bool:
 	# respuesta (Red de Plata, Sacrificio Solar) nunca se podía jugar durante
 	# el turno del rival, exactamente el caso de uso real que existe para
 	# tenerlos en la mano.
-	if GameManager.active_player_id != 0 and not is_instant_response:
+	if GameManager.active_player_id != player_id and not is_instant_response:
 		_main._update_debug("No es tu turno")
 		await _return_card_rejected(card)
 		return false
@@ -632,7 +654,7 @@ func play_card(card: Node) -> bool:
 	# ya está en juego (nadie vuelve a pedir su coste después de jugada).
 	var reveal_pattern: Dictionary = _get_reveal_cost_reduction_pattern(card)
 	if not reveal_pattern.is_empty():
-		var revealed_count: int = await _resolve_reveal_cost_reduction(card, reveal_pattern)
+		var revealed_count: int = await _resolve_reveal_cost_reduction(card, reveal_pattern, player_id)
 		if revealed_count > 0:
 			var applies_to_this_card := func(c: Node) -> bool:
 				return c == card
@@ -644,7 +666,7 @@ func play_card(card: Node) -> bool:
 	# pero la carta entregada se descarta de verdad en vez de solo mostrarse.
 	var discard_pattern: Dictionary = _get_discard_cost_reduction_pattern(card)
 	if not discard_pattern.is_empty():
-		var did_discard: bool = await _resolve_discard_cost_reduction(card)
+		var did_discard: bool = await _resolve_discard_cost_reduction(card, player_id)
 		if did_discard:
 			var applies_to_this_card_discard := func(c: Node) -> bool:
 				return c == card
@@ -659,8 +681,8 @@ func play_card(card: Node) -> bool:
 	# asequibilidad antes de mostrar candidatos. Se corta aquí, antes de la
 	# selección de portador, en vez de solo después.
 	var coste_real = PaymentManager.calcular_coste_real(card)
-	if not PaymentManager.puede_jugar_carta(card, 0):
-		var disponible = get_oro_disponible()
+	if not PaymentManager.puede_jugar_carta(card, player_id):
+		var disponible = get_oro_disponible(player_id)
 		_main._update_debug("Oro insuficiente: necesitas %d, tienes %d (gastado este turno: %d)" % [
 			coste_real, disponible, PaymentManager.oro_gastado_este_turno])
 		# Limpiar el descuento de "muestra X" si se rechaza aquí (2026-08-29):
@@ -681,7 +703,7 @@ func play_card(card: Node) -> bool:
 		# colgada para siempre y 'Elige qué Aliado porta el Arma' se repetía
 		# sin que ningún click a un Aliado la resolviera.
 		card.can_interact = false
-		chosen_wielder = await _select_weapon_wielder()
+		chosen_wielder = await _select_weapon_wielder(player_id)
 		if not chosen_wielder or not is_instance_valid(chosen_wielder):
 			_main._update_debug("Equipar Arma cancelado")
 			PaymentManager.remover_modificador_coste(card)
@@ -691,15 +713,15 @@ func play_card(card: Node) -> bool:
 		# disponible no debería cambiar en medio del propio turno del
 		# jugador, pero es una comprobación barata y evita pagar de más si
 		# algo sí lo cambió mientras esperaba.
-		if not PaymentManager.puede_jugar_carta(card, 0):
-			var disponible2 = get_oro_disponible()
+		if not PaymentManager.puede_jugar_carta(card, player_id):
+			var disponible2 = get_oro_disponible(player_id)
 			_main._update_debug("Oro insuficiente: necesitas %d, tienes %d (gastado este turno: %d)" % [
 				coste_real, disponible2, PaymentManager.oro_gastado_este_turno])
 			PaymentManager.remover_modificador_coste(card)
 			await _return_card_rejected(card)
 			return false
 	if coste_real > 0:
-		await pagar_coste(coste_real, card.card_type, card.get("card_raza") if card.get("card_raza") != null else "", card.card_cost)
+		await pagar_coste(coste_real, card.card_type, card.get("card_raza") if card.get("card_raza") != null else "", card.card_cost, player_id)
 		PaymentManager.registrar_pago(coste_real)
 	_register_play_limit(card)
 	if card.card_type == Constants.CardType.TALISMAN:
@@ -711,7 +733,7 @@ func play_card(card: Node) -> bool:
 	return true
 
 
-func play_card_from_exile(card_data: Dictionary, discount: int = 0) -> bool:
+func play_card_from_exile(card_data: Dictionary, discount: int = 0, owner_id: int = 0) -> bool:
 	"""Juega una carta directamente desde el Destierro propio, pagando su
 	coste real, como si estuviera en la mano (2026-09-04, a pedido del
 	usuario — p.ej. uriel: 'Puedes jugarlo de tu Destierro pagando su
@@ -725,25 +747,28 @@ func play_card_from_exile(card_data: Dictionary, discount: int = 0) -> bool:
 	propio texto diga otra cosa — no hay ningún caso así todavía).
 	discount (2026-09-04, p.ej. rafael: 'reduciendo su coste en un Oro') —
 	descuento fijo aplicado ANTES de calcular coste_real, piso 1 (no dice
-	'hasta un mínimo de 0')."""
-	var phase_exception: bool = has_phase_exception(card_data.get("tipo", -1))
+	'hasta un mínimo de 0').
+	'owner_id' (2026-10-07, mismo criterio que play_card_for_free() — ver
+	arquitectura.md §25/§34): los llamadores existentes (ZoneViewerModule,
+	siempre el Anfitrión) no lo pasan, así que conservan el 0 de siempre."""
+	var phase_exception: bool = has_phase_exception(card_data.get("tipo", -1), owner_id)
 
 	if GameManager.current_phase != Constants.Phase.VIGILIA and not phase_exception:
 		_main._update_debug(get_phase_rejection_reason(card_data.get("tipo", -1)))
 		return false
-	if GameManager.active_player_id != 0:
+	if GameManager.active_player_id != owner_id:
 		_main._update_debug("No es tu turno")
 		return false
 	if PriorityManager.priority_window_active and not phase_exception:
 		_main._update_debug("Resuelve la respuesta pendiente (¿Paso?) antes de jugar otra carta")
 		return false
-	if _no_more_cards_this_turn.get(0, false):
+	if _no_more_cards_this_turn.get(owner_id, false):
 		_main._update_debug("No puedes jugar más cartas este turno")
 		return false
 
 	var card_type: int = card_data.get("tipo", -1)
 	var card = _main._create_card(card_data, false)
-	card.owner_id = 0
+	card.owner_id = owner_id
 	_main._connect_card_signals(card)
 
 	if discount > 0:
@@ -765,8 +790,8 @@ func play_card_from_exile(card_data: Dictionary, discount: int = 0) -> bool:
 		return false
 
 	var coste_real = PaymentManager.calcular_coste_real(card)
-	if not PaymentManager.puede_jugar_carta(card, 0):
-		var disponible = get_oro_disponible()
+	if not PaymentManager.puede_jugar_carta(card, owner_id):
+		var disponible = get_oro_disponible(owner_id)
 		_main._update_debug("Oro insuficiente: necesitas %d, tienes %d" % [coste_real, disponible])
 		card.queue_free()
 		return false
@@ -774,18 +799,18 @@ func play_card_from_exile(card_data: Dictionary, discount: int = 0) -> bool:
 	var chosen_wielder: Node = null
 	if card_type == Constants.CardType.ARMA:
 		card.can_interact = false
-		chosen_wielder = await _select_weapon_wielder()
+		chosen_wielder = await _select_weapon_wielder(owner_id)
 		if not chosen_wielder or not is_instance_valid(chosen_wielder):
 			_main._update_debug("Equipar Arma cancelado")
 			card.queue_free()
 			return false
-		if not PaymentManager.puede_jugar_carta(card, 0):
-			var disponible2 = get_oro_disponible()
+		if not PaymentManager.puede_jugar_carta(card, owner_id):
+			var disponible2 = get_oro_disponible(owner_id)
 			_main._update_debug("Oro insuficiente: necesitas %d, tienes %d" % [coste_real, disponible2])
 			card.queue_free()
 			return false
 
-	var exile: Array = CardManager.get_exile(0)
+	var exile: Array = CardManager.get_exile(owner_id)
 	var idx: int = exile.find(card_data)
 	if idx < 0:
 		card.queue_free()
@@ -793,7 +818,7 @@ func play_card_from_exile(card_data: Dictionary, discount: int = 0) -> bool:
 	exile.remove_at(idx)
 
 	if coste_real > 0:
-		await pagar_coste(coste_real, card_type, card_data.get("raza", ""), card_data.get("coste", 0))
+		await pagar_coste(coste_real, card_type, card_data.get("raza", ""), card_data.get("coste", 0), owner_id)
 		PaymentManager.registrar_pago(coste_real)
 
 	_register_play_limit(card)
@@ -806,7 +831,7 @@ func play_card_from_exile(card_data: Dictionary, discount: int = 0) -> bool:
 	return true
 
 
-func play_card_from_cemetery(card_data: Dictionary) -> bool:
+func play_card_from_cemetery(card_data: Dictionary, owner_id: int = 0) -> bool:
 	"""Juega una carta con Exhumar directamente desde el Cementerio propio,
 	como si estuviera en la mano (DAR - Exhumar). Espejo de play_card() pero
 	con el Cementerio como origen en vez de la mano — la carta nunca pasa
@@ -814,25 +839,28 @@ func play_card_from_cemetery(card_data: Dictionary) -> bool:
 	_equip_weapon() deben tolerar que no tenga ese parent (ya corregido).
 	Al salir del juego irá al Destierro en vez del Cementerio: la carta se
 	marca con is_exhumed = true, que CardManager.destroy_card() y
-	GoldManager._play_talisman() ya respetan."""
+	GoldManager._play_talisman() ya respetan.
+	'owner_id' (2026-10-07, mismo criterio que play_card_for_free() — ver
+	arquitectura.md §25/§34): los llamadores existentes (ZoneViewerModule,
+	siempre el Anfitrión) no lo pasan, así que conservan el 0 de siempre."""
 	# Mismas excepciones que play_card() — ver su comentario (Arma puntual
 	# tipo Lobo Sagrado + Talismanes en general en Guerra de Talismanes, y
 	# Talismanes de respuesta instantánea — Exhumar uno también cuenta como
 	# jugarlo, 2026-09-06).
-	var phase_exception: bool = has_phase_exception(card_data.get("tipo", -1))
+	var phase_exception: bool = has_phase_exception(card_data.get("tipo", -1), owner_id)
 	var is_instant_response: bool = card_data.get("tipo", -1) == Constants.CardType.TALISMAN \
 		and _is_response_only_talisman_data(card_data)
 
 	if GameManager.current_phase != Constants.Phase.VIGILIA and not phase_exception and not is_instant_response:
 		_main._update_debug(get_phase_rejection_reason(card_data.get("tipo", -1)))
 		return false
-	if GameManager.active_player_id != 0:
+	if GameManager.active_player_id != owner_id:
 		_main._update_debug("No es tu turno")
 		return false
 	if PriorityManager.priority_window_active and not phase_exception and not is_instant_response:
 		_main._update_debug("Resuelve la respuesta pendiente (¿Paso?) antes de jugar otra carta")
 		return false
-	if _no_more_cards_this_turn.get(0, false):
+	if _no_more_cards_this_turn.get(owner_id, false):
 		_main._update_debug("No puedes jugar más cartas este turno")
 		return false
 
@@ -843,7 +871,7 @@ func play_card_from_cemetery(card_data: Dictionary) -> bool:
 	# aplica a este camino (jugar con Exhumar desde el Cementerio no es el
 	# caso que esa carta describe: 'una carta de la mano rival').
 	var card = _main._create_card(card_data, false)
-	card.owner_id = 0
+	card.owner_id = owner_id
 	card.is_exhumed = true
 	_main._connect_card_signals(card)
 
@@ -864,8 +892,8 @@ func play_card_from_cemetery(card_data: Dictionary) -> bool:
 	# en play_card() (2026-08-28): no ofrecer selección de portador para un
 	# Arma que ya sabemos que no se puede pagar.
 	var coste_real = PaymentManager.calcular_coste_real(card)
-	if not PaymentManager.puede_jugar_carta(card, 0):
-		var disponible = get_oro_disponible()
+	if not PaymentManager.puede_jugar_carta(card, owner_id):
+		var disponible = get_oro_disponible(owner_id)
 		_main._update_debug("Oro insuficiente: necesitas %d, tienes %d" % [coste_real, disponible])
 		card.queue_free()
 		return false
@@ -873,13 +901,13 @@ func play_card_from_cemetery(card_data: Dictionary) -> bool:
 	var chosen_wielder: Node = null
 	if card_type == Constants.CardType.ARMA:
 		card.can_interact = false
-		chosen_wielder = await _select_weapon_wielder()
+		chosen_wielder = await _select_weapon_wielder(owner_id)
 		if not chosen_wielder or not is_instance_valid(chosen_wielder):
 			_main._update_debug("Equipar Arma cancelado")
 			card.queue_free()
 			return false
-		if not PaymentManager.puede_jugar_carta(card, 0):
-			var disponible2 = get_oro_disponible()
+		if not PaymentManager.puede_jugar_carta(card, owner_id):
+			var disponible2 = get_oro_disponible(owner_id)
 			_main._update_debug("Oro insuficiente: necesitas %d, tienes %d" % [coste_real, disponible2])
 			card.queue_free()
 			return false
@@ -887,15 +915,15 @@ func play_card_from_cemetery(card_data: Dictionary) -> bool:
 	# Solo con todo confirmado (portador elegido, Oro alcanza) se retira
 	# de verdad del Cementerio — igual que play_card() con la mano, para que
 	# cancelar a mitad de camino no deje el Cementerio corrompido.
-	var cemetery: Array = CardManager.get_cemetery(0)
+	var cemetery: Array = CardManager.get_cemetery(owner_id)
 	var idx: int = cemetery.find(card_data)
 	if idx < 0:
 		card.queue_free()
 		return false
-	CardManager.exhume_card(0, idx)
+	CardManager.exhume_card(owner_id, idx)
 
 	if coste_real > 0:
-		await pagar_coste(coste_real, card_type, card_data.get("raza", ""), card_data.get("coste", 0))
+		await pagar_coste(coste_real, card_type, card_data.get("raza", ""), card_data.get("coste", 0), owner_id)
 		PaymentManager.registrar_pago(coste_real)
 
 	_register_play_limit(card)
@@ -1025,9 +1053,11 @@ func _equip_weapon(weapon: Node, ally: Node, fire_enter_play: bool = true) -> vo
 
 	# 3. Quitar de la mano matando cualquier tween activo en DynamicHand (2026-09-19)
 	# para evitar que tweens residuales sigan moviendo 'position' a las coordenadas de la mano.
-	if _main and _main.player_hand:
-		if _main.player_hand.cards.has(weapon) or weapon.get_parent() == _main.player_hand:
-			_main.player_hand.remove_card(weapon, false)
+	var weapon_owner: int = weapon.owner_id if weapon.get("owner_id") != null else 0
+	var weapon_hand_container = _main.player_hand if weapon_owner == 0 else _main.get("_opponent_fan")
+	if _main and weapon_hand_container:
+		if weapon_hand_container.cards.has(weapon) or weapon.get_parent() == weapon_hand_container:
+			weapon_hand_container.remove_card(weapon, false)
 	if weapon.get_parent():
 		weapon.get_parent().remove_child(weapon)
 
@@ -1385,16 +1415,16 @@ func _get_reveal_cost_reduction_pattern(card: Node) -> Dictionary:
 	return _tax._get_reveal_cost_reduction_pattern(card)
 
 
-func _resolve_reveal_cost_reduction(card: Node, pattern: Dictionary) -> int:
-	return await _tax._resolve_reveal_cost_reduction(card, pattern)
+func _resolve_reveal_cost_reduction(card: Node, pattern: Dictionary, player_id: int = 0) -> int:
+	return await _tax._resolve_reveal_cost_reduction(card, pattern, player_id)
 
 
 func _get_discard_cost_reduction_pattern(card: Node) -> Dictionary:
 	return _tax._get_discard_cost_reduction_pattern(card)
 
 
-func _resolve_discard_cost_reduction(card: Node) -> bool:
-	return await _tax._resolve_discard_cost_reduction(card)
+func _resolve_discard_cost_reduction(card: Node, player_id: int = 0) -> bool:
+	return await _tax._resolve_discard_cost_reduction(card, player_id)
 
 
 ## Elegibilidad para jugar una carta (Errante, límite de juego por nombre,
@@ -1435,8 +1465,8 @@ func _get_eligible_weapon_wielders() -> Array:
 	return _restrictions._get_eligible_weapon_wielders()
 
 
-func has_phase_exception(card_type: int) -> bool:
-	return _restrictions.has_phase_exception(card_type)
+func has_phase_exception(card_type: int, player_id: int = 0) -> bool:
+	return _restrictions.has_phase_exception(card_type, player_id)
 
 
 func get_phase_rejection_reason(card_type: int) -> String:
@@ -1471,11 +1501,20 @@ func _play_card_to_field(card: Node) -> void:
 	# player_field/player_linea_apoyo (el Anfitrión), sin importar el
 	# owner_id real de la carta — roto para cualquier carta jugada vía
 	# play_card_for_free()/play_card_from_cemetery() en nombre del jugador 1
-	# (p.ej. La Torre, arco del triunfo, Caín). card.owner_id ya está
+	# (p.ej. La Torre, arco del triunfo, Caín). card.controller_id ya está
 	# asignado antes de llegar aquí en los 3 caminos (play_card/play_card_
 	# from_cemetery/play_card_for_free), así que se enruta por eso en vez
 	# de los contenedores fijos.
-	var owner_id: int = card.owner_id if card.get("owner_id") != null else 0
+	# 2026-10-07, bug real encontrado al desbloquear Miguel (ver
+	# arquitectura.md §38): este 'owner_id' decidía DE QUÉ LADO DEL
+	# TABLERO aparece la carta — eso es controller_id por definición
+	# (Card.gd líneas ~165-174: "Quién CONTROLA la carta... de qué lado
+	# del tablero pelea"), no owner_id (dueño real, a quién vuelve si
+	# muere). Antes no importaba porque en la práctica owner_id ==
+	# controller_id siempre (el setter de owner_id los sincroniza) salvo
+	# en el único caso que los separa a propósito (Miguel, jugar una carta
+	# de un Cementerio ajeno sin volverte su dueño).
+	var owner_id: int = card.controller_id
 	# Crono Diamante (2026-09-02): "si jugaste un Aliado de coste 2 o más
 	# este turno" — condición previa de su otra habilidad. Se registra aquí
 	# porque es el único lugar real donde un Aliado termina jugado, sin
@@ -1923,7 +1962,10 @@ func _play_talisman(card: Node) -> void:
 	# p.ej. Fuente de la Juventud: 'les cuesta un Oro adicional jugar
 	# Talismanes SI han jugado Talismanes este turno' — la condición del
 	# impuesto la consulta _register_talisman_second_play_tax() más abajo).
-	var talisman_owner: int = card.owner_id if card.get("owner_id") != null else 0
+	# 2026-10-07: controller_id, no owner_id — de qué lado del tablero
+	# aparece es cuestión de CONTROL, no de dueño real (ver arquitectura.md
+	# §38, mismo arreglo que _play_card_to_field()).
+	var talisman_owner: int = card.controller_id
 	UniversalCardParser.turn_registry.register("talisman_played:%d" % talisman_owner, 0, GameManager.current_turn)
 
 	# 2026-10-05, bug real encontrado al convertir más cartas: esta función

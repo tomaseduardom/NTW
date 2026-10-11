@@ -24,10 +24,22 @@ func setup(main: Node) -> void:
 	_main = main
 
 
-func open_and_wait(prompt: String = "Nombra una carta") -> Dictionary:
+func open_and_wait(prompt: String = "Nombra una carta", chooser_id: int = 0) -> Dictionary:
 	"""Abre el buscador en vivo y espera. Devuelve el card_data elegido, o
 	{} si se cancela (botón Cancelar o Escape) sin haber clickeado ninguna
-	carta."""
+	carta.
+	'chooser_id' (2026-10-07, ver arquitectura.md §42): a diferencia de los
+	otros 5 diálogos sin puente ya resueltos, este NO manda nada por red —
+	el Remoto ya tiene su propia CardDatabase cargada (mismo autoload, mismo
+	catálogo), así que puede correr este MISMO buscador en vivo, con arte
+	real, del todo local a su pantalla, en vez de recibir una lista
+	curada. Solo viaja el resultado final. Ver RemoteMirrorController.
+	_show_name_card_prompt(), que llama a este mismo open_and_wait() desde
+	el lado del Remoto."""
+	if chooser_id == 1 and NetworkClient.room_code != "" and NetworkClient.is_host:
+		NetworkClient.send_message({"op": "prompt", "kind": "name_card", "title": prompt})
+		var intent: Dictionary = await NetworkClient.await_intent(["name_card_choice"])
+		return intent.get("card_data", {})
 	var layer := CanvasLayer.new()
 	layer.layer = 100
 	_main.add_child(layer)

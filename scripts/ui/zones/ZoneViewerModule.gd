@@ -4,13 +4,14 @@ extends Node
 const CardScene = preload("res://scenes/cards/Card.tscn")
 const TEX_CEMETERY_BG := preload("res://assets/backgrounds/cementerio_bg.jpg")
 const TEX_EXILE_BG    := preload("res://assets/backgrounds/destierro_bg.jpg")
+const TEX_PEDESTAL_CEM := preload("res://assets/ui/zones/pedestal_cementerio.png")
+const TEX_PEDESTAL_DST := preload("res://assets/ui/zones/pedestal_destierro.png")
 const SHADER_VIGNETTE := preload("res://assets/shaders/zone_modal_vignette.gdshader")
-
-var _main: Node = null
-
 
 const FONT_TITLE := preload("res://assets/fonts/Cinzel-Bold.ttf")
 const FONT_BODY := preload("res://assets/fonts/Marcellus-Regular.ttf")
+
+var _main: Node = null
 
 
 func setup(main: Node) -> void:
@@ -30,26 +31,172 @@ func setup_public_zone_viewers() -> void:
 		var label: String = z[1]
 		var pid: int = z[2]
 		var ztype: String = z[3]
-		panel.clip_contents = true
+		var is_cem: bool = (ztype == "cemetery")
+
+		panel.clip_contents = false
 		panel.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
-		panel.gui_input.connect(func(ev):
-			if ev is InputEventMouseButton and ev.button_index == MOUSE_BUTTON_LEFT and ev.pressed:
-				_show_zone_popup(label, pid, ztype)
-		)
-		# TextureRect para mostrar la carta del tope ajustada al contenedor completo
-		var tr = TextureRect.new()
+		panel.pivot_offset = panel.size / 2.0
+
+		# 1. Marco y relieve ornamental
+		var pstyle := StyleBoxFlat.new()
+		pstyle.set_corner_radius_all(10)
+		pstyle.shadow_size = 12
+		pstyle.shadow_color = Color(0, 0, 0, 0.85)
+		if is_cem:
+			pstyle.bg_color = Color(0.04, 0.05, 0.04, 0.20)
+			pstyle.border_color = Color(0.72, 0.60, 0.35, 0.88)
+			pstyle.set_border_width_all(2)
+		else:
+			pstyle.bg_color = Color(0.05, 0.03, 0.07, 0.20)
+			pstyle.border_color = Color(0.65, 0.45, 0.88, 0.88)
+			pstyle.set_border_width_all(2)
+		panel.add_theme_stylebox_override("panel", pstyle)
+
+		# 2. Contenedor interno recortado para el pedestal y cartas
+		var inner := Control.new()
+		inner.name = "InnerCardArea"
+		inner.set_anchors_preset(Control.PRESET_FULL_RECT)
+		inner.clip_contents = true
+		inner.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		panel.add_child(inner)
+
+		# 3. Pedestal temático ilustrado de fondo
+		var bg_rect := TextureRect.new()
+		bg_rect.name = "PedestalBg"
+		bg_rect.texture = TEX_PEDESTAL_CEM if is_cem else TEX_PEDESTAL_DST
+		bg_rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		bg_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+		bg_rect.set_anchors_preset(Control.PRESET_FULL_RECT)
+		bg_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		inner.add_child(bg_rect)
+
+		# 4. Aura de respiración mística (Idle Life)
+		var aura := ColorRect.new()
+		aura.name = "AuraGlow"
+		aura.set_anchors_preset(Control.PRESET_FULL_RECT)
+		aura.color = Color(0.18, 0.85, 0.40, 0.12) if is_cem else Color(0.65, 0.30, 0.95, 0.14)
+		aura.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		inner.add_child(aura)
+
+		var aura_tw := aura.create_tween().set_loops()
+		aura_tw.tween_property(aura, "modulate:a", 0.45, 2.0).set_trans(
+			Tween.TRANS_SINE
+		).set_ease(Tween.EASE_IN_OUT)
+		aura_tw.tween_property(aura, "modulate:a", 1.0, 2.0).set_trans(
+			Tween.TRANS_SINE
+		).set_ease(Tween.EASE_IN_OUT)
+
+		# 5. Capas físicas de cartas apiladas (Underlays 3D)
+		var underlay2 := TextureRect.new()
+		underlay2.name = "StackUnderlay2"
+		underlay2.texture = GameSettings.get_card_back_texture(0)
+		underlay2.modulate = Color(0.40, 0.40, 0.48, 0.9)
+		underlay2.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		underlay2.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+		underlay2.size = Vector2(94, 134)
+		underlay2.position = Vector2(3, 4)
+		underlay2.pivot_offset = Vector2(47, 67)
+		underlay2.rotation_degrees = -2.0
+		underlay2.visible = false
+		underlay2.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		inner.add_child(underlay2)
+
+		var underlay1 := TextureRect.new()
+		underlay1.name = "StackUnderlay1"
+		underlay1.texture = GameSettings.get_card_back_texture(0)
+		underlay1.modulate = Color(0.60, 0.60, 0.68, 0.95)
+		underlay1.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		underlay1.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+		underlay1.size = Vector2(96, 136)
+		underlay1.position = Vector2(2, 2)
+		underlay1.pivot_offset = Vector2(48, 68)
+		underlay1.rotation_degrees = 1.5
+		underlay1.visible = false
+		underlay1.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		inner.add_child(underlay1)
+
+		# 6. Previsualización de la carta del tope
+		var tr := TextureRect.new()
 		tr.name = "TopCardPreview"
 		tr.set_anchors_preset(Control.PRESET_FULL_RECT)
-		tr.set_offsets_preset(Control.PRESET_FULL_RECT)
 		tr.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-		tr.stretch_mode = TextureRect.STRETCH_SCALE
+		tr.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
 		tr.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		tr.visible = false
 		if pid == 1:
 			tr.pivot_offset = Vector2(50.0, 70.0)
 			tr.rotation_degrees = 180.0
-		panel.add_child(tr)
-		panel.move_child(tr, 0)  # Detrás de los otros hijos (count, label)
+		inner.add_child(tr)
+
+		# 7. Medallón heráldico para el contador
+		var count_lbl: Label = panel.get_node_or_null("Count")
+		if count_lbl:
+			var badge := Panel.new()
+			badge.name = "CountBadge"
+			badge.custom_minimum_size = Vector2(28, 28)
+			badge.size = Vector2(28, 28)
+			badge.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
+			badge.anchor_left = 1.0
+			badge.anchor_top = 1.0
+			badge.anchor_right = 1.0
+			badge.anchor_bottom = 1.0
+			badge.offset_left = -32.0
+			badge.offset_top = -32.0
+			badge.offset_right = -4.0
+			badge.offset_bottom = -4.0
+			badge.pivot_offset = Vector2(14, 14)
+			badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+			var bstyle := StyleBoxFlat.new()
+			bstyle.bg_color = Color(0.06, 0.05, 0.08, 0.94)
+			bstyle.set_border_width_all(2)
+			if is_cem:
+				bstyle.border_color = Color(0.88, 0.75, 0.35, 1.0)
+			else:
+				bstyle.border_color = Color(0.78, 0.58, 0.95, 1.0)
+			bstyle.set_corner_radius_all(14)
+			bstyle.shadow_color = Color(0, 0, 0, 0.80)
+			bstyle.shadow_size = 4
+			badge.add_theme_stylebox_override("panel", bstyle)
+
+			count_lbl.get_parent().remove_child(count_lbl)
+			badge.add_child(count_lbl)
+			count_lbl.set_anchors_preset(Control.PRESET_FULL_RECT)
+			count_lbl.offset_left = 0
+			count_lbl.offset_top = 0
+			count_lbl.offset_right = 0
+			count_lbl.offset_bottom = 0
+			count_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+			count_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+			count_lbl.add_theme_font_size_override("font_size", 14)
+			count_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+			panel.add_child(badge)
+
+		# 8. Feedback interactivo de hover
+		panel.mouse_entered.connect(func():
+			var tw := panel.create_tween()
+			tw.set_parallel(true)
+			tw.tween_property(panel, "scale", Vector2(1.03, 1.03), 0.12).set_ease(
+				Tween.EASE_OUT
+			)
+			var h_col = Color(1.0, 0.88, 0.45, 1.0) if is_cem else Color(0.90, 0.72, 1.0, 1.0)
+			tw.tween_property(pstyle, "border_color", h_col, 0.12)
+		)
+		panel.mouse_exited.connect(func():
+			var tw := panel.create_tween()
+			tw.set_parallel(true)
+			tw.tween_property(panel, "scale", Vector2.ONE, 0.12).set_ease(
+				Tween.EASE_OUT
+			)
+			var b_col = Color(0.72, 0.60, 0.35, 0.88) if is_cem else Color(0.65, 0.45, 0.88, 0.88)
+			tw.tween_property(pstyle, "border_color", b_col, 0.12)
+		)
+
+		panel.gui_input.connect(func(ev):
+			if ev is InputEventMouseButton and ev.button_index == MOUSE_BUTTON_LEFT and ev.pressed:
+				_show_zone_popup(label, pid, ztype)
+		)
 
 	# Conectar señales del CardManager para actualizar el tope en tiempo real
 	CardManager.cemetery_count_changed.connect(_on_zone_cemetery_changed)
@@ -911,16 +1058,35 @@ func _on_zone_card_image_loaded(_card_id: String, _texture: Texture2D) -> void:
 
 
 func _refresh_zone_top_card(panel: Panel, cards_data: Array) -> void:
-	var tr: TextureRect = panel.get_node_or_null("TopCardPreview")
+	var tr: TextureRect = panel.find_child("TopCardPreview", true, false) as TextureRect
+	var underlay1: CanvasItem = panel.find_child("StackUnderlay1", true, false) as CanvasItem
+	var underlay2: CanvasItem = panel.find_child("StackUnderlay2", true, false) as CanvasItem
+	var badge: Control = panel.find_child("CountBadge", true, false) as Control
+
 	if not tr:
 		return
 
-	if cards_data.is_empty():
+	if badge:
+		var tw_b = badge.create_tween()
+		tw_b.tween_property(badge, "scale", Vector2(1.22, 1.22), 0.08).set_ease(Tween.EASE_OUT)
+		tw_b.tween_property(badge, "scale", Vector2.ONE, 0.12).set_ease(Tween.EASE_IN)
+
+	var n_cards: int = cards_data.size()
+	if n_cards == 0:
 		tr.texture = null
 		tr.visible = false
+		if underlay1:
+			underlay1.visible = false
+		if underlay2:
+			underlay2.visible = false
 		return
 
 	tr.visible = true
+	if underlay1:
+		underlay1.visible = (n_cards >= 2)
+	if underlay2:
+		underlay2.visible = (n_cards >= 5)
+
 	var top_card = cards_data.back()
 	var card_id = str(top_card.get("id", ""))
 

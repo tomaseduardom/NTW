@@ -35,13 +35,6 @@ func try_execute_tempilcahue_choice_pattern(full_text: String, card: Node, contr
 	var lower := full_text.to_lower()
 	if not ("elige un efecto" in lower and "no puedes jugar más cartas" in lower and "paga dos oros" in lower):
 		return false
-	if controller_id != 0:
-		# Excluida desde el plan original de Fase 3: "Paga dos Oros para
-		# Barajar cartas cuyos costes sumen hasta 4" usa dynamic_filter
-		# (presupuesto en vivo) en await_multi_target(), que el puente de
-		# red no enforcea del lado del Remoto (mismo caso que Lobo Sagrado).
-		return false  # el Remoto no puede usar esta habilidad todavía
-
 	var main := _executor._main.get_node_or_null("/root/Main")
 	if not main or not main._gold_manager:
 		return true
@@ -49,7 +42,7 @@ func try_execute_tempilcahue_choice_pattern(full_text: String, card: Node, contr
 	var choose_search: bool = await SelectionManager.await_two_choice(
 		main, "Tempilcahue",
 		"Buscar una carta en tu Castillo y robar una (no juegas más cartas este turno)",
-		"Pagar 2 Oros: barajar cartas en juego (coste ≤4) y robar 2")
+		"Pagar 2 Oros: barajar cartas en juego (coste ≤4) y robar 2", controller_id)
 
 	if choose_search:
 		# Sin ventana genérica aquí (2026-09-09): Tempilcahue es un Talismán —
@@ -60,10 +53,10 @@ func try_execute_tempilcahue_choice_pattern(full_text: String, card: Node, contr
 		main._gold_manager.set_no_more_cards_this_turn(controller_id)
 		return true
 
-	if not main._gold_manager.puede_pagar(2):
+	if not main._gold_manager.puede_pagar(2, -1, "", -1, controller_id):
 		main._update_debug("No tienes 2 Oros disponibles para esta opción")
 		return true
-	await main._gold_manager.pagar_coste(2)
+	await main._gold_manager.pagar_coste(2, -1, "", -1, controller_id)
 
 	var candidates: Array = []
 	for field in [main.player_field, main.player_linea_ataque, main.player_linea_apoyo,
@@ -88,7 +81,7 @@ func try_execute_tempilcahue_choice_pattern(full_text: String, card: Node, contr
 		var c_cost: int = int(c.get("card_cost")) if c.get("card_cost") != null else 0
 		return sum_cost + c_cost <= 4
 	var chosen: Array = await main._card_interaction.await_multi_target(
-		"Baraja cartas en juego cuyos costes sumen hasta 4", candidates, -1, Callable(), budget_filter)
+		"Baraja cartas en juego cuyos costes sumen hasta 4", candidates, -1, Callable(), budget_filter, true, null, controller_id)
 	# Sin ventana genérica aquí (2026-09-09): return_to_deck() (dentro del
 	# loop) ya consulta Prevención adentro por cada carta.
 	for c in chosen:

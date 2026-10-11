@@ -419,12 +419,11 @@ func _activate_paladin_bestiarium_discard_weapon_discount(source_card: Node, abi
 	if not is_instance_valid(source_card) or not _inspector._main._gold_manager:
 		return
 	var owner_id: int = source_card.owner_id if source_card.get("owner_id") != null else 0
-	if owner_id != 0 or not _inspector._main.player_hand or _inspector._main.player_hand.cards.is_empty():
-		# 2026-10-05: resuelve con gold_manager.play_card(weapon_node) directo
-		# — "No es tu turno" si GameManager.active_player_id != 0 (ver §23).
-		return  # el Remoto no puede usar esta habilidad todavía
+	var hand_container_paladin = _inspector._main.player_hand if owner_id == 0 else _inspector._main._opponent_fan
+	if not hand_container_paladin or hand_container_paladin.cards.is_empty():
+		return
 
-	var hand_cards: Array = _inspector._main.player_hand.cards.duplicate()
+	var hand_cards: Array = hand_container_paladin.cards.duplicate()
 	var gold_manager: GoldManager = _inspector._main._gold_manager
 
 	var weapon_candidates: Array = []
@@ -433,7 +432,7 @@ func _activate_paladin_bestiarium_discard_weapon_discount(source_card: Node, abi
 			continue
 		var base_cost: int = int(c.card_cost) if c.get("card_cost") != null else 0
 		var discounted_cost: int = maxi(base_cost - 1, 0)
-		if gold_manager.puede_pagar(discounted_cost, c.card_type, c.card_raza, base_cost):
+		if gold_manager.puede_pagar(discounted_cost, c.card_type, c.card_raza, base_cost, owner_id):
 			weapon_candidates.append(c)
 	if weapon_candidates.is_empty():
 		_inspector._main._update_debug("No tienes ningún Arma que puedas pagar en la mano, ni con el descuento")
@@ -445,7 +444,7 @@ func _activate_paladin_bestiarium_discard_weapon_discount(source_card: Node, abi
 		return
 	var weapon_filter := func(c: Node) -> bool: return c in weapon_candidates
 	var weapon_node: Node = await _inspector._main._card_interaction.await_target(
-		"Elige el Arma a jugar con 1 Oro de descuento", weapon_filter)
+		"Elige el Arma a jugar con 1 Oro de descuento", weapon_filter, true, owner_id)
 	if not weapon_node or not is_instance_valid(weapon_node):
 		return
 
@@ -455,7 +454,7 @@ func _activate_paladin_bestiarium_discard_weapon_discount(source_card: Node, abi
 		_inspector._main._update_debug("Necesitas otra carta en tu mano para descartar como costo")
 		return
 	var discard_node: Node = await _inspector._main._card_interaction.await_target(
-		"Descarta 1 carta para jugar %s con 1 Oro de descuento" % str(weapon_node.card_name), discard_filter)
+		"Descarta 1 carta para jugar %s con 1 Oro de descuento" % str(weapon_node.card_name), discard_filter, true, owner_id)
 	if not discard_node or not is_instance_valid(discard_node):
 		return
 

@@ -194,7 +194,7 @@ func _get_reveal_cost_reduction_pattern(card: Node) -> Dictionary:
 	return {"types": wanted_types, "allow_zero": allow_zero, "single": single, "zones": zones}
 
 
-func _gather_showable_candidate_nodes(card_types, exclude_card: Node, source: int) -> Array:
+func _gather_showable_candidate_nodes(card_types, exclude_card: Node, source: int, player_id: int = 0) -> Array:
 	"""Igual que la vieja _gather_showable_candidates() pero devuelve los
 	NODOS reales (no card_data) para mano/en juego — 2026-09-13, a pedido
 	del usuario: reemplaza el modal de lista por click directo sobre las
@@ -206,15 +206,19 @@ func _gather_showable_candidate_nodes(card_types, exclude_card: Node, source: in
 	candidates() en _resolve_reveal_cost_reduction()."""
 	var types_array: Array = card_types if card_types is Array else [card_types]
 	var candidates: Array = []
+	var hand_container = _main.player_hand if player_id == 0 else _main._opponent_fan
 	match source:
 		0:
-			for c in _main.player_hand.cards:
+			if not hand_container:
+				return candidates
+			for c in hand_container.cards:
 				if c == exclude_card:
 					continue
 				if c.get("card_type") in types_array:
 					candidates.append(c)
 		2:
-			var field_zones: Array = [_main.player_field, _main.player_linea_ataque, _main.player_linea_apoyo]
+			var field_zones: Array = [_main.player_field, _main.player_linea_ataque, _main.player_linea_apoyo] if player_id == 0 \
+				else [_main.opponent_field, _main.opponent_linea_ataque, _main.opponent_linea_apoyo]
 			for zone in field_zones:
 				if not zone:
 					continue
@@ -232,7 +236,7 @@ const _CARD_TYPE_DISPLAY_NAMES: Dictionary = {
 }
 
 
-func _resolve_reveal_cost_reduction(card: Node, pattern: Dictionary) -> int:
+func _resolve_reveal_cost_reduction(card: Node, pattern: Dictionary, player_id: int = 0) -> int:
 	"""2026-09-13, a pedido del usuario (arquitectura.md §10.17): reemplaza
 	el modal viejo de "¿desde dónde mostrar?" + lista por click directo
 	sobre las cartas reales de TODAS las zonas permitidas A LA VEZ — mano y
@@ -251,12 +255,12 @@ func _resolve_reveal_cost_reduction(card: Node, pattern: Dictionary) -> int:
 
 	var candidates: Array = []
 	if 0 in zone_choices:
-		candidates.append_array(_gather_showable_candidate_nodes(types, card, 0))
+		candidates.append_array(_gather_showable_candidate_nodes(types, card, 0, player_id))
 	if 2 in zone_choices:
-		candidates.append_array(_gather_showable_candidate_nodes(types, card, 2))
+		candidates.append_array(_gather_showable_candidate_nodes(types, card, 2, player_id))
 	var cemetery_popup: CanvasLayer = null
 	if 1 in zone_choices:
-		var popup_result: Dictionary = _open_cemetery_reveal_popup(types)
+		var popup_result: Dictionary = _open_cemetery_reveal_popup(types, player_id)
 		cemetery_popup = popup_result.get("popup")
 		candidates.append_array(popup_result.get("nodes", []))
 
@@ -288,7 +292,7 @@ func _resolve_reveal_cost_reduction(card: Node, pattern: Dictionary) -> int:
 		else:
 			return 2
 	var chosen: Array = await _main._card_interaction.await_multi_target(
-		"Muestra %s para reducir el coste (1 Oro c/u, misma zona)" % type_name, candidates, max_selections, lock_key)
+		"Muestra %s para reducir el coste (1 Oro c/u, misma zona)" % type_name, candidates, max_selections, lock_key, Callable(), true, null, player_id)
 
 	if is_instance_valid(cemetery_popup):
 		cemetery_popup.queue_free()
@@ -312,7 +316,7 @@ func _get_discard_cost_reduction_pattern(card: Node) -> Dictionary:
 	return {"found": true}
 
 
-func _resolve_discard_cost_reduction(card: Node) -> bool:
+func _resolve_discard_cost_reduction(card: Node, player_id: int = 0) -> bool:
 	"""Resuelve el descuento de voragh el devorador — mismo hook/momento que
 	_resolve_reveal_cost_reduction() (ANTES de calcular coste_real, ver
 	comentario en GoldManager.play_card()), pero con costo DISTINTO: la
@@ -322,26 +326,27 @@ func _resolve_discard_cost_reduction(card: Node) -> bool:
 	(cancellable=true) declina sin penalidad, igual que cualquier costo
 	alternativo opcional del resto del proyecto.
 	Returns: true si se descartó una carta (corresponde aplicar el -1)."""
-	if not _main.player_hand or _main.player_hand.cards.is_empty():
+	var hand_container = _main.player_hand if player_id == 0 else _main._opponent_fan
+	if not hand_container or hand_container.cards.is_empty():
 		return false
-	# La carta que se está jugando (card) sigue en player_hand.cards en este
-	# punto del flujo (mismo motivo que _gather_showable_candidate_nodes()
-	# excluye 'exclude_card' arriba) — no tiene sentido descartarse a sí
-	# misma para pagar su propio descuento.
-	var candidates: Array = _main.player_hand.cards.filter(func(c: Node) -> bool: return c != card)
+	# La carta que se está jugando (card) sigue en hand_container.cards en
+	# este punto del flujo (mismo motivo que _gather_showable_candidate_
+	# nodes() excluye 'exclude_card' arriba) — no tiene sentido descartarse
+	# a sí misma para pagar su propio descuento.
+	var candidates: Array = hand_container.cards.filter(func(c: Node) -> bool: return c != card)
 	if candidates.is_empty():
 		return false
 	var chosen: Node = await _main._card_interaction.await_target(
 		"Puedes descartar una carta para reducir el coste en 1 Oro (ESC para no hacerlo)",
 		func(c: Node) -> bool: return c in candidates,
-		true)
+		true, player_id)
 	if not chosen or not is_instance_valid(chosen):
 		return false
-	var result: Dictionary = await ActionModule.discard(0, [chosen], "voragh el devorador", true)
+	var result: Dictionary = await ActionModule.discard(player_id, [chosen], "voragh el devorador", true)
 	return result.get("actual", 0) > 0
 
 
-func _open_cemetery_reveal_popup(card_types) -> Dictionary:
+func _open_cemetery_reveal_popup(card_types, player_id: int = 0) -> Dictionary:
 	"""Popup liviano (SIN oscurecer el resto de la pantalla — a diferencia
 	de ZoneViewerModule.open_cemetery_target_picker(), aquí mano/campo
 	siguen siendo clickeables al mismo tiempo, ver _resolve_reveal_cost_
@@ -349,7 +354,7 @@ func _open_cemetery_reveal_popup(card_types) -> Dictionary:
 	interactivos, en una esquina de la pantalla. Returns: {popup:
 	CanvasLayer, nodes: Array[Node]}."""
 	var types_array: Array = card_types if card_types is Array else [card_types]
-	var own_cemetery: Array = CardManager.get_cemetery(0).filter(func(d): return d.get("tipo", -1) in types_array)
+	var own_cemetery: Array = CardManager.get_cemetery(player_id).filter(func(d): return d.get("tipo", -1) in types_array)
 	var nodes: Array = []
 	if own_cemetery.is_empty():
 		return {"popup": null, "nodes": nodes}
@@ -392,8 +397,8 @@ func _open_cemetery_reveal_popup(card_types) -> Dictionary:
 		var c_node = CardScene.instantiate()
 		c_node.load_from_data(data)
 		c_node.set_zone(Constants.Zone.CEMENTERIO)
-		c_node.owner_id = 0
-		c_node.controller_id = 0
+		c_node.owner_id = player_id
+		c_node.controller_id = player_id
 		c_node.can_interact = true
 		c_node.drag_enabled = false
 		c_node.custom_minimum_size = Vector2(150.0, 210.0)

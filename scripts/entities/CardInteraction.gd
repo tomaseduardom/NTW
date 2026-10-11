@@ -78,9 +78,10 @@ func _on_mouse_entered() -> void:
 
 	_card.emit_signal("card_hovered", _card)
 
-	# Animación de hover (proporcional a base_scale)
-	var tween = _card.create_tween()
-	tween.tween_property(_card, "scale", _card.base_scale * _card.card_scale_hover, _card.animation_speed)
+	# Animación de hover (proporcional a base_scale, omitida si hover_scale es 1.0)
+	if _card.card_scale_hover != 1.0:
+		var tween = _card.create_tween()
+		tween.tween_property(_card, "scale", _card.base_scale * _card.card_scale_hover, _card.animation_speed)
 
 
 func _on_mouse_exited() -> void:
@@ -110,10 +111,11 @@ func _on_mouse_exited() -> void:
 
 	_card.emit_signal("card_unhovered", _card)
 
-	# Volver a escala normal (proporcional a base_scale)
-	var tween = _card.create_tween()
-	var target_scale_val = _card.base_scale * (_card.card_scale_selected if _card.is_selected else _card.card_scale_normal)
-	tween.tween_property(_card, "scale", target_scale_val, _card.animation_speed)
+	# Volver a escala normal si había cambiado
+	if _card.card_scale_hover != 1.0 or _card.is_selected:
+		var tween = _card.create_tween()
+		var target_scale_val = _card.base_scale * (_card.card_scale_selected if _card.is_selected else _card.card_scale_normal)
+		tween.tween_property(_card, "scale", target_scale_val, _card.animation_speed)
 
 
 func on_gui_input(event: InputEvent) -> void:

@@ -135,25 +135,22 @@ func _activate_sandraudiga_banish_pair_and_peek(source_card: Node, ability: Dict
 	Desterrar una carta de tu mano para Barajarlo en tu Castillo' NO
 	implementado (necesitaría una categoría nueva de zona-usable: desde el
 	Destierro)."""
-	if not is_instance_valid(source_card) or not _inspector._main.player_hand or not _inspector._main._gold_manager:
+	if not is_instance_valid(source_card) or not _inspector._main._gold_manager:
 		return
 	var owner_id: int = source_card.owner_id if source_card.get("owner_id") != null else 0
-	if owner_id != 0 or source_card.get("current_zone") != Constants.Zone.MANO:
-		# 2026-10-05: costo real de 1 Oro (puede_pagar()/pagar_coste(), de un
-		# solo jugador, ver §22) Y usa SelectionManager.await_single_pick()
-		# para "mira la mano rival" (sin chooser_id, ver §22) — dos motivos
-		# independientes para dejarla sin desbloquear.
-		return  # el Remoto no puede usar esta habilidad todavía
+	var hand_container_sandraudiga = _inspector._main.player_hand if owner_id == 0 else _inspector._main._opponent_fan
+	if not hand_container_sandraudiga or source_card.get("current_zone") != Constants.Zone.MANO:
+		return
 
 	var other_priests: Array = []
-	for c in _inspector._main.player_hand.cards:
+	for c in hand_container_sandraudiga.cards:
 		if c != source_card and is_instance_valid(c) and c.get("card_type") == Constants.CardType.ALIADO \
 				and "sacerdote" in str(c.get("card_raza")).to_lower():
 			other_priests.append(c)
 	if other_priests.is_empty():
 		_inspector._main._update_debug("Necesitas otro Aliado Sacerdote en tu mano para usar esta habilidad")
 		return
-	if not _inspector._main._gold_manager.puede_pagar(1):
+	if not _inspector._main._gold_manager.puede_pagar(1, -1, "", -1, owner_id):
 		_inspector._main._update_debug("Oro insuficiente (necesitas 1)")
 		return
 
@@ -163,7 +160,7 @@ func _activate_sandraudiga_banish_pair_and_peek(source_card: Node, ability: Dict
 	# modal de lista viejo.
 	var priest_filter := func(c: Node) -> bool: return c in other_priests
 	var other_node: Node = await _inspector._main._card_interaction.await_target(
-		"Elige otro Aliado Sacerdote de tu mano para Desterrar", priest_filter)
+		"Elige otro Aliado Sacerdote de tu mano para Desterrar", priest_filter, true, owner_id)
 	if not other_node or not is_instance_valid(other_node):
 		return
 	if not is_instance_valid(source_card):
@@ -177,19 +174,20 @@ func _activate_sandraudiga_banish_pair_and_peek(source_card: Node, ability: Dict
 		return
 
 	UniversalCardParser.turn_registry.register_ability_use(source_card, ability)
-	await _inspector._main._gold_manager.pagar_coste(1)
+	await _inspector._main._gold_manager.pagar_coste(1, -1, "", -1, owner_id)
 
 	var self_data: Dictionary = source_card.card_data.duplicate()
 	var other_data: Dictionary = other_node.card_data.duplicate()
-	_inspector._main.player_hand.remove_card(other_node, true)
-	_inspector._main.player_hand.remove_card(source_card, true)
+	hand_container_sandraudiga.remove_card(other_node, true)
+	hand_container_sandraudiga.remove_card(source_card, true)
 	CardManager.add_to_exile(owner_id, self_data)
 	CardManager.add_to_exile(owner_id, other_data)
 
 	var opponent_id: int = 1 - owner_id
-	if not _inspector._main._opponent_fan or not _inspector._main._opponent_fan.has_method("get_cards"):
+	var opponent_hand_container = _inspector._main._opponent_fan if owner_id == 0 else _inspector._main.player_hand
+	if not opponent_hand_container:
 		return
-	var opponent_hand: Array = _inspector._main._opponent_fan.get_cards()
+	var opponent_hand: Array = opponent_hand_container.cards
 	var candidates: Array = []
 	for c in opponent_hand:
 		if is_instance_valid(c) and c.get("card_type") != Constants.CardType.ALIADO and c.get("card_type") != Constants.CardType.ORO:
@@ -199,7 +197,7 @@ func _activate_sandraudiga_banish_pair_and_peek(source_card: Node, ability: Dict
 	var not_ally_or_gold := func(d: Dictionary) -> bool:
 		return d.get("tipo") != Constants.CardType.ALIADO and d.get("tipo") != Constants.CardType.ORO
 	var picked_opp: Dictionary = await SelectionManager.await_single_pick(
-		candidates.map(func(c): return c.card_data), "Mira la mano rival: elige una carta (que no sea Aliado ni Oro) para Desterrar", true, 1, not_ally_or_gold)
+		candidates.map(func(c): return c.card_data), "Mira la mano rival: elige una carta (que no sea Aliado ni Oro) para Desterrar", true, 1, not_ally_or_gold, owner_id)
 	if picked_opp.is_empty():
 		return
 	var opp_node: Node = null
@@ -485,11 +483,6 @@ func _activate_ouija_play_from_cemetery_or_deck_top(source_card: Node, ability: 
 	if not is_instance_valid(source_card) or not _inspector._main._gold_manager:
 		return
 	var owner_id: int = source_card.owner_id if source_card.get("owner_id") != null else 0
-	if owner_id != 0:
-		# 2026-10-05: reusa GoldManager.play_card() completo (de un solo
-		# jugador — ver §23) y lee CardManager.get_cemetery(0) hardcodeado
-		# más abajo — se deja sin desbloquear.
-		return  # el Remoto no puede usar esta habilidad todavía
 	if source_card.get("current_zone") != Constants.Zone.RESERVA_ORO:
 		_inspector._main._update_debug("%s ya no está en tu Reserva" % str(source_card.get("card_name")))
 		return
@@ -502,8 +495,8 @@ func _activate_ouija_play_from_cemetery_or_deck_top(source_card: Node, ability: 
 	# que preservar mostrándola en el picker). Todo vive en UN solo
 	# await_multi_target() — evita el problema de correr dos mecanismos de
 	# selección en carrera a la vez (ver arquitectura.md §10.14).
-	var deck: Array = _inspector._main.player_deck
-	var own_cemetery: Array = CardManager.get_cemetery(0)
+	var deck: Array = _inspector._main.player_deck if owner_id == 0 else _inspector._main.opponent_deck
+	var own_cemetery: Array = CardManager.get_cemetery(owner_id)
 	if own_cemetery.is_empty() and deck.is_empty():
 		_inspector._main._update_debug("No tienes cartas en tu Cementerio ni en tu Castillo para jugar con La Ouija")
 		return
@@ -536,8 +529,8 @@ func _activate_ouija_play_from_cemetery_or_deck_top(source_card: Node, ability: 
 		var c_node = CardScene.instantiate()
 		c_node.load_from_data(data)
 		c_node.set_zone(Constants.Zone.CEMENTERIO)
-		c_node.owner_id = 0
-		c_node.controller_id = 0
+		c_node.owner_id = owner_id
+		c_node.controller_id = owner_id
 		c_node.can_interact = true
 		c_node.drag_enabled = false
 		c_node.custom_minimum_size = Vector2(150.0, 210.0)
@@ -555,8 +548,8 @@ func _activate_ouija_play_from_cemetery_or_deck_top(source_card: Node, ability: 
 		var top_node = CardScene.instantiate()
 		top_node.load_from_data(deck[0])
 		top_node.set_zone(Constants.Zone.CASTILLO)
-		top_node.owner_id = 0
-		top_node.controller_id = 0
+		top_node.owner_id = owner_id
+		top_node.controller_id = owner_id
 		top_node.can_interact = true
 		top_node.drag_enabled = false
 		top_node.custom_minimum_size = Vector2(150.0, 210.0)
@@ -570,7 +563,8 @@ func _activate_ouija_play_from_cemetery_or_deck_top(source_card: Node, ability: 
 		candidates.append(top_node)
 
 	var chosen_nodes: Array = await _inspector._main._card_interaction.await_multi_target(
-		"Elige una carta de tu Cementerio o el tope de tu Castillo para jugar", candidates, 1)
+		"Elige una carta de tu Cementerio o el tope de tu Castillo para jugar", candidates, 1,
+		Callable(), Callable(), true, null, owner_id)
 	if is_instance_valid(popup_canvas):
 		popup_canvas.queue_free()
 	if chosen_nodes.is_empty():
@@ -585,10 +579,10 @@ func _activate_ouija_play_from_cemetery_or_deck_top(source_card: Node, ability: 
 	UniversalCardParser.turn_registry.register_ability_use(source_card, ability)
 
 	if chosen_from == "cemetery":
-		var idx: int = CardManager.get_cemetery(0).find(chosen_data)
+		var idx: int = CardManager.get_cemetery(owner_id).find(chosen_data)
 		if idx < 0:
 			return
-		CardManager.remove_from_cemetery(0, idx)
+		CardManager.remove_from_cemetery(owner_id, idx)
 	else:
 		deck.pop_front()
 		if _inspector._main._zone_manager:
@@ -596,9 +590,10 @@ func _activate_ouija_play_from_cemetery_or_deck_top(source_card: Node, ability: 
 		_inspector._main._update_debug("La Ouija: mostrando la primera carta de tu Castillo (%s)" % str(chosen_data.get("nombre", "?")))
 
 	var card_node: Node = _inspector._main._create_card(chosen_data, false)
-	card_node.owner_id = 0
-	card_node.controller_id = 0
-	_inspector._main.player_hand.add_card(card_node)
+	card_node.owner_id = owner_id
+	card_node.controller_id = owner_id
+	var hand_container_ouija = _inspector._main.player_hand if owner_id == 0 else _inspector._main._opponent_fan
+	hand_container_ouija.add_card(card_node)
 	_inspector._main._connect_card_signals(card_node)
 
 	await _inspector._main._gold_manager.play_card(card_node)

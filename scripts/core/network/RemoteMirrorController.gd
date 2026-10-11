@@ -30,6 +30,7 @@ var _main: Node = null
 var _active: bool = false
 var _current_overlay: Control = null
 var _card_nodes: Dictionary = {}  # card_id (String) -> Node local (ghost)
+var _hand_card_nodes: Dictionary = {}  # card_id (String) -> Node local en player_hand (§45)
 
 
 func setup(main: Node) -> void:
@@ -79,10 +80,18 @@ func _on_message(data: Dictionary) -> void:
 					_show_await_target_prompt(data)
 				"await_multi_target":
 					_show_await_multi_target_prompt(data)
+				"await_target_or_castillo":
+					_show_await_target_or_castillo_prompt(data)
+				"name_card":
+					_show_name_card_prompt(data)
 		"move_card":
 			_apply_move_card(data)
 		"remove_card":
 			_apply_remove_card(data)
+		"hand_card_added":
+			_apply_hand_card_added(data)
+		"hand_card_removed":
+			_apply_hand_card_removed(data)
 		"dice_roll":
 			_show_dice_roll_mirror(data)
 
@@ -191,6 +200,41 @@ func _apply_remove_card(data: Dictionary) -> void:
 	_card_nodes.erase(card_id)
 
 
+# =============================================================================
+# MANO PROPIA PERSISTENTE (GameStateBroadcaster._on_hand_card_added()/
+# _on_hand_card_removed(), 2026-10-08, arquitectura.md §45) — a diferencia
+# de _apply_move_card()/_apply_remove_card() (las 5 zonas públicas en
+# juego), esto puebla player_hand de verdad, con Nodos que se quedan ahí
+# durante TODA la partida, no solo mientras un prompt puntual está abierto.
+# can_interact = false a propósito (mismo criterio que _build_card_display()
+# en §37): la acción real sigue pasando por los botones de los prompts
+# (vigilia, etc.), no por clickear la carta misma — un doble-click acá
+# llamaría GoldManager.play_card() LOCAL (el del propio cliente Remoto, sin
+# pasar por el protocolo de intents), que rompería todo.
+# =============================================================================
+func _apply_hand_card_added(data: Dictionary) -> void:
+	var card_data: Dictionary = data.get("data", {})
+	var card_id: String = str(card_data.get("card_id", ""))
+	if card_id.is_empty() or _hand_card_nodes.has(card_id):
+		return
+	var node: Node = _main._create_card(card_data, false)
+	node.owner_id = 0
+	node.controller_id = 0
+	node.can_interact = false
+	node.drag_enabled = false
+	_main._connect_card_signals(node)
+	_main.player_hand.add_card(node)
+	_hand_card_nodes[card_id] = node
+
+
+func _apply_hand_card_removed(data: Dictionary) -> void:
+	var card_id: String = str(data.get("card_id", ""))
+	var node: Node = _hand_card_nodes.get(card_id, null)
+	if node and is_instance_valid(node) and node in _main.player_hand.cards:
+		_main.player_hand.remove_card(node, true)
+	_hand_card_nodes.erase(card_id)
+
+
 func _container_for(own: bool, zone: int) -> Node:
 	match zone:
 		Constants.Zone.RESERVA_ORO:
@@ -211,6 +255,12 @@ func _close_current_overlay() -> void:
 	if _current_overlay and is_instance_valid(_current_overlay):
 		_current_overlay.queue_free()
 	_current_overlay = null
+	# Contraparte de mark_inspection_layer_in_use() en _build_overlay() —
+	# apaga el CanvasLayer solo si no quedó ninguna inspección real abierta
+	# (su propio contador de generación ya resuelve el caso de que mientras
+	# tanto se haya abierto una inspección nueva de verdad).
+	if _main._card_inspector:
+		_main._card_inspector.release_inspection_layer_if_unused()
 
 
 # =============================================================================
@@ -221,6 +271,18 @@ func _build_overlay(title: String) -> VBoxContainer:
 	overlay.color = Color(0, 0, 0, 0.6)
 	overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	overlay.mouse_filter = Control.MOUSE_FILTER_STOP
+	# 2026-10-07, bug real reportado por el usuario (probando online por
+	# primera vez): CardInspectionLayer.tscn arranca con visible=false (solo
+	# CardInspectionLayer.gd lo prende/apaga al inspeccionar una carta) — sin
+	# esto, el diálogo se construía bien pero quedaba invisible, el Remoto
+	# nunca veía ningún prompt (mulligan incluido) y la partida se quedaba
+	# congelada esperando una respuesta que nunca podía mandar. Mismo
+	# mecanismo ya usado por BernardoAbilityHandler.gd para su propio diálogo
+	# ajeno a una inspección real — ver mark_inspection_layer_in_use().
+	if _main._card_inspector:
+		_main._card_inspector.mark_inspection_layer_in_use()
+	else:
+		_main.inspection_layer.visible = true
 	_main.inspection_layer.add_child(overlay)
 	_current_overlay = overlay
 
@@ -259,6 +321,53 @@ func _add_row_button(container: Container, text: String, on_pressed: Callable) -
 	container.add_child(btn)
 
 
+# =============================================================================
+# CARTAS REALES EN LOS PROMPTS (2026-10-07, a pedido del usuario: "no sale
+# mi mulligan bonito, el abanico de cartas está todo escrito") — mismo
+# patrón ya usado en popups livianos del lado del Anfitrión (p.ej.
+# GoldManagerTax._open_cemetery_reveal_popup()): Nodos Card.tscn reales con
+# arte, no interactivos (el click que de verdad decide pasa por los botones
+# de abajo, ya armados con card_id/índice — esto solo reemplaza las listas
+# de puro texto por la carta de verdad). Requiere que RemotePlayerController.
+# _card_public_data() mande el card_data COMPLETO, no solo nombre/coste.
+# =============================================================================
+const _CardScene = preload("res://scenes/cards/Card.tscn")
+
+
+func _build_card_display(card_data: Dictionary) -> Control:
+	var wrapper := Control.new()
+	wrapper.custom_minimum_size = Vector2(84.0, 118.0)
+	var c_node = _CardScene.instantiate()
+	c_node.load_from_data(card_data)
+	c_node.can_interact = false
+	c_node.drag_enabled = false
+	c_node.custom_minimum_size = Vector2(150.0, 210.0)
+	c_node.size = Vector2(150.0, 210.0)
+	c_node.scale = Vector2(0.56, 0.56)
+	c_node.base_scale = Vector2(0.56, 0.56)
+	if _main and _main.has_method("_connect_card_signals"):
+		_main._connect_card_signals(c_node)
+	wrapper.add_child(c_node)
+	return wrapper
+
+
+func _build_card_row(parent: Container, cards_data: Array) -> void:
+	"""Fila horizontal con scroll de Nodos Card reales — se agrega como
+	cualquier otro hijo de 'parent' (normalmente el vbox que devuelve
+	_build_overlay()), antes de los botones de acción correspondientes."""
+	if cards_data.is_empty():
+		return
+	var scroll := ScrollContainer.new()
+	scroll.custom_minimum_size = Vector2(0, 230)
+	scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	parent.add_child(scroll)
+	var hbox := HBoxContainer.new()
+	hbox.add_theme_constant_override("separation", 6)
+	scroll.add_child(hbox)
+	for card_data in cards_data:
+		hbox.add_child(_build_card_display(card_data))
+
+
 func _send_intent_and_close(intent: Dictionary) -> void:
 	NetworkClient.send_message(intent)
 	_close_current_overlay()
@@ -268,26 +377,63 @@ func _send_intent_and_close(intent: Dictionary) -> void:
 # MULLIGAN
 # =============================================================================
 func _show_mulligan_prompt(data: Dictionary) -> void:
+	"""2026-10-08, a pedido del usuario ("construir el abanico visual real
+	como el del Anfitrión" — ver arquitectura.md §44): a diferencia del
+	resto de los prompts (que usan _build_overlay()/_build_card_row(), una
+	fila de solo lectura + botones de texto aparte), el mulligan reusa los
+	Nodos REALES que Main.tscn ya tiene para esto — mulligan_overlay/
+	mulligan_hand (MulliganHand, el mismo abanico con curva/hover que ve el
+	Anfitrión)/keep_hand_button/mulligan_button — en vez de construir un
+	popup aparte. Esos botones ya vienen conectados a MulliganController.
+	on_keep_hand_pressed()/on_mulligan_pressed() (para el flujo LOCAL del
+	Anfitrión) — hay que desconectarlos antes de reusarlos, porque esos
+	handlers terminan en GameManager.start_game() asumiendo una partida
+	local que el Remoto nunca corrió (_dice_winner nunca seteado de este
+	lado) — dispararían eso por error si se dejaran conectados."""
 	var hand: Array = data.get("hand", [])
-	var vbox := _build_overlay("Tu mano inicial (%d cartas) — ¿la mantienes?" % hand.size())
-	for card in hand:
-		var lbl := Label.new()
-		lbl.text = "%s (coste %s)" % [str(card.get("nombre", "?")), str(card.get("coste", "?"))]
-		vbox.add_child(lbl)
+	_main.mulligan_hand.clear_cards_instant()
+	for card_data in hand:
+		var card_node = _main._create_card(card_data, false)
+		card_node.can_interact = true
+		card_node.drag_enabled = false
+		_main.mulligan_hand.add_card(card_node, true)
+	_main.mulligan_cards_label.text = "Mano actual: %d cartas" % hand.size()
+	var next_hand_size: int = hand.size() - 1
+	if next_hand_size <= 0:
+		_main.mulligan_button.disabled = true
+		_main.mulligan_button.text = "No puedes hacer mas mulligan"
+	else:
+		_main.mulligan_button.disabled = false
+		_main.mulligan_button.text = "Mulligan (robar %d)" % next_hand_size
+	_main.mulligan_overlay.visible = true
 
-	var button_row := HBoxContainer.new()
-	button_row.alignment = BoxContainer.ALIGNMENT_CENTER
-	vbox.add_child(button_row)
-	_add_row_button(button_row, "Mantener", func():
-		_send_intent_and_close({"op": "intent", "kind": "mulligan_choice", "keep": true}))
-	_add_row_button(button_row, "Mulligan (redibujar)", func():
-		_send_intent_and_close({"op": "intent", "kind": "mulligan_choice", "keep": false}))
+	if _main.keep_hand_button.pressed.is_connected(_main._mulligan_ctrl.on_keep_hand_pressed):
+		_main.keep_hand_button.pressed.disconnect(_main._mulligan_ctrl.on_keep_hand_pressed)
+	if _main.mulligan_button.pressed.is_connected(_main._mulligan_ctrl.on_mulligan_pressed):
+		_main.mulligan_button.pressed.disconnect(_main._mulligan_ctrl.on_mulligan_pressed)
+	var on_keep := func():
+		_main.mulligan_overlay.visible = false
+		_main.mulligan_hand.clear_cards_instant()
+		NetworkClient.send_message({"op": "intent", "kind": "mulligan_choice", "keep": true})
+	var on_mull := func():
+		_main.mulligan_overlay.visible = false
+		_main.mulligan_hand.clear_cards_instant()
+		NetworkClient.send_message({"op": "intent", "kind": "mulligan_choice", "keep": false})
+	_main.keep_hand_button.pressed.connect(on_keep, CONNECT_ONE_SHOT)
+	_main.mulligan_button.pressed.connect(on_mull, CONNECT_ONE_SHOT)
 
 
 # =============================================================================
 # VIGILIA
 # =============================================================================
 func _show_vigilia_prompt(data: Dictionary) -> void:
+	# 2026-10-08 (ver arquitectura.md §46): las 5 categorías de abajo son
+	# SIEMPRE candidatas de la mano (RemotePlayerController._affordable_
+	# cards_in_hand() las junta de _opponent_fan) — ya no se repiten en una
+	# fila de cartas aparte (_build_card_row()) porque desde §45 la mano
+	# real y persistente del Remoto (player_hand) ya las muestra siempre,
+	# detrás de este mismo overlay. Los botones siguen siendo la acción
+	# real; esto solo saca la carta duplicada.
 	var gold_reserva: int = int(data.get("gold_reserva", 0))
 	var gold_candidates: Array = data.get("gold_candidates", [])
 	var ally_candidates: Array = data.get("ally_candidates", [])
@@ -361,6 +507,7 @@ func _show_ataque_prompt(data: Dictionary) -> void:
 			_send_intent_and_close({"op": "intent", "kind": "declare_attackers", "card_ids": []}))
 		return
 
+	_build_card_row(vbox, attackable)
 	var checkboxes: Dictionary = {}  # card_id -> CheckBox
 	for card in attackable:
 		var card_id: String = str(card.get("card_id", ""))
@@ -395,6 +542,7 @@ func _show_response_window_prompt(data: Dictionary) -> void:
 		lbl.text = "No tienes ninguna habilidad activada disponible."
 		vbox.add_child(lbl)
 
+	_build_card_row(vbox, candidates)
 	for c in candidates:
 		var card_id: String = str(c.get("card_id", ""))
 		var ability_index: int = int(c.get("ability_index", 0))
@@ -424,6 +572,8 @@ func _show_choose_wielder_prompt(data: Dictionary) -> void:
 		vbox.add_child(lbl)
 		return
 
+	_build_card_row(vbox, [weapon] if not weapon.is_empty() else [])
+	_build_card_row(vbox, candidates)
 	for card in candidates:
 		var card_id: String = str(card.get("card_id", ""))
 		_add_row_button(vbox, str(card.get("nombre", "?")), func():
@@ -454,12 +604,10 @@ func _show_select_cards_prompt(data: Dictionary) -> void:
 			_send_intent_and_close({"op": "intent", "kind": "select_cards_choice", "indices": []}))
 		return
 
+	_build_card_row(vbox, candidates)
 	if max_sel <= 0:
-		# Solo mostrar (SelectionMode.REVEAL) — sin elección real.
-		for card in candidates:
-			var lbl := Label.new()
-			lbl.text = "%s (coste %s)" % [str(card.get("nombre", "?")), str(card.get("coste", "?"))]
-			vbox.add_child(lbl)
+		# Solo mostrar (SelectionMode.REVEAL) — sin elección real; la fila de
+		# cartas reales de arriba ya es la "lista", no hace falta texto.
 		_add_row_button(vbox, "Continuar", func():
 			_send_intent_and_close({"op": "intent", "kind": "select_cards_choice", "indices": []}))
 		return
@@ -534,6 +682,7 @@ func _show_select_cemetery_cards_prompt(data: Dictionary) -> void:
 			_send_intent_and_close({"op": "intent", "kind": "select_cemetery_cards_choice", "indices": []}))
 		return
 
+	_build_card_row(vbox, candidates)
 	var zone_words := {"cemetery": "Cementerio", "exile": "Destierro"}
 	var side_words := {"own": "tuyo", "opponent": "rival"}
 	var label_for := func(card: Dictionary) -> String:
@@ -593,6 +742,7 @@ func _show_await_target_prompt(data: Dictionary) -> void:
 			_send_intent_and_close({"op": "intent", "kind": "await_target_choice", "cancelled": true}))
 		return
 
+	_build_card_row(vbox, candidates)
 	for c in candidates:
 		var card_id: String = str(c.get("card_id", ""))
 		_add_row_button(vbox, "%s (coste %s)" % [str(c.get("nombre", "?")), str(c.get("coste", "?"))], func():
@@ -618,6 +768,7 @@ func _show_await_multi_target_prompt(data: Dictionary) -> void:
 			_send_intent_and_close({"op": "intent", "kind": "await_multi_target_choice", "card_ids": []}))
 		return
 
+	_build_card_row(vbox, candidates)
 	var checkboxes3: Dictionary = {}  # card_id (String) -> CheckBox
 	for c in candidates:
 		var card_id: String = str(c.get("card_id", ""))
@@ -641,6 +792,38 @@ func _show_await_multi_target_prompt(data: Dictionary) -> void:
 
 
 # =============================================================================
+# CARRERA "OBJETIVO O CASTILLO" (CardInteractionModule.await_target_or_
+# castillo_pick(), 2026-10-07, arquitectura.md §41) — junta cartas
+# candidatas + Castillo propio/rival en un solo prompt, ya que del lado del
+# Remoto no hay carrera real entre dos interacciones simultáneas de UI.
+# =============================================================================
+func _show_await_target_or_castillo_prompt(data: Dictionary) -> void:
+	var title: String = str(data.get("title", "Elige un objetivo"))
+	var candidates: Array = data.get("candidates", [])
+	var castillo_title: String = str(data.get("castillo_title", "Castillo"))
+	var castillo_own_only: bool = bool(data.get("castillo_own_only", false))
+	var cancellable: bool = bool(data.get("cancellable", true))
+	var vbox := _build_overlay(title)
+
+	_build_card_row(vbox, candidates)
+	for c in candidates:
+		var card_id: String = str(c.get("card_id", ""))
+		_add_row_button(vbox, "%s (coste %s)" % [str(c.get("nombre", "?")), str(c.get("coste", "?"))], func():
+			_send_intent_and_close({"op": "intent", "kind": "await_target_or_castillo_choice", "type": "card", "card_id": card_id}))
+
+	var sep := HSeparator.new()
+	vbox.add_child(sep)
+	_add_row_button(vbox, "%s — Tu Castillo" % castillo_title, func():
+		_send_intent_and_close({"op": "intent", "kind": "await_target_or_castillo_choice", "type": "castillo", "own": true}))
+	if not castillo_own_only:
+		_add_row_button(vbox, "%s — Castillo rival" % castillo_title, func():
+			_send_intent_and_close({"op": "intent", "kind": "await_target_or_castillo_choice", "type": "castillo", "own": false}))
+	if cancellable:
+		_add_row_button(vbox, "Cancelar", func():
+			_send_intent_and_close({"op": "intent", "kind": "await_target_or_castillo_choice", "type": "none"}))
+
+
+# =============================================================================
 # ELECCIÓN DE OPCIÓN DE TEXTO (SelectionDialogs.await_choice()/await_two_
 # choice(), Fase 3 del plan de paridad remota) — la otra familia de UI
 # aparte de "elegir cartas": popups de botones de texto (A/B, o N opciones),
@@ -654,3 +837,19 @@ func _show_choose_option_prompt(data: Dictionary) -> void:
 		var idx: int = i
 		_add_row_button(vbox, str(options[i]), func():
 			_send_intent_and_close({"op": "intent", "kind": "choose_option_choice", "index": idx}))
+
+
+# =============================================================================
+# NOMBRAR UNA CARTA (CardNameSearchDialog.open_and_wait(), 2026-10-07,
+# arquitectura.md §42) — a diferencia de los otros 6 puentes, este no manda
+# ninguna lista de candidatas: el Remoto ya tiene su propia CardDatabase
+# cargada (mismo catálogo que el Anfitrión), así que corre el MISMO
+# buscador en vivo con arte real, enteramente local a su pantalla — solo
+# el resultado final viaja por red. No usa _build_overlay()/_current_
+# overlay (CardNameSearchDialog ya administra su propio CanvasLayer y se
+# autodestruye sola al resolverse).
+# =============================================================================
+func _show_name_card_prompt(data: Dictionary) -> void:
+	var title: String = str(data.get("title", "Nombra una carta"))
+	var picked: Dictionary = await TriggerSystem._card_name_search.open_and_wait(title)
+	NetworkClient.send_message({"op": "intent", "kind": "name_card_choice", "card_data": picked})

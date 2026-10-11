@@ -70,16 +70,20 @@ func _card_public_data(card: Node) -> Dictionary:
 	"""Datos de UNA carta propia del Remoto para mandarle por red — no está
 	oculta para su propio dueño, aunque en la pantalla del Anfitrión se vea
 	con esta_oculta=true (eso es solo la vista LOCAL del Anfitrión, no un
-	límite real de información para la persona a la que pertenece)."""
+	límite real de información para la persona a la que pertenece).
+	2026-10-07, a pedido del usuario ("no sale mi mulligan bonito, el
+	abanico de cartas está todo escrito"): antes mandaba solo 5 campos
+	curados (nombre/coste/tipo/habilidad), suficientes para los prompts de
+	puro texto pero no para dibujar la carta real — ahora manda el
+	card_data COMPLETO (mismo dict que usa Card.load_from_data() en
+	cualquier otro popup del proyecto, p.ej. GoldManagerTax._open_cemetery_
+	reveal_popup()), con card_id agregado encima para las respuestas por
+	red (no es un campo nativo de card_data)."""
 	if not is_instance_valid(card):
 		return {}
-	return {
-		"card_id": _card_ref(card),
-		"nombre": str(card.get("card_name")) if card.get("card_name") != null else "",
-		"coste": int(card.get("card_cost")) if card.get("card_cost") != null else 0,
-		"tipo": int(card.get("card_type")) if card.get("card_type") != null else -1,
-		"habilidad": str(card.get("card_ability")) if card.get("card_ability") != null else "",
-	}
+	var data: Dictionary = card.card_data.duplicate(true) if card.get("card_data") != null else {}
+	data["card_id"] = _card_ref(card)
+	return data
 
 
 func _affordable_cards_in_hand(allowed_types: Array) -> Array:
@@ -421,12 +425,15 @@ func try_respond_with_activated_ability() -> bool:
 
 	var candidate_payload: Array = []
 	for c in candidates:
-		candidate_payload.append({
-			"card_id": _card_ref(c.card),
-			"ability_index": c.ability.get("ability_index", 0),
-			"cost_text": c.ability.get("cost_text", ""),
-			"effect_text": c.ability.get("effect_text", ""),
-		})
+		# 2026-10-07: card_data completo (no solo nombre/coste curados) para
+		# que RemoteMirrorController pueda mostrar la carta real, mismo
+		# criterio que el resto de los prompts (ver _card_public_data()).
+		var entry: Dictionary = c.card.card_data.duplicate(true) if c.card.get("card_data") != null else {}
+		entry["card_id"] = _card_ref(c.card)
+		entry["ability_index"] = c.ability.get("ability_index", 0)
+		entry["cost_text"] = c.ability.get("cost_text", "")
+		entry["effect_text"] = c.ability.get("effect_text", "")
+		candidate_payload.append(entry)
 	NetworkClient.send_message({"op": "prompt", "kind": "response_window", "candidates": candidate_payload})
 	var intent: Dictionary = await _await_intent(["activate_ability", "pass"])
 

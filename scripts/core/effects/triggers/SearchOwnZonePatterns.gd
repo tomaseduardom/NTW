@@ -205,15 +205,6 @@ func try_execute_raise_same_type_gold_and_search_banish_pattern(ability_text: St
 	var lower := ability_text.to_lower()
 	if not ("sube una o dos cartas de un mismo tipo que no sea talismán de tu cementerio a tu mano" in lower):
 		return false
-	if controller_id != 0:
-		# 2026-10-05: a diferencia del resto de este archivo, esta NO se
-		# desbloquea — usa lock_group_key (candado "mismo tipo que la
-		# primera elegida") en await_multi_target(), que el puente de red
-		# NO enforcea del lado del Remoto a propósito (ver §17). Dejarla
-		# pasar permitiría subir cartas de tipos distintos sin que el
-		# candado se respete de verdad.
-		return true  # el Remoto no puede usar esta habilidad todavía
-
 	var main := _main.get_node_or_null("/root/Main")
 	if not main or not main._gold_manager:
 		return true
@@ -275,7 +266,7 @@ func try_execute_raise_same_type_gold_and_search_banish_pattern(ability_text: St
 
 		var lock_key := func(c: Node) -> Variant: return c.card_data.get("tipo", -1)
 		var chosen_nodes: Array = await main._card_interaction.await_multi_target(
-			"Sube hasta dos cartas del MISMO tipo de tu Cementerio a tu mano", candidates, 2, lock_key)
+			"Sube hasta dos cartas del MISMO tipo de tu Cementerio a tu mano", candidates, 2, lock_key, Callable(), true, null, controller_id)
 		if is_instance_valid(cemetery_popup):
 			cemetery_popup.queue_free()
 		for node in chosen_nodes:
@@ -290,18 +281,20 @@ func try_execute_raise_same_type_gold_and_search_banish_pattern(ability_text: St
 	if await TriggerSystem.open_response_window(card, "asedio naval", controller_id):
 		return true
 
+	var hand_container_asedio = main.player_hand if controller_id == 0 else main._opponent_fan
 	for picked_data in raised:
 		var idx: int = own_cemetery.find(picked_data)
 		if idx >= 0:
 			CardManager.remove_from_cemetery(controller_id, idx)
 			var card_node = main._create_card(picked_data, false)
-			main.player_hand.add_card(card_node)
+			card_node.owner_id = controller_id
+			hand_container_asedio.add_card(card_node)
 			main._connect_card_signals(card_node)
 
 	if chosen_type != -1:
 		var predicate := func(card_type: int, _card_race: String, _card_cost: int) -> bool:
 			return card_type == chosen_type
-		main._gold_manager.generar_oro_virtual_restringido(1, predicate, "cartas del mismo tipo")
+		main._gold_manager.generar_oro_virtual_restringido(1, predicate, "cartas del mismo tipo", controller_id)
 
 	var zone_owner: int = await _main._targeted_executor._choose_search_zone_owner(controller_id, Constants.Zone.CASTILLO)
 	await ActionModule.search(zone_owner, Constants.Zone.CASTILLO, {}, 1, true, false, false, card, Constants.Zone.DESTIERRO)

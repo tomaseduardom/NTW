@@ -142,6 +142,15 @@ func _ready() -> void:
 	_easy_bot.name = "EasyBotController"
 	add_child(_easy_bot); _easy_bot.setup(self)
 
+	# Etiqueta superior "Jugador 1" (2026-10-07, bug real reportado por el
+	# usuario: la pantalla del Remoto seguía diciendo "Jugador 1" arriba a la
+	# izquierda) — el texto venía fijo en Main.tscn, ningún script lo
+	# actualizaba nunca según quién mira la pantalla. En una sala online, el
+	# Remoto es Jugador 2 desde su propia perspectiva; en cualquier otro modo
+	# (local, contra el bot) la única persona real siempre es Jugador 1.
+	if NetworkClient.room_code != "" and not NetworkClient.is_host:
+		player_info.text = "Jugador 2"
+
 	# Multiplayer remoto — lado Remoto: si esta instancia es el Remoto de una
 	# sala de red activa, RemoteMirrorController es lo que le permite seguir
 	# jugando después de mandar su mazo (ver GameBootstrap._send_own_deck_

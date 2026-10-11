@@ -4,28 +4,44 @@
 [ext_resource type="Texture2D" path="res://fondo_inicio.png" id="2_background"]
 [ext_resource type="FontFile" uid="uid://c4o8my2eqi3aj" path="res://assets/fonts/Cinzel-Bold.ttf" id="3_font_title"]
 [ext_resource type="FontFile" uid="uid://bamah0jf3ujug" path="res://assets/fonts/Marcellus-Regular.ttf" id="4_font_medieval"]
+[ext_resource type="Texture2D" path="res://assets/ui/menu/play_mode/btn_back.png" id="5_btn_back"]
+[ext_resource type="Texture2D" path="res://assets/ui/menu/play_mode/btn_back_hover.png" id="6_btn_back_hover"]
 
-[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_panel"]
-bg_color = Color(0.06, 0.05, 0.09, 0.92)
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_card"]
+bg_color = Color(0.06, 0.05, 0.09, 0.94)
 border_width_left = 2
 border_width_top = 2
 border_width_right = 2
 border_width_bottom = 2
-border_color = Color(0.83, 0.69, 0.22, 1)
-corner_radius_top_left = 12
-corner_radius_top_right = 12
-corner_radius_bottom_right = 12
-corner_radius_bottom_left = 12
-shadow_color = Color(0, 0, 0, 0.75)
-shadow_size = 18
+border_color = Color(0.83, 0.69, 0.22, 0.85)
+corner_radius_top_left = 14
+corner_radius_top_right = 14
+corner_radius_bottom_right = 14
+corner_radius_bottom_left = 14
+shadow_color = Color(0, 0, 0, 0.85)
+shadow_size = 22
 
-[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_input"]
-bg_color = Color(0.03, 0.02, 0.05, 0.85)
-border_width_left = 1
-border_width_top = 1
-border_width_right = 1
-border_width_bottom = 1
-border_color = Color(0.65, 0.55, 0.3, 0.5)
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_code_box"]
+bg_color = Color(0.03, 0.06, 0.13, 0.95)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0.32, 0.82, 1, 0.92)
+corner_radius_top_left = 10
+corner_radius_top_right = 10
+corner_radius_bottom_right = 10
+corner_radius_bottom_left = 10
+shadow_color = Color(0.2, 0.72, 1, 0.32)
+shadow_size = 14
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_input_code"]
+bg_color = Color(0.03, 0.05, 0.1, 0.92)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0.35, 0.65, 0.85, 0.65)
 corner_radius_top_left = 8
 corner_radius_top_right = 8
 corner_radius_bottom_right = 8
@@ -35,26 +51,26 @@ content_margin_top = 10.0
 content_margin_right = 16.0
 content_margin_bottom = 10.0
 
-[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_input_focus"]
-bg_color = Color(0.05, 0.04, 0.08, 0.95)
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_input_code_focus"]
+bg_color = Color(0.04, 0.08, 0.16, 0.96)
 border_width_left = 2
 border_width_top = 2
 border_width_right = 2
 border_width_bottom = 2
-border_color = Color(1, 0.88, 0.45, 1)
+border_color = Color(0.35, 0.9, 1, 1)
 corner_radius_top_left = 8
 corner_radius_top_right = 8
 corner_radius_bottom_right = 8
 corner_radius_bottom_left = 8
-shadow_color = Color(1, 0.88, 0.45, 0.25)
-shadow_size = 6
+shadow_color = Color(0.25, 0.8, 1, 0.4)
+shadow_size = 10
 content_margin_left = 16.0
 content_margin_top = 10.0
 content_margin_right = 16.0
 content_margin_bottom = 10.0
 
-[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_button"]
-bg_color = Color(0.06, 0.05, 0.09, 0.92)
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_button_gold"]
+bg_color = Color(0.07, 0.06, 0.11, 0.94)
 border_width_left = 2
 border_width_top = 2
 border_width_right = 2
@@ -67,8 +83,8 @@ corner_radius_bottom_left = 10
 shadow_color = Color(0, 0, 0, 0.8)
 shadow_size = 6
 
-[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_button_hover"]
-bg_color = Color(0.14, 0.11, 0.18, 0.96)
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_button_gold_hover"]
+bg_color = Color(0.16, 0.13, 0.22, 0.96)
 border_width_left = 2
 border_width_top = 2
 border_width_right = 2
@@ -81,7 +97,7 @@ corner_radius_bottom_left = 10
 shadow_color = Color(1, 0.88, 0.45, 0.3)
 shadow_size = 8
 
-[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_button_pressed"]
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_button_gold_pressed"]
 bg_color = Color(0.04, 0.03, 0.06, 0.98)
 border_width_left = 2
 border_width_top = 2
@@ -93,9 +109,63 @@ corner_radius_top_right = 10
 corner_radius_bottom_right = 10
 corner_radius_bottom_left = 10
 
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_button_blue"]
+bg_color = Color(0.05, 0.1, 0.18, 0.95)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0.3, 0.8, 1, 0.9)
+corner_radius_top_left = 8
+corner_radius_top_right = 8
+corner_radius_bottom_right = 8
+corner_radius_bottom_left = 8
+shadow_color = Color(0.2, 0.7, 1, 0.25)
+shadow_size = 6
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_button_blue_hover"]
+bg_color = Color(0.08, 0.16, 0.28, 0.98)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0.5, 0.92, 1, 1)
+corner_radius_top_left = 8
+corner_radius_top_right = 8
+corner_radius_bottom_right = 8
+corner_radius_bottom_left = 8
+shadow_color = Color(0.3, 0.85, 1, 0.4)
+shadow_size = 10
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_button_blue_pressed"]
+bg_color = Color(0.03, 0.07, 0.12, 1)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0.25, 0.7, 0.9, 1)
+corner_radius_top_left = 8
+corner_radius_top_right = 8
+corner_radius_bottom_right = 8
+corner_radius_bottom_left = 8
+
 [sub_resource type="StyleBoxLine" id="StyleBoxLine_separator"]
 color = Color(0.75, 0.62, 0.28, 0.45)
 thickness = 1
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_relay_panel"]
+bg_color = Color(0.04, 0.03, 0.07, 0.96)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.6, 0.5, 0.3, 0.6)
+corner_radius_top_left = 8
+corner_radius_top_right = 8
+corner_radius_bottom_right = 8
+corner_radius_bottom_left = 8
+shadow_color = Color(0, 0, 0, 0.7)
+shadow_size = 8
 
 [node name="OnlineConnect" type="Control"]
 layout_mode = 3
@@ -124,181 +194,396 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
-color = Color(0.03, 0.03, 0.05, 0.6)
+color = Color(0.02, 0.02, 0.04, 0.84)
 
-[node name="TopBar" type="HBoxContainer" parent="."]
-layout_mode = 1
-anchors_preset = 10
-anchor_right = 1.0
-offset_left = 30.0
-offset_top = 20.0
-offset_right = -30.0
-offset_bottom = 76.0
-grow_horizontal = 2
-theme_override_constants/separation = 20
-
-[node name="BackButton" type="Button" parent="TopBar" unique_id=75892302]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(140, 48)
-layout_mode = 2
-mouse_default_cursor_shape = 2
-theme_override_fonts/font = ExtResource("4_font_medieval")
-theme_override_font_sizes/font_size = 18
-theme_override_colors/font_color = Color(1, 0.95, 0.8, 1)
-theme_override_colors/font_hover_color = Color(1, 0.85, 0.4, 1)
-theme_override_styles/normal = SubResource("StyleBoxFlat_button")
-theme_override_styles/hover = SubResource("StyleBoxFlat_button_hover")
-theme_override_styles/pressed = SubResource("StyleBoxFlat_button_pressed")
-text = "← VOLVER"
-
-[node name="TitleLabel" type="Label" parent="TopBar"]
-layout_mode = 2
-size_flags_horizontal = 3
-theme_override_fonts/font = ExtResource("3_font_title")
-theme_override_font_sizes/font_size = 32
-theme_override_colors/font_color = Color(1, 0.9, 0.6, 1)
-theme_override_colors/font_shadow_color = Color(0, 0, 0, 0.85)
-theme_override_constants/shadow_offset_x = 2
-theme_override_constants/shadow_offset_y = 2
-text = "JUGAR EN LÍNEA"
-horizontal_alignment = 1
-vertical_alignment = 1
-
-[node name="Spacer" type="Control" parent="TopBar"]
-custom_minimum_size = Vector2(140, 0)
-layout_mode = 2
-
-[node name="CenterContainer" type="CenterContainer" parent="."]
+[node name="MainLayout" type="VBoxContainer" parent="."]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
-offset_top = 70.0
+offset_left = 60.0
+offset_top = 36.0
+offset_right = -60.0
+offset_bottom = -36.0
 grow_horizontal = 2
 grow_vertical = 2
+theme_override_constants/separation = 18
 
-[node name="PanelContainer" type="PanelContainer" parent="CenterContainer"]
-custom_minimum_size = Vector2(520, 0)
+[node name="HeaderContainer" type="VBoxContainer" parent="MainLayout"]
 layout_mode = 2
-theme_override_styles/panel = SubResource("StyleBoxFlat_panel")
+theme_override_constants/separation = 4
 
-[node name="MarginContainer" type="MarginContainer" parent="CenterContainer/PanelContainer"]
+[node name="TitleLabel" type="Label" parent="MainLayout/HeaderContainer"]
 layout_mode = 2
-theme_override_constants/margin_left = 36
+theme_override_fonts/font = ExtResource("3_font_title")
+theme_override_font_sizes/font_size = 36
+theme_override_colors/font_color = Color(1, 0.9, 0.6, 1)
+theme_override_colors/font_shadow_color = Color(0, 0, 0, 0.9)
+theme_override_constants/shadow_offset_x = 2
+theme_override_constants/shadow_offset_y = 2
+text = "PARTIDA EN LÍNEA"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="SubtitleLabel" type="Label" parent="MainLayout/HeaderContainer"]
+layout_mode = 2
+theme_override_fonts/font = ExtResource("4_font_medieval")
+theme_override_font_sizes/font_size = 18
+theme_override_colors/font_color = Color(0.88, 0.78, 0.52, 1)
+theme_override_colors/font_shadow_color = Color(0, 0, 0, 0.8)
+theme_override_constants/shadow_offset_x = 1
+theme_override_constants/shadow_offset_y = 1
+text = "— CREA UNA SALA O ÚNETE A LA BATALLA —"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="CenterArea" type="CenterContainer" parent="MainLayout"]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="CardsRow" type="HBoxContainer" parent="MainLayout/CenterArea"]
+layout_mode = 2
+theme_override_constants/separation = 48
+alignment = 1
+
+[node name="HostCard" type="PanelContainer" parent="MainLayout/CenterArea/CardsRow"]
+custom_minimum_size = Vector2(450, 520)
+layout_mode = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_card")
+
+[node name="HostMargin" type="MarginContainer" parent="MainLayout/CenterArea/CardsRow/HostCard"]
+layout_mode = 2
+theme_override_constants/margin_left = 32
 theme_override_constants/margin_top = 28
-theme_override_constants/margin_right = 36
+theme_override_constants/margin_right = 32
 theme_override_constants/margin_bottom = 28
 
-[node name="VBoxContainer" type="VBoxContainer" parent="CenterContainer/PanelContainer/MarginContainer"]
+[node name="HostVBox" type="VBoxContainer" parent="MainLayout/CenterArea/CardsRow/HostCard/HostMargin"]
 layout_mode = 2
 theme_override_constants/separation = 14
 
-[node name="HostTitle" type="Label" parent="CenterContainer/PanelContainer/MarginContainer/VBoxContainer"]
+[node name="HostTitle" type="Label" parent="MainLayout/CenterArea/CardsRow/HostCard/HostMargin/HostVBox"]
 layout_mode = 2
 theme_override_fonts/font = ExtResource("3_font_title")
-theme_override_font_sizes/font_size = 18
+theme_override_font_sizes/font_size = 24
 theme_override_colors/font_color = Color(1, 0.9, 0.6, 1)
-theme_override_colors/font_shadow_color = Color(0, 0, 0, 0.7)
+theme_override_colors/font_shadow_color = Color(0, 0, 0, 0.8)
 theme_override_constants/shadow_offset_x = 1
 theme_override_constants/shadow_offset_y = 1
-text = "CREAR SALA NUEVA"
+text = "CREAR SALA"
 horizontal_alignment = 1
 
-[node name="CreateRoomButton" type="Button" parent="CenterContainer/PanelContainer/MarginContainer/VBoxContainer" unique_id=98765432]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(0, 50)
+[node name="HostSubtitle" type="Label" parent="MainLayout/CenterArea/CardsRow/HostCard/HostMargin/HostVBox"]
 layout_mode = 2
-mouse_default_cursor_shape = 2
 theme_override_fonts/font = ExtResource("4_font_medieval")
-theme_override_font_sizes/font_size = 18
-theme_override_colors/font_color = Color(1, 0.95, 0.85, 1)
-theme_override_colors/font_hover_color = Color(1, 0.9, 0.5, 1)
-theme_override_styles/normal = SubResource("StyleBoxFlat_button")
-theme_override_styles/hover = SubResource("StyleBoxFlat_button_hover")
-theme_override_styles/pressed = SubResource("StyleBoxFlat_button_pressed")
-text = "CREAR SALA (ANFITRIÓN)"
+theme_override_font_sizes/font_size = 15
+theme_override_colors/font_color = Color(0.8, 0.72, 0.5, 1)
+text = "— SER ANFITRIÓN —"
+horizontal_alignment = 1
 
-[node name="RoomCodeLabel" type="Label" parent="CenterContainer/PanelContainer/MarginContainer/VBoxContainer" unique_id=87654321]
-unique_name_in_owner = true
+[node name="HostSep" type="HSeparator" parent="MainLayout/CenterArea/CardsRow/HostCard/HostMargin/HostVBox"]
 layout_mode = 2
-theme_override_fonts/font = ExtResource("3_font_title")
-theme_override_font_sizes/font_size = 16
-theme_override_colors/font_color = Color(1, 0.92, 0.5, 1)
-text = ""
+theme_override_styles/separator = SubResource("StyleBoxLine_separator")
+
+[node name="HostDesc" type="Label" parent="MainLayout/CenterArea/CardsRow/HostCard/HostMargin/HostVBox"]
+layout_mode = 2
+theme_override_fonts/font = ExtResource("4_font_medieval")
+theme_override_font_sizes/font_size = 15
+theme_override_colors/font_color = Color(0.88, 0.85, 0.8, 1)
+theme_override_colors/font_shadow_color = Color(0, 0, 0, 0.6)
+text = "Inicia una sala privada en el servidor y obtén un código para compartir con tu rival."
 horizontal_alignment = 1
 autowrap_mode = 2
 
-[node name="HSeparator1" type="HSeparator" parent="CenterContainer/PanelContainer/MarginContainer/VBoxContainer"]
+[node name="HostSpacer1" type="Control" parent="MainLayout/CenterArea/CardsRow/HostCard/HostMargin/HostVBox"]
 layout_mode = 2
-theme_override_styles/separator = SubResource("StyleBoxLine_separator")
+size_flags_vertical = 3
 
-[node name="JoinTitle" type="Label" parent="CenterContainer/PanelContainer/MarginContainer/VBoxContainer"]
-layout_mode = 2
-theme_override_fonts/font = ExtResource("3_font_title")
-theme_override_font_sizes/font_size = 18
-theme_override_colors/font_color = Color(1, 0.9, 0.6, 1)
-theme_override_colors/font_shadow_color = Color(0, 0, 0, 0.7)
-theme_override_constants/shadow_offset_x = 1
-theme_override_constants/shadow_offset_y = 1
-text = "UNIRSE A SALA EXISTENTE"
-horizontal_alignment = 1
-
-[node name="CodeEdit" type="LineEdit" parent="CenterContainer/PanelContainer/MarginContainer/VBoxContainer" unique_id=76543210]
+[node name="CreateRoomButton" type="Button" parent="MainLayout/CenterArea/CardsRow/HostCard/HostMargin/HostVBox" unique_id=98765432]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(0, 48)
-layout_mode = 2
-theme_override_fonts/font = ExtResource("4_font_medieval")
-theme_override_font_sizes/font_size = 18
-theme_override_colors/font_color = Color(1, 0.95, 0.85, 1)
-theme_override_colors/font_placeholder_color = Color(0.65, 0.6, 0.5, 0.6)
-theme_override_styles/normal = SubResource("StyleBoxFlat_input")
-theme_override_styles/focus = SubResource("StyleBoxFlat_input_focus")
-placeholder_text = "Código de sala (ej. ABCD)"
-alignment = 1
-max_length = 8
-
-[node name="JoinRoomButton" type="Button" parent="CenterContainer/PanelContainer/MarginContainer/VBoxContainer" unique_id=65432109]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(0, 50)
+custom_minimum_size = Vector2(0, 54)
 layout_mode = 2
 mouse_default_cursor_shape = 2
 theme_override_fonts/font = ExtResource("4_font_medieval")
-theme_override_font_sizes/font_size = 18
+theme_override_font_sizes/font_size = 19
 theme_override_colors/font_color = Color(1, 0.95, 0.85, 1)
 theme_override_colors/font_hover_color = Color(1, 0.9, 0.5, 1)
-theme_override_styles/normal = SubResource("StyleBoxFlat_button")
-theme_override_styles/hover = SubResource("StyleBoxFlat_button_hover")
-theme_override_styles/pressed = SubResource("StyleBoxFlat_button_pressed")
-text = "UNIRSE A SALA"
+theme_override_styles/normal = SubResource("StyleBoxFlat_button_gold")
+theme_override_styles/hover = SubResource("StyleBoxFlat_button_gold_hover")
+theme_override_styles/pressed = SubResource("StyleBoxFlat_button_gold_pressed")
+text = "CREAR SALA NUEVA"
 
-[node name="HSeparator2" type="HSeparator" parent="CenterContainer/PanelContainer/MarginContainer/VBoxContainer"]
+[node name="CodeDisplayBox" type="PanelContainer" parent="MainLayout/CenterArea/CardsRow/HostCard/HostMargin/HostVBox" unique_id=88880001]
+unique_name_in_owner = true
+visible = false
+custom_minimum_size = Vector2(0, 180)
 layout_mode = 2
-theme_override_styles/separator = SubResource("StyleBoxLine_separator")
+theme_override_styles/panel = SubResource("StyleBoxFlat_code_box")
 
-[node name="StatusLabel" type="Label" parent="CenterContainer/PanelContainer/MarginContainer/VBoxContainer" unique_id=54321098]
+[node name="CodeMargin" type="MarginContainer" parent="MainLayout/CenterArea/CardsRow/HostCard/HostMargin/HostVBox/CodeDisplayBox"]
+layout_mode = 2
+theme_override_constants/margin_left = 18
+theme_override_constants/margin_top = 16
+theme_override_constants/margin_right = 18
+theme_override_constants/margin_bottom = 16
+
+[node name="CodeVBox" type="VBoxContainer" parent="MainLayout/CenterArea/CardsRow/HostCard/HostMargin/HostVBox/CodeDisplayBox/CodeMargin"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="CodeHeaderLabel" type="Label" parent="MainLayout/CenterArea/CardsRow/HostCard/HostMargin/HostVBox/CodeDisplayBox/CodeMargin/CodeVBox"]
+layout_mode = 2
+theme_override_fonts/font = ExtResource("4_font_medieval")
+theme_override_font_sizes/font_size = 14
+theme_override_colors/font_color = Color(0.4, 0.85, 1, 1)
+theme_override_colors/font_shadow_color = Color(0, 0, 0, 0.8)
+text = "CÓDIGO DE TU SALA"
+horizontal_alignment = 1
+
+[node name="RoomCodeLabel" type="Label" parent="MainLayout/CenterArea/CardsRow/HostCard/HostMargin/HostVBox/CodeDisplayBox/CodeMargin/CodeVBox" unique_id=87654321]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_fonts/font = ExtResource("3_font_title")
+theme_override_font_sizes/font_size = 46
+theme_override_colors/font_color = Color(0.35, 0.92, 1, 1)
+theme_override_colors/font_shadow_color = Color(0.1, 0.5, 0.8, 0.5)
+theme_override_constants/shadow_offset_x = 2
+theme_override_constants/shadow_offset_y = 2
+text = "A B C D"
+horizontal_alignment = 1
+
+[node name="CopyCodeButton" type="Button" parent="MainLayout/CenterArea/CardsRow/HostCard/HostMargin/HostVBox/CodeDisplayBox/CodeMargin/CodeVBox" unique_id=88880002]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 42)
+layout_mode = 2
+mouse_default_cursor_shape = 2
+theme_override_fonts/font = ExtResource("4_font_medieval")
+theme_override_font_sizes/font_size = 15
+theme_override_colors/font_color = Color(0.85, 0.95, 1, 1)
+theme_override_colors/font_hover_color = Color(1, 1, 1, 1)
+theme_override_styles/normal = SubResource("StyleBoxFlat_button_blue")
+theme_override_styles/hover = SubResource("StyleBoxFlat_button_blue_hover")
+theme_override_styles/pressed = SubResource("StyleBoxFlat_button_blue_pressed")
+text = "COPIAR CÓDIGO"
+
+[node name="WaitingPeerLabel" type="Label" parent="MainLayout/CenterArea/CardsRow/HostCard/HostMargin/HostVBox/CodeDisplayBox/CodeMargin/CodeVBox" unique_id=88880003]
 unique_name_in_owner = true
 layout_mode = 2
 theme_override_fonts/font = ExtResource("4_font_medieval")
 theme_override_font_sizes/font_size = 14
-theme_override_colors/font_color = Color(0.95, 0.88, 0.65, 1)
-text = ""
+theme_override_colors/font_color = Color(0.75, 0.85, 0.95, 0.9)
+text = "Esperando que tu rival se una..."
+horizontal_alignment = 1
+
+[node name="HostSpacer2" type="Control" parent="MainLayout/CenterArea/CardsRow/HostCard/HostMargin/HostVBox"]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="JoinCard" type="PanelContainer" parent="MainLayout/CenterArea/CardsRow"]
+custom_minimum_size = Vector2(450, 520)
+layout_mode = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_card")
+
+[node name="JoinMargin" type="MarginContainer" parent="MainLayout/CenterArea/CardsRow/JoinCard"]
+layout_mode = 2
+theme_override_constants/margin_left = 32
+theme_override_constants/margin_top = 28
+theme_override_constants/margin_right = 32
+theme_override_constants/margin_bottom = 28
+
+[node name="JoinVBox" type="VBoxContainer" parent="MainLayout/CenterArea/CardsRow/JoinCard/JoinMargin"]
+layout_mode = 2
+theme_override_constants/separation = 14
+
+[node name="JoinTitle" type="Label" parent="MainLayout/CenterArea/CardsRow/JoinCard/JoinMargin/JoinVBox"]
+layout_mode = 2
+theme_override_fonts/font = ExtResource("3_font_title")
+theme_override_font_sizes/font_size = 24
+theme_override_colors/font_color = Color(1, 0.9, 0.6, 1)
+theme_override_colors/font_shadow_color = Color(0, 0, 0, 0.8)
+theme_override_constants/shadow_offset_x = 1
+theme_override_constants/shadow_offset_y = 1
+text = "UNIRSE A SALA"
+horizontal_alignment = 1
+
+[node name="JoinSubtitle" type="Label" parent="MainLayout/CenterArea/CardsRow/JoinCard/JoinMargin/JoinVBox"]
+layout_mode = 2
+theme_override_fonts/font = ExtResource("4_font_medieval")
+theme_override_font_sizes/font_size = 15
+theme_override_colors/font_color = Color(0.8, 0.72, 0.5, 1)
+text = "— COMO INVITADO —"
+horizontal_alignment = 1
+
+[node name="JoinSep" type="HSeparator" parent="MainLayout/CenterArea/CardsRow/JoinCard/JoinMargin/JoinVBox"]
+layout_mode = 2
+theme_override_styles/separator = SubResource("StyleBoxLine_separator")
+
+[node name="JoinDesc" type="Label" parent="MainLayout/CenterArea/CardsRow/JoinCard/JoinMargin/JoinVBox"]
+layout_mode = 2
+theme_override_fonts/font = ExtResource("4_font_medieval")
+theme_override_font_sizes/font_size = 15
+theme_override_colors/font_color = Color(0.88, 0.85, 0.8, 1)
+theme_override_colors/font_shadow_color = Color(0, 0, 0, 0.6)
+text = "Ingresa el código de 4 letras que te compartió el anfitrión para conectarte a su partida."
 horizontal_alignment = 1
 autowrap_mode = 2
 
-[node name="RelayUrlEdit" type="LineEdit" parent="CenterContainer/PanelContainer/MarginContainer/VBoxContainer" unique_id=43210987]
+[node name="JoinSpacer1" type="Control" parent="MainLayout/CenterArea/CardsRow/JoinCard/JoinMargin/JoinVBox"]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="InputLabel" type="Label" parent="MainLayout/CenterArea/CardsRow/JoinCard/JoinMargin/JoinVBox"]
+layout_mode = 2
+theme_override_fonts/font = ExtResource("4_font_medieval")
+theme_override_font_sizes/font_size = 14
+theme_override_colors/font_color = Color(0.7, 0.82, 0.92, 1)
+text = "CÓDIGO DE SALA:"
+horizontal_alignment = 1
+
+[node name="CodeEdit" type="LineEdit" parent="MainLayout/CenterArea/CardsRow/JoinCard/JoinMargin/JoinVBox" unique_id=76543210]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(0, 36)
+custom_minimum_size = Vector2(0, 54)
+layout_mode = 2
+theme_override_fonts/font = ExtResource("3_font_title")
+theme_override_font_sizes/font_size = 24
+theme_override_colors/font_color = Color(0.35, 0.92, 1, 1)
+theme_override_colors/font_placeholder_color = Color(0.45, 0.55, 0.65, 0.6)
+theme_override_styles/normal = SubResource("StyleBoxFlat_input_code")
+theme_override_styles/focus = SubResource("StyleBoxFlat_input_code_focus")
+placeholder_text = "EJ. ABCD"
+alignment = 1
+max_length = 8
+
+[node name="JoinRoomButton" type="Button" parent="MainLayout/CenterArea/CardsRow/JoinCard/JoinMargin/JoinVBox" unique_id=65432109]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 54)
+layout_mode = 2
+mouse_default_cursor_shape = 2
+theme_override_fonts/font = ExtResource("4_font_medieval")
+theme_override_font_sizes/font_size = 19
+theme_override_colors/font_color = Color(1, 0.95, 0.85, 1)
+theme_override_colors/font_hover_color = Color(1, 0.9, 0.5, 1)
+theme_override_styles/normal = SubResource("StyleBoxFlat_button_gold")
+theme_override_styles/hover = SubResource("StyleBoxFlat_button_gold_hover")
+theme_override_styles/pressed = SubResource("StyleBoxFlat_button_gold_pressed")
+text = "CONECTAR Y JUGAR"
+
+[node name="JoinHint" type="Label" parent="MainLayout/CenterArea/CardsRow/JoinCard/JoinMargin/JoinVBox"]
+layout_mode = 2
+theme_override_fonts/font = ExtResource("4_font_medieval")
+theme_override_font_sizes/font_size = 13
+theme_override_colors/font_color = Color(0.65, 0.65, 0.65, 0.8)
+text = "Presiona ENTER para conectar rápido"
+horizontal_alignment = 1
+
+[node name="JoinSpacer2" type="Control" parent="MainLayout/CenterArea/CardsRow/JoinCard/JoinMargin/JoinVBox"]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="FooterContainer" type="VBoxContainer" parent="MainLayout"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="StatusLabel" type="Label" parent="MainLayout/FooterContainer" unique_id=54321098]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 28)
+layout_mode = 2
+theme_override_fonts/font = ExtResource("4_font_medieval")
+theme_override_font_sizes/font_size = 17
+theme_override_colors/font_color = Color(1, 0.92, 0.7, 1)
+theme_override_colors/font_shadow_color = Color(0, 0, 0, 0.8)
+theme_override_constants/shadow_offset_x = 1
+theme_override_constants/shadow_offset_y = 1
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="BackButtonContainer" type="HBoxContainer" parent="MainLayout/FooterContainer"]
+layout_mode = 2
+alignment = 1
+
+[node name="BackButton" type="TextureButton" parent="MainLayout/FooterContainer/BackButtonContainer" unique_id=75892302]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(260, 64)
+layout_mode = 2
+mouse_default_cursor_shape = 2
+texture_normal = ExtResource("5_btn_back")
+texture_hover = ExtResource("6_btn_back_hover")
+texture_focused = ExtResource("6_btn_back_hover")
+ignore_texture_size = true
+stretch_mode = 5
+
+[node name="AdvancedLayer" type="Control" parent="."]
+layout_mode = 1
+anchors_preset = 3
+anchor_left = 1.0
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -340.0
+offset_top = -140.0
+offset_right = -30.0
+offset_bottom = -20.0
+grow_horizontal = 0
+grow_vertical = 0
+mouse_filter = 2
+
+[node name="RelayBox" type="PanelContainer" parent="AdvancedLayer" unique_id=43210999]
+unique_name_in_owner = true
+visible = false
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_relay_panel")
+
+[node name="RelayMargin" type="MarginContainer" parent="AdvancedLayer/RelayBox"]
+layout_mode = 2
+theme_override_constants/margin_left = 12
+theme_override_constants/margin_top = 10
+theme_override_constants/margin_right = 12
+theme_override_constants/margin_bottom = 10
+
+[node name="RelayVBox" type="VBoxContainer" parent="AdvancedLayer/RelayBox/RelayMargin"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="RelayLabel" type="Label" parent="AdvancedLayer/RelayBox/RelayMargin/RelayVBox"]
 layout_mode = 2
 theme_override_fonts/font = ExtResource("4_font_medieval")
 theme_override_font_sizes/font_size = 12
-theme_override_colors/font_color = Color(0.7, 0.7, 0.7, 0.8)
+theme_override_colors/font_color = Color(0.85, 0.8, 0.7, 1)
+text = "Servidor Relay WebSocket:"
+
+[node name="RelayUrlEdit" type="LineEdit" parent="AdvancedLayer/RelayBox/RelayMargin/RelayVBox" unique_id=43210987]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 34)
+layout_mode = 2
+theme_override_fonts/font = ExtResource("4_font_medieval")
+theme_override_font_sizes/font_size = 11
+theme_override_colors/font_color = Color(0.8, 0.8, 0.8, 0.9)
 theme_override_colors/font_placeholder_color = Color(0.5, 0.5, 0.5, 0.5)
-theme_override_styles/normal = SubResource("StyleBoxFlat_input")
-theme_override_styles/focus = SubResource("StyleBoxFlat_input_focus")
+theme_override_styles/normal = SubResource("StyleBoxFlat_input_code")
+theme_override_styles/focus = SubResource("StyleBoxFlat_input_code_focus")
 placeholder_text = "Servidor Relay"
 
-[node name="ContinueButton" type="Button" parent="CenterContainer/PanelContainer/MarginContainer/VBoxContainer" unique_id=32109876]
+[node name="RelayToggleBtn" type="Button" parent="AdvancedLayer" unique_id=43210988]
 unique_name_in_owner = true
-visible = false
-layout_mode = 2
-text = "Continuar"
+layout_mode = 1
+anchors_preset = 3
+anchor_left = 1.0
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -110.0
+offset_top = -28.0
+grow_horizontal = 0
+grow_vertical = 0
+mouse_default_cursor_shape = 2
+theme_override_fonts/font = ExtResource("4_font_medieval")
+theme_override_font_sizes/font_size = 12
+theme_override_colors/font_color = Color(0.7, 0.7, 0.7, 0.6)
+theme_override_colors/font_hover_color = Color(1, 0.9, 0.6, 1)
+text = "⚙ Servidor"
+flat = true

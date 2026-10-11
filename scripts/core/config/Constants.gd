@@ -33,8 +33,8 @@ const STARTING_HAND_SIZE: int = 8
 const MAX_HAND_SIZE: int = 8
 const CARDS_DRAWN_PER_TURN: int = 1
 
-## Escala de las cartas de Oro en Reserva y Oro Pagado (0.80 = proporción balanceada sin solapamiento vertical)
-const GOLD_CARD_SCALE: Vector2 = Vector2(0.80, 0.80)
+## Escala de las cartas de Oro en Reserva y Oro Pagado (0.88 = más presencia y legibilidad)
+const GOLD_CARD_SCALE: Vector2 = Vector2(0.88, 0.88)
 
 ## Desplazamiento vertical para Armas equipadas a un Aliado (asoman discretamente por abajo)
 const WEAPON_OFFSET_Y: float = 48.0

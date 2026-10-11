@@ -19,7 +19,7 @@ func setup(main: CanvasLayer) -> void:
 	_main = main
 
 
-func await_single_pick(candidates: Array, title: String, can_cancel: bool = true, min_selections: int = 1, filter: Callable = Callable()) -> Dictionary:
+func await_single_pick(candidates: Array, title: String, can_cancel: bool = true, min_selections: int = 1, filter: Callable = Callable(), chooser_id: int = 0) -> Dictionary:
 	"""Abre un panel CUSTOM de 1-sola-elección y espera la respuesta —
 	extraído (2026-08-30) del mismo bloque de 15-20 líneas que se repetía
 	copiado en Don de Amma, Tesoro de los Césares, Miguel, las dos de Tyet,
@@ -35,6 +35,14 @@ func await_single_pick(candidates: Array, title: String, can_cancel: bool = true
 	costo opcional tipo Bernardo O'Higgins: 'Puedes Barajar...') SÍ puede
 	terminar en 'selection_completed' con array vacío (confirmó sin elegir
 	nada) — se escuchan las dos señales siempre, la de más no molesta.
+	'chooser_id' (2026-10-07, a pedido del usuario: "arranca con await_
+	single_pick" — ver arquitectura.md §39): el puente de red para esto ya
+	estaba COMPLETO desde Fase 3 — open_selection()/_delegate_selection_to_
+	remote() ya saben mandarlo por red y emiten las mismas 3 señales que
+	esta función ya escucha más abajo. Solo faltaba exponer el parámetro
+	hasta aquí; nadie lo había necesitado porque hasta hoy todo llamador de
+	await_single_pick() se quedaba con el default 0 (bloqueado para el
+	Remoto por un guard explícito en cada carta).
 	Returns: el card_data elegido, o {} si se canceló o confirmó vacío."""
 	_main.open_selection(candidates, _main.SelectionMode.CUSTOM, {
 		"title": title,
@@ -42,7 +50,7 @@ func await_single_pick(candidates: Array, title: String, can_cancel: bool = true
 		"min_selections": min_selections,
 		"can_cancel": can_cancel,
 		"filter": filter,
-	})
+	}, chooser_id)
 	var state := {"resolved": false, "picked": {}}
 	var on_single := func(d: Dictionary):
 		state.picked = d
@@ -82,10 +90,20 @@ func await_card_pair_choice(
 	label_a: String = "Tope",
 	label_b: String = "Fondo",
 	face_down_b: bool = true,
-	face_down_a: bool = false
+	face_down_a: bool = false,
+	chooser_id: int = 0
 ) -> bool:
 	"""Modal de Selección Visual entre 2 Cartas (p.ej. La Ouija: tope vs fondo de Castillo).
-	Presenta las dos cartas niveladas en pantalla con estética de Altar Catedralicio limpia y directa."""
+	Presenta las dos cartas niveladas en pantalla con estética de Altar Catedralicio limpia y directa.
+	'chooser_id' (2026-10-07, ver arquitectura.md §41): mismo criterio que
+	await_castillo_pick() — esto es un modal visual con Nodos reales de ESTA
+	pantalla, no tiene sentido tal cual para el Remoto. Se delega a await_
+	choice() (ya con puente de red) con label_a/label_b como texto en vez
+	de construir un sistema nuevo — se pierde el arte de las cartas en la
+	pantalla del Remoto, pero la elección en sí es la misma."""
+	if chooser_id == 1 and NetworkClient.room_code != "" and NetworkClient.is_host:
+		var picked_idx: int = await await_choice(main, title, [label_a, label_b], chooser_id)
+		return picked_idx == 0
 	var canvas := CanvasLayer.new()
 	canvas.layer = 75
 	main.add_child(canvas)
@@ -602,7 +620,7 @@ func cancel_castillo_pick() -> void:
 		cleanup.call()
 
 
-func await_castillo_pick(main: Node, title: String) -> bool:
+func await_castillo_pick(main: Node, title: String, chooser_id: int = 0) -> bool:
 	"""Espera un click directo sobre el Panel del Castillo propio o del
 	rival en el tablero — reemplaza el popup de 2 botones de texto para
 	elegir 'tu Castillo o el del oponente' (2026-08-30, a pedido del
@@ -612,7 +630,16 @@ func await_castillo_pick(main: Node, title: String) -> bool:
 	mismo criterio que await_two_choice(), es una elección obligatoria
 	entre dos zonas, no un 'puedes'. Envoltorio de start_castillo_pick()
 	(2026-09-06, mismo split que start_target_selection()/await_target()).
-	Returns: true si se clickeó el Castillo propio, false si el rival."""
+	'chooser_id' (2026-10-07, ver arquitectura.md §40): esto es un click
+	sobre un Panel real de ESTA pantalla — no tiene sentido para el Remoto,
+	que no ve el tablero del Anfitrión. En vez de construir un sistema de
+	red nuevo, se delega a await_choice() (ya tiene puente de red completo,
+	"choose_option") con las mismas dos opciones en texto — misma elección
+	A/B, otro medio.
+	Returns: true si se eligió el Castillo propio, false si el rival."""
+	if chooser_id == 1 and NetworkClient.room_code != "" and NetworkClient.is_host:
+		var picked_idx: int = await await_choice(main, title, ["Tu Castillo", "Castillo rival"], chooser_id)
+		return picked_idx == 0
 	var state := {"done": false, "picked_own": true}
 	start_castillo_pick(main, title, func(v: bool) -> void:
 		state.picked_own = v
@@ -636,7 +663,7 @@ func _set_castillo_pick_glow(panel: Panel, on: bool) -> void:
 	panel.add_theme_stylebox_override("panel", style)
 
 
-func await_multi_pick(candidates: Array, title: String, max_selections: int, min_selections: int = 0, can_cancel: bool = true, filter: Callable = Callable()) -> Dictionary:
+func await_multi_pick(candidates: Array, title: String, max_selections: int, min_selections: int = 0, can_cancel: bool = true, filter: Callable = Callable(), chooser_id: int = 0) -> Dictionary:
 	"""Selección múltiple (0 a max_selections) y espera la respuesta —
 	extraído (2026-08-30) del mismo bloque repetido en
 	_resolve_search_cemetery_to_hand()/_select_hand_cards_for_discard()
@@ -647,6 +674,16 @@ func await_multi_pick(candidates: Array, title: String, max_selections: int, min
 	'puedes' entero vs. aceptarlo pero no encontrar nada que valga la
 	pena elegir) — por eso devuelve un Dictionary con las dos señales en
 	vez de colapsarlas en un Array vacío como haría await_single_pick().
+	'chooser_id' (2026-10-07, mismo arreglo que await_single_pick(), ver
+	arquitectura.md §40): el puente ya existe en open_selection(), solo
+	faltaba exponerlo. OJO — límite real para quien lo use del lado del
+	Remoto: RemoteMirrorController._show_select_cards_prompt() resuelve la
+	multi-selección con checkboxes, no con orden de click, así que cualquier
+	llamador que dependa de 'el orden en que se clickeó' (p.ej. Infernum
+	Vox, que reordena el tope del Castillo) NO preserva ese orden para el
+	Remoto — vuelve siempre en el orden original en que se mostraron. 'Mira
+	y elige cuáles' funciona igual para los dos lados; 'en QUÉ ORDEN' solo
+	para el Anfitrión.
 	Returns: {"cancelled": bool, "picked": Array[Dictionary]}."""
 	_main.open_selection(candidates, _main.SelectionMode.CUSTOM, {
 		"title": title,
@@ -654,7 +691,7 @@ func await_multi_pick(candidates: Array, title: String, max_selections: int, min
 		"min_selections": min_selections,
 		"can_cancel": can_cancel,
 		"filter": filter,
-	})
+	}, chooser_id)
 	var state := {"resolved": false, "picked": [], "cancelled": false}
 	var on_single := func(d: Dictionary):
 		state.picked = [d]

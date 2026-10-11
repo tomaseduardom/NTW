@@ -152,19 +152,13 @@ func try_execute_banish_opponent_cost_sum_six_pattern(ability_text: String, card
 	var lower := ability_text.to_lower()
 	if not ("destierra cartas oponentes cuyos costes sumen hasta 6" in lower):
 		return false
-	if controller_id != 0:
-		# 2026-10-05: a diferencia del resto de este archivo, esta NO se
-		# desbloquea — usa dynamic_filter (presupuesto en vivo) en
-		# await_multi_target(), que el puente de red NO enforcea del lado
-		# del Remoto a propósito (ver §17/arquitectura.md) — dejarla pasar
-		# permitiría desterrar de más sin que el límite de coste 6 se
-		# respete de verdad.
-		return true  # el Remoto no puede usar esta habilidad todavía
 	var main := _main.get_node_or_null("/root/Main")
 	if not main or not main._targeted_executor:
 		return true
 	var opponent_cards: Array = []
-	for field in [main.opponent_field, main.opponent_linea_ataque, main.opponent_linea_apoyo, main.opponent_gold]:
+	var rival_fields: Array = [main.opponent_field, main.opponent_linea_ataque, main.opponent_linea_apoyo, main.opponent_gold] if controller_id == 0 \
+		else [main.player_field, main.player_linea_ataque, main.player_linea_apoyo, main.player_gold]
+	for field in rival_fields:
 		if field:
 			opponent_cards.append_array(field.get_children())
 	if opponent_cards.is_empty():
@@ -181,7 +175,7 @@ func try_execute_banish_opponent_cost_sum_six_pattern(ability_text: String, card
 		var c_cost: int = int(c.get("card_cost")) if c.get("card_cost") != null else 0
 		return sum_cost + c_cost <= 6
 	var chosen: Array = await main._card_interaction.await_multi_target(
-		"Destierra cartas rivales cuyos costes sumen hasta 6", opponent_cards, -1, Callable(), budget_filter)
+		"Destierra cartas rivales cuyos costes sumen hasta 6", opponent_cards, -1, Callable(), budget_filter, true, null, controller_id)
 	if not chosen.is_empty():
 		# Sin ventana genérica aquí a propósito (2026-09-09): banish() con
 		# can_be_prevented=true (default) ya consulta Prevención adentro —

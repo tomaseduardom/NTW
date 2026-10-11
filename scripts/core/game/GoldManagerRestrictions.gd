@@ -200,13 +200,18 @@ func _max_weapons_per_ally() -> int:
 	return 1 + extra
 
 
-func _can_play_weapons_in_guerra_talismanes() -> bool:
+func _can_play_weapons_in_guerra_talismanes(player_id: int = 0) -> bool:
 	"""Detecta 'Puedes jugar Armas en Guerra de Talismanes' (p.ej. Lobo
 	Sagrado) en el propio jugador (2026-08-28) — misma técnica de
 	escaneo-de-texto que _register_talisman_totem_tax(), pero como chequeo
 	de legalidad puntual en vez de un modificador registrado, porque aquí
-	solo importa el instante de jugar el Arma, no algo que deba persistir."""
-	for field in [_main.player_field, _main.player_linea_ataque, _main.player_linea_apoyo]:
+	solo importa el instante de jugar el Arma, no algo que deba persistir.
+	'player_id' (2026-10-07, ver arquitectura.md §34): play_card() ya puede
+	jugarse en nombre del jugador 1, así que el campo a escanear tiene que
+	ser el suyo, no siempre el del Anfitrión."""
+	var fields: Array = [_main.player_field, _main.player_linea_ataque, _main.player_linea_apoyo] if player_id == 0 \
+		else [_main.opponent_field, _main.opponent_linea_ataque, _main.opponent_linea_apoyo]
+	for field in fields:
 		if not field:
 			continue
 		for card in field.get_children():
@@ -221,7 +226,7 @@ func _can_play_weapons_in_guerra_talismanes() -> bool:
 	return false
 
 
-func has_phase_exception(card_type: int) -> bool:
+func has_phase_exception(card_type: int, player_id: int = 0) -> bool:
 	"""Único punto de verdad para las excepciones de fase (Arma puntual tipo
 	Lobo Sagrado + Talismanes en general en Guerra de Talismanes) — antes
 	estaba duplicado inline en play_card()/play_card_from_cemetery(), y
@@ -235,7 +240,7 @@ func has_phase_exception(card_type: int) -> bool:
 	if card_type == Constants.CardType.TALISMAN:
 		return true
 	if card_type == Constants.CardType.ARMA:
-		return _can_play_weapons_in_guerra_talismanes()
+		return _can_play_weapons_in_guerra_talismanes(player_id)
 	return false
 
 

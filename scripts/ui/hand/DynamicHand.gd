@@ -1,5 +1,5 @@
-extends Control
 class_name DynamicHand
+extends Control
 ## Mano con cartas en abanico profesional (arco rúnico).
 ## - Distribución matemática en arco cosenoidal/parabólico con rotación progresiva.
 ## - Hover profesional: la carta se eleva, se endereza a 0° y gana prioridad z_index.
@@ -9,11 +9,11 @@ signal card_clicked(card: Node)
 signal card_double_clicked(card: Node)
 
 @export_group("Layout")
-@export var card_overlap: float = -35.0         ## Solapamiento base entre cartas en mano
+@export var card_overlap: float = -35.0  ## Solapamiento base entre cartas en mano
 @export var animation_duration: float = 0.22
-@export var max_fan_angle: float = 9.5          ## Ángulo máximo de apertura del abanico en grados
-@export var max_arc_height: float = 22.0        ## Elevación vertical máxima del centro del arco
-@export var hover_lift: float = 2.0             ## Elevación mínima en píxeles al hacer hover (micro-lift sutil)
+@export var max_fan_angle: float = 9.5  ## Ángulo máximo de apertura del abanico en grados
+@export var max_arc_height: float = 22.0  ## Elevación vertical máxima del centro del arco
+@export var hover_lift: float = 0.0  ## Inmovilidad en hover (0 movimiento a pedido del usuario)
 
 var cards: Array[Node] = []
 var _tweens: Dictionary = {}
@@ -228,15 +228,12 @@ func _arrange_cards(animated: bool = true) -> void:
 		card.set("target_rotation", target_rot)
 		card.set("original_position", target_pos)
 
-		var is_card_hovered: bool = (card.get("is_hovered") == true)
+		var is_card_hovered: bool = card.get("is_hovered") == true
 		if is_card_hovered:
-			target_pos.y -= hover_lift
-			target_rot = 0.0
 			card.z_index = 100
-			card.set("original_z_index", i)
 		else:
 			card.z_index = i
-			card.set("original_z_index", i)
+		card.set("original_z_index", i)
 
 		# Recorte de click para cartas tapadas por la siguiente a la derecha
 		if card.has_method("set_click_clip_right"):
@@ -253,8 +250,15 @@ func _arrange_cards(animated: bool = true) -> void:
 		if animated:
 			var tween = create_tween()
 			tween.set_parallel(true)
-			tween.tween_property(card, "position", target_pos, animation_duration).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_CUBIC)
-			tween.tween_property(card, "rotation_degrees", target_rot, animation_duration).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_CUBIC)
+			tween.tween_property(card, "position", target_pos, animation_duration).set_ease(Tween.EASE_OUT).set_trans(
+				Tween.TRANS_CUBIC
+			)
+			(
+				tween
+				. tween_property(card, "rotation_degrees", target_rot, animation_duration)
+				. set_ease(Tween.EASE_OUT)
+				. set_trans(Tween.TRANS_CUBIC)
+			)
 			if not is_card_hovered:
 				tween.tween_property(card, "scale", Vector2.ONE, animation_duration).set_ease(Tween.EASE_OUT)
 			_tweens[card] = tween
@@ -266,7 +270,8 @@ func _arrange_cards(animated: bool = true) -> void:
 
 
 func _on_card_hovered(card: Node) -> void:
-	"""Al hacer hover: eleva suavemente la carta, la endereza a 0° y le da prioridad de dibujo."""
+	"""Al hacer hover: la carta no se mueve ni rota (a pedido del usuario),
+	solo se trae al frente (z_index = 100) y se libera el recorte para interacción completa."""
 	if not is_instance_valid(card) or card.get_parent() != self:
 		return
 	if _is_hidden or card.get("is_dragging") == true:
@@ -276,22 +281,13 @@ func _on_card_hovered(card: Node) -> void:
 		_tweens[card].kill()
 		_tweens.erase(card)
 
-	var base_target: Vector2 = get_card_target_position(card)
-	var hover_pos := Vector2(base_target.x, base_target.y - hover_lift)
-
 	card.z_index = 100
 	if card.has_method("set_click_clip_right"):
 		card.set_click_clip_right(-1.0)
 
-	var tw = create_tween()
-	tw.set_parallel(true)
-	tw.tween_property(card, "position", hover_pos, 0.16).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_CUBIC)
-	tw.tween_property(card, "rotation_degrees", 0.0, 0.16).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_CUBIC)
-	_tweens[card] = tw
-
 
 func _on_card_unhovered(card: Node) -> void:
-	"""Al salir el mouse: regresa suavemente a su posición y rotación en el abanico."""
+	"""Al salir el mouse: restaura su z_index original y recorte sin desplazar la carta."""
 	if not is_instance_valid(card) or card.get_parent() != self:
 		return
 	if card.get("is_dragging") == true:
@@ -301,21 +297,10 @@ func _on_card_unhovered(card: Node) -> void:
 		_tweens[card].kill()
 		_tweens.erase(card)
 
-	var target_pos: Vector2 = get_card_target_position(card)
-	var target_rot: float = get_card_target_rotation(card)
 	var base_z: int = card.get_meta("hand_base_z_index", cards.find(card))
-
-	var tw = create_tween()
-	tw.set_parallel(true)
-	tw.tween_property(card, "position", target_pos, 0.18).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_CUBIC)
-	tw.tween_property(card, "rotation_degrees", target_rot, 0.18).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_CUBIC)
-	tw.chain().tween_callback(func():
-		if is_instance_valid(card) and not card.get("is_hovered"):
-			card.z_index = base_z
-			if card.has_method("set_click_clip_right"):
-				card.set_click_clip_right(get_card_clip_right(card))
-	)
-	_tweens[card] = tw
+	card.z_index = base_z
+	if card.has_method("set_click_clip_right"):
+		card.set_click_clip_right(get_card_clip_right(card))
 
 
 func get_card_clip_right(card: Node) -> float:

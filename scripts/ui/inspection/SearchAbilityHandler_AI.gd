@@ -27,17 +27,11 @@ func _activate_aho_banish_ally_and_deck(source_card: Node, ability: Dictionary) 
 	if not is_instance_valid(source_card):
 		return
 	var owner_id: int = source_card.owner_id if source_card.get("owner_id") != null else 0
-	if owner_id != 0:
-		# 2026-09-30: a diferencia de otras habilidades de este archivo, esta
-		# no se puede abrir todavía para el Remoto — depende de
-		# await_castillo_pick()/start_castillo_pick(), que el plan de
-		# paridad remota deja fuera de la Fase 3 (ver arquitectura.md).
-		return
 
 	var target: Node = await TriggerSystem._targeted_executor._select_ally_or_totem_target(
 		"Elige un Aliado o Tótem para desterrar", owner_id)
 
-	var look_own: bool = await SelectionManager.await_castillo_pick(_inspector._main, "Aho — destierra 5 del tope")
+	var look_own: bool = await SelectionManager.await_castillo_pick(_inspector._main, "Aho — destierra 5 del tope", owner_id)
 	var deck_owner: int = owner_id if look_own else (1 - owner_id)
 
 	if await TriggerSystem.open_response_window(source_card, "Aho", owner_id):
@@ -184,14 +178,8 @@ func _activate_chakram_look_and_lock(source_card: Node, ability: Dictionary) -> 
 	if not is_instance_valid(source_card):
 		return
 	var owner_id: int = source_card.owner_id if source_card.get("owner_id") != null else 0
-	if owner_id != 0:
-		# 2026-10-05: usa SelectionManager.await_single_pick() para "mira la
-		# mano rival", sin chooser_id (ver §22) — se deja sin desbloquear.
-		return  # el Remoto no puede usar esta habilidad todavía
-
-	var opponent_hand: Array = []
-	if _inspector._main._opponent_fan and _inspector._main._opponent_fan.has_method("get_cards"):
-		opponent_hand = _inspector._main._opponent_fan.get_cards()
+	var opponent_hand_container = _inspector._main._opponent_fan if owner_id == 0 else _inspector._main.player_hand
+	var opponent_hand: Array = opponent_hand_container.cards if opponent_hand_container else []
 	var candidates: Array = []
 	for c in opponent_hand:
 		if is_instance_valid(c):
@@ -207,7 +195,7 @@ func _activate_chakram_look_and_lock(source_card: Node, ability: Dictionary) -> 
 	var not_oro_filter := func(d: Dictionary) -> bool:
 		return d.get("tipo") != Constants.CardType.ORO
 	var picked: Dictionary = await SelectionManager.await_single_pick(
-		candidate_data, "Mira la mano rival: elige una carta que no sea Oro", true, 0, not_oro_filter)
+		candidate_data, "Mira la mano rival: elige una carta que no sea Oro", true, 0, not_oro_filter, owner_id)
 	if picked.is_empty():
 		return  # canceló — no se marca 'una vez por turno'
 
@@ -485,12 +473,13 @@ func _activate_infernum_vox_look_reorder(source_card: Node, ability: Dictionary)
 	if not is_instance_valid(source_card):
 		return
 	var owner_id: int = source_card.owner_id if source_card.get("owner_id") != null else 0
-	if owner_id != 0:
-		# 2026-10-05: usa await_castillo_pick(), excluido desde el plan
-		# original (mismo caso que Aho más arriba) — se deja sin desbloquear.
-		return  # el Remoto no puede usar esta habilidad todavía
-
-	var look_own: bool = await SelectionManager.await_castillo_pick(_inspector._main, "Infernum Vox — mira 6 cartas")
+	# 2026-10-07 (ver arquitectura.md §40): await_castillo_pick()/await_
+	# multi_pick() ya tienen puente de red. Límite conocido para el Remoto
+	# específicamente en ESTA carta: la UI remota de multi-selección usa
+	# checkboxes, no orden de click, así que el reordenamiento en sí no se
+	# respeta de su lado (siempre vuelve en el orden que ya tenía) — "mirar
+	# y elegir cuáles van al fondo" sí funciona igual para los dos lados.
+	var look_own: bool = await SelectionManager.await_castillo_pick(_inspector._main, "Infernum Vox — mira 6 cartas", owner_id)
 	var target_player: int = owner_id if look_own else (1 - owner_id)
 
 	var deck: Array = CardManager.get_deck(target_player)
@@ -518,7 +507,7 @@ func _activate_infernum_vox_look_reorder(source_card: Node, ability: Dictionary)
 
 	var result_bottom: Dictionary = await SelectionManager.await_multi_pick(
 		peeked, "Elige, EN ORDEN, las cartas que van al FONDO del Castillo (puedes no elegir ninguna)",
-		amount, 0, false)
+		amount, 0, false, Callable(), owner_id)
 	var ordered_bottom: Array = result_bottom.picked
 
 	var ordered_top: Array = peeked.duplicate()
@@ -528,7 +517,7 @@ func _activate_infernum_vox_look_reorder(source_card: Node, ability: Dictionary)
 	if ordered_top.size() > 1:
 		var result_top: Dictionary = await SelectionManager.await_multi_pick(
 			ordered_top, "Ordena las cartas que quedan en el TOPE (elegilas de arriba hacia abajo)",
-			ordered_top.size(), ordered_top.size(), false)
+			ordered_top.size(), ordered_top.size(), false, Callable(), owner_id)
 		ordered_top = result_top.picked
 
 	# add_to_deck_bottom() = append (2026-08-30, tras corregir CardManager):

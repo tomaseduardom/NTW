@@ -24,3 +24,6 @@ relay-server/node_modules/
 # Builds exportados (portable Windows, ~2GB con Embed PCK) — se regeneran con
 # Godot --headless --export-release "Windows Desktop" build/windows/MitosOnline.exe
 build/
+
+# Reporte generado por tools/lint.ps1 — se regenera, no versionar
+linter_report.txt

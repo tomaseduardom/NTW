@@ -79,17 +79,12 @@ func try_execute_name_reveal_until_match_then_gold_to_pagado_pattern(ability_tex
 	var lower := ability_text.to_lower()
 	if not ("nombra un aliado o tótem" in lower and "pon un oro de tu mano en tu oro pagado" in lower):
 		return false
-	if controller_id != 0:
-		# 2026-10-05: usa TriggerSystem._card_name_search.open_and_wait()
-		# (CardNameSearchDialog), excluido desde el plan original — se deja
-		# sin desbloquear.
-		return true  # el Remoto no puede usar esta habilidad todavía
-
 	var main := _main.get_node_or_null("/root/Main")
 	if not main or not main._gold_manager:
 		return true
+	var hand_container_caos = main.player_hand if controller_id == 0 else main._opponent_fan
 	var picked: Dictionary = await _main._card_name_search.open_and_wait(
-		"Nombra un Aliado o Tótem")
+		"Nombra un Aliado o Tótem", controller_id)
 	if await TriggerSystem.open_response_window(card, str(card.card_name) if card else "contra el caos", controller_id):
 		return true
 	var picked_name: String = str(picked.get("nombre", ""))
@@ -105,7 +100,8 @@ func try_execute_name_reveal_until_match_then_gold_to_pagado_pattern(ability_tex
 		if not found.is_empty():
 			_remove_data_from_array(revealed, found)
 			var card_node = main._create_card(found, false)
-			main.player_hand.add_card(card_node)
+			card_node.owner_id = controller_id
+			hand_container_caos.add_card(card_node)
 			main._connect_card_signals(card_node)
 		for c in revealed:
 			deck.append(c)
@@ -113,16 +109,16 @@ func try_execute_name_reveal_until_match_then_gold_to_pagado_pattern(ability_tex
 		if main.get("_zone_manager"):
 			main._zone_manager._update_castillo_counts()
 
-	if main.player_hand and main._card_interaction:
+	if hand_container_caos and main._card_interaction:
 		# 2026-09-13, a pedido del usuario: click directo en la mano en vez
 		# del modal viejo.
 		var oro_filter := func(c: Node) -> bool:
 			return c.get("current_zone") == Constants.Zone.MANO and c.get("card_type") == Constants.CardType.ORO
 		var gold_node: Node = await main._card_interaction.await_target(
-			"Pon un Oro de tu mano en tu Oro Pagado", oro_filter)
+			"Pon un Oro de tu mano en tu Oro Pagado", oro_filter, true, controller_id)
 		if gold_node and is_instance_valid(gold_node):
 			var gold_data: Dictionary = gold_node.card_data.duplicate()
-			main.player_hand.remove_card(gold_node, true)
+			hand_container_caos.remove_card(gold_node, true)
 			await main._gold_manager.put_gold_directly_in_pagado(controller_id, gold_data)
 	return true
 

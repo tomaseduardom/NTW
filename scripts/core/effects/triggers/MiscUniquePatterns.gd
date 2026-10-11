@@ -193,13 +193,8 @@ func try_execute_malleus_name_lock_pattern(ability_text: String, card: Node, con
 	var lower := ability_text.to_lower()
 	if not ("nombra una carta que no sea malleus maleficarum" in lower):
 		return false
-	if controller_id != 0:
-		# Excluida desde el plan original de Fase 3: usa CardNameSearchDialog
-		# (open_and_wait()), sin chooser_id.
-		return true  # el Remoto no puede usar esta habilidad todavía
-
 	var picked: Dictionary = await _main._card_name_search.open_and_wait(
-		"Nombra una carta (pierde su habilidad mientras Malleus Maleficarum esté en juego)")
+		"Nombra una carta (pierde su habilidad mientras Malleus Maleficarum esté en juego)", controller_id)
 	if picked.is_empty():
 		return true
 	var picked_name: String = str(picked.get("nombre", ""))

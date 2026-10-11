@@ -4789,5 +4789,621 @@ guardia pero sí usaba siempre el Oro del jugador 0 sin verificar
 
 **Total acumulado (cartas únicas confirmadas): 143.**
 
-**Verificado con el headless check tras cada tanda de cambios — sin errores
-de parseo. Sin verificar en partida real todavía.**
+## 34. Bug sistémico encontrado al revisar `play_card()`: `OpponentFan` no tenía `.cards` — y conversión completa de `play_card()`/`play_card_from_exile()`/`play_card_from_cemetery()` (2026-10-07)
+
+**A pedido del usuario** ("veamos el play card" → "sí, convertilo completo"),
+tras mostrarle que `GoldManager.play_card()` seguía con la guardia
+`active_player_id != 0` documentada como fuera de alcance en §33.
+
+**Bug sistémico encontrado ANTES de tocar play_card() — el más importante de
+los dos:** el patrón repetido en TODO el proyecto (§10.14 en adelante)
+`hand_container = main.player_hand if owner_id == 0 else main._opponent_fan`
+seguido de `hand_container.cards.find/remove_at/duplicate/...` asume que
+`OpponentFan` (la mano visual del Remoto) tiene una propiedad pública `cards`
+igual que `DynamicHand` (la mano del Anfitrión). **No la tenía** — solo
+`_cards` (privada, sin getter/setter), más los métodos `add_card()`/
+`remove_card()`/`get_cards()`. Acceder a `.cards` sobre un `OpponentFan` real
+lanza un error de propiedad inexistente en tiempo de ejecución — algo que
+`--check-only` (verificación de parseo, no de ejecución) nunca podía
+detectar, y que ninguna de las decenas de conversiones de este proyecto
+("unlocked" cards de §10.14 hasta §33) había podido ejercitar de verdad
+porque **nunca se jugó una partida online real** contra el Remoto. En la
+práctica, esto significaba que casi ninguna de las cartas ya "desbloqueadas"
+para el jugador 1 en sesiones anteriores iba a funcionar de verdad la
+primera vez que el Remoto las intentara usar — habrían roto en
+`hand_container.cards` apenas se llegara a tocar la mano.
+
+**Arreglo (altísimo apalancamiento — un solo archivo, beneficia a TODO lo ya
+convertido):** `OpponentFan.gd` — `_cards` renombrada a `cards` (pública,
+mismo nombre que `DynamicHand.cards`) y agregado `_arrange_cards(animated:=
+true)` como alias de su `_arrange()` privado (misma firma que
+`DynamicHand._arrange_cards()`). Sin otros cambios de comportamiento — nada
+fuera de este archivo usaba `_cards` por su nombre real (confirmado por
+grep), así que el rename no rompe nada existente.
+
+**`play_card()` convertido por completo:** deriva `player_id` de
+`card.owner_id` (no se agregó parámetro nuevo — todos los llamadores
+existentes pasan nodos con `owner_id` ya correcto desde antes, ver §25/§26).
+Convertidos: el gateo de turno (`active_player_id != player_id`),
+`puede_jugar_carta()`/`get_oro_disponible()` (las dos veces, antes y después
+de elegir portador), `_select_weapon_wielder(player_id)`, `pagar_coste(...,
+player_id)`, y los dos sub-sistemas de descuento de coste que `play_card()`
+resuelve internamente y que también estaban hardcodeados a jugador 0:
+- `GoldManagerTax._gather_showable_candidate_nodes()`/
+  `_open_cemetery_reveal_popup()`/`_resolve_reveal_cost_reduction()` — "Reduce
+  su coste en un Oro por cada/si muestras X" (El Rey y el Verdugo, Shiji).
+- `GoldManagerTax._resolve_discard_cost_reduction()` — "Puedes Descartar una
+  carta para reducir su coste en un Oro" (voragh el devorador).
+
+**`play_card_from_exile()`/`play_card_from_cemetery()` también convertidas**,
+con un parámetro nuevo `owner_id: int = 0` (mismo criterio que
+`play_card_for_free()`, §25) — sus únicos llamadores reales
+(`ZoneViewerModule.gd`, popups del Anfitrión) no lo pasan, así que conservan
+el comportamiento de siempre.
+
+**Otros arreglos en la misma cadena:**
+- `GoldManager._place_card_as_gold()` — completa (contenedor de mano/Reserva,
+  `GameState.agregar_oro_reserva/get_oro_reserva`, `_register_gold_placed()`,
+  el guard de `gold_cards.append()` solo para jugador 0, mismo criterio ya
+  usado en `put_gold_directly_in_pagado()`).
+- `_resolve_become_opponent_gold_copy()` (Corazón de Dragón) — el Oro rival a
+  copiar ahora se elige según quién juega la carta, no siempre
+  `opponent_gold`.
+- `GoldManagerRestrictions.has_phase_exception()`/
+  `_can_play_weapons_in_guerra_talismanes()` (Lobo Sagrado) — ganaron
+  `player_id`; escaneaban siempre el campo del Anfitrión buscando el efecto
+  habilitante, sin importar quién jugaba el Arma.
+- `_equip_weapon()` — la limpieza de tweens al quitar un Arma de la mano
+  (paso 3 de 4) comparaba siempre contra `player_hand`; ahora usa el
+  contenedor real según `weapon.owner_id`.
+
+**Esto NO desbloquea automáticamente las cartas que llaman a `play_card()`
+directo** (Crono Diamante, segunda habilidad de Belta, Miguel, el descuento
+de Paladín Bestiarium, La Ouija, el descuento de Kuchiku Cazador) — cada una
+tiene su PROPIA guardia explícita (`if owner_id/controller_id != 0: return`)
+en su propio archivo, confirmada todavía presente (p.ej.
+`SearchAbilityHandler_JV.gd` para Kuchiku Cazador). Lo que este cambio hace
+es sacar el bloqueo ARQUITECTÓNICO de fondo — sacar esas 6 guardias puntuales
+queda como trabajo aparte, a pedido explícito, no incluido aquí. Actualiza lo
+dicho en §33 ("deliberadamente fuera de alcance... siguen con la guardia
+active_player_id != 0") — eso ya no es cierto para las 3 funciones de
+`GoldManager`, solo sigue siendo cierto para las 6 cartas con guardia propia.
+
+**Verificado con headless check tras cada tanda — sin errores de parseo.
+Sin verificar en partida real todavía** (lo que hace que el hallazgo del
+bug de `OpponentFan.cards` sea tan relevante: ningún otro arreglo de esta
+bitácora pudo haber sido probado de verdad contra el Remoto hasta ahora).
+
+## 35. Primera partida online real — bug encontrado: el Remoto nunca veía NINGÚN prompt (mulligan incluido) (2026-10-07)
+
+**A pedido/reporte del usuario, primera prueba real cross-máquina** después
+de §33/§34: "el jugador 2 no puede ver su mano ni su castillo nada". Dos
+preguntas de diagnóstico confirmaron que el Jugador 2 veía el tablero (las 5
+zonas públicas que `RemoteMirrorController._apply_move_card()` sí mirrorea)
+pero **nunca le apareció ningún popup** de mulligan — la partida quedó
+congelada ahí porque `RemotePlayerController.run_mulligan()` queda
+`await`-eando la respuesta del Remoto para siempre si esa respuesta nunca
+puede mandarse.
+
+**Causa real:** `CardInspectionLayer` (el `CanvasLayer`, `layer=100`, donde
+`RemoteMirrorController._build_overlay()` mete CADA diálogo — mulligan,
+vigilia, ataque, selección de cartas, todos los 9 tipos de prompt) arranca
+con `visible = false` en `Main.tscn` por defecto. Solo `CardInspectionLayer.
+gd` lo prende/apaga (al abrir/cerrar la inspección de una carta con clic
+derecho) — `RemoteMirrorController._build_overlay()` nunca lo tocaba. El
+diálogo se construía perfectamente bien (Nodos reales, botones conectados,
+todo correcto) pero quedaba invisible porque su `CanvasLayer` padre estaba
+apagado. Mismo síntoma para los 9 tipos de prompt, no solo mulligan — nunca
+hubo forma de que el Remoto respondiera NADA desde que se implementó la Fase
+B (§multiplayer remoto, 2026-09-11).
+
+**Arreglo:** `RemoteMirrorController._build_overlay()`/`_close_current_
+overlay()` ahora usan el mismo mecanismo que ya existía para este problema
+exacto en otro lado (`BernardoAbilityHandler.gd` con su diálogo "Elige el
+efecto", ver `CardInspectionLayer.mark_inspection_layer_in_use()`/`release_
+inspection_layer_if_unused()`, contador de generación — documentado en el
+código desde 2026-09-13/14): `mark_inspection_layer_in_use()` al construir
+cualquier overlay, `release_inspection_layer_if_unused()` al cerrarlo. No se
+reinventó un mecanismo nuevo — se reusó el que ya resolvía el mismo
+problema (una inspección real de carta abierta al mismo tiempo no se cierra
+de golpe).
+
+**Por qué nadie lo notó antes:** ningún prompt del Remoto se había probado
+nunca en una partida real (igual que el bug de §34, `OpponentFan.cards`) —
+el camino de red en sí (mandar/recibir el Dictionary, incluso el mirror de
+"dice_roll" y "move_card") funcionaba bien, pero nada volvía a mostrarse en
+pantalla una vez construido.
+
+**Verificado con headless check — sin errores de parseo. Build nuevo
+exportado y re-zippeado para la próxima prueba real.**
+
+## 36. Segunda prueba real: el mulligan del Remoto ya aparece — dos reportes más (2026-10-07)
+
+**A pedido/reporte del usuario, tras el arreglo de §35:** "ahora sí pasa al
+mulligan y a poder jugar" — confirma que §35 resolvió el bloqueo real. Dos
+reportes nuevos sobre esa misma prueba:
+
+**1. Bug real — la etiqueta superior decía "Jugador 1" en la pantalla del
+Remoto.** Causa: `PlayerInfo` (Label, `TopBar` en `Main.tscn`) tiene
+`text = "Jugador 1"` fijo en la escena — ningún script lo actualizaba nunca
+(confirmado por grep: cero asignaciones a `player_info.text` en todo el
+proyecto). **Arreglo:** `Main.gd._ready()`, junto al resto de la rama
+Anfitrión/Remoto — si `NetworkClient.room_code != "" and not NetworkClient.
+is_host`, pone `player_info.text = "Jugador 2"`. Cualquier otro modo (local,
+contra el bot, o el propio Anfitrión online) conserva el "Jugador 1" de
+siempre.
+
+**2. Limitación ya documentada (§35, `RemoteMirrorController` docstring
+original de 2026-09-11), que el usuario pidió arreglar ahora (primero dijo
+dejarla para después, se corrigió de inmediato — "no dejarlo así me
+equivoqué, revisalo"):** "no se ve el mismo diseño de mulligan y del juego...
+está todo hecho como manual, no sale mi mulligan bonito o el abanico de
+cartas". Ver §37 para el arreglo real.
+
+**Verificado con headless check — sin errores de parseo. Build nuevo
+exportado y copiado al Escritorio (`MitosOnline.zip`) para la próxima
+prueba.**
+
+## 37. Cartas reales (con arte) en los 9 tipos de prompt del Remoto — en vez de listas de solo texto (2026-10-07)
+
+**A pedido del usuario, revirtiendo su propia respuesta anterior** ("no
+dejarlo así me equivoqué, revisalo") — §36 punto 2 había quedado consultado
+como "se deja para después"; el usuario pidió hacerlo de inmediato.
+
+**Causa de que todo se viera "escrito"/"manual":** los 9 tipos de prompt de
+`RemoteMirrorController.gd` (mulligan, vigilia, ataque, elegir portador,
+selección genérica, selección de Cementerio, objetivo simple/múltiple,
+ventana de respuesta) mandaban solo un subconjunto curado de campos
+(`nombre`/`coste`/`habilidad`, a veces menos) en vez del `card_data`
+completo que `Card.load_from_data()` necesita para dibujar la carta real
+(arte, raza, fuerza, edición) — por eso cada prompt solo podía mostrar texto
+plano en los botones.
+
+**Arreglo — dos partes:**
+1. **Mandar el dato completo.** `RemotePlayerController._card_public_data()`
+   (mulligan, vigilia, elegir portador, ventana de respuesta vía su propio
+   payload) y los dos bridges de `CardInteractionModule.gd`
+   (`_delegate_target_to_remote()`/el de `await_multi_target()`) ahora
+   mandan `card.card_data.duplicate(true)` completo, con `card_id` agregado
+   encima (no es un campo nativo de `card_data`). `SelectionManager._delegate_
+   selection_to_remote()`/`ZoneViewerModule` ya mandaban el dato completo de
+   antes — no necesitaron cambios.
+2. **Dibujar la carta real.** `RemoteMirrorController.gd` — helper nuevo
+   `_build_card_display()`/`_build_card_row()` (mismo patrón ya usado en
+   popups livianos del lado del Anfitrión, p.ej. `GoldManagerTax._open_
+   cemetery_reveal_popup()`: instancia `Card.tscn`, `load_from_data()`,
+   `can_interact = false`, escala reducida) — se agrega como fila con scroll
+   horizontal ANTES de los botones de acción existentes en los 9 tipos de
+   prompt. Los botones/checkboxes que de verdad deciden la acción NO se
+   tocaron — siguen siendo botones de texto (elegir por imagen sin tocar la
+   carta en sí queda fuera de este alcance, ver nota abajo).
+
+**Fuera de alcance, a propósito:** las cartas siguen sin ser interactivas de
+verdad (click/arrastre sobre la carta misma) — la acción real sigue siendo
+el botón de texto correspondiente, debajo de la fila de cartas. Darle a la
+carta misma el click real (en vez del botón) es un paso más de pulido, no
+incluido aquí.
+
+**Verificado con headless check — sin errores de parseo. Build nuevo
+exportado y copiado al Escritorio (`MitosOnline.zip`) para la próxima
+prueba. Sin verificar en partida real todavía.**
+
+## 38. Las 6 cartas de `play_card()` desbloqueadas — y un bug de fondo encontrado al hacerlo: `owner_id` vs `controller_id` para el lado del tablero (2026-10-07)
+
+**A pedido del usuario** ("arranca con las 6 cartas"), ahora que `play_card()`
+es per-player (§34). Las 6: La Ouija, Kuchiku El Cazador (descuento de
+búsqueda), Miguel, Belta (autorresucitar desde el Cementerio), Crono
+Diamante, Paladín Bestiarium (descuento de Arma por descarte).
+
+**Bug de fondo encontrado al desbloquear Miguel (confirmado en Card.gd,
+líneas ~165-197): `controller_id` es "de qué lado del tablero pelea"
+(documentado ahí mismo), distinto de `owner_id` ("dueño real, a quién
+vuelve si sale de juego") — normalmente son el mismo valor (el setter de
+`owner_id` sincroniza `controller_id` automáticamente), salvo que algo los
+separe a propósito DESPUÉS de asignar `owner_id`. Miguel es la única carta
+del proyecto que hace justo eso ("juega una carta de tu mano o de UN
+Cementerio" — puede ser el rival, pero jugarla te vuelve controlador, no
+dueño). `GoldManager.play_card()`/`_play_card_to_field()`/`_play_talisman()`/
+`_place_card_as_gold()`/`_resolve_become_opponent_gold_copy()` leían
+`card.owner_id` para decidir mano/campo/Reserva de QUÉ LADO usar — correcto
+en todos los casos salvo Miguel, donde pondría la carta del lado equivocado
+(el del Cementerio de origen, no el del activador) y pagaría/chequearía el
+turno del jugador equivocado. Arreglado: esas 5 funciones ahora leen
+`card.controller_id`. Sin efecto en ningún otro camino ya probado (siempre
+fue igual a `owner_id` en la práctica) — confirmado por qué nadie lo había
+notado: este era justo el tipo de divergencia que solo Miguel ejercita, y
+Miguel nunca se había desbloqueado hasta hoy.
+
+**Arreglos de pasada en cada una de las 6 (mismo patrón de siempre — hand_
+container owner-aware, `chooser_id` agregado a los `await_target()`/
+`await_multi_target()`, `puede_pagar()` con el `player_id` real):**
+- La Ouija: `CardManager.get_cemetery(0)`/`player_deck` hardcodeados → por
+  `owner_id`; `await_multi_target()` sin `chooser_id`.
+- Kuchiku El Cazador: mano hardcodeada a `player_hand`.
+- Miguel: mano hardcodeada; `_open_dual_cemetery_reveal_popup()` ganó un
+  parámetro `owner_id` solo para las ETIQUETAS de columna ("Tu Cementerio"
+  primero) — cada Nodo ya se etiquetaba con su cementerio real de origen
+  sin importar quién mira, así que la lógica en sí no dependía de esto.
+- Belta: `open_cemetery_target_picker()` sin `chooser_id`.
+- Crono Diamante / Paladín Bestiarium: mismo esqueleto en los dos — mano
+  hardcodeada, `puede_pagar()` sin `player_id`, dos `await_target()` sin
+  `chooser_id`.
+
+**Nota relacionada, NO incluida en este alcance:** `PlayFromCemeteryPatterns.
+gd` tiene un guard que cita exactamente esta misma razón ("se le vuelve a
+poner el guard hasta que se decida tocar la puerta de turno de play_card()")
+— ahora que play_card() se tocó, esa carta también podría revisarse, pero
+no era una de las 6 pedidas; queda para un batch aparte.
+
+**Verificado con headless check — sin errores de parseo. Sin verificar en
+partida real todavía.**
+
+## 39. Puente de red para `SelectionManager.await_single_pick()` — 3 cartas desbloqueadas (2026-10-07)
+
+**A pedido del usuario** ("arranca con await_single_pick"), tras revisar
+los 5 sistemas de diálogo sin puente de red documentados hasta ahora.
+
+**Hallazgo clave — el puente YA estaba construido, solo faltaba un
+parámetro:** `await_single_pick()` llama internamente a `SelectionManager.
+open_selection()`, y `open_selection()` YA tenía su propio `chooser_id`
+desde la Fase 3 original (2026-09-30) — si `chooser_id == 1` y hay un
+Remoto real conectado, delega a `_delegate_selection_to_remote()` (manda
+`{"op":"prompt","kind":"select_cards",...}`, espera la respuesta, y emite
+las MISMAS señales `card_selected`/`selection_completed`/
+`selection_cancelled` que la UI local). `await_single_pick()` ya escuchaba
+esas tres señales — simplemente nunca pasaba su propio `chooser_id` hacia
+`open_selection()`, así que siempre quedaba en el default 0. No hizo falta
+ningún sistema nuevo del lado de `RemoteMirrorController` — su `_show_
+select_cards_prompt()` (§37) ya cubre el caso `max_selections == 1` con
+clic directo. **Esto NO era el caso de los otros 4 sistemas** (`await_
+castillo_pick`/`await_card_pair_choice`/`await_target_or_castillo_pick`/
+`CardNameSearchDialog`) — esos sí necesitarían infraestructura de red nueva
+de verdad, no solo exponer un parámetro.
+
+**Arreglo:** `SelectionDialogs.await_single_pick()`/`SelectionManager.
+await_single_pick()` (forwarder) ganaron `chooser_id: int = 0`, pasado a
+`open_selection()`.
+
+**3 cartas desbloqueadas** (no 4 — Infernum Vox, que parecía parte de este
+lote, en realidad usa `await_castillo_pick`, un sistema distinto; queda
+pendiente):
+- **Chakram** (`SearchAbilityHandler_AI.gd`) — "mano rival" hardcodeada a
+  `_opponent_fan`; ahora ternario por `owner_id`.
+- **sandraudiga** (`HandCementerioAbilityHandler.gd`) — mano propia
+  hardcodeada, `puede_pagar()`/`pagar_coste()` sin `player_id`, `await_
+  target()` sin `chooser_id`, "mano rival" hardcodeada — los 4 arreglos de
+  siempre, juntos en esta misma carta.
+- **Perla de Sangre** (su 2ª habilidad, `search_hand_or_play`,
+  `PreventionAbilityHandler_PV.gd`) — `await_two_choice()` sin
+  `chooser_id`, mano propia hardcodeada al poner/jugar el Aliado
+  encontrado, y el Aliado recién creado no tenía `owner_id` asignado antes
+  de jugarlo (`play_card()` lo habría puesto del lado equivocado).
+
+**Verificado con headless check — sin errores de parseo. Build nuevo
+exportado y copiado al Escritorio (`MitosOnline.zip`). Sin verificar en
+partida real todavía.**
+
+## 40. Puente de red para `await_castillo_pick()`/`await_multi_pick()` — 4 cartas, más un bug latente de alto impacto en un helper genérico (2026-10-07)
+
+**A pedido del usuario** ("sigamos otro sistema"). Mismo hallazgo que §39:
+`await_castillo_pick()` NO tenía ningún puente (a diferencia de `await_
+single_pick()`, este de verdad era un caso nuevo — espera un click directo
+sobre un Panel real de la pantalla, no tiene sentido tal cual para el
+Remoto). En vez de construir un sistema de red nuevo, se delega a
+`await_choice()` (ya con puente completo, "choose_option") con las dos
+opciones en texto ("Tu Castillo"/"Castillo rival") — misma elección A/B,
+otro medio. `await_multi_pick()` SÍ tenía el mismo gap exacto que `await_
+single_pick()` en §39 (el puente ya existe en `open_selection()`, solo
+faltaba exponer `chooser_id`) — mismo arreglo de una línea.
+
+**Límite real aceptado para `await_multi_pick()` del lado del Remoto:**
+`RemoteMirrorController._show_select_cards_prompt()` resuelve la
+multi-selección con checkboxes, no con orden de click — cualquier llamador
+que dependa de "el orden en que se clickeó" (Infernum Vox, que reordena el
+tope del Castillo) no preserva ese orden para el Remoto, vuelve siempre en
+el orden original. "Mirar y elegir cuáles" sí funciona igual para los dos
+lados. Documentado en el propio docstring de `await_multi_pick()`.
+
+**4 cartas desbloqueadas:**
+- **Infernum Vox** (`SearchAbilityHandler_AI.gd`) — con el límite de orden
+  de arriba.
+- **Aho** (`SearchAbilityHandler_AI.gd`).
+- **Espada del Juicio** (`ConvertAndMiscResolver.gd`) — esta NO tenía el
+  guard explícito de siempre; tenía un `and controller_id == 0` inline que
+  simplemente SALTEABA la pregunta para el Remoto y asumía su propio
+  Castillo sin preguntar, en vez de bloquear la carta entera. Arreglado a
+  preguntar de verdad.
+
+**Bug latente de alto impacto encontrado de pasada:** `TargetedEffectExecutor.
+_choose_search_zone_owner()` — el helper GENÉRICO que resuelve "un Castillo"
+sin posesivo (¿cuál de los dos?) para unas 15 cartas distintas en 9
+archivos (Rey de Amarillo, Sherlock Holmes, y varias ya "desbloqueadas" en
+tandas anteriores: `SearchAbilityHandler_AI/JV.gd`, `BanishOpponentPatterns.
+gd`, `GoldConversionPatterns.gd`, `LookRevealPatternsB.gd`,
+`SearchOwnZonePatterns.gd`, `WeaponSearchShuffleExecutor.gd`,
+`ConvertAndMiscResolver.gd`) — su rama Castillo llamaba a `await_castillo_
+pick()` SIN `chooser_id`, mientras su rama Cementerio (misma función, dos
+líneas más abajo) sí lo pasaba. Cualquiera de esas ~15 cartas que un
+Remoto intentara usar con zona Castillo se habría quedado esperando una
+respuesta que nunca iba a llegar — el mismo síntoma de fondo que §35
+(prompt que nunca se resuelve), pero por un `chooser_id` faltante en vez de
+una capa invisible. Un solo `, controller_id` agregado arregla las ~15 de
+una vez — no se tocó cada carta individualmente porque ninguna tenía guard
+propio esperando esto: ya estaban "convertidas" y el bug quedaba escondido
+dentro del helper compartido.
+
+**Verificado con headless check — sin errores de parseo. Sin verificar en
+partida real todavía.**
+
+## 41. Puentes de red para `await_card_pair_choice()` y `await_target_or_castillo_pick()` — los últimos 2 de los 5 sistemas sin puente (2026-10-07)
+
+**A pedido del usuario** ("continuemos"), cerrando la lista de 5 sistemas
+sin puente documentada al empezar §39.
+
+**`await_card_pair_choice()`** (modal visual "Tope vs Fondo", 2 Nodos Card
+reales lado a lado) — mismo criterio que `await_castillo_pick()` en §40:
+se delega a `await_choice()` con `label_a`/`label_b` como texto en vez de
+construir un sistema nuevo. Se pierde el arte de las dos cartas en la
+pantalla del Remoto (solo ve los nombres de las etiquetas, p.ej. "Tope"/
+"Fondo"), pero la elección es la misma. Único llamador real:
+`DSR_SearchGoldCombos.try_execute_deck_top_or_bottom_to_hand_pattern()`
+(La Ouija — su OTRA habilidad, el trigger "pon la primera o la última
+carta de tu Castillo en tu mano", distinta de la que ya se había
+desbloqueado en §38 vía `play_card()`). Mazo/mano hardcodeados a
+`player_deck`/`player_hand` arreglados de pasada (mismo patrón de siempre).
+
+**`await_target_or_castillo_pick()`** (carrera entre clickear una carta o
+un Panel de Castillo) — este SÍ era un sistema nuevo de verdad, sin
+puente reusable: es una carrera entre dos interacciones de UI simultáneas
+de ESTA pantalla, sin equivalente directo para el Remoto. Construido de
+cero, mismo patrón que los 4 sistemas anteriores de la Fase 3:
+- `CardInteractionModule._delegate_target_or_castillo_to_remote()` (nueva)
+  junta ambas mitades de la carrera en un solo mensaje — las cartas
+  candidatas (mismo barrido de 10 zonas que `_delegate_target_to_remote()`)
+  MÁS las dos opciones de Castillo, todo en un solo prompt. Nuevo op:
+  `{"op":"prompt","kind":"await_target_or_castillo",...}` /
+  `"await_target_or_castillo_choice"`.
+- `RemoteMirrorController._show_await_target_or_castillo_prompt()` (nueva)
+  — fila de cartas reales (§37) + botones por carta + "Tu Castillo"/
+  "Castillo rival" (el segundo se oculta si `castillo_own_only`) +
+  Cancelar si corresponde.
+- Única carta bloqueada por este sistema: **Espada de O'Higgins**
+  (`shuffle_or_search_gold`, `PreventionAbilityHandler_AE.gd`) — ya estaba
+  completamente owner-aware por dentro, solo le faltaba la guardia y pasar
+  `owner_id` como `chooser_id`.
+
+**Con esto, los 5 sistemas de diálogo documentados como "sin puente de
+red" desde el inicio de esta sesión (§32) ya tienen puente — 3 reutilizando
+infraestructura existente (await_single_pick en §39, await_castillo_pick/
+await_card_pair_choice en §40/§41) y uno construido de cero (await_target_
+or_castillo_pick). Queda `CardNameSearchDialog` (texto libre, 4 cartas:
+contra el caos, Malleus Maleficarum, lider del comite, Tesoro de los
+Césares) — ese es un buscador de texto con autocompletado, no una lista de
+candidatas; necesitaría su propio diseño de UI remota, no encaja en el
+patrón de "lista de opciones" que cubrieron los otros 5.
+
+**Verificado con headless check — sin errores de parseo. Build nuevo
+exportado y copiado al Escritorio (`MitosOnline.zip`). Sin verificar en
+partida real todavía.**
+
+## 42. Puente de red para `CardNameSearchDialog` — el 6to y último sistema, 4 cartas (2026-10-07)
+
+**A pedido del usuario** ("continuemos"), cerrando la lista completa.
+
+**Diseño distinto a los otros 5 — y mejor, no un parche:** `CardNameSearchDialog`
+es un buscador EN VIVO sobre `CardDatabase.get_all_cards()` (miles de
+cartas, re-filtra en cada tecla). Mandarle esa lista completa al Remoto por
+red no tenía sentido. En cambio: el cliente del Remoto YA tiene su propia
+`CardDatabase` cargada (mismo autoload, mismo catálogo, sea por caché local
+o por la API externa) — así que en vez de degradar a una lista curada como
+los otros 5 puentes, `RemoteMirrorController._show_name_card_prompt()`
+corre el MISMO buscador (`TriggerSystem._card_name_search.open_and_wait()`)
+ENTERAMENTE LOCAL en la pantalla del Remoto — con arte real, autocompletado
+en vivo, la experiencia completa — y solo el `card_data` final elegido
+viaja por red. Nuevo op: `{"op":"prompt","kind":"name_card","title":...}`
+/ `"name_card_choice"`.
+
+**`CardNameSearchDialog.open_and_wait()`** ganó `chooser_id: int = 0`: si
+`chooser_id == 1` y hay Remoto conectado, manda el prompt y espera el
+`card_data` de vuelta en vez de abrir el buscador local (que mostraría el
+buscador en la pantalla del ANFITRIÓN por una decisión que no es suya).
+
+**4 cartas desbloqueadas**, las 4 con el mismo patrón de siempre (mano
+propia hardcodeada, `chooser_id` faltante en sus `await_target()`, "mano
+rival" hardcodeada a `_opponent_fan` donde aplica):
+- **contra el caos** (`LookRevealPatternsB.gd`).
+- **Malleus Maleficarum** (`MiscUniquePatterns.gd`) — la más simple, sin
+  ningún otro arreglo hardcodeado.
+- **lider del comite** (`SearchAbilityHandler_JV.gd`) — además
+  `SelectionManager.open_reveal()` (usado para "mirar la mano rival"
+  informativo) ganó `chooser_id` también, mismo mecanismo que `open_
+  selection()` ya tenía.
+- **Tesoro de los Césares** (`SearchAbilityHandler_JV.gd`).
+
+**Con esto, los 6 sistemas de diálogo sin puente de red documentados desde
+§32 ya tienen puente — 4 reutilizando infraestructura existente, uno
+construido de cero (§41), y este último con un diseño propio mejor que
+el patrón genérico (ejecutar el mismo buscador local en vez de degradar a
+una lista). No queda ningún tipo de diálogo sin camino de red; lo que
+queda sin desbloquear en el proyecto (asedio naval, Tempilcahue, Ngenechén)
+es por una razón distinta — presupuesto en vivo (`dynamic_filter`/
+`lock_group_key`) que el puente no enforcea del lado del Remoto, decisión
+de diseño ya tomada, no un gap de infraestructura.**
+
+**Verificado con headless check — sin errores de parseo. Build nuevo
+exportado y copiado al Escritorio (`MitosOnline.zip`). Sin verificar en
+partida real todavía.**
+
+## 43. `dynamic_filter`/`lock_group_key` ya se enforcean del lado del Anfitrión — Tempilcahue, Ngenechén y asedio naval desbloqueadas (2026-10-08)
+
+**A pedido del usuario** ("que pasa con tempilcahue y ngenechen" → "dale
+arreglemoslo"). Última exclusión que quedaba en todo el proyecto por un
+motivo de infraestructura real (no de diseño): `await_multi_target()`
+soporta `lock_group_key` (candado "mismo grupo que la primera elegida") y
+`dynamic_filter` (presupuesto que se re-evalúa en cada click, p.ej. "costes
+que sumen hasta N") — su contraparte de red (`_delegate_multi_target_to_
+remote()`, Fase 3) nunca los enforceaba: mandaba la lista completa de
+candidatas como checkboxes y aceptaba cualquier combinación que el Remoto
+tildara, sin volver a aplicar ninguno de los dos filtros.
+
+**Arreglo:** no hay forma de re-evaluar un filtro EN VIVO contra una UI de
+checkboxes de una sola vuelta (eso requeriría convertirla en algo
+iterativo, mucho más grande) — en cambio, `_delegate_multi_target_to_
+remote()` ahora recibe `lock_group_key`/`dynamic_filter` y los re-aplica
+él mismo AL RECIBIR la respuesta completa, recorriendo los `card_ids` que
+mandó el Remoto en el orden en que vinieron y aceptando cada uno solo si
+todavía pasa el mismo filtro dado lo ya aceptado hasta ese punto — una
+carta que lo violaría se descarta sola (no trunca el resto: una carta cara
+rechazada no bloquea otras más chicas que sí entren después). Mismo
+criterio exacto que ya usa el panel LOCAL, solo que evaluado una vez al
+final en vez de en cada click.
+
+**3 cartas desbloqueadas** (las únicas 3 que usaban alguno de los dos
+filtros en todo el proyecto):
+- **Tempilcahue** (`dynamic_filter`, coste ≤4) — además `puede_pagar()`/
+  `pagar_coste()`/`await_two_choice()` sin `player_id`/`chooser_id`,
+  mismo patrón de siempre.
+- **Ngenechén** (`dynamic_filter`, coste ≤6) — además "cartas oponentes"
+  hardcodeado a `opponent_*` sin importar quién activa.
+- **asedio naval** (`lock_group_key`, mismo tipo que la primera) — además
+  mano propia hardcodeada y `generar_oro_virtual_restringido()` sin
+  `player_id`.
+
+**Con esto no queda NINGUNA carta excluida en todo el proyecto por un
+motivo de infraestructura de red** — lo que sea que quede sin convertir de
+ahora en más es por otro tipo de límite (reglas no implementadas, casos
+borde documentados), no por el puente Anfitrión↔Remoto.
+
+**Verificado con headless check — sin errores de parseo. Build nuevo
+exportado y copiado al Escritorio (`MitosOnline.zip`). Sin verificar en
+partida real todavía.**
+
+## 44. Mulligan del Remoto: abanico visual real (igual al del Anfitrión), no texto (2026-10-08)
+
+**A pedido del usuario** ("podrias revisar el mano y mulligan" →
+"Construir el abanico visual real (como el del Anfitrión)"), siguiendo lo
+que había quedado documentado como pendiente en §36.
+
+**Arreglo:** `RemoteMirrorController._show_mulligan_prompt()` dejó de
+construir un popup aparte (`_build_overlay()`/`_build_card_row()`, fila de
+cartas de solo lectura + botones de texto al lado) — ahora reusa los Nodos
+REALES que `Main.tscn` ya tiene para esto: `mulligan_overlay`/`mulligan_
+hand` (`MulliganHand`, el mismo abanico con curva/hover/animación de
+entrada que ve el Anfitrión)/`keep_hand_button`/`mulligan_button`. Mismo
+look exacto en las dos pantallas.
+
+**El único riesgo real:** esos botones vienen conectados de fábrica a
+`MulliganController.on_keep_hand_pressed()`/`on_mulligan_pressed()`, que
+en el flujo LOCAL terminan en `GameManager.start_game(_main._dice_winner)`
+— el Remoto nunca corrió su propio `GameBootstrap` hasta ahí, así que
+`_dice_winner` nunca se seteó de ese lado; dejar esos handlers conectados
+y mostrar el overlay real los habría dejado clickeables por error,
+rompiendo el estado del cliente Remoto. Se desconectan (si estaban
+conectados) antes de conectar los handlers de red propios, con
+`CONNECT_ONE_SHOT` para que cada ronda de mulligan (mantener o redibujar
+con una carta menos) reconecte limpio.
+
+**Fuera de alcance, explícitamente separado (confirmado con el usuario):**
+la mano durante el resto de la partida (Vigilia en adelante) sigue sin un
+abanico persistente — se ve como fila de cartas reales dentro de cada
+prompt puntual (§37), no como `player_hand` poblado todo el tiempo. Darle
+eso necesitaría extender `GameStateBroadcaster` (hoy solo cubre las 5 zonas
+PÚBLICAS, `Constants.ZONES_IN_PLAY`) para también transmitir cambios de
+Mano — y hoy no existe ningún punto único donde engancharse para eso: los
+cambios de mano pasan por decenas de `_opponent_fan.add_card()`/
+`remove_card()` repartidos por todo el proyecto, no una sola señal como
+`on_card_entered_play`. Tarea separada, más grande, no incluida aquí.
+
+**Verificado con headless check — sin errores de parseo. Build nuevo
+exportado y copiado al Escritorio (`MitosOnline.zip`). Sin verificar en
+partida real todavía.**
+
+## 45. Mano persistente real del Remoto durante toda la partida (2026-10-08)
+
+**A pedido del usuario** ("revisa la mano para que se pueda ver durante
+toda la partida"), la pieza grande que había quedado fuera de alcance en
+§44.
+
+**El problema de fondo:** no existía NINGÚN punto único donde enganchar
+"la mano del jugador 1 cambió" — decenas de llamadores por todo el
+proyecto hacen `_opponent_fan.add_card()`/`remove_card()` directo (robo,
+descarte, jugar una carta, buscar a la mano, etc.), sin pasar por un lugar
+común. `GameStateBroadcaster` solo cubría las 5 zonas públicas en juego
+(`Constants.ZONES_IN_PLAY`, vía `EffectController.on_card_entered_play`/
+`on_card_left_play`, señales que YA existían) — Mano quedaba fuera a
+propósito.
+
+**Arreglo — el choke point correcto SÍ existe, no son los llamadores, es
+el contenedor:** `OpponentFan` (la mano de PANTALLA del jugador 1, del
+lado del Anfitrión) es el ÚNICO Node por el que pasa cualquier cambio a
+esa mano, sin excepción — agregarle dos señales nuevas (`card_added`,
+`card_removed`) cubre los mismos "decenas de llamadores" de una sola vez,
+sin tocar ninguno de ellos.
+
+- **`OpponentFan.gd`**: `card_added(card)`/`card_removed(card)`, emitidas
+  desde `add_card()`/`remove_card()`/`clear_hand()`. `card_removed` se
+  emite ANTES de `queue_free()` (el Node sigue siendo válido al llegar al
+  listener).
+- **`GameStateBroadcaster.gd`**: se suscribe a esas dos señales, pero
+  recién tras `GameManager.game_started` (`CONNECT_ONE_SHOT`) — NO desde
+  `setup()`, porque `_opponent_fan.add_card()` YA se llama durante el
+  mulligan (`RemotePlayerController.run_mulligan()` dibuja ahí mismo
+  mientras se decide mantener/redibujar); escuchar desde el arranque le
+  habría mostrado al Remoto cartas apareciendo en su mano PERMANENTE
+  mientras todavía está en la pantalla de mulligan (que ya tiene su propio
+  camino separado, §44, sin relación con este). Al conectarse, sincroniza
+  de una la mano ya sobreviviente del mulligan. Nuevos ops:
+  `{"op":"hand_card_added","data":{...card_data completo...}}` /
+  `{"op":"hand_card_removed","card_id":...}`.
+- **`RemoteMirrorController.gd`**: `_apply_hand_card_added()`/
+  `_apply_hand_card_removed()` pueblan `player_hand` (la mano REAL,
+  persistente, el mismo `DynamicHand` que usa el Anfitrión) con Nodos
+  reales — `can_interact = false` a propósito (mismo criterio que
+  `_build_card_display()` en §37): la acción sigue pasando por los
+  botones de los prompts, no por clickear la carta misma — un doble-click
+  ahí llamaría `GoldManager.play_card()` LOCAL del propio cliente Remoto,
+  sin pasar por el protocolo de intents, y rompería todo.
+
+**Redundancia conocida, no resuelta aquí:** los prompts de Vigilia (§37)
+siguen mostrando además una fila de cartas candidatas dentro del propio
+popup — ahora la misma carta se ve dos veces (una en la mano persistente
+de atrás, otra en la fila del prompt). Funciona, pero es visualmente
+redundante; sacar la fila del prompt ahora que la mano real está siempre
+visible queda para una pasada de pulido aparte.
+
+**Verificado con headless check — sin errores de parseo. Build nuevo
+exportado y copiado al Escritorio (`MitosOnline.zip`). Sin verificar en
+partida real todavía — esta es la pieza con más superficie nueva de toda
+la sesión (dos señales nuevas en un Node compartido, un listener que se
+conecta en un momento preciso del ciclo de vida); conviene probarla con
+atención especial a: que la mano no aparezca duplicada/vacía al empezar,
+que las cartas desaparezcan de la mano del Remoto al jugarlas/descartarlas,
+y que no haya ningún crash al clickear una carta de la mano por error.**
+
+## 46. Resuelta la redundancia visual de §45 en Vigilia (2026-10-08)
+
+**A pedido del usuario** ("resuelve la redundancia"), la que había quedado
+documentada sin resolver al cierre de §45.
+
+**Arreglo acotado a propósito:** de los 9 tipos de prompt, solo las 5
+categorías de `_show_vigilia_prompt()` (Oro/Aliado/Arma/Talismán/Tótem)
+son candidatas EXCLUSIVAMENTE de la mano — confirmado leyendo
+`RemotePlayerController._affordable_cards_in_hand()`, que las junta
+siempre de `_opponent_fan` — así que con la mano real y persistente de
+§45 ya siempre visible detrás del prompt, repetirlas en una fila de
+`_build_card_row()` aparte quedó puramente redundante. Se sacaron esas 5
+filas, quedaron solo la etiqueta de categoría + los botones (la acción
+real).
+
+**Deliberadamente NO tocado — los otros prompts mezclan fuentes:**
+`_show_choose_wielder_prompt()` (candidatos = Aliados EN JUEGO, no mano),
+`_show_await_target_prompt()`/`_show_await_multi_target_prompt()`/
+`_show_await_target_or_castillo_prompt()` (el barrido de candidatas cubre
+10 zonas de tablero MÁS mano — mixto, sacar la fila ahí ocultaría objetivos
+reales que no están en la mano), `_show_response_window_prompt()`
+(habilidades activadas desde cualquier zona). Ninguno de estos tiene la
+garantía de "siempre viene de la mano" que sí tienen las 5 de Vigilia.
+
+**Verificado con headless check — sin errores de parseo. Build nuevo
+exportado y copiado al Escritorio (`MitosOnline.zip`). Sin verificar en
+partida real todavía.**

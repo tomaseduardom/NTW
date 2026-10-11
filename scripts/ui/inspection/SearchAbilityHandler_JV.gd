@@ -15,7 +15,7 @@ func setup(inspector: CardInspectionLayer) -> void:
 	_inspector = inspector
 
 
-func _open_dual_cemetery_reveal_popup(affordable_filter: Callable) -> Dictionary:
+func _open_dual_cemetery_reveal_popup(affordable_filter: Callable, owner_id: int = 0) -> Dictionary:
 	"""Popup liviano (sin oscurecer el resto de la pantalla — mano sigue
 	clickeable, mismo criterio que GoldManagerTax._open_cemetery_reveal_
 	popup()/PreventionAbilityHandler_PV._open_cemetery_reveal_popup_oro(),
@@ -23,7 +23,11 @@ func _open_dual_cemetery_reveal_popup(affordable_filter: Callable) -> Dictionary
 	columnas de Nodos temporales interactivos — usado por Miguel ('de tu
 	mano o de un Cementerio'), a diferencia de Sake (una sola columna,
 	solo el propio). 'affordable_filter' recibe el card_data crudo (no hay
-	Nodo todavía) y decide si esa carta entra en el popup.
+	Nodo todavía) y decide si esa carta entra en el popup. 'owner_id' solo
+	decide el ORDEN/etiqueta de las columnas ("Tu Cementerio" primero) —
+	cada Nodo ya se etiqueta con su cementerio real de origen (side_idx)
+	sin importar quién mira, así que Miguel.owner_id/cemetery_owner sigue
+	funcionando igual de cualquier lado.
 	Returns: {popup: CanvasLayer, nodes: Array[Node]}."""
 	var main := _inspector._main
 	var CardScene = load("res://scenes/cards/Card.tscn")
@@ -54,7 +58,7 @@ func _open_dual_cemetery_reveal_popup(affordable_filter: Callable) -> Dictionary
 	panel.add_child(columns)
 
 	var nodes: Array = []
-	var labels: Array = ["Tu Cementerio", "Cementerio Rival"]
+	var labels: Array = ["Tu Cementerio", "Cementerio Rival"] if owner_id == 0 else ["Cementerio Rival", "Tu Cementerio"]
 	for side_idx in [0, 1]:
 		var col := VBoxContainer.new()
 		columns.add_child(col)
@@ -203,16 +207,15 @@ func _activate_kuchiku_cazador_search_and_play_discount(source_card: Node, abili
 	if not is_instance_valid(source_card) or not _inspector._main._gold_manager:
 		return
 	var owner_id: int = source_card.owner_id if source_card.get("owner_id") != null else 0
-	if owner_id != 0 or not _inspector._main.player_hand:
-		# 2026-10-05: resuelve con gold_manager.play_card(card_node) directo
-		# — "No es tu turno" si GameManager.active_player_id != 0 (ver §23).
-		return  # el Remoto no puede usar esta habilidad todavía
+	var hand_container_kuchiku = _inspector._main.player_hand if owner_id == 0 else _inspector._main._opponent_fan
+	if not hand_container_kuchiku:
+		return
 
 	var search_castillo: bool = await SelectionManager.await_two_choice(
 		_inspector._main, "¿Dónde buscar un Aliado?", "Tu Castillo", "Tu Cementerio")
 	var zone := Constants.Zone.CASTILLO if search_castillo else Constants.Zone.CEMENTERIO
 
-	var hand_before: Array = _inspector._main.player_hand.cards.duplicate()
+	var hand_before: Array = hand_container_kuchiku.cards.duplicate()
 	var result: Dictionary = await ActionModule.search(
 		owner_id, zone, {"type": Constants.CardType.ALIADO}, 1, true, false, false, source_card, Constants.Zone.MANO)
 	if result.get("selected", []).is_empty():
@@ -220,7 +223,7 @@ func _activate_kuchiku_cazador_search_and_play_discount(source_card: Node, abili
 		return
 
 	var card_node: Node = null
-	for c in _inspector._main.player_hand.cards:
+	for c in hand_container_kuchiku.cards:
 		if c not in hand_before:
 			card_node = c
 			break
@@ -301,12 +304,9 @@ func _activate_lider_del_comite_discard_look_name_lock(source_card: Node, abilit
 	if not is_instance_valid(source_card):
 		return
 	var owner_id: int = source_card.owner_id if source_card.get("owner_id") != null else 0
-	if owner_id != 0 or not _inspector._main.player_hand or _inspector._main.player_hand.cards.is_empty():
-		# 2026-10-05: usa TriggerSystem._card_name_search.open_and_wait()
-		# (CardNameSearchDialog), excluido desde el plan original (mismo
-		# caso que Malleus Maleficarum/Alicia en Wonderland) — se deja sin
-		# desbloquear.
-		return  # el Remoto no puede usar esta habilidad todavía; sin mano no hay costo que pagar
+	var hand_container_lider = _inspector._main.player_hand if owner_id == 0 else _inspector._main._opponent_fan
+	if not hand_container_lider or hand_container_lider.cards.is_empty():
+		return  # sin mano no hay costo que pagar
 
 	if not _inspector._main._card_interaction:
 		return
@@ -314,25 +314,25 @@ func _activate_lider_del_comite_discard_look_name_lock(source_card: Node, abilit
 	# modal de lista viejo.
 	var hand_filter := func(c: Node) -> bool: return c.get("current_zone") == Constants.Zone.MANO
 	var to_discard_node: Node = await _inspector._main._card_interaction.await_target(
-		"Descarta 1 carta de tu mano", hand_filter)
+		"Descarta 1 carta de tu mano", hand_filter, true, owner_id)
 	if not to_discard_node or not is_instance_valid(to_discard_node):
 		return  # canceló — no paga el costo
 
 	UniversalCardParser.turn_registry.register_ability_use(source_card, ability)
 	await ActionModule.discard(owner_id, [to_discard_node], "activated_ability", true)
 
-	var opponent_hand: Array = []
-	if _inspector._main._opponent_fan and _inspector._main._opponent_fan.has_method("get_cards"):
-		opponent_hand = _inspector._main._opponent_fan.get_cards()
+	var opponent_hand_container = _inspector._main._opponent_fan if owner_id == 0 else _inspector._main.player_hand
+	var opponent_hand: Array = opponent_hand_container.cards if opponent_hand_container else []
 	var opponent_hand_data: Array = []
 	for c in opponent_hand:
 		if is_instance_valid(c):
 			opponent_hand_data.append(c.card_data)
 	if not opponent_hand_data.is_empty():
-		SelectionManager.open_reveal(opponent_hand_data, "Mano de tu oponente")
+		SelectionManager.open_reveal(opponent_hand_data, "Mano de tu oponente", owner_id)
 
 	var picked_card: Dictionary = await TriggerSystem._card_name_search.open_and_wait(
-		"Nombra una carta: pierde su habilidad y tu oponente no puede jugarla el próximo turno"
+		"Nombra una carta: pierde su habilidad y tu oponente no puede jugarla el próximo turno",
+		owner_id
 	)
 	if picked_card.is_empty():
 		return
@@ -366,12 +366,9 @@ func _activate_miguel_discount_play(source_card: Node, ability: Dictionary) -> v
 	if not is_instance_valid(source_card) or not _inspector._main._gold_manager:
 		return
 	var owner_id: int = source_card.owner_id if source_card.get("owner_id") != null else 0
-	if owner_id != 0 or not _inspector._main.player_hand or not _inspector._main._card_interaction:
-		# 2026-10-05: resuelve con gold_manager.play_card(card_node) directo
-		# — "No es tu turno" si GameManager.active_player_id != 0 (ver §23).
-		# Además lee GameState.get_oro_reserva(0) hardcodeado para el
-		# filtro de asequibilidad (ver §22) — dos motivos independientes.
-		return  # el Remoto no puede usar esta habilidad todavía
+	var hand_container_miguel = _inspector._main.player_hand if owner_id == 0 else _inspector._main._opponent_fan
+	if not hand_container_miguel or not _inspector._main._card_interaction:
+		return
 
 	# Filtro de asequibilidad ANTES de ofrecer la carta como opción (2026-09-08,
 	# bug real reportado por el usuario: dejaba elegir un Arma que no podía
@@ -381,7 +378,7 @@ func _activate_miguel_discount_play(source_card: Node, ability: Dictionary) -> v
 	# que se sabe de antemano que no se puede pagar. Aproximado con el dato
 	# crudo de coste (no hay nodo todavía para las candidatas de Cementerio,
 	# así que no se puede calcular_coste_real() con modificadores reales).
-	var available_gold: int = GameState.get_oro_reserva(0) + _inspector._main._gold_manager.oros_virtuales.get(0, 0)
+	var available_gold: int = GameState.get_oro_reserva(owner_id) + _inspector._main._gold_manager.oros_virtuales.get(owner_id, 0)
 	var affordable := func(data: Dictionary) -> bool:
 		var raw_cost = data.get("coste")
 		if raw_cost == null or not (raw_cost is int or raw_cost is float or (raw_cost is String and raw_cost.is_valid_int())):
@@ -394,10 +391,10 @@ func _activate_miguel_discount_play(source_card: Node, ability: Dictionary) -> v
 	# Sake, arquitectura.md §10.23, extendido a dos columnas) — en vez del
 	# modal de lista viejo combinando las tres fuentes.
 	var hand_candidates: Array = []
-	for c in _inspector._main.player_hand.cards:
+	for c in hand_container_miguel.cards:
 		if is_instance_valid(c) and affordable.call(c.card_data):
 			hand_candidates.append(c)
-	var cemetery_popup_result: Dictionary = _open_dual_cemetery_reveal_popup(affordable)
+	var cemetery_popup_result: Dictionary = _open_dual_cemetery_reveal_popup(affordable, owner_id)
 	var cemetery_popup: CanvasLayer = cemetery_popup_result.get("popup")
 	var candidates: Array = hand_candidates + cemetery_popup_result.get("nodes", [])
 	if candidates.is_empty():
@@ -408,7 +405,7 @@ func _activate_miguel_discount_play(source_card: Node, ability: Dictionary) -> v
 
 	var filter := func(c: Node) -> bool: return c in candidates
 	var chosen_node: Node = await _inspector._main._card_interaction.await_target(
-		"Elige una carta (tu mano o cualquier Cementerio) para jugar con 1 Oro de descuento", filter)
+		"Elige una carta (tu mano o cualquier Cementerio) para jugar con 1 Oro de descuento", filter, true, owner_id)
 	if is_instance_valid(cemetery_popup):
 		cemetery_popup.queue_free()
 	if not chosen_node or not is_instance_valid(chosen_node):
@@ -428,13 +425,14 @@ func _activate_miguel_discount_play(source_card: Node, ability: Dictionary) -> v
 		# corregido a pedido del usuario): jugar una carta ajena te vuelve
 		# CONTROLADOR, no dueño — si es Aliado/Tótem/Arma/Oro pelea de tu
 		# lado, pero si sale de juego (destruida/desterrada) vuelve al
-		# Cementerio/Destierro de su dueño original, no al tuyo. GoldManager.
-		# play_card() coloca todo del lado del jugador 0 sin mirar owner_id
-		# (siempre fue solo para el jugador humano), así que esto no afecta
-		# en qué lado del tablero aparece — solo a dónde vuelve si muere.
+		# Cementerio/Destierro de su dueño original, no al tuyo. 2026-10-07:
+		# GoldManager.play_card()/_play_card_to_field()/_play_talisman() ya
+		# enrutan por controller_id (ver arquitectura.md §38), así que esto
+		# SÍ decide de qué lado del tablero aparece (controller_id=owner_id,
+		# el activador) y a dónde vuelve si muere (owner_id=cemetery_owner).
 		card_node.owner_id = cemetery_owner
 		card_node.controller_id = owner_id
-		_inspector._main.player_hand.add_card(card_node)
+		hand_container_miguel.add_card(card_node)
 		_inspector._main._connect_card_signals(card_node)
 
 	if not is_instance_valid(card_node):
@@ -633,18 +631,15 @@ func _activate_tesoro_cesares_name_tax(source_card: Node, ability: Dictionary) -
 	if not is_instance_valid(source_card):
 		return
 	var owner_id: int = source_card.owner_id if source_card.get("owner_id") != null else 0
-	if owner_id != 0 or not _inspector._main.player_hand or _inspector._main.player_hand.cards.is_empty() \
-			or not _inspector._main._card_interaction:
-		# 2026-10-05: usa TriggerSystem._card_name_search.open_and_wait()
-		# (CardNameSearchDialog), excluido desde el plan original — se deja
-		# sin desbloquear.
-		return  # el Remoto no puede usar esta habilidad todavía; sin mano no hay costo que pagar
+	var hand_container_tesoro = _inspector._main.player_hand if owner_id == 0 else _inspector._main._opponent_fan
+	if not hand_container_tesoro or hand_container_tesoro.cards.is_empty() or not _inspector._main._card_interaction:
+		return  # sin mano no hay costo que pagar
 
 	# 2026-09-13, a pedido del usuario: click directo en la mano en vez del
 	# modal de lista viejo.
 	var hand_filter := func(c: Node) -> bool: return c.get("current_zone") == Constants.Zone.MANO
 	var to_shuffle_node: Node = await _inspector._main._card_interaction.await_target(
-		"Baraja 1 carta de tu mano en tu mazo", hand_filter)
+		"Baraja 1 carta de tu mano en tu mazo", hand_filter, true, owner_id)
 	if not to_shuffle_node or not is_instance_valid(to_shuffle_node):
 		return  # canceló — no paga el costo, no nombra nada
 
@@ -656,12 +651,12 @@ func _activate_tesoro_cesares_name_tax(source_card: Node, ability: Dictionary) -
 	# "Invalid access... on a base object of type 'previously freed'" al
 	# tocar .modulate. remove_card() sí desconecta todo antes de destruir.
 	var shuffled_data: Dictionary = to_shuffle_node.card_data
-	_inspector._main.player_hand.remove_card(to_shuffle_node, true)
+	hand_container_tesoro.remove_card(to_shuffle_node, true)
 	CardManager.get_deck(owner_id).append(shuffled_data)
 	ActionModule.shuffle_deck(owner_id)
 
 	var picked_card: Dictionary = await TriggerSystem._card_name_search.open_and_wait(
-		"Nombra una carta: cuesta 1 Oro adicional el próximo turno"
+		"Nombra una carta: cuesta 1 Oro adicional el próximo turno", owner_id
 	)
 
 	UniversalCardParser.turn_registry.register_ability_use(source_card, ability)
