@@ -31,6 +31,15 @@ var _active: bool = false
 var _current_overlay: Control = null
 var _card_nodes: Dictionary = {}  # card_id (String) -> Node local (ghost)
 var _hand_card_nodes: Dictionary = {}  # card_id (String) -> Node local en player_hand (§45)
+## Botón de paso del Remoto (2026-10-11): qué hace el botón del HUD (y el
+## atajo P) según el prompt activo, y el window_id de la ventana de
+## prioridad que se está respondiendo (-1 si no hay ninguna).
+var _paso_action: Callable = Callable()
+var _priority_window_id: int = -1
+## Último prompt de Vigilia todavía sin responder: si una ventana de
+## prioridad lo tapa (p.ej. el Anfitrión responde a tu carta con un
+## Talismán), se vuelve a mostrar al cerrarse esa ventana.
+var _pending_vigilia: Dictionary = {}
 
 
 func setup(main: Node) -> void:
@@ -49,6 +58,7 @@ func _on_message(data: Dictionary) -> void:
 	match data.get("op", ""):
 		"prompt":
 			_close_current_overlay()
+			_clear_remote_paso()
 			# 2026-09-23, bug real reportado por el usuario: cualquier prompt
 			# real que llegue (mulligan/vigilia/ataque/etc.) tiene que tapar
 			# la pantalla "ESPERANDO JUGADOR" que dejó el duelo de dados — sin
@@ -84,6 +94,8 @@ func _on_message(data: Dictionary) -> void:
 					_show_await_target_or_castillo_prompt(data)
 				"name_card":
 					_show_name_card_prompt(data)
+				"priority":
+					_show_priority_prompt(data)
 		"move_card":
 			_apply_move_card(data)
 		"remove_card":
@@ -92,6 +104,12 @@ func _on_message(data: Dictionary) -> void:
 			_apply_hand_card_added(data)
 		"hand_card_removed":
 			_apply_hand_card_removed(data)
+		"priority_closed":
+			if int(data.get("window_id", -2)) == _priority_window_id:
+				_close_current_overlay()
+				_clear_remote_paso()
+			if not _pending_vigilia.is_empty() and not _current_overlay:
+				_show_vigilia_prompt(_pending_vigilia)
 		"castillo_counts":
 			UIManager.sync_castillo_counts(int(data.get("own", 0)), int(data.get("rival", 0)))
 		"dice_roll":
@@ -371,8 +389,11 @@ func _build_card_row(parent: Container, cards_data: Array) -> void:
 
 
 func _send_intent_and_close(intent: Dictionary) -> void:
+	if intent.get("kind", "") in ["place_gold", "play_card", "end_vigilia"]:
+		_pending_vigilia = {}
 	NetworkClient.send_message(intent)
 	_close_current_overlay()
+	_clear_remote_paso()
 
 
 # =============================================================================
@@ -436,6 +457,7 @@ func _show_vigilia_prompt(data: Dictionary) -> void:
 	# real y persistente del Remoto (player_hand) ya las muestra siempre,
 	# detrás de este mismo overlay. Los botones siguen siendo la acción
 	# real; esto solo saca la carta duplicada.
+	_pending_vigilia = data
 	var gold_reserva: int = int(data.get("gold_reserva", 0))
 	var gold_candidates: Array = data.get("gold_candidates", [])
 	var ally_candidates: Array = data.get("ally_candidates", [])
@@ -493,6 +515,8 @@ func _show_vigilia_prompt(data: Dictionary) -> void:
 	vbox.add_child(sep)
 	_add_row_button(vbox, "Terminar Vigilia / Atacar", func():
 		_send_intent_and_close({"op": "intent", "kind": "end_vigilia"}))
+	_set_remote_paso("Atacar [P]", false, func():
+		_send_intent_and_close({"op": "intent", "kind": "end_vigilia"}))
 
 
 # =============================================================================
@@ -506,6 +530,8 @@ func _show_ataque_prompt(data: Dictionary) -> void:
 		lbl.text = "No tienes ningún Aliado que pueda atacar."
 		vbox.add_child(lbl)
 		_add_row_button(vbox, "Continuar", func():
+			_send_intent_and_close({"op": "intent", "kind": "declare_attackers", "card_ids": []}))
+		_set_remote_paso("Pasar [P]", false, func():
 			_send_intent_and_close({"op": "intent", "kind": "declare_attackers", "card_ids": []}))
 		return
 
@@ -524,12 +550,14 @@ func _show_ataque_prompt(data: Dictionary) -> void:
 
 	var sep := HSeparator.new()
 	vbox.add_child(sep)
-	_add_row_button(vbox, "Confirmar ataque", func():
+	var confirm_attack := func():
 		var chosen_ids: Array = []
 		for card_id in checkboxes:
 			if checkboxes[card_id].button_pressed:
 				chosen_ids.append(card_id)
-		_send_intent_and_close({"op": "intent", "kind": "declare_attackers", "card_ids": chosen_ids}))
+		_send_intent_and_close({"op": "intent", "kind": "declare_attackers", "card_ids": chosen_ids})
+	_add_row_button(vbox, "Confirmar ataque", confirm_attack)
+	_set_remote_paso("Confirmar ataque [P]", false, confirm_attack)
 
 
 # =============================================================================
@@ -855,3 +883,160 @@ func _show_name_card_prompt(data: Dictionary) -> void:
 	var title: String = str(data.get("title", "Nombra una carta"))
 	var picked: Dictionary = await TriggerSystem._card_name_search.open_and_wait(title)
 	NetworkClient.send_message({"op": "intent", "kind": "name_card_choice", "card_data": picked})
+
+
+# =============================================================================
+# BOTÓN DE PASO DEL REMOTO (2026-10-11, a pedido del usuario: "el botón de
+# paso tiene que funcionar para el jugador 1 y el jugador 2") — el mismo
+# botón del HUD que usa el Anfitrión. Como este cliente no corre GameManager
+# propio, el texto/visibilidad los decide el prompt activo y el click (o la
+# tecla P, vía PhaseFlowController._on_paso_pressed()) ejecuta _paso_action.
+# =============================================================================
+func on_paso_pressed() -> void:
+	if _paso_action.is_valid():
+		_paso_action.call()
+
+
+func _set_remote_paso(text: String, glow: bool, action: Callable) -> void:
+	_paso_action = action
+	if _main._game_hud:
+		_main._game_hud.show_paso_button_with_text(text, glow)
+
+
+func _clear_remote_paso() -> void:
+	_paso_action = Callable()
+	_priority_window_id = -1
+	if _main._game_hud:
+		_main._game_hud.stop_paso_countdown()
+		_main._game_hud.stop_paso_glow()
+		_main._game_hud.hide_paso_button()
+
+
+# =============================================================================
+# VENTANA DE PRIORIDAD (RemotePlayerController.on_priority_received()):
+# responder a una carta/habilidad del Anfitrión, Guerra de Talismanes o
+# declarar bloqueadores. Toda respuesta lleva el window_id del prompt.
+# =============================================================================
+func _show_priority_prompt(data: Dictionary) -> void:
+	var window_id: int = int(data.get("window_id", -1))
+	var timeout: int = int(data.get("timeout", 0))
+	var button_text: String = str(data.get("button_text", "Pasar [P]"))
+	var abilities: Array = data.get("abilities", [])
+	var talismans: Array = data.get("talismans", [])
+	var blockers: Array = data.get("blockers", [])
+	var attackers: Array = data.get("attackers", [])
+
+	var respond := func(extra: Dictionary) -> void:
+		var intent := {"op": "intent", "kind": "priority_response", "window_id": window_id}
+		intent.merge(extra)
+		_send_intent_and_close(intent)
+
+	if not blockers.is_empty():
+		var confirm_blocks: Callable = _build_blockers_panel(attackers, blockers, respond)
+		_set_remote_paso(button_text, true, confirm_blocks)
+	else:
+		var pass_action := func(): respond.call({"action": "pass"})
+		if not abilities.is_empty() or not talismans.is_empty():
+			_build_response_panel(str(data.get("context", "")), abilities, talismans, timeout, respond, pass_action)
+		_set_remote_paso(button_text, true, pass_action)
+	_priority_window_id = window_id
+	if timeout > 0 and _main._game_hud:
+		_main._game_hud.start_paso_countdown(timeout)
+
+
+func _build_response_panel(context_name: String, abilities: Array, talismans: Array, timeout: int,
+		respond: Callable, pass_action: Callable) -> void:
+	var title := "¿Respondes? — %s" % context_name if not context_name.is_empty() else "¿Respondes?"
+	var vbox := _build_overlay(title)
+
+	if not talismans.is_empty():
+		var t_lbl := Label.new()
+		t_lbl.text = "Jugar Talismán:"
+		vbox.add_child(t_lbl)
+		_build_card_row(vbox, talismans)
+		for card in talismans:
+			var card_id: String = str(card.get("card_id", ""))
+			_add_row_button(vbox, "%s (coste %s)" % [str(card.get("nombre", "?")), str(card.get("coste", "?"))], func():
+				respond.call({"action": "play", "card_id": card_id}))
+
+	if not abilities.is_empty():
+		var a_lbl := Label.new()
+		a_lbl.text = "Usar habilidad:"
+		vbox.add_child(a_lbl)
+		_build_card_row(vbox, abilities)
+		for c in abilities:
+			var card_id: String = str(c.get("card_id", ""))
+			var ability_index: int = int(c.get("ability_index", 0))
+			var label_text: String = str(c.get("effect_text", c.get("cost_text", "Usar habilidad")))
+			_add_row_button(vbox, "Usar: %s" % label_text, func():
+				respond.call({"action": "ability", "card_id": card_id, "ability_index": ability_index}))
+
+	var sep := HSeparator.new()
+	vbox.add_child(sep)
+	var pass_btn := Button.new()
+	pass_btn.text = "Pasar"
+	pass_btn.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	pass_btn.pressed.connect(pass_action)
+	vbox.add_child(pass_btn)
+	if timeout > 0:
+		_countdown_button_text(pass_btn, "Pasar", timeout)
+
+
+func _countdown_button_text(btn: Button, base_text: String, seconds: int) -> void:
+	"""Cuenta regresiva visible dentro del panel (el botón del HUD queda tapado
+	por el overlay). Solo visual — el plazo real lo controla el Anfitrión."""
+	for remaining in range(seconds, 0, -1):
+		if not is_instance_valid(btn):
+			return
+		btn.text = "%s (%d)" % [base_text, remaining]
+		await get_tree().create_timer(1.0).timeout
+
+
+func _build_blockers_panel(attackers: Array, blockers: Array, respond: Callable) -> Callable:
+	"""Un selector por cada Aliado propio que puede bloquear: 'No bloquea' o
+	el atacante al que bloquea. Devuelve la acción de confirmar (la usan el
+	botón del panel y el botón de paso del HUD)."""
+	var vbox := _build_overlay("Bloqueo — elige tus bloqueadores")
+	var attacker_names: Dictionary = {}
+	for a in attackers:
+		attacker_names[str(a.get("card_id", ""))] = str(a.get("nombre", "?"))
+	if not attackers.is_empty():
+		var a_lbl := Label.new()
+		a_lbl.text = "Atacan:"
+		vbox.add_child(a_lbl)
+		_build_card_row(vbox, attackers)
+
+	var selectors: Dictionary = {}  # blocker_id -> {option: OptionButton, ids: Array}
+	for b in blockers:
+		var blocker_id: String = str(b.get("card_id", ""))
+		var row := HBoxContainer.new()
+		vbox.add_child(row)
+		var lbl := Label.new()
+		lbl.text = "%s →" % str(b.get("nombre", "?"))
+		lbl.custom_minimum_size = Vector2(200, 0)
+		row.add_child(lbl)
+		var option := OptionButton.new()
+		option.add_item("No bloquea")
+		var ids: Array = [""]
+		for attacker_id in b.get("can_block", []):
+			option.add_item("Bloquea a %s" % attacker_names.get(str(attacker_id), "?"))
+			ids.append(str(attacker_id))
+		row.add_child(option)
+		selectors[blocker_id] = {"option": option, "ids": ids}
+
+	var confirm := func():
+		var pairs: Array = []
+		var used_attackers: Dictionary = {}
+		for blocker_id in selectors:
+			var sel: Dictionary = selectors[blocker_id]
+			var attacker_id: String = sel.ids[sel.option.selected]
+			if attacker_id.is_empty() or used_attackers.has(attacker_id):
+				continue  # un atacante solo puede tener un bloqueador
+			used_attackers[attacker_id] = true
+			pairs.append({"blocker_id": blocker_id, "attacker_id": attacker_id})
+		respond.call({"action": "blocks", "pairs": pairs})
+
+	var sep := HSeparator.new()
+	vbox.add_child(sep)
+	_add_row_button(vbox, "Confirmar bloqueos", confirm)
+	return confirm

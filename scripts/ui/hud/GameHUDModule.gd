@@ -8,6 +8,9 @@ const FONT_TITLE := preload("res://assets/fonts/Cinzel-Bold.ttf")
 var _main: Node = null
 var _paso_button: Button = null
 var _paso_glow_tween: Tween = null
+## Generación de la cuenta regresiva del botón (2026-10-11): sube en cada
+## start/stop para que un bucle viejo deje de escribir el texto.
+var _countdown_generation: int = 0
 var _phase_announcer_label: Label = null
 var _phase_announcer_tween: Tween = null
 
@@ -261,3 +264,43 @@ func stop_paso_glow() -> void:
 
 	_paso_button.add_theme_stylebox_override("normal", style_normal)
 	_paso_button.add_theme_color_override("font_color", Color(1.0, 0.95, 0.85, 1.0))
+
+
+# =============================================================================
+# CUENTA REGRESIVA Y CONTROL EXTERNO DEL BOTÓN (2026-10-11, online)
+# =============================================================================
+func start_paso_countdown(seconds: int) -> void:
+	"""Muestra los segundos que quedan para responder en el texto del botón
+	("Pasar (5)", "Pasar (4)"...). Solo visual: quien de verdad pasa al
+	vencer el plazo es el Anfitrión (PhaseFlowController/RemotePlayerController)."""
+	if not _paso_button:
+		return
+	_countdown_generation += 1
+	var gen := _countdown_generation
+	var base_text: String = _paso_button.text.replace(" [P]", "")
+	for remaining in range(seconds, 0, -1):
+		if gen != _countdown_generation or not _paso_button.visible:
+			return
+		_paso_button.text = "%s (%d)" % [base_text, remaining]
+		await _main.get_tree().create_timer(1.0).timeout
+	if gen == _countdown_generation:
+		_paso_button.text = "%s [P]" % base_text
+
+
+func stop_paso_countdown() -> void:
+	_countdown_generation += 1
+
+
+func show_paso_button_with_text(text: String, glow: bool) -> void:
+	"""Para el cliente Remoto, que no corre GameManager propio y por lo tanto
+	nunca pasa por update_paso_button_state(): RemoteMirrorController decide
+	el texto y la visibilidad según lo que le manda el Anfitrión."""
+	if not _paso_button:
+		return
+	stop_paso_countdown()
+	_paso_button.text = text
+	_paso_button.visible = true
+	if glow:
+		start_paso_glow()
+	else:
+		stop_paso_glow()

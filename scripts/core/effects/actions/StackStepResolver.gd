@@ -253,7 +253,7 @@ func _execute_step_d(stack_obj: Dictionary) -> Dictionary:
 	# "no hay nada que decidir" del humano (PhaseFlowController._on_priority_
 	# changed_glow()), que a propósito solo actúa en RESPONSE_WINDOW real para
 	# no auto-pasar una Guerra de Talismanes genuina.
-	PriorityManager.start_priority_window(PriorityManager.PriorityContext.RESPONSE_WINDOW, opponent_id)
+	PriorityManager.start_priority_window(PriorityManager.PriorityContext.RESPONSE_WINDOW, opponent_id, controller_id)
 
 	# ─────────────────────────────────────────────────────────────────────────
 	# Esperar hasta que ambos pasen o alguien responda

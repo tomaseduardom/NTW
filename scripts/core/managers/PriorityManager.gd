@@ -66,6 +66,17 @@ var current_priority_context: int = PriorityContext.NONE
 ## que se programaron ya no es la actual, no hacen nada.
 var _window_generation: int = 0
 
+## Jugador que controla el objeto de la pila al que responde esta ventana
+## (Paso D de StackStepResolver), o -1 si la ventana no responde a ninguna
+## carta/habilidad puntual (fase, pila recién vaciada, etc.). Ver
+## needs_real_decision() — 2026-10-11, botón de paso simétrico online.
+var current_stack_controller: int = -1
+
+## Tiempo límite para responder en una Ventana de Respuesta online (2026-10-11,
+## a pedido del usuario: "5 segundos nada más por ahora"). Solo aplica a
+## RESPONSE_WINDOW — Bloqueo y Guerra de Talismanes esperan sin límite.
+const ONLINE_RESPONSE_TIMEOUT: float = 5.0
+
 
 func _ready() -> void:
 	# GameManager es el único conductor de fases (ver consolidación
@@ -78,12 +89,14 @@ func _ready() -> void:
 # =============================================================================
 # INICIALIZACIÓN DE PRIORIDAD
 # =============================================================================
-func start_priority_window(context: int, starting_player: int = -1) -> void:
+func start_priority_window(context: int, starting_player: int = -1, stack_controller: int = -1) -> void:
 	"""Inicia una ventana de prioridad
 	context: PriorityContext enum
 	starting_player: -1 para usar regla por defecto según contexto
+	stack_controller: dueño del objeto de la pila al que se responde (-1 si no hay)
 	"""
 	current_priority_context = context
+	current_stack_controller = stack_controller
 	player_passed = [false, false]
 	priority_window_active = true
 	_window_generation += 1
@@ -275,6 +288,26 @@ func _on_phase_changed(new_phase: int) -> void:
 # =============================================================================
 # CONSULTAS
 # =============================================================================
+func needs_real_decision(player_id: int) -> bool:
+	"""¿Tiene este jugador una decisión real que tomar en la ventana actual,
+	o puede pasar automáticamente? (2026-10-11, a pedido del usuario: "el
+	jugador activo solo pasa para ir a la guerra o pasar turno; el otro
+	debe pasar cada vez que el oponente juegue una carta o use una
+	habilidad", y al cambiar de turno se invierten los roles).
+	- Ventana de Respuesta: decide solo el rival de quien controla el objeto
+	de la pila. Sin objeto puntual (pila recién vaciada) nadie decide.
+	- Bloqueo: decide solo el defensor.
+	- Guerra de Talismanes (y el resto): deciden ambos."""
+	match current_priority_context:
+		PriorityContext.RESPONSE_WINDOW:
+			return current_stack_controller >= 0 and player_id != current_stack_controller
+		PriorityContext.BLOCK_DECLARATION:
+			var active_player: int = GameManager.active_player_id if GameManager else 0
+			return player_id != active_player
+		_:
+			return true
+
+
 func has_priority(player_id: int) -> bool:
 	"""Verifica si un jugador tiene prioridad actualmente"""
 	return priority_window_active and current_priority_player == player_id

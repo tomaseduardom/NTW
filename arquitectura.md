@@ -5431,3 +5431,70 @@ actualiza el contador (ni en el Anfitrión ni en el Remoto).
 
 **Verificado con headless check (`--editor --quit`) — sin errores. Sin
 verificar en partida real todavía.**
+
+## 48. Botón de paso simétrico online: prioridad real para ambos jugadores (2026-10-11)
+
+**A pedido del usuario:** "el botón de paso tiene que funcionar para el
+jugador 1 y el jugador 2. Si es el turno del jugador 1, este solo podría
+pasar para ir a guerra o pasar turno, mientras que el jugador 2 es el que
+debe pasar cada vez que el oponente juegue una carta o use una habilidad
+[...] cuando comienza el turno del jugador 2 se invierten los roles". Plazo
+de respuesta: 5 segundos. Bloqueo del Remoto incluido.
+
+**Bug de fondo encontrado:** `PhaseFlowController._on_priority_changed_bot_
+autopass()` pasaba la prioridad del J2 a los 0.2s en CUALQUIER ventana sin
+distinguir bot de persona — el Remoto nunca alcanzaba a responder (el
+prompt de `try_respond_with_activated_ability()` llegaba, pero la ventana ya
+se había cerrado), ni a jugar Talismanes en Guerra de Talismanes, ni a
+bloquear. Además `ResponseWindowHandler._bot_pass_after()` corría en
+paralelo por el mismo jugador.
+
+**Regla única — `PriorityManager.needs_real_decision(player_id)`:**
+- Ventana de Respuesta (Paso D): decide solo el rival de quien controla el
+  objeto de la pila. `start_priority_window()` recibe ahora
+  `stack_controller` (lo pasa `StackStepResolver._execute_step_d()`); sin
+  objeto puntual (ventana de `_on_stack_resolved()`) nadie decide.
+- Bloqueo: decide solo el defensor.
+- Guerra de Talismanes: deciden ambos.
+Quien no tiene decisión real pasa solo (0.2s). Como depende de
+`active_player_id` y no de quién es el Anfitrión, los roles se invierten
+solos al cambiar de turno. Contra el bot local nada cambia.
+
+**Plazo:** `PriorityManager.ONLINE_RESPONSE_TIMEOUT = 5.0`, solo en Ventana
+de Respuesta. Bloqueo y Guerra de Talismanes esperan sin límite. El botón
+muestra la cuenta regresiva (`GameHUDModule.start_paso_countdown()`).
+
+**Anfitrión (J1):** `_on_priority_changed_glow()` — rama nueva para partidas
+online: auto-pase si no decide; en Ventana de Respuesta real, brillo +
+cuenta regresiva + `_human_pass_after(5.0)` (que no pasa si estás en medio
+de elegir el objetivo de tu respuesta).
+
+**Remoto (J2), lado Anfitrión:** `RemotePlayerController.on_priority_
+received()` reemplaza al auto-pase del bot. Manda
+`{"op":"prompt","kind":"priority","window_id",...}` con Talismanes jugables
+(solo instantáneos en Ventana de Respuesta, cualquiera en Guerra),
+habilidades activadas y, en Bloqueo, los bloqueos válidos por Aliado
+(`BattleManager.is_valid_block()`, `ContinuousEffectManager.can_block()`).
+Espera `{"op":"intent","kind":"priority_response","window_id",
+"action":"pass"|"ability"|"play"|"blocks"}`; una respuesta con otro
+`window_id` se descarta (nunca se aplica sobre la ventana siguiente). Al
+terminar manda `{"op":"priority_closed","window_id"}`. Los bloqueos se
+revalidan del lado del Anfitrión antes de `GameManager.declare_blocker()`.
+
+**Remoto, lado cliente:** `RemoteMirrorController` maneja el botón del HUD
+(`_set_remote_paso()`/`_clear_remote_paso()`, `on_paso_pressed()`):
+`PhaseFlowController._on_paso_pressed()` (botón y tecla P) desvía al
+Remoto. Vigilia ("Atacar [P]") y Ataque ("Confirmar ataque [P]") también lo
+usan. Panel de respuesta con cuenta regresiva propia (el overlay tapa el
+botón del HUD) y panel de bloqueadores (un selector por Aliado). Si una
+ventana de prioridad tapa el prompt de Vigilia, se vuelve a mostrar al
+cerrarse (`_pending_vigilia`).
+
+**Límites conocidos:** el popup de Vigilia sigue siendo modal (el botón del
+HUD queda detrás; funciona la tecla P y el botón del propio popup). Tras un
+Talismán en Guerra de Talismanes la guerra termina al vaciarse la pila
+(comportamiento previo del motor, igual contra el bot).
+
+**Verificado:** los 7 scripts compilan con autoloads (worktree limpio sin
+los cambios en curso de `SelectionDialogs.gd`). Sin verificar en partida
+real todavía.

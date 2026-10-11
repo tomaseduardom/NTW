@@ -143,6 +143,13 @@ func _on_priority_changed_bot_autopass(player_id: int) -> void:
 		return
 	if not PriorityManager.priority_window_active:
 		return
+	# 2026-10-11: contra un jugador Remoto real, el J2 NO es un bot — antes
+	# este auto-pase le pasaba la prioridad a los 0.2s en CUALQUIER ventana
+	# (respuesta, Bloqueo, Guerra de Talismanes), así que el Remoto nunca
+	# alcanzaba a responder. Ahora decide RemotePlayerController.
+	if _main._easy_bot is RemotePlayerController:
+		_main._easy_bot.on_priority_received()
+		return
 	# 2026-09-15: se captura la generación de ESTA ventana (ver
 	# PriorityManager._window_generation) ANTES del await — mismo motivo
 	# que _human_pass_after()/_bot_pass_after(), ver esos comentarios.
@@ -251,8 +258,25 @@ func _on_priority_changed_glow(player_id: int) -> void:
 			# PriorityManager._window_generation) para que el timer no actúe
 			# sobre una ventana NUEVA si esta ya cerró sola antes de que pase el delay.
 			_human_pass_after(0.2, PriorityManager._window_generation)  # bajado de 0.5s, 2026-09-11
+		elif _main._easy_bot is RemotePlayerController:
+			# 2026-10-11, botón de paso simétrico online (ver PriorityManager.
+			# needs_real_decision()): si esta ventana no te pide nada (p.ej. la
+			# respuesta a TU propia carta, o eres el atacante en Bloqueo), se
+			# pasa sola; en una Ventana de Respuesta real tienes 5s para
+			# responder antes de que pase sola; Bloqueo y Guerra de Talismanes
+			# esperan tu click sin límite.
+			var gen: int = PriorityManager._window_generation
+			if not PriorityManager.needs_real_decision(0):
+				_main._game_hud.stop_paso_glow()
+				_human_pass_after(0.2, gen)
+			elif PriorityManager.current_priority_context == PriorityManager.PriorityContext.RESPONSE_WINDOW:
+				if _main._card_inspector:
+					_main._card_inspector.refresh_activatable_glows()
+				_main._game_hud.start_paso_countdown(int(PriorityManager.ONLINE_RESPONSE_TIMEOUT))
+				_human_pass_after(PriorityManager.ONLINE_RESPONSE_TIMEOUT, gen)
 	else:
 		_main._game_hud.stop_paso_glow()
+		_main._game_hud.stop_paso_countdown()
 		if _main._card_inspector:
 			_main._card_inspector._clear_all_activatable_glows()
 
@@ -272,6 +296,7 @@ func _on_priority_window_closed_glow() -> void:
 	Vigilia — la regla de respaldo (¿es tu turno en una fase relevante?) de
 	update_paso_button_state() nunca llegaba a aplicarse."""
 	_main._game_hud.stop_paso_glow()
+	_main._game_hud.stop_paso_countdown()
 	_main._game_hud.update_paso_button_state()
 
 
@@ -459,6 +484,10 @@ func _human_pass_after(delay: float, scheduled_for_generation: int) -> void:
 	# de la que este timer estaba mirando).
 	if PriorityManager._window_generation != scheduled_for_generation:
 		return
+	# Plazo largo (5s online): si al vencer estás en medio de elegir el
+	# objetivo de tu respuesta, no se te pasa por abajo (2026-10-11).
+	if delay > 1.0 and _main._card_interaction and _main._card_interaction.is_selecting_target:
+		return
 	if PriorityManager.priority_window_active and PriorityManager.current_priority_player == 0:
 		PriorityManager.pass_priority()
 
@@ -468,6 +497,12 @@ func _human_pass_after(delay: float, scheduled_for_generation: int) -> void:
 # =============================================================================
 func _on_paso_pressed() -> void:
 	"""El jugador presiona ¿Paso? — pasa prioridad o avanza fase."""
+	# 2026-10-11: en el cliente Remoto no corre GameManager propio — el botón
+	# (y el atajo P) mandan la decisión al Anfitrión por red.
+	if NetworkClient.room_code != "" and not NetworkClient.is_host:
+		if _main._remote_mirror:
+			_main._remote_mirror.on_paso_pressed()
+		return
 	# 2026-09-14, bug real reportado por el usuario: con una selección de
 	# objetivo pendiente (p.ej. 'Elige un Oro o una carta de coste 2 o menos
 	# para Convertir', TargetedEffectExecutor._execute_targeted_convert())

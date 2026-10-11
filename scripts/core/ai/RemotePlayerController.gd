@@ -390,9 +390,24 @@ func take_ataque_actions() -> void:
 # activada, elegida por el Remoto en vez de al azar
 # =============================================================================
 func try_respond_with_activated_ability() -> bool:
+	"""Camino viejo de respuesta (prompt 'response_window'). Desde 2026-10-11
+	ya no lo usa ResponseWindowHandler contra un Remoto (ver
+	on_priority_received()), pero se conserva por si algún otro llamador de
+	la clase base lo invoca."""
+	var candidates: Array = _collect_activatable_abilities()
+	var candidate_payload: Array = _abilities_payload(candidates)
+	NetworkClient.send_message({"op": "prompt", "kind": "response_window", "candidates": candidate_payload})
+	var intent: Dictionary = await _await_intent(["activate_ability", "pass"])
+	if intent.get("kind", "") != "activate_ability":
+		return false
+	return await _activate_chosen_ability(str(intent.get("card_id", "")), int(intent.get("ability_index", -1)), candidates)
+
+
+func _collect_activatable_abilities() -> Array:
+	"""Habilidades activadas que el Remoto puede usar ahora mismo: [{card, ability}]."""
 	var fields: Array = [_main.opponent_field, _main.opponent_linea_ataque, _main.opponent_linea_apoyo,
 		_main.opponent_gold, _main.opponent_oro_pagado]
-	var candidates: Array = []  # [{card, ability}]
+	var candidates: Array = []
 	for field in fields:
 		if not field:
 			continue
@@ -422,8 +437,11 @@ func try_respond_with_activated_ability() -> bool:
 					if UniversalCardParser.turn_registry.was_used(card_id, ability.get("ability_index", 0), GameManager.current_turn):
 						continue
 				candidates.append({"card": card, "ability": ability})
+	return candidates
 
-	var candidate_payload: Array = []
+
+func _abilities_payload(candidates: Array) -> Array:
+	var payload: Array = []
 	for c in candidates:
 		# 2026-10-07: card_data completo (no solo nombre/coste curados) para
 		# que RemoteMirrorController pueda mostrar la carta real, mismo
@@ -433,17 +451,14 @@ func try_respond_with_activated_ability() -> bool:
 		entry["ability_index"] = c.ability.get("ability_index", 0)
 		entry["cost_text"] = c.ability.get("cost_text", "")
 		entry["effect_text"] = c.ability.get("effect_text", "")
-		candidate_payload.append(entry)
-	NetworkClient.send_message({"op": "prompt", "kind": "response_window", "candidates": candidate_payload})
-	var intent: Dictionary = await _await_intent(["activate_ability", "pass"])
+		payload.append(entry)
+	return payload
 
-	if intent.get("kind", "") != "activate_ability":
-		return false
 
-	var chosen_card := _find_card_by_id(str(intent.get("card_id", "")))
+func _activate_chosen_ability(card_id: String, ability_index: int, candidates: Array) -> bool:
+	var chosen_card := _find_card_by_id(card_id)
 	if not chosen_card:
 		return false
-	var ability_index: int = int(intent.get("ability_index", -1))
 	var chosen_ability: Dictionary = {}
 	for c in candidates:
 		if c.card == chosen_card and int(c.ability.get("ability_index", -1)) == ability_index:
@@ -451,7 +466,192 @@ func try_respond_with_activated_ability() -> bool:
 			break
 	if chosen_ability.is_empty():
 		return false
-
 	var context := {"controller_id": 1, "source_card_node": chosen_card}
 	var result: Dictionary = await ActionPipeline.activate_ability(chosen_card.card_data, chosen_ability, context)
 	return result.get("success", false)
+
+
+# =============================================================================
+# BOTÓN DE PASO SIMÉTRICO ONLINE (2026-10-11, a pedido del usuario)
+# =============================================================================
+# Cada vez que el J2 (el Remoto) recibe la prioridad en CUALQUIER ventana, el
+# Anfitrión decide aquí qué hacer, con la misma regla que usa para el J1
+# (PriorityManager.needs_real_decision()):
+#   - sin decisión real (respuesta a su propia carta, atacante en Bloqueo,
+#     pila recién vaciada) → pasa solo;
+#   - Ventana de Respuesta real → el Remoto ve su botón de paso con cuenta
+#     regresiva de 5s y puede responder con un Talismán instantáneo o una
+#     habilidad activada; al vencer el plazo, el Anfitrión pasa por él;
+#   - Guerra de Talismanes → puede jugar Talismanes/habilidades, sin plazo;
+#   - Bloqueo (defensor) → elige bloqueadores, sin plazo.
+# El prompt viaja con window_id (= PriorityManager._window_generation) y la
+# respuesta debe traer el mismo id: una respuesta tardía de una ventana que
+# ya cerró se descarta sola, nunca se aplica sobre la ventana siguiente.
+func on_priority_received() -> void:
+	if not (PriorityManager.priority_window_active and PriorityManager.current_priority_player == 1):
+		return
+	var window_id: int = PriorityManager._window_generation
+	var context: int = PriorityManager.current_priority_context
+
+	if not PriorityManager.needs_real_decision(1):
+		await get_tree().create_timer(0.2).timeout
+		_pass_if_still_current(window_id)
+		return
+
+	var ability_candidates: Array = []
+	var talisman_cards: Array = []
+	var block_options: Array = []
+	var attackers_payload: Array = []
+	var timeout: float = 0.0
+	var button_text: String = "Pasar [P]"
+	match context:
+		PriorityManager.PriorityContext.RESPONSE_WINDOW:
+			timeout = PriorityManager.ONLINE_RESPONSE_TIMEOUT
+			ability_candidates = _collect_activatable_abilities()
+			talisman_cards = _playable_talismans_now(true)
+		PriorityManager.PriorityContext.GUERRA_TALISMANES:
+			button_text = "Daño [P]"
+			ability_candidates = _collect_activatable_abilities()
+			talisman_cards = _playable_talismans_now(false)
+		PriorityManager.PriorityContext.BLOCK_DECLARATION:
+			button_text = "Confirmar bloqueos [P]"
+			for a in GameManager.attackers:
+				if is_instance_valid(a):
+					attackers_payload.append(_card_public_data(a))
+			block_options = _block_options()
+			if block_options.is_empty():
+				# Nada que bloquear (información pública) — no hace falta
+				# hacer esperar al Remoto por un click sin opciones.
+				await get_tree().create_timer(0.4).timeout
+				_pass_if_still_current(window_id)
+				return
+
+	var talisman_payload: Array = []
+	for c in talisman_cards:
+		talisman_payload.append(_card_public_data(c))
+	NetworkClient.send_message({
+		"op": "prompt", "kind": "priority",
+		"window_id": window_id,
+		"context": PriorityManager.current_context,
+		"button_text": button_text,
+		"timeout": timeout,
+		"abilities": _abilities_payload(ability_candidates),
+		"talismans": talisman_payload,
+		"attackers": attackers_payload,
+		"blockers": block_options,
+	})
+
+	var intent: Dictionary = await _await_priority_intent(window_id, timeout)
+	NetworkClient.send_message({"op": "priority_closed", "window_id": window_id})
+	if not _is_current_window(window_id):
+		return  # la ventana cerró por otro camino mientras se esperaba
+
+	match str(intent.get("action", "pass")):
+		"ability":
+			var used: bool = await _activate_chosen_ability(
+				str(intent.get("card_id", "")), int(intent.get("ability_index", -1)), ability_candidates)
+			if used:
+				return  # la habilidad quedó en la pila — el Paso D la detecta como respuesta
+		"play":
+			var card := _find_card_by_id(str(intent.get("card_id", "")))
+			if card and card in talisman_cards:
+				await _play_talisman_remote(card)
+				return
+		"blocks":
+			_apply_remote_blocks(intent.get("pairs", []))
+	_pass_if_still_current(window_id)
+
+
+func _is_current_window(window_id: int) -> bool:
+	return PriorityManager._window_generation == window_id and PriorityManager.priority_window_active \
+		and PriorityManager.current_priority_player == 1
+
+
+func _pass_if_still_current(window_id: int) -> void:
+	if _is_current_window(window_id):
+		PriorityManager.pass_priority()
+
+
+func _await_priority_intent(window_id: int, timeout: float) -> Dictionary:
+	"""Espera {"op":"intent","kind":"priority_response","window_id":window_id}.
+	Devuelve {} si vence el plazo (timeout > 0, con 0.5s de gracia por la
+	latencia de red) o si la ventana deja de ser la actual."""
+	var state := {"done": false, "intent": {}}
+	var on_message := func(data: Dictionary) -> void:
+		if state.done or data.get("op", "") != "intent" or data.get("kind", "") != "priority_response":
+			return
+		if int(data.get("window_id", -1)) != window_id:
+			return
+		state.intent = data
+		state.done = true
+	NetworkClient.message_received.connect(on_message)
+	var elapsed: float = 0.0
+	while not state.done:
+		await get_tree().create_timer(0.1).timeout
+		elapsed += 0.1
+		if timeout > 0.0 and elapsed >= timeout + 0.5:
+			break
+		if not _is_current_window(window_id):
+			break
+	NetworkClient.message_received.disconnect(on_message)
+	return state.intent
+
+
+func _playable_talismans_now(response_only: bool) -> Array:
+	"""Talismanes de la mano del Remoto que puede pagar y jugar en esta
+	ventana: solo los de respuesta instantánea (Red de Plata, Sacrificio
+	Solar...) en una Ventana de Respuesta; cualquiera en Guerra de Talismanes."""
+	var result: Array = []
+	var gm = _main._gold_manager
+	for c in _affordable_cards_in_hand([Constants.CardType.TALISMAN]):
+		if response_only and not (gm and gm._is_response_only_talisman(c)):
+			continue
+		result.append(c)
+	return result
+
+
+func _block_options() -> Array:
+	"""[{card_data..., card_id, can_block: [attacker_id...]}] para cada Aliado
+	del Remoto en Línea de Defensa que puede bloquear a algún atacante."""
+	var options: Array = []
+	if not _main.opponent_field:
+		return options
+	for blocker in _main.opponent_field.get_children():
+		if not is_instance_valid(blocker) or blocker.get("card_type") != Constants.CardType.ALIADO:
+			continue
+		if blocker in GameManager.blockers.values() or not ContinuousEffectManager.can_block(blocker):
+			continue
+		var valid_attackers: Array = []
+		for attacker in GameManager.attackers:
+			if not is_instance_valid(attacker) or GameManager.blockers.has(attacker):
+				continue
+			if BattleManager.is_valid_block(attacker, blocker).get("valid", false):
+				valid_attackers.append(_card_ref(attacker))
+		if valid_attackers.is_empty():
+			continue
+		var entry: Dictionary = _card_public_data(blocker)
+		entry["can_block"] = valid_attackers
+		options.append(entry)
+	return options
+
+
+func _apply_remote_blocks(pairs: Array) -> void:
+	"""Mismo efecto que CardInteractionModule._declare_blocker() del humano,
+	pero validando cada par contra las reglas del lado del Anfitrión."""
+	for pair in pairs:
+		if not (pair is Dictionary):
+			continue
+		var blocker := _find_card_by_id(str(pair.get("blocker_id", "")))
+		var attacker := _find_card_by_id(str(pair.get("attacker_id", "")))
+		if not blocker or not attacker or not (attacker in GameManager.attackers):
+			continue
+		if blocker.get_parent() != _main.opponent_field or blocker in GameManager.blockers.values():
+			continue
+		if GameManager.blockers.has(attacker) or not ContinuousEffectManager.can_block(blocker):
+			continue
+		if not BattleManager.is_valid_block(attacker, blocker).get("valid", false):
+			continue
+		GameManager.declare_blocker(blocker, attacker)
+		var tween = create_tween()
+		tween.tween_property(blocker, "modulate", Color(0.4, 0.7, 1.0, 1.0), 0.2)
+		_main._update_debug("Oponente: %s bloquea a %s" % [str(blocker.get("card_name")), str(attacker.get("card_name"))])

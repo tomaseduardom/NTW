@@ -29,6 +29,12 @@ func _on_step_d_waiting(stack_obj: Dictionary, priority_player: int) -> void:
 	# para no romper la secuencia de "ambos pasan consecutivamente" que
 	# ActionPipeline espera.
 	if priority_player != 0:
+		# 2026-10-11: un jugador Remoto real decide por su cuenta (lo maneja
+		# PhaseFlowController._on_priority_changed_bot_autopass() →
+		# RemotePlayerController.on_priority_received()) — sin este return
+		# había dos caminos pasando por él a la vez.
+		if _inspector._main._easy_bot is RemotePlayerController:
+			return
 		# 2026-09-15: se captura la generación de ESTA ventana (ver
 		# PriorityManager._window_generation) — mismo motivo que
 		# PhaseFlowController._human_pass_after(), ver ese comentario.
