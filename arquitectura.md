@@ -5573,3 +5573,44 @@ los atacantes del rival.
 
 **Verificado:** compila con autoloads, sin advertencias nuevas de gdlint.
 Sin verificar en partida real todavía.
+
+## 52. Portador de Arma, objetivos y habilidades de respuesta en el tablero (2026-10-11)
+
+**A pedido del usuario** ("sigamos con los demás popups"), continuación de
+§49–§51. Selección genérica sobre las cartas reales
+(`_start_board_pick(card_ids, on_pick)` en `RemoteMirrorController`):
+brillo celeste si la carta es tuya, rojo si es del rival
+(`&"remote_pick"`); clic simple → `on_pick(card_id)`. Busca en el tablero
+espejado (`_card_nodes`) y en la mano física (`_hand_card_nodes`).
+
+- **Portador de Arma** (`choose_wielder`): clic en tu Aliado.
+- **Objetivo único** (`await_target`): clic en la carta; botón de paso
+  "Cancelar [P]" si es cancelable.
+- **Objetivos múltiples** (`await_multi_target`): clic marca/desmarca
+  (tinte dorado, tope `max_selections`); "Confirmar [P]" manda.
+- **Objetivo o Castillo** (`await_target_or_castillo`): cartas brillantes +
+  los Castillos clickeables del motor (`SelectionManager.
+  start_castillo_pick()`, solo UI en esta pantalla); si es solo el propio,
+  clickear el rival no cuenta.
+- **Habilidades de respuesta** (prompt de prioridad, §48): las cartas con
+  habilidad activada brillan en dorado; clic la usa (si tiene varias, un
+  mini-popup pregunta cuál). Ya no hay panel: queda visible el botón de paso
+  con su cuenta regresiva.
+
+**Respaldo:** si algún candidato no tiene Nodo visible en la pantalla del
+Remoto (p.ej. una carta de la mano del Anfitrión), se usa el popup de
+siempre para no esconder una opción válida.
+
+**Siguen como popup a propósito** (no hay cartas en la mesa que clickear):
+buscar en el mazo/cementerio (`select_cards`, `select_cemetery_cards`),
+opciones de texto (`choose_option`, incluye Tope/Fondo y elegir Castillo
+solo) y nombrar carta (`name_card`).
+
+`_clear_board_pick()` limpia brillos, tintes, `can_interact` (la mano queda
+interactiva) y cancela la elección de Castillo; se llama al mandar cualquier
+intent, al llegar un prompt nuevo y con `priority_closed`. El doble clic en
+la mano ya no avisa "No puedes jugar esa carta" si no hay ninguna jugada
+abierta (era el eco del clic que eligió un objetivo).
+
+**Verificado:** compila con autoloads, sin advertencias nuevas de gdlint.
+Sin verificar en partida real todavía.

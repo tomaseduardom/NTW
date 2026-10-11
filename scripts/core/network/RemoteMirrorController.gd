@@ -53,6 +53,11 @@ var _attack_candidates: Dictionary = {}
 var _block_options: Dictionary = {}
 var _block_pairs: Dictionary = {}
 var _block_pending_blocker: String = ""
+## Selección genérica sobre el tablero/mano (2026-10-11): card_id -> qué hacer
+## al clickearla (portador de Arma, objetivo de un efecto, habilidad de
+## respuesta). _pick_multi guarda las marcadas en una selección múltiple.
+var _pick_targets: Dictionary = {}
+var _pick_multi: Dictionary = {}
 
 
 func setup(main: Node) -> void:
@@ -75,6 +80,7 @@ func _on_message(data: Dictionary) -> void:
 			_clear_hand_actions()
 			_clear_attack_candidates()
 			_clear_board_blocking()
+			_clear_board_pick()
 			# 2026-09-23, bug real reportado por el usuario: cualquier prompt
 			# real que llegue (mulligan/vigilia/ataque/etc.) tiene que tapar
 			# la pantalla "ESPERANDO JUGADOR" que dejó el duelo de dados — sin
@@ -126,6 +132,7 @@ func _on_message(data: Dictionary) -> void:
 				_clear_remote_paso()
 				_clear_hand_actions()
 				_clear_board_blocking()
+				_clear_board_pick()
 			if not _pending_vigilia.is_empty() and not _current_overlay:
 				_show_vigilia_prompt(_pending_vigilia)
 		"castillo_counts":
@@ -416,6 +423,7 @@ func _send_intent_and_close(intent: Dictionary) -> void:
 	_clear_hand_actions()
 	_clear_attack_candidates()
 	_clear_board_blocking()
+	_clear_board_pick()
 
 
 # =============================================================================
@@ -559,6 +567,12 @@ func _show_response_window_prompt(data: Dictionary) -> void:
 func _show_choose_wielder_prompt(data: Dictionary) -> void:
 	var weapon: Dictionary = data.get("weapon", {})
 	var candidates: Array = data.get("candidates", [])
+	var on_wielder := func(card_id: String) -> void:
+		_send_intent_and_close({"op": "intent", "kind": "choose_wielder", "card_id": card_id})
+	if not candidates.is_empty() and _start_board_pick(_ids_of(candidates), on_wielder):
+		_main._update_debug("Elige quién porta %s: clic en uno de tus Aliados brillantes" % str(
+			weapon.get("nombre", "el Arma")))
+		return
 	var vbox := _build_overlay("Elige quién porta %s" % str(weapon.get("nombre", "el Arma")))
 	if candidates.is_empty():
 		var lbl := Label.new()
@@ -726,6 +740,14 @@ func _show_await_target_prompt(data: Dictionary) -> void:
 	var title: String = str(data.get("title", "Elige un objetivo"))
 	var candidates: Array = data.get("candidates", [])
 	var cancellable: bool = bool(data.get("cancellable", true))
+	var on_target := func(card_id: String) -> void:
+		_send_intent_and_close({"op": "intent", "kind": "await_target_choice", "card_id": card_id})
+	if not candidates.is_empty() and _start_board_pick(_ids_of(candidates), on_target):
+		_main._update_debug("%s: clic en una carta brillante" % title)
+		if cancellable:
+			_set_remote_paso("Cancelar [P]", false, func():
+				_send_intent_and_close({"op": "intent", "kind": "await_target_choice", "cancelled": true}))
+		return
 	var vbox := _build_overlay(title)
 
 	if candidates.is_empty():
@@ -752,6 +774,14 @@ func _show_await_multi_target_prompt(data: Dictionary) -> void:
 	var title: String = str(data.get("title", "Elige objetivo(s)"))
 	var candidates: Array = data.get("candidates", [])
 	var max_sel: int = int(data.get("max_selections", -1))
+	if not candidates.is_empty() and _start_board_pick(_ids_of(candidates), _toggle_multi_pick.bind(max_sel)):
+		_main._update_debug("%s: clic en las cartas brillantes para marcarlas, luego Confirmar" % title)
+		_set_remote_paso("Confirmar [P]", false, func():
+			var chosen_ids: Array = []
+			for id in _pick_multi:
+				chosen_ids.append(id)
+			_send_intent_and_close({"op": "intent", "kind": "await_multi_target_choice", "card_ids": chosen_ids}))
+		return
 	var vbox := _build_overlay(title)
 
 	if candidates.is_empty():
@@ -797,6 +827,16 @@ func _show_await_target_or_castillo_prompt(data: Dictionary) -> void:
 	var castillo_title: String = str(data.get("castillo_title", "Castillo"))
 	var castillo_own_only: bool = bool(data.get("castillo_own_only", false))
 	var cancellable: bool = bool(data.get("cancellable", true))
+	var on_card := func(card_id: String) -> void:
+		_send_intent_and_close({"op": "intent", "kind": "await_target_or_castillo_choice", "type": "card",
+			"card_id": card_id})
+	if candidates.is_empty() or _start_board_pick(_ids_of(candidates), on_card):
+		_start_remote_castillo_pick(castillo_title, castillo_own_only)
+		_main._update_debug("%s: clic en una carta brillante o en un Castillo" % title)
+		if cancellable:
+			_set_remote_paso("Cancelar [P]", false, func():
+				_send_intent_and_close({"op": "intent", "kind": "await_target_or_castillo_choice", "type": "none"}))
+		return
 	var vbox := _build_overlay(title)
 
 	_build_card_row(vbox, candidates)
@@ -908,7 +948,7 @@ func _show_priority_prompt(data: Dictionary) -> void:
 			actions[card_id] = {"op": "intent", "kind": "priority_response", "window_id": window_id,
 				"action": "play", "card_id": card_id}
 		_set_hand_actions(actions)
-		if not abilities.is_empty():
+		if not abilities.is_empty() and not _start_ability_pick(abilities, respond):
 			_build_response_panel(str(data.get("context", "")), abilities, timeout, respond, pass_action)
 		_set_remote_paso(button_text, true, pass_action)
 	_priority_window_id = window_id
@@ -966,6 +1006,8 @@ func on_card_double_clicked(card: Node) -> void:
 			break
 	if card_id.is_empty():
 		return  # carta del tablero espejado — no se juega con doble clic
+	if _hand_actions.is_empty():
+		return  # ninguna jugada abierta (p.ej. el eco del clic que eligió un objetivo)
 	if not _hand_actions.has(card_id):
 		_main._update_debug("No puedes jugar esa carta ahora")
 		return
@@ -992,12 +1034,11 @@ func _clear_hand_actions() -> void:
 func on_card_clicked(card: Node) -> void:
 	"""Clic simple en el cliente Remoto: marcar/desmarcar atacante, o elegir
 	bloqueador y a quién bloquea."""
-	var card_id: String = ""
-	for id in _card_nodes:
-		if _card_nodes[id] == card:
-			card_id = id
-			break
+	var card_id: String = _visible_id_of(card)
 	if card_id.is_empty():
+		return
+	if _pick_targets.has(card_id):
+		_pick_targets[card_id].call(card_id)
 		return
 	if not _block_options.is_empty():
 		_on_board_block_click(card_id)
@@ -1131,3 +1172,122 @@ func _clear_board_blocking() -> void:
 	_block_options = {}
 	_block_pairs = {}
 	_block_pending_blocker = ""
+
+
+# =============================================================================
+# SELECCIÓN SOBRE EL TABLERO/MANO (2026-10-11, a pedido del usuario: "sigamos
+# con los demás popups") — portador de Arma, objetivos de efectos y
+# habilidades de respuesta se eligen con clic sobre la carta real (brillo
+# celeste si es tuya, rojo si es del rival). Si algún candidato no tiene
+# Nodo visible en esta pantalla (p.ej. una carta de la mano del Anfitrión),
+# se cae al popup de siempre para no esconder una opción válida.
+# =============================================================================
+func _visible_id_of(card: Node) -> String:
+	for id in _card_nodes:
+		if _card_nodes[id] == card:
+			return id
+	for id in _hand_card_nodes:
+		if _hand_card_nodes[id] == card:
+			return id
+	return ""
+
+
+func _visible_node(card_id: String) -> Node:
+	var node: Node = _card_nodes.get(card_id, null)
+	if not node:
+		node = _hand_card_nodes.get(card_id, null)
+	return node if node and is_instance_valid(node) else null
+
+
+func _ids_of(cards_data: Array) -> Array:
+	var ids: Array = []
+	for c in cards_data:
+		var card_id: String = str(c.get("card_id", ""))
+		if not card_id.is_empty() and not (card_id in ids):
+			ids.append(card_id)
+	return ids
+
+
+func _start_board_pick(card_ids: Array, on_pick: Callable) -> bool:
+	for card_id in card_ids:
+		if not _visible_node(card_id):
+			return false
+	for card_id in card_ids:
+		var node: Node = _visible_node(card_id)
+		node.can_interact = true
+		var color: Color = CardBadges.GLOW_COLOR_CELESTE if node.get("owner_id") == 0 else CardBadges.GLOW_COLOR_RED
+		node.set_activatable(true, color, &"remote_pick")
+		_pick_targets[card_id] = on_pick
+	return true
+
+
+func _toggle_multi_pick(card_id: String, max_sel: int) -> void:
+	var node: Node = _visible_node(card_id)
+	if _pick_multi.has(card_id):
+		_pick_multi.erase(card_id)
+		if node:
+			node.modulate = Color.WHITE
+	elif max_sel < 0 or _pick_multi.size() < max_sel:
+		_pick_multi[card_id] = true
+		if node:
+			node.modulate = Color(1.0, 0.88, 0.45, 1.0)
+	else:
+		_main._update_debug("Ya elegiste el máximo (%d)" % max_sel)
+		return
+	_main._update_debug("Elegidas: %d" % _pick_multi.size())
+
+
+func _start_remote_castillo_pick(castillo_title: String, own_only: bool) -> void:
+	"""Reusa la UI de Castillos clickeables del motor (SelectionManager.
+	start_castillo_pick(), solo visual en esta pantalla)."""
+	SelectionManager.start_castillo_pick(_main, castillo_title, func(picked_own: bool) -> void:
+		if own_only and not picked_own:
+			_main._update_debug("Solo puedes elegir tu propio Castillo")
+			_start_remote_castillo_pick(castillo_title, own_only)
+			return
+		_send_intent_and_close({"op": "intent", "kind": "await_target_or_castillo_choice", "type": "castillo",
+			"own": picked_own}))
+
+
+func _start_ability_pick(abilities: Array, respond: Callable) -> bool:
+	"""Las cartas con una habilidad activada disponible brillan; clic en una:
+	si tiene una sola habilidad se usa directo, si tiene varias se elige cuál."""
+	var by_card: Dictionary = {}  # card_id -> [ability entries]
+	for a in abilities:
+		var card_id: String = str(a.get("card_id", ""))
+		if not by_card.has(card_id):
+			by_card[card_id] = []
+		by_card[card_id].append(a)
+	var on_card := func(card_id: String) -> void:
+		var options: Array = by_card.get(card_id, [])
+		if options.size() == 1:
+			respond.call({"action": "ability", "card_id": card_id,
+				"ability_index": int(options[0].get("ability_index", 0))})
+			return
+		var vbox := _build_overlay("¿Qué habilidad usas?")
+		for opt in options:
+			var ability_index: int = int(opt.get("ability_index", 0))
+			_add_row_button(vbox, str(opt.get("effect_text", opt.get("cost_text", "Usar habilidad"))), func():
+				respond.call({"action": "ability", "card_id": card_id, "ability_index": ability_index}))
+		_add_row_button(vbox, "Volver", func(): _close_current_overlay())
+	if not _start_board_pick(by_card.keys(), on_card):
+		return false
+	for card_id in by_card:
+		var node: Node = _visible_node(card_id)
+		if node:
+			node.set_activatable(true, CardBadges.GLOW_COLOR_GOLD, &"remote_pick")
+	return true
+
+
+func _clear_board_pick() -> void:
+	for card_id in _pick_targets:
+		var node: Node = _visible_node(card_id)
+		if not node:
+			continue
+		node.set_activatable(false, CardBadges.GLOW_COLOR_CELESTE, &"remote_pick")
+		node.modulate = Color.WHITE
+		# La mano física siempre queda interactiva (§49); el tablero espejado no.
+		node.can_interact = _hand_card_nodes.has(card_id)
+	_pick_targets = {}
+	_pick_multi = {}
+	SelectionManager.cancel_castillo_pick()
