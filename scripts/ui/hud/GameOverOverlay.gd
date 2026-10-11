@@ -91,7 +91,7 @@ func _build_ui() -> void:
 	_inspect_bar.add_theme_font_override("font", FONT_REGULAR)
 	_inspect_bar.add_theme_font_size_override("font_size", 14)
 	_inspect_bar.add_theme_color_override("font_color", Color(1.0, 0.92, 0.75))
-	
+
 	var bar_style = StyleBoxFlat.new()
 	bar_style.bg_color = Color(0.08, 0.08, 0.12, 0.92)
 	bar_style.border_width_bottom = 2

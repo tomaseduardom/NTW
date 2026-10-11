@@ -492,7 +492,7 @@ func _on_available_decks_pressed() -> void:
 func _build_clean_action_buttons() -> void:
 	"""Crea botones interactivos en el pedestal que calzan al milímetro sobre los botones
 	del fondo original, tapándolos por completo con versiones 3D táctiles y vivas."""
-	
+
 	# =========================================================================
 	# 1. PEDESTAL CENTRAL: COMENZAR PARTIDA (Calce 100% exacto sobre el altar)
 	# =========================================================================

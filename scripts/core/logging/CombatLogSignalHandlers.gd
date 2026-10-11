@@ -410,7 +410,6 @@ func _on_priority_opened(player_id: int, phase) -> void:
 
 func _on_priority_closed(phase) -> void:
 	"""Handler cuando se cierra ventana de prioridad"""
-	pass  # No loguear para evitar spam
 
 
 # =============================================================================

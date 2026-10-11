@@ -90,12 +90,10 @@ func _highlight_card_for_reorder(index: int) -> void:
 func _show_drop_indicator(index: int) -> void:
 	"""Muestra indicador visual de dónde se soltará la carta"""
 	# TODO: Implementar indicador visual (línea o espacio)
-	pass
 
 
 func _hide_drop_indicator() -> void:
 	"""Oculta el indicador de drop"""
-	pass
 
 
 func reorder_card_displays() -> void:

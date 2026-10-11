@@ -124,7 +124,7 @@ func _arrange() -> void:
 		cx = vp.get_visible_rect().size.x / 2.0 if vp else 960.0
 
 	var effective_width := CARD_W * card_scale  # 75px
-	
+
 	# Solapamiento dinámico: si hay muchas cartas se comprime suavemente
 	var overlap := card_overlap
 	var max_available_width := 420.0

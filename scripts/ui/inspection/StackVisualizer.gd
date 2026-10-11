@@ -321,7 +321,6 @@ func _reorder_items() -> void:
 func _create_stack_item_scene() -> void:
 	"""Crea la escena de item programáticamente"""
 	# En producción, esto sería una escena .tscn
-	pass
 
 
 func _create_stack_item_node(stack_obj: Dictionary) -> Control:

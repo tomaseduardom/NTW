@@ -88,7 +88,7 @@ func _draw() -> void:
 			if target_castle and is_instance_valid(target_castle):
 				var start_pt = _get_card_center(attacker)
 				var end_pt = _get_node_center(target_castle)
-				
+
 				# Tono dorado/fuego mítico con pulso respirante
 				var alpha = 0.70 + 0.25 * sin(_pulse_time)
 				var gold_color = Color(1.0, 0.80, 0.28, alpha)
