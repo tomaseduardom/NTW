@@ -301,7 +301,9 @@ func try_execute_look_play_free_pattern(ability_text: String, source_card: Node,
 
 	var main := _main.get_node_or_null("/root/Main")
 	var to_play: Dictionary = {}
-	if controller_id == 0:
+	# 2026-10-12 (§58): el Remoto real también elige (antes elegía el bot al
+	# azar por él, y solo Aliados).
+	if controller_id == 0 or PlayerSideScript.is_remote(controller_id):
 		# Una sola ventana (2026-08-26, a pedido del usuario — "más visual,
 		# menos texto"): antes eran dos ventanas seguidas, una de solo mirar
 		# (sin poder hacer click en nada) y solo en la segunda se podía
@@ -313,7 +315,8 @@ func try_execute_look_play_free_pattern(ability_text: String, source_card: Node,
 		if main and main._zone_viewer:
 			var node_filter := func(c: Node) -> bool: return is_eligible.call(c.card_data)
 			var picked: Array = await main._zone_viewer.open_reveal_picker(
-				"Juega una carta de coste %d o menos gratis" % max_cost, top_cards, controller_id, node_filter, 1, true)
+				"Juega una carta de coste %d o menos gratis" % max_cost, top_cards, controller_id, node_filter, 1, true,
+				controller_id)
 			if not picked.is_empty():
 				to_play = picked[0]
 	else:
@@ -346,9 +349,13 @@ func try_execute_look_play_free_pattern(ability_text: String, source_card: Node,
 		main._zone_manager._update_castillo_counts()
 
 	if not to_play.is_empty() and not await TriggerSystem.open_response_window(source_card, str(source_card.card_name), controller_id):
-		if controller_id == 0:
-			if main and main._gold_manager and main._gold_manager.has_method("play_card_for_free"):
-				await main._gold_manager.play_card_for_free(to_play)
+		# play_card_for_free() ya sabe jugar cualquier tipo para cualquier
+		# jugador (§25: Arma con portador elegido por quien corresponde) — el
+		# bot local sigue con su camino propio (solo Aliados) porque elegir
+		# portador le abriría la selección al Anfitrión (2026-10-12, §58).
+		if not PlayerSideScript.is_bot(controller_id):
+			if main and main._gold_manager:
+				await main._gold_manager.play_card_for_free(to_play, controller_id)
 		elif main and main._easy_bot:
 			await main._easy_bot.play_free_ally_from_data(to_play)
 
@@ -463,18 +470,16 @@ func try_execute_look_play_or_gold_pattern(ability_text: String, source_card: No
 
 	var main := _main.get_node_or_null("/root/Main")
 	var picked: Dictionary = {}
-	# 2026-10-12 (§57): el Remoto real también elige (antes elegía el bot al
-	# azar por él). Del lado del jugador 1 solo Oros o Aliados — es lo que
-	# saben poner en juego gratis play_free_ally_from_data()/put_free_gold_
-	# in_pagado_from_data() de abajo (mismo alcance que el bot).
+	# 2026-10-12 (§57/§58): el Remoto real también elige (antes elegía el
+	# bot al azar por él). Las dos opciones del texto son distintas: JUGAR
+	# gratis una carta (Aliado/Arma/Tótem/Talismán, abajo con play_card_
+	# for_free()) o PONER EN JUEGO un Oro en el Oro Pagado — un Oro nunca se
+	# "juega" (regla confirmada por el usuario).
 	if controller_id == 0 or PlayerSideScript.is_remote(controller_id):
 		# 2026-09-14, a pedido del usuario: click directo (open_reveal_picker)
 		# en vez del modal de lista viejo.
 		if main and main._zone_viewer:
-			var node_filter := func(c: Node) -> bool:
-				if controller_id != 0 and int(c.card_data.get("tipo", -1)) not in [Constants.CardType.ORO, Constants.CardType.ALIADO]:
-					return false
-				return is_pickable.call(c.card_data)
+			var node_filter := func(c: Node) -> bool: return is_pickable.call(c.card_data)
 			var picked_list: Array = await main._zone_viewer.open_reveal_picker(
 				"Juega una carta de coste %d o menos gratis, o pon un Oro directo en tu Oro Pagado" % max_cost,
 				top_cards, controller_id, node_filter, 1, not any_legal_action, controller_id)
@@ -513,13 +518,15 @@ func try_execute_look_play_or_gold_pattern(ability_text: String, source_card: No
 		return true
 
 	if controller_id != 0:
-		# GoldManager._trigger_enter_play()/play_card_for_free() están
-		# hardcodeados a jugador 0 — ver comentario en
-		# EasyBotController.play_free_ally_from_data(), mismo motivo por el
-		# que este trigger del bot necesita su propio camino.
+		# Jugador 1: el Oro se PONE en su Oro Pagado (put_free_gold_in_pagado_
+		# from_data(), ya hecho para el jugador 1); una carta se JUEGA gratis
+		# con play_card_for_free(..., 1) si es el Remoto (cualquier tipo), o
+		# con el camino propio del bot (solo Aliados) — §58.
 		if main and main._easy_bot:
 			if picked.get("tipo", -1) == Constants.CardType.ORO:
 				await main._easy_bot.put_free_gold_in_pagado_from_data(picked)
+			elif PlayerSideScript.is_remote(controller_id) and main._gold_manager:
+				await main._gold_manager.play_card_for_free(picked, controller_id)
 			else:
 				await main._easy_bot.play_free_ally_from_data(picked)
 		return true
@@ -683,6 +690,22 @@ func try_execute_look_play_or_hand_pattern(ability_text: String, source_card: No
 
 		to_play = state.picked
 		to_hand = state.to_hand
+	elif PlayerSideScript.is_remote(controller_id):
+		# 2026-10-12 (§58): el panel de arriba es local (botón "Poner"
+		# agregado a mano) y no viaja por red. El Remoto elige con clic en
+		# las cartas reveladas; si no elige ninguna, se le ofrece la otra
+		# opción del texto (llevárselas a la mano) o declinar.
+		var main_r := _main.get_node_or_null("/root/Main")
+		if main_r and main_r._zone_viewer:
+			var node_filter_r := func(c: Node) -> bool: return is_eligible.call(c.card_data)
+			var picked_r: Array = await main_r._zone_viewer.open_reveal_picker(
+				"Juega una carta de coste %d o menos gratis (o cancela para ver la otra opción)" % max_cost,
+				top_cards, controller_id, node_filter_r, 1, true, controller_id)
+			if not picked_r.is_empty():
+				to_play = picked_r[0]
+			else:
+				to_hand = await SelectionManager.await_two_choice(main_r, str(source_card.card_name),
+					"Poner las cartas en tu mano", "No hacer nada", controller_id)
 	else:
 		# El bot resuelve solo (2026-09-09, mismo bug real que ya se corrigió
 		# en Tangata Manu/Perder la Razón: esto abría el mismo diálogo de
@@ -737,9 +760,13 @@ func try_execute_look_play_or_hand_pattern(ability_text: String, source_card: No
 		main._zone_manager._update_castillo_counts()
 
 	if not to_play.is_empty() and not await TriggerSystem.open_response_window(source_card, str(source_card.card_name), controller_id):
-		if controller_id == 0:
-			if main and main._gold_manager and main._gold_manager.has_method("play_card_for_free"):
-				await main._gold_manager.play_card_for_free(to_play)
+		# play_card_for_free() ya sabe jugar cualquier tipo para cualquier
+		# jugador (§25: Arma con portador elegido por quien corresponde) — el
+		# bot local sigue con su camino propio (solo Aliados) porque elegir
+		# portador le abriría la selección al Anfitrión (2026-10-12, §58).
+		if not PlayerSideScript.is_bot(controller_id):
+			if main and main._gold_manager:
+				await main._gold_manager.play_card_for_free(to_play, controller_id)
 		elif main and main._easy_bot:
 			await main._easy_bot.play_free_ally_from_data(to_play)
 

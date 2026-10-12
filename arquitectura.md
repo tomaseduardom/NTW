@@ -5876,12 +5876,44 @@ _play_weapon_remote()/_play_talisman_remote()/_play_totem_remote()`.
 |---|---|---|
 | Crono Diamante (protección contra Anular) | solo jugador 0 | mira la Reserva del controlador (`PlayerSide.gold_reserva`) |
 | Jormundgander (Aliado → Oro en Oro Pagado) | solo jugador 0 | Oro Pagado y contador del dueño; `gold_cards` solo para el 0 |
-| "Mira/muestra… juega gratis o pon un Oro" (LookRevealPatternsA) | el Remoto: elegía el bot al azar | el Remoto elige en el popup (solo Oro/Aliado, lo que el jugador 1 sabe poner gratis) |
+| "Mira/muestra… juega gratis o pon un Oro" (LookRevealPatternsA) | el Remoto: elegía el bot al azar | el Remoto elige en el popup (ampliado en §58: cualquier carta jugable, y el Oro se pone en juego) |
 | aku aku (Aliado del Cementerio −1 Oro) | cortaba para el jugador 1 | búsqueda + `play_from_hand`; el bot acepta solo |
 | kotoku-in (Oro restringido al entrar) | cortaba para el jugador 1 | Oro Virtual restringido del controlador |
 | Estación Fantasma (nombrar carta) | cortaba para el jugador 1 | el Remoto nombra (`open_and_wait(..., chooser)`); el bot declina |
 | "Baraja cartas de tu mano cuyos costes sumen…" | solo jugador 0 | mano del controlador, elige el Remoto; el bot declina |
 | Costo "Descarta una carta" de activadas (ActionPipeline) | rechazado para el jugador 1 | el Remoto elige por red; el bot descarta la de menor coste |
 | `ActionSearch._put_found_card_into_play()` ("puedes jugarla", p.ej. Arturo) | `play_card()` → fallaba para el jugador 1 | `play_from_hand` |
+
+**Sin verificar en partida real todavía.**
+
+## 58. "Juega gratis" del jugador 1 revisado — un Oro nunca se juega (2026-10-12)
+
+**A pedido del usuario:** "revisa lo de juega gratis… los Oros no se pueden
+'jugar gratis', se pueden rampear por efectos pero nunca ser jugados, o sea
+se ponen en juego". Regla del juego, no solo de redacción: JUGAR (gratis o
+pagando) es para Aliados, Armas, Tótems y Talismanes; un Oro solo se PONE
+EN JUEGO (Reserva / Oro Pagado) por efectos.
+
+- `GoldManager.play_card_for_free()`: rechaza un Oro con un aviso en el log
+  (antes lo habría mandado a una Línea como carta jugada). Ningún llamador
+  lo hacía hoy; queda como red de seguridad.
+- `_make_look_play_free_filter()` ya excluía Oros de "juega una carta de
+  coste N o menos gratis" — correcto, sin cambios.
+- LookRevealPatternsA, los tres patrones "muestra N… juega gratis":
+  - Tangata Manu/Presente (`try_execute_look_play_free_pattern`) y
+    "juega gratis o ponlas en tu mano" (`try_execute_look_play_or_hand_
+    pattern`): el Remoto ahora elige (antes elegía el bot al azar por él);
+    el segundo usaba un panel local con un botón "Poner" agregado a mano
+    que no viaja por red — para el Remoto: clic en la carta revelada, y si
+    no elige ninguna, "Poner las cartas en tu mano" / "No hacer nada".
+  - Perder la Razón (`try_execute_look_play_or_gold_pattern`): saqué la
+    restricción "solo Oro/Aliado" de §57 para el Remoto; jugar es
+    cualquier tipo, y el Oro va por su camino propio (se pone en el Oro
+    Pagado).
+  - La ejecución usa `play_card_for_free(carta, controller_id)` para el
+    jugador 0 y el Remoto (cualquier tipo; el Arma pide portador a quien
+    corresponde). El bot local sigue jugando solo Aliados
+    (`play_free_ally_from_data()`): elegir portador le abriría la
+    selección al Anfitrión.
 
 **Sin verificar en partida real todavía.**

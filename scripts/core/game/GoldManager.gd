@@ -954,6 +954,14 @@ func play_card_for_free(card_data: Dictionary, owner_id: int = 0) -> bool:
 	Los llamadores existentes que no pasan este argumento conservan el
 	comportamiento viejo (0) sin cambios."""
 	var card_type: int = card_data.get("tipo", -1)
+	# Un Oro NUNCA se juega, ni gratis — solo se pone en juego por efectos
+	# (2026-10-12, regla confirmada por el usuario). Si un patrón llegara a
+	# mandar uno aquí, terminaría como carta "jugada" en una Línea; se
+	# rechaza para que el error se vea en vez de romper el tablero.
+	if card_type == Constants.CardType.ORO:
+		push_warning("[GoldManager] play_card_for_free() recibió un Oro (%s): un Oro no se juega, se pone en juego" % str(
+			card_data.get("nombre", "?")))
+		return false
 	var card = _main._create_card(card_data, false)
 	card.owner_id = owner_id
 	_main._connect_card_signals(card)
