@@ -1529,7 +1529,7 @@ func _play_card_to_field(card: Node) -> void:
 		_apply_crono_diamante_annul_protection(card)
 	_main._update_debug("Jugando: %s" % card.card_name)
 	var start_pos = card.global_position
-	var hand_container: HBoxContainer = _main.player_hand if owner_id == 0 else _main._opponent_fan
+	var hand_container: Control = _main.player_hand if owner_id == 0 else _main._opponent_fan  # HandManager/OpponentFan son Control
 	var idx = hand_container.cards.find(card) if hand_container else -1
 	if idx >= 0:
 		hand_container.cards.remove_at(idx)
@@ -1976,7 +1976,7 @@ func _play_talisman(card: Node) -> void:
 	# jugado vía play_card_for_free()/play_card_from_cemetery() en nombre
 	# del jugador 1 (ver arquitectura.md §25). Se enruta por talisman_owner,
 	# el mismo que ya usa el resto de esta función más abajo.
-	var hand_container: HBoxContainer = _main.player_hand if talisman_owner == 0 else _main._opponent_fan
+	var hand_container: Control = _main.player_hand if talisman_owner == 0 else _main._opponent_fan  # HandManager/OpponentFan son Control
 	var field_container: HBoxContainer = _main.player_field if talisman_owner == 0 else _main.opponent_field
 	var idx = hand_container.cards.find(card) if hand_container else -1
 	if idx >= 0:
