@@ -8,13 +8,10 @@ class_name EffectInterpreter
 ## medida de lo posible". Un paso marcado "then" (impreso tras "Luego,")
 ## solo corre si el anterior se resolvió por completo.
 ##
-## NO abre ventana de respuesta propia: todo camino que llega aquí ya le dio
-## al rival su Paso D antes — los triggers en TriggerResolution.resolve_
-## next_trigger(), los Talismanes en TriggerSystem.resolve_talisman() y las
-## activadas en la Pila (ActionPipeline). Abrir otra acá le haría pasar dos
-## veces al rival y, dentro de la resolución de la Pila (_is_resolving),
-## colgaría el juego 8 s esperando un objeto que la Pila no procesa hasta
-## terminar el actual.
+## Ventana de respuesta (§59): tras declarar llama a EffectContext.
+## ensure_window() — si el efecto todavía no le dio su ventana al rival
+## (triggers: ya no se abre por adelantado), se abre ahí; si ya la tuvo
+## (Talismanes, activadas en la Pila), no se abre otra.
 ##
 ## Quién elige: el jugador local (0) con clic en el tablero; el Remoto real
 ## (1 con sala abierta) por red — await_target()/await_multi_target()/
@@ -41,6 +38,7 @@ const GOLD_CONTAINERS := ["player_gold", "opponent_gold", "player_oro_pagado", "
 
 const EffectCompilerScript = preload("res://scripts/core/effects/compiler/EffectCompiler.gd")
 const PlayerSideScript = preload("res://scripts/core/game/PlayerSide.gd")
+const EffectContextScript = preload("res://scripts/core/effects/EffectContext.gd")
 
 var _ts: Node  # TriggerSystem (dueño de este intérprete)
 
@@ -97,6 +95,11 @@ func execute_plan(plan: Dictionary, card: Node, controller_id: int) -> void:
 
 	if card.has_method("play_ability_activation_effect"):
 		card.play_ability_activation_effect()
+
+	# Ventana del rival DESPUÉS de declarar (§59, opción B): si el efecto
+	# todavía no la tuvo, se abre acá; si la cancela, no se resuelve nada.
+	if await EffectContextScript.ensure_window():
+		return
 
 	# ── Resolver en orden, en la medida de lo posible ─────────────────────
 	await _execute_steps(main, steps, chosen_targets, card, controller_id)

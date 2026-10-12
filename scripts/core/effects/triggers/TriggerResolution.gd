@@ -83,15 +83,14 @@ func resolve_next_trigger() -> Dictionary:
 	# brillo celeste/botón de Anular (§10.51) y el mismo auto-pase (§10.52)
 	# que cualquier otro objeto de la Pila — para CUALQUIER trigger, no solo
 	# los ~40 patrones que ya lo llamaban a mano.
-	var was_cancelled: bool = await _main.open_response_window(
-		card, str(card.card_name) if card.get("card_name") else trigger_type, controller_id)
-
-	if was_cancelled:
-		_main.awaiting_response = false
-		_main.emit_signal("response_window_closed", trigger, was_cancelled)
-		print("[TriggerSystem] %s fue CANCELADO" % trigger_type)
-		_main.emit_signal("trigger_cancelled", card, trigger_type, null)
-		return await resolve_next_trigger()
+	#
+	# 2026-10-12 (§59, opción B elegida por el usuario: el rival responde
+	# DESPUÉS de que se declaran los objetivos): la ventana ya NO se abre
+	# aquí adelante. El efecto arranca con la ventana "pendiente" en
+	# EffectContext; la abre el propio patrón tras declarar (su llamada a
+	# open_response_window() pasa a ser LA ventana) o, si no la pide,
+	# EffectContext.ensure_window() justo antes de su primera acción real.
+	# Antes el rival pasaba hasta 3 veces por la misma carta.
 
 	# === RESOLVER "EN MEDIDA DE LO POSIBLE" (DAR Sección 8) ===
 	print("[TriggerSystem] Resolviendo: %s de %s" % [trigger_type, card.card_name])
@@ -108,9 +107,24 @@ func resolve_next_trigger() -> Dictionary:
 	# ventana anidada de un trigger, es suya" (comentario propio de ese
 	# archivo). El 'ambos pasaron' de la ventana nueva SÍ llegaba a la
 	# lógica de fin de fase, causando resoluciones dobles.
-	var ctx_token: int = EffectContextScript.push(card, controller_id, "disparada")
+	var ctx_token: int = EffectContextScript.push(card, controller_id, "disparada", "pending")
 	var result = await _execute_trigger_effect(card, trigger_type, event_data)
+	var window_state: String = EffectContextScript.window_state(ctx_token)
 	EffectContextScript.pop(ctx_token)
+	var was_cancelled: bool = window_state == "cancelled"
+	if was_cancelled:
+		_main.awaiting_response = false
+		_main.emit_signal("response_window_closed", trigger, true)
+		print("[TriggerSystem] %s de %s fue CANCELADO" % [trigger_type, card.card_name if is_instance_valid(card) else "?"])
+		_main.emit_signal("trigger_cancelled", card, trigger_type, null)
+		return await resolve_next_trigger()
+	if window_state == "pending":
+		# Ninguna acción pasó por un punto vigilado (ActionModule, Oros,
+		# jugar gratis): o el efecto no hizo nada ("puedes" rechazado, sin
+		# objetivos), o un patrón mueve cartas por su cuenta — en ese caso
+		# conviene que pida su ventana con open_response_window().
+		print("[TriggerSystem] %s de %s: resuelto sin ventana de respuesta" % [
+			trigger_type, card.card_name if is_instance_valid(card) else "?"])
 	result["card"] = card
 	result["type"] = trigger_type
 

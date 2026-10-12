@@ -55,6 +55,7 @@ signal action_validation_passed(action_type: String, can_resolve_percent: float)
 # =============================================================================
 # REFERENCIAS
 # =============================================================================
+const EffectContextScript = preload("res://scripts/core/effects/EffectContext.gd")  # detector de paridad (§56)
 var _game_board: Node = null
 
 ## Módulos extraídos (Fase 4 de reestructuración)
@@ -117,6 +118,8 @@ func validate_action(action_type: String, params: Dictionary, context: Dictionar
 # DRAW - Robar cartas (implementación en ActionDraw.gd)
 # =============================================================================
 func draw(player_id: int, amount: int, source: String = "", skip_validation: bool = false) -> Dictionary:
+	if await EffectContextScript.ensure_window():  # ventana única por efecto (§59)
+		return {"success": false, "cancelled": true}
 	return await _action_draw.draw(player_id, amount, source, skip_validation)
 
 
@@ -140,6 +143,8 @@ func shuffle_deck(player_id: int) -> void:
 
 
 func search(player_id: int, zone: int, filter: Dictionary, amount: int = 1, can_fail: bool = true, skip_validation: bool = false, may_play: bool = false, source_card: Node = null, destination: int = Constants.Zone.MANO, distinct_names: bool = false, chooser_id: int = -1) -> Dictionary:
+	if await EffectContextScript.ensure_window():  # ventana única por efecto (§59)
+		return {"success": false, "cancelled": true}
 	return await _action_search.search(player_id, zone, filter, amount, can_fail, skip_validation, may_play, source_card, destination, distinct_names, chooser_id)
 
 
@@ -149,6 +154,8 @@ func search_zones(player_id: int, zones: Array, filter: Dictionary, amount: int 
 		skip_validation: bool = false, may_play: bool = false, source_card: Node = null,
 		destination: int = Constants.Zone.MANO, distinct_names: bool = false, chooser_id: int = -1,
 		cost_reduction: int = 0) -> Dictionary:
+	if await EffectContextScript.ensure_window():  # ventana única por efecto (§59)
+		return {"success": false, "cancelled": true}
 	return await _action_search.search_zones(player_id, zones, filter, amount, can_fail, skip_validation, may_play,
 		source_card, destination, distinct_names, chooser_id, cost_reduction)
 
@@ -163,6 +170,8 @@ func _put_found_card_into_play(main: Node, player_id: int, card_data: Dictionary
 # MILL - Moler cartas (implementación en ActionMill.gd)
 # =============================================================================
 func mill(player_id: int, amount: int, to_exile: bool = false, source: String = "", skip_validation: bool = false) -> Dictionary:
+	if await EffectContextScript.ensure_window():  # ventana única por efecto (§59)
+		return {"success": false, "cancelled": true}
 	return await _action_mill.mill(player_id, amount, to_exile, source, skip_validation)
 
 
@@ -170,6 +179,8 @@ func mill(player_id: int, amount: int, to_exile: bool = false, source: String = 
 # DESTROY - Destruir cartas (implementación en ActionDestroy.gd)
 # =============================================================================
 func destroy(targets: Array, source: Node = null, can_be_prevented: bool = true, skip_validation: bool = false) -> Dictionary:
+	if await EffectContextScript.ensure_window():  # ventana única por efecto (§59)
+		return {"success": false, "cancelled": true}
 	return await _action_destroy.destroy(targets, source, can_be_prevented, skip_validation)
 
 
@@ -177,6 +188,8 @@ func destroy(targets: Array, source: Node = null, can_be_prevented: bool = true,
 # BANISH - Desterrar cartas (implementación en ActionBanish.gd)
 # =============================================================================
 func banish(targets: Array, source: Node = null, skip_validation: bool = false, can_be_prevented: bool = true) -> Dictionary:
+	if await EffectContextScript.ensure_window():  # ventana única por efecto (§59)
+		return {"success": false, "cancelled": true}
 	return await _action_banish.banish(targets, source, skip_validation, can_be_prevented)
 
 
@@ -184,10 +197,14 @@ func banish(targets: Array, source: Node = null, skip_validation: bool = false, 
 # RETURN TO DECK + DISCARD (implementación en ActionReturnDiscard.gd)
 # =============================================================================
 func return_to_deck(card: Node, player_id: int, to_top: bool = true, source: Node = null) -> bool:
+	if await EffectContextScript.ensure_window():  # ventana única por efecto (§59)
+		return false
 	return await _action_return_discard.return_to_deck(card, player_id, to_top, source)
 
 
 func discard(player_id: int, cards: Array, source: String = "", skip_validation: bool = false) -> Dictionary:
+	if await EffectContextScript.ensure_window():  # ventana única por efecto (§59)
+		return {"success": false, "cancelled": true}
 	return await _action_return_discard.discard(player_id, cards, source, skip_validation)
 
 

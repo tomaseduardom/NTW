@@ -286,7 +286,7 @@ func resolve_talisman(card: Node) -> bool:
 	controla este Talismán) para el detector de paridad mientras resuelve.
 	La lógica real está en _resolve_talisman_impl()."""
 	var controller: int = int(card.get("owner_id")) if is_instance_valid(card) and card.get("owner_id") != null else 0
-	var ctx_token: int = EffectContextScript.push(card, controller, "Talismán")
+	var ctx_token: int = EffectContextScript.push(card, controller, "Talismán", "pending")
 	var annulled: bool = await _resolve_talisman_impl(card)
 	EffectContextScript.pop(ctx_token)
 	return annulled
@@ -891,6 +891,19 @@ func open_response_window(source_card: Node, description: String, controller_id:
 	cancelado durante la ventana); false si debe seguir normalmente."""
 	if not is_instance_valid(source_card):
 		return false
+	# Una sola ventana por efecto (2026-10-12, §59): si la pide la carta del
+	# efecto que se está resolviendo y el rival ya tuvo su ventana para él,
+	# no se abre otra (antes: hasta 3 seguidas por la misma carta). Si
+	# estaba pendiente, esta ES la ventana — después de que el patrón ya
+	# declaró sus objetivos (opción B).
+	var ctx: Dictionary = EffectContextScript.current()
+	var tracked: bool = not ctx.is_empty() and ctx.get("card") == source_card
+	if tracked:
+		if ctx.window == "done":
+			return false
+		if ctx.window == "cancelled":
+			return true
+		description = "efecto de %s (%s)" % [ctx.card_name, ctx.kind]
 	var ability_data: Dictionary = {"name": description}
 	var source_data: Dictionary = source_card.card_data if source_card.get("card_data") else {}
 	var context: Dictionary = {
@@ -898,7 +911,10 @@ func open_response_window(source_card: Node, description: String, controller_id:
 		"source_card_node": source_card,
 	}
 	var outcome: Dictionary = await ActionPipeline.add_triggered_ability_to_stack_and_await(ability_data, source_data, context)
-	return outcome.get("annulled", false) or outcome.get("cancelled", false)
+	var stopped: bool = outcome.get("annulled", false) or outcome.get("cancelled", false)
+	if tracked:
+		ctx.window = "cancelled" if stopped else "done"
+	return stopped
 
 
 func resolve_ability_effect(card: Node, effect_text: String, controller_id: int) -> bool:

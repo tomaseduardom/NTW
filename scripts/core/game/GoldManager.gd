@@ -269,6 +269,8 @@ func put_gold_directly_in_pagado(player_id: int, card_data: Dictionary) -> Node:
 	disponible para pagar nada, entra ya-gastado (2026-08-29, p.ej. Don de
 	Amma). Mismo patrón que LookAndPlayResolver (Perder la Razón), pero
 	generalizado a cualquier player_id en vez de asumir siempre 0."""
+	if await EffectContextScript.ensure_window():  # ventana única por efecto (§59)
+		return null
 	var data: Dictionary = card_data.duplicate()
 	data["esta_oculta"] = false
 	var card_node = _main._create_card(data)
@@ -508,6 +510,8 @@ func put_gold_directly_in_reserva(player_id: int, card_data: Dictionary) -> Node
 	partida, solo se chequea/aplica si hay una Armería del Guerrero en
 	juego (de cualquiera de los dos lados — el texto dice 'los jugadores',
 	no 'tu oponente')."""
+	if await EffectContextScript.ensure_window():  # ventana única por efecto (§59)
+		return null
 	if _has_card_named_in_play("armería del guerrero") and _oro_por_efecto_used_game.get(player_id, false):
 		_main._update_debug("Ya pusiste un Oro en juego por efectos esta partida (Armería del Guerrero)")
 		return null
@@ -953,6 +957,8 @@ func play_card_for_free(card_data: Dictionary, owner_id: int = 0) -> bool:
 	etc.) terminaba poniendo la carta en el campo del Anfitrión por error.
 	Los llamadores existentes que no pasan este argumento conservan el
 	comportamiento viejo (0) sin cambios."""
+	if await EffectContextScript.ensure_window():  # ventana única por efecto (§59)
+		return false
 	var card_type: int = card_data.get("tipo", -1)
 	# Un Oro NUNCA se juega, ni gratis — solo se pone en juego por efectos
 	# (2026-10-12, regla confirmada por el usuario). Si un patrón llegara a

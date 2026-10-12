@@ -5917,3 +5917,47 @@ EN JUEGO (Reserva / Oro Pagado) por efectos.
     selección al Anfitrión.
 
 **Sin verificar en partida real todavía.**
+
+## 59. Una sola ventana de respuesta por efecto, después de declarar (2026-10-12)
+
+**Reportado por el usuario** (log de Estrella de Kirin: "varios se repiten y
+se pierde el hilo"): por una sola carta el rival recibía hasta 3 ventanas —
+(1) al poner la carta en juego, (2) la genérica de `resolve_next_trigger()`
+(§10.53) antes de ejecutar el disparo, (3) la del propio patrón (111
+llamadas a `open_response_window()` en los patrones). **Decisión de regla
+del usuario: opción B** — el rival responde DESPUÉS de que el controlador
+declara los objetivos.
+
+**Cómo (sin tocar los 111 patrones):** `EffectContext` guarda por efecto el
+estado de su ventana: `"pending"`, `"done"` o `"cancelled"`.
+- `resolve_next_trigger()` ya no abre ventana adelante: empuja el contexto
+  con `"pending"`.
+- `TriggerSystem.open_response_window()`: si la pide la carta del efecto en
+  curso y ya tuvo su ventana → no abre otra (`false`); si estaba
+  cancelada → `true`; si estaba pendiente → abre la ventana real (después de
+  que el patrón ya declaró) y guarda el resultado.
+- Si el patrón nunca la pide, `EffectContext.ensure_window()` la abre justo
+  antes de la primera acción real: `ActionModule.draw/search/search_zones/
+  mill/destroy/banish/return_to_deck/discard`, `GoldManager.put_gold_
+  directly_in_reserva/pagado` y `play_card_for_free`. Si el rival cancela,
+  esas acciones devuelven sin hacer nada (`{"success": false, "cancelled":
+  true}`), así el resto del efecto no se aplica; al terminar,
+  `resolve_next_trigger()` emite `trigger_cancelled` como antes.
+- `EffectInterpreter` llama a `ensure_window()` tras declarar.
+- Talismanes: `resolve_talisman()` empuja `"pending"` y su propia ventana
+  (al jugarse) la cierra — los patrones de adentro ya no abren otra.
+  Activadas: `"done"` (la Pila ya dio su Paso D) — además evita el cuelgue
+  de 8 s si un patrón pedía ventana dentro de la resolución de la Pila.
+- Ventanas de cartas JUGADAS (GoldManager/EasyBot/Remote) y de habilidades
+  por botón (`ui/inspection/*`) no tienen contexto de efecto: sin cambios.
+- Diagnóstico: si un disparo termina con la ventana todavía pendiente, el
+  log dice "<disparo> de <carta>: resuelto sin ventana de respuesta" (o no
+  hizo nada, o un patrón mueve cartas por su cuenta sin pasar por los
+  puntos vigilados — conviene que pida su ventana).
+
+**Log más claro:** `ActionPipeline` imprime "Ventana de respuesta: <motivo> —
+el rival puede responder"; para los efectos el motivo es "efecto de <carta>
+(disparada|Talismán|activada)", para las jugadas el nombre de la carta.
+
+Probado headless: ventana ya dada → no abre otra; cancelada → `draw()`
+devuelve `cancelled` sin robar. **Sin verificar en partida real todavía.**

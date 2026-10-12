@@ -19,6 +19,16 @@ class_name EffectContext
 ##
 ## Funciona también contra el bot: jugando una partida local, cada línea
 ## [PARIDAD] marca una carta que con un Remoto real fallaría.
+##
+## Ventana de respuesta única por efecto (2026-10-12, §59, opción B elegida
+## por el usuario: el rival responde DESPUÉS de que se declaran los
+## objetivos). Cada entrada lleva 'window': "pending" (todavía no se le dio
+## la ventana al rival), "done" o "cancelled". TriggerSystem.
+## open_response_window() la consulta cuando la pide la propia carta del
+## efecto: si ya se abrió, no abre otra; si estaba pendiente, esa ES la
+## ventana. Si el patrón nunca la pide, ensure_window() la abre justo antes
+## de la primera acción real (ActionModule, poner Oros en juego, jugar
+## gratis). Si el rival la cancela, las acciones siguientes no se ejecutan.
 
 const PlayerSideScript = preload("res://scripts/core/game/PlayerSide.gd")
 
@@ -27,15 +37,43 @@ static var _next_token: int = 1
 static var _reported: Dictionary = {}
 
 
-static func push(card: Node, controller_id: int, kind: String) -> int:
+static func push(card: Node, controller_id: int, kind: String, window: String = "done") -> int:
 	"""Devuelve un token para pop(): los efectos pueden anidarse y, como son
 	coroutines, terminar en otro orden — pop() saca SU entrada, no la de
-	arriba."""
+	arriba. 'window': "pending" si al rival todavía no se le dio su
+	ventana de respuesta para este efecto, "done" si ya la tuvo (activadas:
+	la Pila ya les dio su Paso D)."""
 	var token := _next_token
 	_next_token += 1
 	var name: String = str(card.get("card_name")) if is_instance_valid(card) and card.get("card_name") != null else "?"
-	_stack.append({"token": token, "card_name": name, "controller_id": controller_id, "kind": kind})
+	_stack.append({"token": token, "card": card, "card_name": name, "controller_id": controller_id, "kind": kind,
+		"window": window})
 	return token
+
+
+static func window_state(token: int) -> String:
+	for e in _stack:
+		if e.token == token:
+			return e.window
+	return ""
+
+
+static func ensure_window() -> bool:
+	"""Abre la ventana de respuesta del efecto en curso si todavía estaba
+	pendiente (justo antes de su primera acción real). Devuelve true si el
+	efecto quedó cancelado/anulado — el llamador NO debe ejecutar su acción."""
+	var ctx := current()
+	if ctx.is_empty():
+		return false
+	match str(ctx.window):
+		"cancelled":
+			return true
+		"pending":
+			if not is_instance_valid(ctx.card):
+				ctx.window = "done"
+				return false
+			return await TriggerSystem.open_response_window(ctx.card, ctx.card_name, int(ctx.controller_id))
+	return false
 
 
 static func pop(token: int) -> void:

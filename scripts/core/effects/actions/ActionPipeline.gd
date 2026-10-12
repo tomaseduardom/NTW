@@ -288,9 +288,7 @@ func add_triggered_ability_to_stack(ability_data: Dictionary, source_card: Dicti
 
 	_stack.append(stack_obj)
 
-	print("[ActionPipeline] Habilidad '%s' (de %s) va a la pila" % [
-		stack_obj.name, ctx.get("source_name", "???")
-	])
+	print("[ActionPipeline] Ventana de respuesta: %s — el rival puede responder" % stack_obj.name)
 
 	emit_signal("stack_object_added", stack_obj)
 
