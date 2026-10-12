@@ -181,10 +181,22 @@ func try_execute_peek_hand_banish_search_castillo_cemetery_draw_pattern(ability_
 func try_execute_reveal_gold_to_pagado_weapon_or_totem_to_hand_pattern(ability_text: String, controller_id: int, card: Node = null) -> bool:
 	"""'Muestra cartas del tope de tu Castillo hasta mostrar un Oro y un
 	Arma o Tótem. Pon el Oro en tu Oro Pagado, la otra carta en tu mano y
-	Baraja el resto' (Activar Tenshi Z, 2026-09-04)."""
+	Baraja el resto' (Activar Tenshi Z, 2026-09-04).
+
+	2026-10-12, bug real reportado por el usuario: Estrella de Kirin ('...
+	hasta mostrar un Oro y un Arma o Tótem y ponlos en tu mano') caía en
+	este mismo patrón (comparten la frase de revelado) y el Oro terminaba
+	en la Reserva — y además disparaba su 'Cuando entra en juego' (p.ej.
+	Drácula). El destino del Oro sale ahora del texto: 'ponlos en tu mano'
+	→ ambos a la mano; 'pon el Oro en tu Oro Pagado' → Oro Pagado (antes
+	también iba a la Reserva por error, contra el propio texto de Tenshi Z)."""
 	var lower := ability_text.to_lower()
 	if not ("hasta mostrar un oro y un arma o tótem" in lower or "hasta mostrar un oro y un arma o totem" in lower):
 		return false
+	var gold_to_hand: bool = "ponlos en tu mano" in lower or "ponlas en tu mano" in lower
+	var gold_to_pagado: bool = "pon el oro en tu oro pagado" in lower
+	if not gold_to_hand and not gold_to_pagado:
+		return false  # otra variante de texto: que la resuelva otro patrón
 
 	var main := _main.get_node_or_null("/root/Main")
 	if not main or not main._gold_manager:
@@ -206,13 +218,20 @@ func try_execute_reveal_gold_to_pagado_weapon_or_totem_to_hand_pattern(ability_t
 		elif found_other.is_empty() and (top_type == Constants.CardType.ARMA or top_type == Constants.CardType.TOTEM):
 			found_other = top
 
+	var hand_container_tenshiz = main.player_hand if controller_id == 0 else main._opponent_fan
 	if not found_oro.is_empty():
 		_remove_data_from_array(revealed, found_oro)
-		await main._gold_manager.put_gold_directly_in_reserva(controller_id, found_oro)
-	var hand_container_tenshiz = main.player_hand if controller_id == 0 else main._opponent_fan
+		if gold_to_hand and hand_container_tenshiz:
+			# Estrella de Kirin: a la mano, como la otra carta.
+			var oro_node = main._create_card(found_oro, controller_id != 0)
+			hand_container_tenshiz.add_card(oro_node)
+			main._connect_card_signals(oro_node)
+		else:
+			# Activar Tenshi Z: se PONE en juego en el Oro Pagado.
+			await main._gold_manager.put_gold_directly_in_pagado(controller_id, found_oro)
 	if not found_other.is_empty() and hand_container_tenshiz:
 		_remove_data_from_array(revealed, found_other)
-		var card_node = main._create_card(found_other, false)
+		var card_node = main._create_card(found_other, controller_id != 0)
 		hand_container_tenshiz.add_card(card_node)
 		main._connect_card_signals(card_node)
 
