@@ -178,4 +178,6 @@ $cacheList | ConvertTo-Json -Depth 6 | Set-Content -Path $cacheFile -Encoding ut
 Write-Host ""
 Write-Host "$updatedCount carta(s) actualizadas en:"
 Write-Host "  $cacheFile"
+# El zip lleva las cartas dentro (res://data/cards.json) — ver bundle_cards.ps1.
+& (Join-Path $here "bundle_cards.ps1")
 Write-Host "Reinicia el juego (o recarga el cache) para que tome los cambios."

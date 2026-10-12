@@ -8,7 +8,8 @@
     por nombre). Este baja el formato completo y agrega solo las cartas cuyo
     myl_id no está en el cache. Con -Update además reemplaza las que cambiaron
     de texto/coste/fuerza. Antes de escribir deja una copia del cache en
-    cards.json.bak.
+    cards.json.bak. Al final regenera data\cards.json (bundle_cards.ps1) para
+    que el próximo zip lleve las cartas nuevas.
 
 .PARAMETER Format
     Formato/temporada a consultar en la API (default "imp" = Imperio).
@@ -176,3 +177,6 @@ $json = $cacheList | ConvertTo-Json -Depth 6
 [System.IO.File]::WriteAllText($cacheFile, $json, (New-Object System.Text.UTF8Encoding $false))
 Write-Host "Cache actualizado (copia previa en cards.json.bak):"
 Write-Host "  $cacheFile"
+
+# El zip lleva las cartas dentro (res://data/cards.json) — ver bundle_cards.ps1.
+& (Join-Path $here "bundle_cards.ps1")

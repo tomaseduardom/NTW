@@ -312,9 +312,40 @@ func load_cards_from_bundled() -> bool:
 	file.close()
 	if json == null or not json is Array:
 		return false
+	# 2026-10-12: el bundle viaja en el zip (tools/bundle_cards.ps1) y es la
+	# fuente común para Anfitrión y Remoto; las cartas del cache local que
+	# NO estén en el bundle (p.ej. bajadas con sync_cards.ps1 después de
+	# exportar) se suman igual, en vez de quedar ignoradas para siempre.
+	var bundled_count: int = json.size()
+	var extras := _cache_cards_missing_from(json)
+	json.append_array(extras)
 	_process_cards_data(json)
-	print("[CardDatabase] Cartas cargadas desde bundled (res://data/cards.json): %d" % cards.size())
+	print("[CardDatabase] Cartas cargadas desde bundled (res://data/cards.json): %d (+%d del cache local)" % [
+		bundled_count, extras.size()])
 	return true
+
+
+func _cache_cards_missing_from(base: Array) -> Array:
+	"""Cartas del cache local (user://) cuyo id no está en 'base'."""
+	var cache_file = LOCAL_CACHE_PATH + "cards.json"
+	if not FileAccess.file_exists(cache_file):
+		return []
+	var f = FileAccess.open(cache_file, FileAccess.READ)
+	if f == null:
+		return []
+	var cached = JSON.parse_string(f.get_as_text().trim_prefix("\ufeff"))
+	f.close()
+	if not cached is Array:
+		return []
+	var known := {}
+	for c in base:
+		if c is Dictionary:
+			known[str(c.get("id", ""))] = true
+	var extras: Array = []
+	for c in cached:
+		if c is Dictionary and not known.has(str(c.get("id", ""))):
+			extras.append(c)
+	return extras
 
 
 func export_for_bundling() -> void:
