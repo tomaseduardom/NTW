@@ -8,6 +8,7 @@ extends RefCounted
 ## patrón que _convert_misc_resolver/_draw_shuffle_resolver), llamado desde
 ## TriggerResolution.gd en los branches on_enter_play/on_leave_play.
 
+const PlayerSideScript = preload("res://scripts/core/game/PlayerSide.gd")
 var _main: Node
 
 ## kotoku-in (2026-09-20): "hacer que el próximo Talismán que juegue tu
@@ -148,8 +149,8 @@ func try_execute_kotoku_in_enter_pattern(ability_text: String, card: Node, contr
 	var lower := ability_text.to_lower()
 	if not ("genera un oro por el turno para jugar cartas que no sean talism" in lower):
 		return false
-	if controller_id != 0:
-		return true  # el bot no usa esta habilidad todavía
+	# 2026-10-12 (§57): sin elección de por medio — sirve igual para el
+	# jugador 1 (Remoto o bot), con su propio Oro Virtual restringido.
 
 	var main := _main.get_node_or_null("/root/Main")
 	if not main or not main._gold_manager:
@@ -157,7 +158,7 @@ func try_execute_kotoku_in_enter_pattern(ability_text: String, card: Node, contr
 
 	var predicate := func(card_type, _card_race, _card_cost) -> bool:
 		return card_type != Constants.CardType.TALISMAN
-	main._gold_manager.generar_oro_virtual_restringido(1, predicate, "kotoku-in")
+	main._gold_manager.generar_oro_virtual_restringido(1, predicate, "kotoku-in", controller_id)
 	return true
 
 
@@ -509,11 +510,11 @@ func try_execute_estacion_fantasma_name_pattern(ability_text: String, card: Node
 	var lower := ability_text.to_lower()
 	if not ("nombra una carta que no sea oro" in lower and "tu oponente baraja las cartas que controle con ese nombre" in lower):
 		return false
-	if controller_id != 0:
-		return true  # el bot no usa esta habilidad todavía
+	if PlayerSideScript.is_bot(controller_id):
+		return true  # el bot no sabe nombrar cartas (2026-10-12: el Remoto sí)
 
 	var picked: Dictionary = await _main._card_name_search.open_and_wait(
-		"Nombra una carta que no sea Oro (tu oponente baraja las que controle con ese nombre)")
+		"Nombra una carta que no sea Oro (tu oponente baraja las que controle con ese nombre)", controller_id)
 	if picked.is_empty():
 		return true
 	var picked_name: String = str(picked.get("nombre", ""))

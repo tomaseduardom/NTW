@@ -5857,3 +5857,31 @@ pasándola a piezas, §54). Primeros candidatos ya conocidos: los cortes
 `controller_id != 0` listados en §55.
 
 **Sin verificar en partida real todavía.**
+
+## 57. Cortes "solo jugador 0" de §55 arreglados con PlayerSide (2026-10-12)
+
+**A pedido del usuario** ("arregla los 7 cortes de controller_id del §55").
+Eran 9 en total (Lobo Sagrado ya se había arreglado en §55; el de
+`GameBootstrap._on_own_deck_loaded_for_network()` no es de cartas — es el
+intercambio de mazos por red — y queda como está).
+
+**Pieza nueva — `PlayerSide.play_from_hand(main, pid, card)`:** jugar una
+carta de la mano pagando su coste real (respeta modificadores de coste
+puestos por el llamador). `GoldManager.play_card()` es solo del Anfitrión
+(rechaza "No es tu turno" con el turno del jugador 1); para el jugador 1 usa
+`EasyBotController._play_ally()` y, si es el Remoto, `RemotePlayerController.
+_play_weapon_remote()/_play_talisman_remote()/_play_totem_remote()`.
+
+| Carta / costo | Antes | Ahora |
+|---|---|---|
+| Crono Diamante (protección contra Anular) | solo jugador 0 | mira la Reserva del controlador (`PlayerSide.gold_reserva`) |
+| Jormundgander (Aliado → Oro en Oro Pagado) | solo jugador 0 | Oro Pagado y contador del dueño; `gold_cards` solo para el 0 |
+| "Mira/muestra… juega gratis o pon un Oro" (LookRevealPatternsA) | el Remoto: elegía el bot al azar | el Remoto elige en el popup (solo Oro/Aliado, lo que el jugador 1 sabe poner gratis) |
+| aku aku (Aliado del Cementerio −1 Oro) | cortaba para el jugador 1 | búsqueda + `play_from_hand`; el bot acepta solo |
+| kotoku-in (Oro restringido al entrar) | cortaba para el jugador 1 | Oro Virtual restringido del controlador |
+| Estación Fantasma (nombrar carta) | cortaba para el jugador 1 | el Remoto nombra (`open_and_wait(..., chooser)`); el bot declina |
+| "Baraja cartas de tu mano cuyos costes sumen…" | solo jugador 0 | mano del controlador, elige el Remoto; el bot declina |
+| Costo "Descarta una carta" de activadas (ActionPipeline) | rechazado para el jugador 1 | el Remoto elige por red; el bot descarta la de menor coste |
+| `ActionSearch._put_found_card_into_play()` ("puedes jugarla", p.ej. Arturo) | `play_card()` → fallaba para el jugador 1 | `play_from_hand` |
+
+**Sin verificar en partida real todavía.**

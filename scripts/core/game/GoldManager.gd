@@ -31,6 +31,7 @@ signal gold_placed(player_id: int, count_this_turn: int)
 ## turno, porque el conteo es "este turno", no "en mi turno".
 const EffectContextScript = preload("res://scripts/core/effects/EffectContext.gd")  # detector de paridad (§56)
 
+const PlayerSideScript = preload("res://scripts/core/game/PlayerSide.gd")
 var oro_colocado_conteo: Dictionary = {0: 0, 1: 0}
 
 ## 'Los jugadores no pueden poner Oros en juego por efectos si ya
@@ -1601,9 +1602,8 @@ func _apply_crono_diamante_annul_protection(card: Node) -> void:
 	response-window-design.md para el sistema más grande del que esto
 	terminaría formando parte."""
 	var controller_id: int = card.controller_id if card.get("controller_id") != null else 0
-	if controller_id != 0:
-		return  # el rival no tiene Crono Diamante implementado de ese lado todavía
-	var gold_container = _main.player_gold
+	# 2026-10-12 (§57): también para el jugador 1 — su Reserva es opponent_gold.
+	var gold_container = PlayerSideScript.gold_reserva(_main, controller_id)
 	if not gold_container:
 		return
 	var has_crono_diamante := false
@@ -2502,8 +2502,8 @@ func convert_ally_to_gold_in_pagado(card: Node) -> void:
 	if not is_instance_valid(card):
 		return
 	var owner_id: int = card.owner_id if card.get("owner_id") != null else 0
-	if owner_id != 0:
-		return  # Sin soporte de conversión para el oponente todavía
+	# 2026-10-12 (§57): también para el jugador 1 (su Oro Pagado).
+	var pagado_container: Node = PlayerSideScript.oro_pagado(_main, owner_id)
 
 	card.revert_to_data = card.card_data.duplicate()
 
@@ -2521,7 +2521,7 @@ func convert_ally_to_gold_in_pagado(card: Node) -> void:
 	new_data["tipo"] = Constants.CardType.ORO
 	card.load_from_data(new_data)
 
-	_main.player_oro_pagado.add_child(card)
+	pagado_container.add_child(card)
 	card.top_level = false
 	card.set_zone(Constants.Zone.ORO_PAGADO)
 	card.scale = Constants.GOLD_CARD_SCALE
@@ -2534,8 +2534,9 @@ func convert_ally_to_gold_in_pagado(card: Node) -> void:
 	tween.parallel().tween_property(card, "modulate", Color(0.6, 0.6, 0.6, 1.0), 0.3)
 	await tween.finished
 	card.can_interact = true
-	GameState.agregar_oro_pagado(0, 1)
-	_main.gold_cards.append(card)
+	GameState.agregar_oro_pagado(owner_id, 1)
+	if owner_id == 0:
+		_main.gold_cards.append(card)  # gold_cards es solo la Reserva del Anfitrión
 	_update_gold_display()
 
 

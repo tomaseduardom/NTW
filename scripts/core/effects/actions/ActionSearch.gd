@@ -6,6 +6,7 @@ extends RefCounted
 
 const EffectContextScript = preload("res://scripts/core/effects/EffectContext.gd")  # detector de paridad (§56)
 
+const PlayerSideScript = preload("res://scripts/core/game/PlayerSide.gd")
 var _main: Node
 
 
@@ -337,7 +338,9 @@ func _put_found_card_into_play(main: Node, player_id: int, card_data: Dictionary
 			var play_it: bool = await SelectionManager.await_two_choice(main, card_name,
 				"Jugarla (coste %d)" % coste, "Ponerla en tu mano", player_id)
 			if play_it:
-				await main._gold_manager.play_card(card_node)
+				# 2026-10-12 (§57): play_card() es solo del Anfitrión ("No es
+				# tu turno" para el jugador 1).
+				await PlayerSideScript.play_from_hand(main, player_id, card_node)
 		# Si no puede pagarla o eligió la mano, se queda en la mano.
 		if cost_reduction > 0:
 			PaymentManager.remover_modificador_coste(card_node)

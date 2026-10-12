@@ -100,6 +100,39 @@ static func oro_pagado(main: Node, pid: int) -> Node:
 
 
 # =============================================================================
+# JUGAR UNA CARTA DE LA MANO
+# =============================================================================
+static func play_from_hand(main: Node, pid: int, card: Node) -> void:
+	"""Juega una carta que ya está en la mano del jugador, pagando su coste
+	real (con los modificadores de coste que el llamador haya puesto, p.ej.
+	un descuento). GoldManager.play_card() es SOLO del Anfitrión (rechaza con
+	'No es tu turno' cuando el turno es del jugador 1); el jugador 1 usa sus
+	propios caminos: EasyBotController._play_ally() y, si es el Remoto real,
+	RemotePlayerController._play_weapon_remote()/_play_talisman_remote()/
+	_play_totem_remote() (eligen por red). El bot local solo juega Aliados."""
+	if not is_instance_valid(card):
+		return
+	if pid == 0:
+		await main._gold_manager.play_card(card)
+		return
+	var bot = main.get("_easy_bot")
+	if not bot:
+		return
+	match int(card.card_type):
+		Constants.CardType.ALIADO:
+			await bot._play_ally(card)
+		Constants.CardType.ARMA:
+			if bot.has_method("_play_weapon_remote"):
+				await bot._play_weapon_remote(card)
+		Constants.CardType.TALISMAN:
+			if bot.has_method("_play_talisman_remote"):
+				await bot._play_talisman_remote(card)
+		Constants.CardType.TOTEM:
+			if bot.has_method("_play_totem_remote"):
+				await bot._play_totem_remote(card)
+
+
+# =============================================================================
 # PAGO
 # =============================================================================
 static func pay(main: Node, pid: int, amount: int, card: Node = null) -> bool:

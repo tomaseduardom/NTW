@@ -12,6 +12,7 @@ extends RefCounted
 ## LookRevealPatterns.gd (facade) — ver ese archivo para la lista completa y
 ## la mitad hermana (LookRevealPatternsB.gd).
 
+const PlayerSideScript = preload("res://scripts/core/game/PlayerSide.gd")
 var _main: Node
 
 
@@ -462,14 +463,21 @@ func try_execute_look_play_or_gold_pattern(ability_text: String, source_card: No
 
 	var main := _main.get_node_or_null("/root/Main")
 	var picked: Dictionary = {}
-	if controller_id == 0:
+	# 2026-10-12 (§57): el Remoto real también elige (antes elegía el bot al
+	# azar por él). Del lado del jugador 1 solo Oros o Aliados — es lo que
+	# saben poner en juego gratis play_free_ally_from_data()/put_free_gold_
+	# in_pagado_from_data() de abajo (mismo alcance que el bot).
+	if controller_id == 0 or PlayerSideScript.is_remote(controller_id):
 		# 2026-09-14, a pedido del usuario: click directo (open_reveal_picker)
 		# en vez del modal de lista viejo.
 		if main and main._zone_viewer:
-			var node_filter := func(c: Node) -> bool: return is_pickable.call(c.card_data)
+			var node_filter := func(c: Node) -> bool:
+				if controller_id != 0 and int(c.card_data.get("tipo", -1)) not in [Constants.CardType.ORO, Constants.CardType.ALIADO]:
+					return false
+				return is_pickable.call(c.card_data)
 			var picked_list: Array = await main._zone_viewer.open_reveal_picker(
 				"Juega una carta de coste %d o menos gratis, o pon un Oro directo en tu Oro Pagado" % max_cost,
-				top_cards, controller_id, node_filter, 1, not any_legal_action)
+				top_cards, controller_id, node_filter, 1, not any_legal_action, controller_id)
 			if not picked_list.is_empty():
 				picked = picked_list[0]
 	else:

@@ -6,6 +6,7 @@ extends RefCounted
 ## LookAndPlayResolver.gd (facade) — ver ese archivo para la lista completa de
 ## las 7 mitades hermanas.
 
+const PlayerSideScript = preload("res://scripts/core/game/PlayerSide.gd")
 var _main: Node
 
 
@@ -88,40 +89,31 @@ func try_execute_play_cemetery_ally_discounted_min1_pattern(ability_text: String
 	if not ("puedes jugar un aliado de tu cementerio reduciendo su coste en un oro, hasta un mínimo de 1" in lower):
 		return false
 
-	if controller_id != 0:
-		# 2026-10-05, bug real encontrado al arreglar play_card_for_free()
-		# (ver arquitectura.md §25): esta función resuelve con gold_manager.
-		# play_card(card_node) directo, que rechaza con "No es tu turno"
-		# cuando GameManager.active_player_id != 0 — exactamente la
-		# situación normal cuando el disparador de ESTA carta es de verdad
-		# el jugador 1. Esta carta estaba "convertida" (sin guard) desde
-		# antes de esta sesión, pero en la práctica queda rota para el
-		# jugador 1 por este motivo — se le vuelve a poner el guard hasta
-		# que se decida tocar la puerta de turno de play_card() (fuera de
-		# alcance de hoy).
-		return true  # el Remoto no puede usar esta habilidad todavía
-
+	# 2026-10-12 (§57): antes cortaba para el jugador 1 — gold_manager.
+	# play_card() es solo del Anfitrión ("No es tu turno"). Ahora juega con
+	# PlayerSide.play_from_hand(), que usa el camino propio del jugador 1.
 	var main := _main.get_node_or_null("/root/Main")
-	if not main or not main._gold_manager or not main.player_hand:
+	if not main or not main._gold_manager:
 		return true
 	var own_cemetery: Array = CardManager.get_cemetery(controller_id)
 	if own_cemetery.filter(func(d): return d.get("tipo", -1) == Constants.CardType.ALIADO).is_empty():
 		return true
-	var confirm: bool = await SelectionManager.await_two_choice(
+	# El bot local acepta siempre (no tiene a quién preguntarle).
+	var confirm: bool = PlayerSideScript.is_bot(controller_id) or await SelectionManager.await_two_choice(
 		main, "aku aku", "Jugar un Aliado de tu Cementerio (-1 Oro, mínimo 1)", "No hacer nada", controller_id)
 	if not confirm:
 		return true
 	if await TriggerSystem.open_response_window(card, str(card.card_name), controller_id):
 		return true
 
-	var hand_before: Array = main.player_hand.cards.duplicate()
+	var hand_before: Array = PlayerSideScript.hand_cards(main, controller_id)
 	var result: Dictionary = await ActionModule.search(
 		controller_id, Constants.Zone.CEMENTERIO, {"type": Constants.CardType.ALIADO}, 1, true, false, false, card, Constants.Zone.MANO)
 	if result.get("selected", []).is_empty():
 		return true
 
 	var card_node: Node = null
-	for c in main.player_hand.cards:
+	for c in PlayerSideScript.hand_cards(main, controller_id):
 		if c not in hand_before:
 			card_node = c
 			break
@@ -133,7 +125,9 @@ func try_execute_play_cemetery_ally_discounted_min1_pattern(ability_text: String
 	PaymentManager.agregar_modificador_coste(card_node, -1, applies_to_this_card, false)
 	if card_node.has_method("refresh_cost_badge"):
 		card_node.refresh_cost_badge()
-	await main._gold_manager.play_card(card_node)
+	if PaymentManager.puede_jugar_carta(card_node, controller_id):
+		await PlayerSideScript.play_from_hand(main, controller_id, card_node)
+	PaymentManager.remover_modificador_coste(card_node)
 	return true
 
 

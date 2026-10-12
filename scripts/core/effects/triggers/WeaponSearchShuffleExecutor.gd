@@ -167,15 +167,15 @@ func _execute_shuffle_for_draw(action: Dictionary, controller_id: int, card: Nod
 	== 0); el bot simplemente declina. NOTA: solo mira main.player_hand —
 	si la carta real (si existe) dijera 'cartas EN JUEGO' en vez de 'de tu
 	mano', habría que ampliar los candidatos más allá de la mano."""
-	if controller_id != 0:
-		return
+	if PlayerSideScript.is_bot(controller_id):
+		return  # el bot declina (2026-10-12: el Remoto sí puede, §57)
 	var params: Dictionary = action.get("params", {})
 	var max_sum: int = params.get("max_cost_sum", 0)
 	var draw_amount: int = params.get("draw_amount", 0)
 	var main := _main.get_node_or_null("/root/Main")
-	if not main or not main.player_hand:
+	if not main or not PlayerSideScript.hand(main, controller_id):
 		return
-	var hand_cards: Array = main.player_hand.cards.duplicate()
+	var hand_cards: Array = PlayerSideScript.hand_cards(main, controller_id)
 	if hand_cards.is_empty():
 		return
 	if not main._card_interaction:
@@ -193,20 +193,23 @@ func _execute_shuffle_for_draw(action: Dictionary, controller_id: int, card: Nod
 		return sum_cost + c_cost <= max_sum
 	var chosen: Array = await main._card_interaction.await_multi_target(
 		"Baraja cartas de tu mano cuyos costes sumen hasta %d (para robar %d)" % [max_sum, draw_amount],
-		hand_cards, -1, Callable(), budget_filter)
+		hand_cards, -1, Callable(), budget_filter, true, null, controller_id)
 	if chosen.is_empty():
 		return
 
 	for c in chosen:
 		if not is_instance_valid(c):
 			continue
-		var idx = main.player_hand.cards.find(c)
-		if idx >= 0:
-			main.player_hand.cards.remove_at(idx)
-		if c.get_parent() == main.player_hand:
-			main.player_hand.remove_child(c)
+		if controller_id != 0:
+			PlayerSideScript.remove_from_hand(main, controller_id, c)
+		else:
+			var idx = main.player_hand.cards.find(c)
+			if idx >= 0:
+				main.player_hand.cards.remove_at(idx)
+			if c.get_parent() == main.player_hand:
+				main.player_hand.remove_child(c)
 		await ActionModule.return_to_deck(c, controller_id, false)
-	if main.player_hand.has_method("_arrange_cards"):
+	if controller_id == 0 and main.player_hand.has_method("_arrange_cards"):
 		main.player_hand._arrange_cards()
 
 	CardManager.shuffle_deck(controller_id)

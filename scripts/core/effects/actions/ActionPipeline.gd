@@ -89,6 +89,7 @@ const TYPE_NAMES: Dictionary = {
 # =============================================================================
 ## Pila principal - Array de StackObjects
 ## El índice 0 es el FONDO, el último índice es el TOPE
+const PlayerSideScript = preload("res://scripts/core/game/PlayerSide.gd")
 var _stack: Array[Dictionary] = []
 
 ## Contador de IDs únicos para objetos de la pila
@@ -440,17 +441,20 @@ func activate_ability(source_card_data: Dictionary, ability_data: Dictionary, co
 			if not paid:
 				return {"success": false, "reason": "Oro insuficiente"}
 		UniversalCardParser.CostType.DISCARD:
-			if controller_id != 0:
-				# El bot no tiene mano representada como Nodos todavía
-				# (2026-09-09) — este tipo de costo queda fuera de su alcance
-				# hasta que exista esa representación.
-				return {"success": false, "reason": "El bot no puede descartar todavía"}
-			if not main_ref or not main_ref.player_hand:
+			# 2026-10-12 (§57): la mano del jugador 1 SÍ existe como Nodos
+			# (_opponent_fan) — antes este costo se rechazaba para él. El
+			# Remoto elige por red; el bot descarta la de menor coste.
+			if not main_ref or not PlayerSideScript.hand(main_ref, controller_id):
 				return {"success": false, "reason": "No se pudo descartar"}
-			var hand_cards: Array = main_ref.player_hand.cards.duplicate()
+			var hand_cards: Array = PlayerSideScript.hand_cards(main_ref, controller_id)
 			if hand_cards.is_empty():
 				return {"success": false, "reason": "Mano vacía"}
-			var chosen: Array = await TriggerSystem._select_hand_cards_for_discard(hand_cards, 1)
+			var chosen: Array = []
+			if PlayerSideScript.is_bot(controller_id):
+				hand_cards.sort_custom(func(a: Node, b: Node) -> bool: return int(a.card_cost) < int(b.card_cost))
+				chosen = [hand_cards[0]]
+			else:
+				chosen = await TriggerSystem._select_hand_cards_for_discard(hand_cards, 1, controller_id)
 			if chosen.is_empty():
 				return {"success": false, "reason": "Descarte cancelado"}
 			await ActionModule.discard(controller_id, chosen, "activated_ability", true)
