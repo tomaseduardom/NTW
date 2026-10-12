@@ -64,6 +64,7 @@ func _start_hand_sync() -> void:
 	for c in _main._opponent_fan.cards:
 		_on_hand_card_added(c)
 	_sync_cards_already_in_play()
+	_watch_in_play_containers()
 	# Contadores de Castillo (§47): públicos para ambos (solo el tamaño, nunca
 	# el contenido). Mismo momento que la mano — el mulligan baraja y redibuja
 	# antes de game_started, así que el primer conteo útil es este.
@@ -102,6 +103,46 @@ func _sync_cards_already_in_play() -> void:
 			for child in container.get_children():
 				if child.get("card_data") != null and child.get("current_zone") != null:
 					_on_card_entered_play(player_id, child, int(child.current_zone))
+
+
+## Contenedor en juego -> (jugador, zona). 2026-10-12, bug real reportado por
+## el usuario ("jugué una carta desde el jugador 2 y ni siquiera se pagaron
+## los Oros"): pagar mueve el Oro de Reserva a Oro Pagado con add_child()
+## directo (GoldManager.pagar_coste()/EasyBotController._pay_oro_for_bot()),
+## sin pasar por on_card_entered_play — el Remoto nunca se enteraba, ni de
+## sus Oros ni de los del Anfitrión (lo mismo al recuperarlos en la
+## Agrupación). Vigilar child_entered_tree de los 10 contenedores cubre
+## CUALQUIER movimiento entre zonas en juego, venga del código que venga;
+## move_card es idempotente del lado Remoto.
+const WATCHED_CONTAINERS := {
+	"player_gold": [0, Constants.Zone.RESERVA_ORO], "player_oro_pagado": [0, Constants.Zone.ORO_PAGADO],
+	"player_field": [0, Constants.Zone.LINEA_DEFENSA], "player_linea_ataque": [0, Constants.Zone.LINEA_ATAQUE],
+	"player_linea_apoyo": [0, Constants.Zone.LINEA_APOYO],
+	"opponent_gold": [1, Constants.Zone.RESERVA_ORO], "opponent_oro_pagado": [1, Constants.Zone.ORO_PAGADO],
+	"opponent_field": [1, Constants.Zone.LINEA_DEFENSA], "opponent_linea_ataque": [1, Constants.Zone.LINEA_ATAQUE],
+	"opponent_linea_apoyo": [1, Constants.Zone.LINEA_APOYO],
+}
+
+
+func _watch_in_play_containers() -> void:
+	for prop in WATCHED_CONTAINERS:
+		var container: Node = _main.get(prop)
+		if not container:
+			continue
+		var info: Array = WATCHED_CONTAINERS[prop]
+		container.child_entered_tree.connect(_on_container_child_entered.bind(info[0], info[1]))
+
+
+func _on_container_child_entered(node: Node, player_id: int, zone: int) -> void:
+	# Diferido: el código que mueve la carta todavía puede estar ajustándola
+	# en este mismo frame (set_zone, escala, esta_oculta).
+	_send_container_move.call_deferred(node, player_id, zone)
+
+
+func _send_container_move(node: Node, player_id: int, zone: int) -> void:
+	if not is_instance_valid(node) or node.get("card_data") == null:
+		return
+	_on_card_entered_play(player_id, node, zone)
 
 
 func _on_hand_card_added(card: Node) -> void:

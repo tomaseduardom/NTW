@@ -7,6 +7,9 @@ var _main: Node = null
 var is_in_mulligan: bool = false
 var mulligan_count: int = 0
 var mulligan_hand_data: Array = []
+## Mulligan del Remoto corriendo en paralelo al propio (2026-10-12, ver
+## start_mulligan_phase()).
+var _remote_mulligan_done: bool = true
 
 func setup(main: Node) -> void:
 	_main = main
@@ -33,6 +36,18 @@ func start_mulligan_phase() -> void:
 	_draw_mulligan_hand(_main.INITIAL_HAND_SIZE)
 	_update_mulligan_ui()
 	print("[Mulligan] Mulligan listo con %d cartas" % mulligan_hand_data.size())
+	# 2026-10-12, a pedido del usuario: "los 2 jugadores tienen que poder ver
+	# su mano al mismo tiempo" — antes el Remoto recién recibía su mulligan
+	# cuando el Anfitrión terminaba el suyo. Ahora arranca en paralelo (sin
+	# await) y _end_mulligan_phase() espera a que ambos hayan elegido.
+	if _main._easy_bot is RemotePlayerController:
+		_remote_mulligan_done = false
+		_run_remote_mulligan()
+
+
+func _run_remote_mulligan() -> void:
+	await _main._easy_bot.run_mulligan(_main.INITIAL_HAND_SIZE)
+	_remote_mulligan_done = true
 
 
 func _draw_mulligan_hand(count: int) -> void:
@@ -104,7 +119,15 @@ func _end_mulligan_phase() -> void:
 	# red) en vez de robarle la mano directo sin ninguna decisión — que es
 	# lo único que existía hasta ahora para el "oponente".
 	if _main._easy_bot is RemotePlayerController:
-		await _main._easy_bot.run_mulligan(_main.INITIAL_HAND_SIZE)
+		if not _remote_mulligan_done:
+			var loading := get_node_or_null("/root/MatchLoadingOverlay")
+			if loading:
+				loading.show_loading(_main, "ESPERANDO JUGADOR",
+					"Tu mano ya está lista — esperando a que el otro jugador elija la suya...")
+			while not _remote_mulligan_done:
+				await get_tree().process_frame
+			if loading:
+				loading.hide_loading()
 	else:
 		await _main._zone_manager.draw_initial_hand(1, _main.INITIAL_HAND_SIZE)
 	GameManager.start_game(_main._dice_winner)

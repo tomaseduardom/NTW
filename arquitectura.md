@@ -5775,3 +5775,41 @@ Draig Ifang, la activada con autodestrucción de Guardia Gozosa y Hy Brasil.
 Detalle de las 255 en `docs/plans/2026-10-12-cartas-nuevas-dracula.md`.
 
 **Sin verificar en partida real todavía.**
+
+## 55. Arreglos de la primera prueba online con el zip de §54 (2026-10-12)
+
+**Reportado por el usuario:** "jugué un Lobo Sagrado desde el jugador 2 y no
+sucedió nada, ni siquiera se pagaron los Oros"; "el jugador 2 espera el
+mulligan oponente — los 2 tienen que ver su mano al mismo tiempo"; "intenté
+jugar contra el bot en el otro PC y no me cargó el mazo".
+
+- **Oros pagados invisibles para el Remoto:** pagar mueve el Oro de Reserva
+  a Oro Pagado con `add_child()` directo (`GoldManager.pagar_coste()`,
+  `EasyBotController._pay_oro_for_bot()`), sin `on_card_entered_play` —
+  `GameStateBroadcaster` solo transmitía esas señales. Ahora además vigila
+  `child_entered_tree` de los 10 contenedores en juego de ambos lados
+  (`WATCHED_CONTAINERS`) y manda `move_card` (diferido un frame) por
+  cualquier movimiento entre zonas en juego, venga del código que venga.
+- **Lobo Sagrado (y Hanta) para el Remoto:** `WeaponSearchShuffleExecutor.
+  _execute_play_weapon_discount_draw()` cortaba con `controller_id != 0`.
+  Ahora el Remoto real elige el Arma (clic en su mano, o el popup con la
+  carta dibujada si está en el Cementerio) y el portador por red, paga con
+  `_pay_oro_for_bot()` y roba. El bot local sigue declinando.
+  `CardInteractionModule._delegate_target_to_remote()` incluye ahora los
+  Nodos temporales de `_cemetery_target_nodes`.
+- **Mulligan simultáneo:** `MulliganController.start_mulligan_phase()`
+  arranca `RemotePlayerController.run_mulligan()` en paralelo (sin await);
+  `_end_mulligan_phase()` espera a ambos. Quien termina primero ve
+  "ESPERANDO JUGADOR" (MatchLoadingOverlay); del lado Remoto lo cierra el
+  primer `castillo_counts` (llega al empezar la partida).
+- **Mazo contra el bot que no cargaba:** al salir de una partida online la
+  sala quedaba abierta (`NetworkClient.room_code`), y "Jugar" entraba al
+  flujo online esperando el mazo del otro. `MainMenu._ready()` cierra
+  cualquier sala que haya quedado.
+
+Pendiente conocido: otros patrones viejos siguen siendo solo del jugador 0
+(`controller_id != 0` en GoldManager — Crono Diamante, conversión —,
+LookRevealPatternsA, PlayFromCemeteryPatterns, TotemAbilityPatterns,
+Bernardo/WeaponSearchShuffleExecutor:168, ActionPipeline:443).
+
+**Sin verificar en partida real todavía.**

@@ -228,8 +228,14 @@ func _execute_play_weapon_discount_draw(action: Dictionary, controller_id: int, 
 
 	Variante 'hand_only' (p.ej. Hanta: 'puedes jugar un Arma de tu mano
 	reduciendo su coste...' sin Cementerio ni robo) reusa toda esta lógica
-	— solo cambia el origen elegible y si al final se roba o no."""
-	if controller_id != 0:
+	— solo cambia el origen elegible y si al final se roba o no.
+
+	2026-10-12, bug real reportado por el usuario ("jugué un Lobo Sagrado
+	desde el jugador 2 y no sucedió nada"): antes solo el jugador 0. Ahora
+	también el Remoto real (elige por red: Arma con clic en su mano o en el
+	popup del Cementerio, y portador). El bot local sigue declinando."""
+	var is_remote: bool = controller_id == 1 and NetworkClient.room_code != "" and NetworkClient.is_host
+	if controller_id != 0 and not is_remote:
 		return
 	var params: Dictionary = action.get("params", {})
 	var discount: int = params.get("discount", 0)
@@ -242,7 +248,8 @@ func _execute_play_weapon_discount_draw(action: Dictionary, controller_id: int, 
 		return
 
 	var hand_weapons: Array = []
-	for c in main.player_hand.cards:
+	var own_hand_cards: Array = main.player_hand.cards if controller_id == 0 else main._opponent_fan.get_cards()
+	for c in own_hand_cards:
 		if is_instance_valid(c) and c.get("card_type") == Constants.CardType.ARMA:
 			hand_weapons.append(c)
 	var cemetery_weapons: Array = []
@@ -280,6 +287,9 @@ func _execute_play_weapon_discount_draw(action: Dictionary, controller_id: int, 
 		var CardScene = load("res://scenes/cards/Card.tscn")
 		cemetery_popup = CanvasLayer.new()
 		cemetery_popup.layer = 40
+		# Si elige el Remoto, el popup no se muestra en la pantalla del
+		# Anfitrión — sus Nodos solo sirven de candidatos para la delegación.
+		cemetery_popup.visible = controller_id == 0
 		main.add_child(cemetery_popup)
 		var panel := PanelContainer.new()
 		# 2026-09-25, bug real reportado por el usuario ("el popup del
@@ -341,7 +351,7 @@ func _execute_play_weapon_discount_draw(action: Dictionary, controller_id: int, 
 	# Nodos temporales de este popup ahí les da a ambos caminos la misma
 	# salida real.
 	main._card_interaction._cemetery_target_nodes = cemetery_nodes
-	var picked_node: Node = await main._card_interaction.await_target(title, weapon_filter)
+	var picked_node: Node = await main._card_interaction.await_target(title, weapon_filter, true, controller_id)
 	if is_instance_valid(cemetery_popup):
 		cemetery_popup.queue_free()
 	if not picked_node or not is_instance_valid(picked_node):
@@ -349,7 +359,7 @@ func _execute_play_weapon_discount_draw(action: Dictionary, controller_id: int, 
 	var picked_data: Dictionary = picked_node.card_data
 
 	# Portador ANTES de tocar el origen del Arma (mismo orden que GoldManager.play_card)
-	var ally = await main._gold_manager._select_weapon_wielder()
+	var ally = await main._gold_manager._select_weapon_wielder(controller_id)
 	if not ally or not is_instance_valid(ally):
 		return
 
@@ -360,6 +370,9 @@ func _execute_play_weapon_discount_draw(action: Dictionary, controller_id: int, 
 		# reemplaza por uno real conectado a las señales del juego.
 		weapon_node = main._create_card(picked_data, false)
 		main._connect_card_signals(weapon_node)
+	if controller_id != 0:
+		weapon_node.owner_id = controller_id
+		weapon_node.controller_id = controller_id
 
 	var applies_to_this_weapon := func(c: Node) -> bool:
 		return c == weapon_node
@@ -379,7 +392,10 @@ func _execute_play_weapon_discount_draw(action: Dictionary, controller_id: int, 
 			weapon_node.queue_free()
 		return
 
-	if from_hand:
+	if from_hand and controller_id != 0:
+		main._opponent_fan.remove_card(weapon_node, false)
+		weapon_node.esta_oculta = false
+	elif from_hand:
 		var idx = main.player_hand.cards.find(weapon_node)
 		if idx >= 0:
 			main.player_hand.cards.remove_at(idx)
@@ -391,7 +407,11 @@ func _execute_play_weapon_discount_draw(action: Dictionary, controller_id: int, 
 		if cidx >= 0:
 			CardManager.remove_from_cemetery(controller_id, cidx)
 
-	if coste_real > 0:
+	if coste_real > 0 and controller_id != 0:
+		# Mismo pago que el resto de las jugadas del Remoto (mueve sus Oros
+		# físicos de Reserva a Oro Pagado).
+		main._easy_bot._pay_oro_for_bot(coste_real)
+	elif coste_real > 0:
 		var weapon_race: String = str(weapon_node.get("card_raza")) if weapon_node.get("card_raza") != null else ""
 		await main._gold_manager.pagar_coste(coste_real, weapon_node.card_type, weapon_race, weapon_node.card_cost)
 		PaymentManager.registrar_pago(coste_real)

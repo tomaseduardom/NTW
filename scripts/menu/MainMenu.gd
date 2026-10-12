@@ -20,6 +20,15 @@ func _ready() -> void:
 			btn.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 			_setup_button_hover(btn)
 
+	# 2026-10-12, bug real reportado por el usuario ("intenté jugar contra el
+	# bot y no me cargó el mazo"): al salir de una partida online la sala de
+	# red quedaba abierta (NetworkClient.room_code seguía seteado), así que
+	# "Jugar" contra el bot entraba al flujo online y esperaba para siempre
+	# el mazo del otro jugador. Volver al menú = no hay partida online en
+	# curso; OnlineConnect va directo a Main sin pasar por aquí.
+	if NetworkClient.room_code != "":
+		NetworkClient.disconnect_from_relay()
+
 	play_button.pressed.connect(_on_play_pressed)
 	shadowforge_button.pressed.connect(_on_shadowforge_pressed)
 	decks_button.pressed.connect(_on_decks_pressed)

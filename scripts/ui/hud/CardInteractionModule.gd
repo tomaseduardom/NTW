@@ -422,6 +422,13 @@ func _delegate_target_to_remote(prompt: String, filter: Callable, cancellable: b
 		for c in hand.cards:
 			if is_instance_valid(c) and filter.call(c):
 				candidates.append(c)
+	# Nodos temporales de un popup de Cementerio (2026-10-12, p.ej. Lobo
+	# Sagrado jugado por el Remoto) — no viven en ningún contenedor; del lado
+	# Remoto no son visibles en el tablero, así que se muestran en el popup
+	# con la carta dibujada (RemoteMirrorController._show_await_target_prompt()).
+	for c in _cemetery_target_nodes:
+		if is_instance_valid(c) and filter.call(c) and c not in candidates:
+			candidates.append(c)
 	if candidates.is_empty():
 		return null
 

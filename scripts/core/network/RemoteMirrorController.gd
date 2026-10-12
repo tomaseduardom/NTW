@@ -139,6 +139,11 @@ func _on_message(data: Dictionary) -> void:
 				_show_vigilia_prompt(_pending_vigilia)
 		"castillo_counts":
 			UIManager.sync_castillo_counts(int(data.get("own", 0)), int(data.get("rival", 0)))
+			# Llega al empezar la partida (GameStateBroadcaster._start_hand_sync())
+			# — cierra la espera del mulligan simultáneo.
+			var waiting := _main.get_node_or_null("/root/MatchLoadingOverlay")
+			if waiting:
+				waiting.hide_loading()
 		"dice_roll":
 			_show_dice_roll_mirror(data)
 
@@ -470,6 +475,13 @@ func _show_mulligan_prompt(data: Dictionary) -> void:
 		_main.mulligan_overlay.visible = false
 		_main.mulligan_hand.clear_cards_instant()
 		NetworkClient.send_message({"op": "intent", "kind": "mulligan_choice", "keep": true})
+		# Mulligan simultáneo (2026-10-12): si el Anfitrión todavía está
+		# eligiendo, se espera aquí; lo tapa el primer mensaje de partida
+		# iniciada (castillo_counts, ver _on_message()).
+		var loading := _main.get_node_or_null("/root/MatchLoadingOverlay")
+		if loading:
+			loading.show_loading(_main, "ESPERANDO JUGADOR",
+				"Tu mano ya está lista — esperando a que el otro jugador elija la suya...")
 	var on_mull := func():
 		_main.mulligan_overlay.visible = false
 		_main.mulligan_hand.clear_cards_instant()
