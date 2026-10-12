@@ -39,6 +39,10 @@ var _viewer_pool: int = -1
 var _viewer_markers: Dictionary = {}  # card_idx -> Panel (borde de "elegida") del visor abierto
 var _viewer_count_label: Label = null
 var _viewer_confirm_btn: Button = null
+## Cartas de la mano que también son candidatas (2026-10-12, Miguel: "juega
+## una carta de tu mano o de un Cementerio"). Brillan en la mano y un clic
+## en una la elige de inmediato (devuelve [-1, índice]).
+var _hand_nodes: Array = []
 
 
 func setup(main: Node) -> void:
@@ -54,10 +58,15 @@ static func zone_label(is_own: bool, zone: int) -> String:
 	return "Tu %s" % zone_name if is_own else "%s rival" % zone_name
 
 
-func pick(title: String, pools: Array, min_count: int, max_count: int, distinct_names: bool = false) -> Array:
+func pick(title: String, pools: Array, min_count: int, max_count: int, distinct_names: bool = false,
+		hand_nodes: Array = []) -> Array:
 	"""Abre el selector y espera la confirmación. 'pools': [{is_own, zone,
 	cards: [{data, eligible}]}]. Devuelve [[pool_idx, card_idx], ...] en el
-	orden en que se eligieron (vacío si se confirmó sin elegir nada)."""
+	orden en que se eligieron (vacío si se confirmó sin elegir nada).
+	'hand_nodes' (opcional, 2026-10-12): cartas de la mano que también son
+	elegibles — brillan y un clic en una termina la selección con
+	[[-1, índice_en_hand_nodes]] (pensado para elegir UNA carta, p.ej.
+	Miguel). Solo en la pantalla local: el Remoto no lo usa todavía."""
 	if _active:
 		push_warning("[ZoneBrowsePicker] Ya hay una selección en curso")
 		return []
@@ -77,11 +86,16 @@ func pick(title: String, pools: Array, min_count: int, max_count: int, distinct_
 	_main._update_debug("%s — clic en %s para ver sus cartas; confirma con el botón de paso" % [
 		title, " / ".join(labels)])
 	_refresh_paso()
-	_open_viewer(_first_pool_with_eligible())
-
+	_hand_nodes = hand_nodes.duplicate()
+	if _hand_nodes.is_empty():
+		_open_viewer(_first_pool_with_eligible())
+	else:
+		# Con candidatas en la mano no se abre el visor solo (taparía la
+		# mano): los Cementerios brillan y se abren con clic.
+		_arm_hand_pick()
 	while not _done:
 		await get_tree().process_frame
-
+	_disarm_hand_pick()
 	_close_viewer()
 	for restore in _panel_restores:
 		restore.call()
@@ -91,6 +105,45 @@ func pick(title: String, pools: Array, min_count: int, max_count: int, distinct_
 		_main._game_hud.stop_paso_glow()
 		_main._game_hud.update_paso_button_state()
 	return _selected.duplicate()
+
+
+func _arm_hand_pick() -> void:
+	if _hand_nodes.is_empty() or not _main.get("_card_interaction") or not _main._card_interaction:
+		return
+	for c in _hand_nodes:
+		if is_instance_valid(c):
+			c.set_activatable(true, CardBadges.GLOW_COLOR_CELESTE, &"zone_pick")
+	var filter := func(c: Node) -> bool: return c in _hand_nodes
+	_main._card_interaction.start_target_selection(
+		"%s — clic en una carta de tu mano, o abre un Cementerio" % _title, filter, _on_hand_picked, true)
+
+
+func _on_hand_picked(card: Node) -> void:
+	if not _active or _done:
+		return
+	if card and is_instance_valid(card) and card in _hand_nodes:
+		_selected = [[-1, _hand_nodes.find(card)]]
+		_done = true
+		return
+	# ESC/cancelado: la mano deja de escuchar, pero el selector sigue (se
+	# puede elegir del Cementerio o confirmar sin elegir).
+	_unglow_hand()
+
+
+func _disarm_hand_pick() -> void:
+	if _hand_nodes.is_empty():
+		return
+	var ci = _main.get("_card_interaction")
+	if ci and ci.is_selecting_target and ci.get("_target_callback") == Callable(self, "_on_hand_picked"):
+		ci.cancel_target_selection()
+	_unglow_hand()
+	_hand_nodes = []
+
+
+func _unglow_hand() -> void:
+	for c in _hand_nodes:
+		if is_instance_valid(c):
+			c.set_activatable(false, CardBadges.GLOW_COLOR_CELESTE, &"zone_pick")
 
 
 func on_paso_pressed() -> void:

@@ -8,6 +8,8 @@
 ## línea por este split. Opera sobre CardInspectionLayer via _inspector (y
 ## sobre el Main del juego via _inspector._main).
 
+const PlayerSideScript = preload("res://scripts/core/game/PlayerSide.gd")
+
 var _inspector: CardInspectionLayer
 
 
@@ -380,9 +382,14 @@ func _activate_miguel_discount_play(source_card: Node, ability: Dictionary) -> v
 	# así que no se puede calcular_coste_real() con modificadores reales).
 	var available_gold: int = GameState.get_oro_reserva(owner_id) + _inspector._main._gold_manager.oros_virtuales.get(owner_id, 0)
 	var affordable := func(data: Dictionary) -> bool:
+		# Un Oro nunca se JUEGA (2026-10-12, regla confirmada por el usuario:
+		# "juega una carta... reduciendo su coste" no incluye Oros — no
+		# tienen coste; solo se ponen en juego por efectos que lo digan).
+		if int(data.get("tipo", -1)) == Constants.CardType.ORO:
+			return false
 		var raw_cost = data.get("coste")
 		if raw_cost == null or not (raw_cost is int or raw_cost is float or (raw_cost is String and raw_cost.is_valid_int())):
-			return true  # Oro u otra carta sin coste numérico real
+			return false
 		var discounted: int = maxi(int(raw_cost) - 1, 0)
 		return discounted <= available_gold
 
@@ -391,12 +398,59 @@ func _activate_miguel_discount_play(source_card: Node, ability: Dictionary) -> v
 	# Sake, arquitectura.md §10.23, extendido a dos columnas) — en vez del
 	# modal de lista viejo combinando las tres fuentes.
 	var hand_candidates: Array = []
-	for c in hand_container_miguel.cards:
+	for c in PlayerSideScript.hand_cards(_inspector._main, owner_id):
 		if is_instance_valid(c) and affordable.call(c.card_data):
 			hand_candidates.append(c)
+
+	# 2026-10-12, a pedido del usuario: en vez del popup con los dos
+	# Cementerios, se elige desde el propio tablero — las cartas jugables de
+	# la mano brillan (clic directo) y los Cementerios brillan y se abren con
+	# clic (ZoneBrowsePicker, el mismo selector de las búsquedas, §53). Solo
+	# en la pantalla local; el Remoto sigue con el popup de abajo.
+	var picker = _inspector._main.get("_zone_browse_picker")
+	if owner_id == 0 and picker:
+		var pools: Array = []
+		var any_cemetery := false
+		for cem_owner in [0, 1]:
+			var entries: Array = []
+			for d in CardManager.get_cemetery(cem_owner):
+				var ok: bool = affordable.call(d)
+				any_cemetery = any_cemetery or ok
+				entries.append({"data": d, "eligible": ok})
+			pools.append({"is_own": cem_owner == 0, "zone": Constants.Zone.CEMENTERIO, "cards": entries})
+		if hand_candidates.is_empty() and not any_cemetery:
+			_inspector._main._update_debug("No tienes ninguna carta que puedas jugar ni con el descuento")
+			return
+		var picks: Array = await picker.pick("Miguel: juega una carta con 1 Oro de descuento", pools, 0, 1, false,
+			hand_candidates)
+		if picks.is_empty():
+			return
+		var pi: int = int(picks[0][0])
+		var ci: int = int(picks[0][1])
+		var picked_node: Node = null
+		if pi < 0:
+			picked_node = hand_candidates[ci]
+		else:
+			var picked_data: Dictionary = pools[pi].cards[ci].data
+			var cem_owner_p: int = 0 if pools[pi].is_own else 1
+			var idx_p: int = CardManager.get_cemetery(cem_owner_p).find(picked_data)
+			if idx_p < 0:
+				return
+			CardManager.remove_from_cemetery(cem_owner_p, idx_p)
+			picked_node = _inspector._main._create_card(picked_data, false)
+			picked_node.owner_id = cem_owner_p
+			picked_node.controller_id = owner_id
+			hand_container_miguel.add_card(picked_node)
+			_inspector._main._connect_card_signals(picked_node)
+		await _play_miguel_choice(source_card, ability, picked_node, owner_id)
+		return
+
 	var cemetery_popup_result: Dictionary = _open_dual_cemetery_reveal_popup(affordable, owner_id)
 	var cemetery_popup: CanvasLayer = cemetery_popup_result.get("popup")
 	var candidates: Array = hand_candidates + cemetery_popup_result.get("nodes", [])
+	# Para que la delegación al Remoto también ofrezca las del Cementerio
+	# (CardInteractionModule._delegate_target_to_remote(), §55).
+	_inspector._main._card_interaction._cemetery_target_nodes = cemetery_popup_result.get("nodes", [])
 	if candidates.is_empty():
 		if is_instance_valid(cemetery_popup):
 			cemetery_popup.queue_free()
@@ -435,6 +489,13 @@ func _activate_miguel_discount_play(source_card: Node, ability: Dictionary) -> v
 		hand_container_miguel.add_card(card_node)
 		_inspector._main._connect_card_signals(card_node)
 
+	await _play_miguel_choice(source_card, ability, card_node, owner_id)
+
+
+func _play_miguel_choice(source_card: Node, ability: Dictionary, card_node: Node, owner_id: int) -> void:
+	"""Juega la carta elegida para Miguel con −1 Oro (piso 0). Con
+	PlayerSide.play_from_hand(): GoldManager.play_card() es solo del
+	Anfitrión (para el Remoto rechazaba con 'No es tu turno', §57)."""
 	if not is_instance_valid(card_node):
 		return
 
@@ -446,7 +507,7 @@ func _activate_miguel_discount_play(source_card: Node, ability: Dictionary) -> v
 
 	UniversalCardParser.turn_registry.register_ability_use(source_card, ability)
 
-	await _inspector._main._gold_manager.play_card(card_node)
+	await PlayerSideScript.play_from_hand(_inspector._main, owner_id, card_node)
 
 
 func _activate_padre_patria_gold(source_card: Node, ability: Dictionary) -> void:
