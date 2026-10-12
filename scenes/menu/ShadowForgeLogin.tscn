@@ -4,97 +4,153 @@
 [ext_resource type="Texture2D" path="res://fondo_inicio.png" id="2_background"]
 [ext_resource type="FontFile" uid="uid://c4o8my2eqi3aj" path="res://assets/fonts/Cinzel-Bold.ttf" id="3_font_title"]
 [ext_resource type="FontFile" uid="uid://bamah0jf3ujug" path="res://assets/fonts/Marcellus-Regular.ttf" id="4_font_medieval"]
+[ext_resource type="Texture2D" path="res://assets/ui/menu/play_mode/btn_back.png" id="5_btn_back"]
+[ext_resource type="Texture2D" path="res://assets/ui/menu/play_mode/btn_back_hover.png" id="6_btn_back_hover"]
 
-[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_panel"]
-bg_color = Color(0.06, 0.05, 0.09, 0.92)
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_card"]
+bg_color = Color(0.06, 0.06, 0.09, 0.95)
 border_width_left = 2
 border_width_top = 2
 border_width_right = 2
 border_width_bottom = 2
-border_color = Color(0.83, 0.69, 0.22, 1)
-corner_radius_top_left = 12
-corner_radius_top_right = 12
-corner_radius_bottom_right = 12
-corner_radius_bottom_left = 12
-shadow_color = Color(0, 0, 0, 0.75)
-shadow_size = 18
+border_color = Color(0.35, 0.72, 0.42, 0.88)
+corner_radius_top_left = 14
+corner_radius_top_right = 14
+corner_radius_bottom_right = 14
+corner_radius_bottom_left = 14
+shadow_color = Color(0.12, 0.45, 0.2, 0.28)
+shadow_size = 20
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_profile_box"]
+bg_color = Color(0.03, 0.07, 0.05, 0.92)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0.35, 0.8, 0.45, 0.7)
+corner_radius_top_left = 10
+corner_radius_top_right = 10
+corner_radius_bottom_right = 10
+corner_radius_bottom_left = 10
+shadow_color = Color(0.15, 0.6, 0.25, 0.2)
+shadow_size = 12
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_input"]
-bg_color = Color(0.03, 0.02, 0.05, 0.85)
+bg_color = Color(0.03, 0.04, 0.06, 0.92)
 border_width_left = 1
 border_width_top = 1
 border_width_right = 1
 border_width_bottom = 1
-border_color = Color(0.65, 0.55, 0.3, 0.5)
+border_color = Color(0.35, 0.65, 0.45, 0.5)
 corner_radius_top_left = 8
 corner_radius_top_right = 8
 corner_radius_bottom_right = 8
 corner_radius_bottom_left = 8
-content_margin_left = 16.0
+content_margin_left = 18.0
 content_margin_top = 10.0
-content_margin_right = 16.0
+content_margin_right = 18.0
 content_margin_bottom = 10.0
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_input_focus"]
-bg_color = Color(0.05, 0.04, 0.08, 0.95)
+bg_color = Color(0.04, 0.08, 0.07, 0.96)
 border_width_left = 2
 border_width_top = 2
 border_width_right = 2
 border_width_bottom = 2
-border_color = Color(1, 0.88, 0.45, 1)
+border_color = Color(0.45, 0.95, 0.55, 1)
 corner_radius_top_left = 8
 corner_radius_top_right = 8
 corner_radius_bottom_right = 8
 corner_radius_bottom_left = 8
-shadow_color = Color(1, 0.88, 0.45, 0.25)
-shadow_size = 6
-content_margin_left = 16.0
+shadow_color = Color(0.2, 0.8, 0.35, 0.35)
+shadow_size = 10
+content_margin_left = 18.0
 content_margin_top = 10.0
-content_margin_right = 16.0
+content_margin_right = 18.0
 content_margin_bottom = 10.0
 
-[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_button"]
-bg_color = Color(0.06, 0.05, 0.09, 0.92)
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_btn_emerald"]
+bg_color = Color(0.06, 0.12, 0.08, 0.94)
 border_width_left = 2
 border_width_top = 2
 border_width_right = 2
 border_width_bottom = 2
-border_color = Color(0.83, 0.69, 0.22, 1)
+border_color = Color(0.38, 0.82, 0.45, 0.95)
 corner_radius_top_left = 10
 corner_radius_top_right = 10
 corner_radius_bottom_right = 10
 corner_radius_bottom_left = 10
-shadow_color = Color(0, 0, 0, 0.8)
-shadow_size = 6
-
-[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_button_hover"]
-bg_color = Color(0.14, 0.11, 0.18, 0.96)
-border_width_left = 2
-border_width_top = 2
-border_width_right = 2
-border_width_bottom = 2
-border_color = Color(1, 0.88, 0.45, 1)
-corner_radius_top_left = 10
-corner_radius_top_right = 10
-corner_radius_bottom_right = 10
-corner_radius_bottom_left = 10
-shadow_color = Color(1, 0.88, 0.45, 0.3)
+shadow_color = Color(0.2, 0.65, 0.3, 0.35)
 shadow_size = 8
 
-[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_button_pressed"]
-bg_color = Color(0.04, 0.03, 0.06, 0.98)
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_btn_emerald_hover"]
+bg_color = Color(0.1, 0.18, 0.12, 0.98)
 border_width_left = 2
 border_width_top = 2
 border_width_right = 2
 border_width_bottom = 2
-border_color = Color(0.7, 0.55, 0.18, 1)
+border_color = Color(0.55, 1, 0.65, 1)
+corner_radius_top_left = 10
+corner_radius_top_right = 10
+corner_radius_bottom_right = 10
+corner_radius_bottom_left = 10
+shadow_color = Color(0.35, 0.9, 0.45, 0.45)
+shadow_size = 12
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_btn_emerald_pressed"]
+bg_color = Color(0.04, 0.08, 0.05, 1)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0.3, 0.65, 0.35, 1)
+corner_radius_top_left = 10
+corner_radius_top_right = 10
+corner_radius_bottom_right = 10
+corner_radius_bottom_left = 10
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_btn_logout"]
+bg_color = Color(0.1, 0.05, 0.06, 0.9)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0.75, 0.4, 0.4, 0.8)
+corner_radius_top_left = 10
+corner_radius_top_right = 10
+corner_radius_bottom_right = 10
+corner_radius_bottom_left = 10
+shadow_color = Color(0.6, 0.2, 0.2, 0.25)
+shadow_size = 6
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_btn_logout_hover"]
+bg_color = Color(0.16, 0.07, 0.08, 0.96)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(1, 0.55, 0.55, 1)
+corner_radius_top_left = 10
+corner_radius_top_right = 10
+corner_radius_bottom_right = 10
+corner_radius_bottom_left = 10
+shadow_color = Color(0.9, 0.3, 0.3, 0.4)
+shadow_size = 10
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_btn_logout_pressed"]
+bg_color = Color(0.06, 0.03, 0.04, 1)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0.55, 0.3, 0.3, 1)
 corner_radius_top_left = 10
 corner_radius_top_right = 10
 corner_radius_bottom_right = 10
 corner_radius_bottom_left = 10
 
 [sub_resource type="StyleBoxLine" id="StyleBoxLine_separator"]
-color = Color(0.75, 0.62, 0.28, 0.45)
+color = Color(0.35, 0.72, 0.42, 0.45)
 thickness = 1
 
 [node name="ShadowForgeLogin" type="Control"]
@@ -124,163 +180,270 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
-color = Color(0.03, 0.03, 0.05, 0.6)
+color = Color(0.02, 0.02, 0.04, 0.84)
 
-[node name="TopBar" type="HBoxContainer" parent="."]
+[node name="MainLayout" type="VBoxContainer" parent="."]
 layout_mode = 1
-anchors_preset = 10
+anchors_preset = 15
 anchor_right = 1.0
-offset_left = 30.0
-offset_top = 20.0
-offset_right = -30.0
-offset_bottom = 76.0
+anchor_bottom = 1.0
+offset_left = 60.0
+offset_top = 40.0
+offset_right = -60.0
+offset_bottom = -40.0
 grow_horizontal = 2
+grow_vertical = 2
 theme_override_constants/separation = 20
 
-[node name="BackButton" type="Button" parent="TopBar" unique_id=75892301]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(140, 48)
+[node name="HeaderContainer" type="VBoxContainer" parent="MainLayout"]
 layout_mode = 2
-mouse_default_cursor_shape = 2
-theme_override_fonts/font = ExtResource("4_font_medieval")
-theme_override_font_sizes/font_size = 18
-theme_override_colors/font_color = Color(1, 0.95, 0.8, 1)
-theme_override_colors/font_hover_color = Color(1, 0.85, 0.4, 1)
-theme_override_styles/normal = SubResource("StyleBoxFlat_button")
-theme_override_styles/hover = SubResource("StyleBoxFlat_button_hover")
-theme_override_styles/pressed = SubResource("StyleBoxFlat_button_pressed")
-text = "← VOLVER"
+theme_override_constants/separation = 4
 
-[node name="TitleLabel" type="Label" parent="TopBar"]
+[node name="TitleLabel" type="Label" parent="MainLayout/HeaderContainer"]
 layout_mode = 2
-size_flags_horizontal = 3
 theme_override_fonts/font = ExtResource("3_font_title")
-theme_override_font_sizes/font_size = 32
+theme_override_font_sizes/font_size = 36
 theme_override_colors/font_color = Color(1, 0.9, 0.6, 1)
-theme_override_colors/font_shadow_color = Color(0, 0, 0, 0.85)
+theme_override_colors/font_shadow_color = Color(0, 0, 0, 0.9)
 theme_override_constants/shadow_offset_x = 2
 theme_override_constants/shadow_offset_y = 2
 text = "SHADOWFORGE"
 horizontal_alignment = 1
 vertical_alignment = 1
 
-[node name="Spacer" type="Control" parent="TopBar"]
-custom_minimum_size = Vector2(140, 0)
+[node name="SubtitleLabel" type="Label" parent="MainLayout/HeaderContainer"]
 layout_mode = 2
+theme_override_fonts/font = ExtResource("4_font_medieval")
+theme_override_font_sizes/font_size = 18
+theme_override_colors/font_color = Color(0.88, 0.78, 0.52, 1)
+theme_override_colors/font_shadow_color = Color(0, 0, 0, 0.8)
+theme_override_constants/shadow_offset_x = 1
+theme_override_constants/shadow_offset_y = 1
+text = "— SINCRONIZACIÓN DE MAZOS —"
+horizontal_alignment = 1
+vertical_alignment = 1
 
-[node name="CenterContainer" type="CenterContainer" parent="."]
-layout_mode = 1
-anchors_preset = 15
-anchor_right = 1.0
-anchor_bottom = 1.0
-offset_top = 70.0
-grow_horizontal = 2
-grow_vertical = 2
-
-[node name="PanelContainer" type="PanelContainer" parent="CenterContainer"]
-custom_minimum_size = Vector2(480, 0)
+[node name="CenterArea" type="CenterContainer" parent="MainLayout"]
 layout_mode = 2
-theme_override_styles/panel = SubResource("StyleBoxFlat_panel")
+size_flags_vertical = 3
 
-[node name="MarginContainer" type="MarginContainer" parent="CenterContainer/PanelContainer"]
+[node name="CardPanel" type="PanelContainer" parent="MainLayout/CenterArea"]
+custom_minimum_size = Vector2(460, 420)
+layout_mode = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_card")
+
+[node name="CardMargin" type="MarginContainer" parent="MainLayout/CenterArea/CardPanel"]
 layout_mode = 2
 theme_override_constants/margin_left = 36
 theme_override_constants/margin_top = 32
 theme_override_constants/margin_right = 36
 theme_override_constants/margin_bottom = 32
 
-[node name="VBoxContainer" type="VBoxContainer" parent="CenterContainer/PanelContainer/MarginContainer"]
+[node name="ContentVBox" type="VBoxContainer" parent="MainLayout/CenterArea/CardPanel/CardMargin"]
 layout_mode = 2
 theme_override_constants/separation = 16
 
-[node name="SectionTitle" type="Label" parent="CenterContainer/PanelContainer/MarginContainer/VBoxContainer"]
+[node name="LoadingBox" type="VBoxContainer" parent="MainLayout/CenterArea/CardPanel/CardMargin/ContentVBox" unique_id=70102030]
+unique_name_in_owner = true
+visible = false
 layout_mode = 2
-theme_override_fonts/font = ExtResource("3_font_title")
-theme_override_font_sizes/font_size = 20
-theme_override_colors/font_color = Color(1, 0.9, 0.6, 1)
-theme_override_colors/font_shadow_color = Color(0, 0, 0, 0.7)
-theme_override_constants/shadow_offset_x = 1
-theme_override_constants/shadow_offset_y = 1
-text = "CONEXIÓN DE CUENTA"
-horizontal_alignment = 1
+size_flags_vertical = 3
+theme_override_constants/separation = 22
+alignment = 1
 
-[node name="SectionDesc" type="Label" parent="CenterContainer/PanelContainer/MarginContainer/VBoxContainer"]
+[node name="SpinnerHost" type="Control" parent="MainLayout/CenterArea/CardPanel/CardMargin/ContentVBox/LoadingBox"]
+custom_minimum_size = Vector2(60, 60)
+layout_mode = 2
+size_flags_horizontal = 4
+
+[node name="LoadingSpinner" type="Control" parent="MainLayout/CenterArea/CardPanel/CardMargin/ContentVBox/LoadingBox/SpinnerHost" unique_id=70102031]
+unique_name_in_owner = true
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="LoadingText" type="Label" parent="MainLayout/CenterArea/CardPanel/CardMargin/ContentVBox/LoadingBox" unique_id=70102032]
+unique_name_in_owner = true
 layout_mode = 2
 theme_override_fonts/font = ExtResource("4_font_medieval")
-theme_override_font_sizes/font_size = 14
-theme_override_colors/font_color = Color(0.8, 0.75, 0.65, 0.9)
-text = "Inicia sesión para sincronizar automáticamente tus mazos creados en ShadowForge."
+theme_override_font_sizes/font_size = 18
+theme_override_colors/font_color = Color(0.8, 0.95, 0.85, 1)
+text = "Verificando sesión..."
 horizontal_alignment = 1
-autowrap_mode = 2
 
-[node name="HSeparatorTop" type="HSeparator" parent="CenterContainer/PanelContainer/MarginContainer/VBoxContainer"]
+[node name="ConnectedBox" type="VBoxContainer" parent="MainLayout/CenterArea/CardPanel/CardMargin/ContentVBox" unique_id=80102030]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_constants/separation = 16
+alignment = 1
+
+[node name="ConnectedTitle" type="Label" parent="MainLayout/CenterArea/CardPanel/CardMargin/ContentVBox/ConnectedBox"]
+layout_mode = 2
+theme_override_fonts/font = ExtResource("3_font_title")
+theme_override_font_sizes/font_size = 22
+theme_override_colors/font_color = Color(0.85, 1, 0.85, 1)
+theme_override_colors/font_shadow_color = Color(0, 0, 0, 0.8)
+theme_override_constants/shadow_offset_x = 1
+theme_override_constants/shadow_offset_y = 1
+text = "CUENTA VINCULADA"
+horizontal_alignment = 1
+
+[node name="ConnectedSep" type="HSeparator" parent="MainLayout/CenterArea/CardPanel/CardMargin/ContentVBox/ConnectedBox"]
 layout_mode = 2
 theme_override_styles/separator = SubResource("StyleBoxLine_separator")
 
-[node name="UsernameEdit" type="LineEdit" parent="CenterContainer/PanelContainer/MarginContainer/VBoxContainer" unique_id=10293847]
+[node name="ProfilePlaque" type="PanelContainer" parent="MainLayout/CenterArea/CardPanel/CardMargin/ContentVBox/ConnectedBox"]
+custom_minimum_size = Vector2(0, 110)
+layout_mode = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_profile_box")
+
+[node name="ProfileMargin" type="MarginContainer" parent="MainLayout/CenterArea/CardPanel/CardMargin/ContentVBox/ConnectedBox/ProfilePlaque"]
+layout_mode = 2
+theme_override_constants/margin_left = 18
+theme_override_constants/margin_top = 16
+theme_override_constants/margin_right = 18
+theme_override_constants/margin_bottom = 16
+
+[node name="ProfileVBox" type="VBoxContainer" parent="MainLayout/CenterArea/CardPanel/CardMargin/ContentVBox/ConnectedBox/ProfilePlaque/ProfileMargin"]
+layout_mode = 2
+theme_override_constants/separation = 6
+alignment = 1
+
+[node name="AccountNameLabel" type="Label" parent="MainLayout/CenterArea/CardPanel/CardMargin/ContentVBox/ConnectedBox/ProfilePlaque/ProfileMargin/ProfileVBox" unique_id=80102031]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(0, 48)
+layout_mode = 2
+theme_override_fonts/font = ExtResource("3_font_title")
+theme_override_font_sizes/font_size = 26
+theme_override_colors/font_color = Color(0.4, 0.95, 0.6, 1)
+theme_override_colors/font_shadow_color = Color(0.1, 0.4, 0.2, 0.5)
+theme_override_constants/shadow_offset_x = 2
+theme_override_constants/shadow_offset_y = 2
+text = "usuario"
+horizontal_alignment = 1
+
+[node name="SyncStatusLabel" type="Label" parent="MainLayout/CenterArea/CardPanel/CardMargin/ContentVBox/ConnectedBox/ProfilePlaque/ProfileMargin/ProfileVBox"]
 layout_mode = 2
 theme_override_fonts/font = ExtResource("4_font_medieval")
-theme_override_font_sizes/font_size = 16
+theme_override_font_sizes/font_size = 14
+theme_override_colors/font_color = Color(0.8, 0.88, 0.8, 0.85)
+text = "Mazos sincronizados con la nube"
+horizontal_alignment = 1
+
+[node name="ConnectedSpacer" type="Control" parent="MainLayout/CenterArea/CardPanel/CardMargin/ContentVBox/ConnectedBox"]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="LogoutButton" type="Button" parent="MainLayout/CenterArea/CardPanel/CardMargin/ContentVBox/ConnectedBox" unique_id=50697887]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 52)
+layout_mode = 2
+mouse_default_cursor_shape = 2
+theme_override_fonts/font = ExtResource("4_font_medieval")
+theme_override_font_sizes/font_size = 18
+theme_override_colors/font_color = Color(1, 0.85, 0.85, 1)
+theme_override_colors/font_hover_color = Color(1, 1, 1, 1)
+theme_override_styles/normal = SubResource("StyleBoxFlat_btn_logout")
+theme_override_styles/hover = SubResource("StyleBoxFlat_btn_logout_hover")
+theme_override_styles/pressed = SubResource("StyleBoxFlat_btn_logout_pressed")
+text = "CERRAR SESIÓN"
+
+[node name="LoginBox" type="VBoxContainer" parent="MainLayout/CenterArea/CardPanel/CardMargin/ContentVBox" unique_id=90102030]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_constants/separation = 14
+
+[node name="LoginTitle" type="Label" parent="MainLayout/CenterArea/CardPanel/CardMargin/ContentVBox/LoginBox"]
+layout_mode = 2
+theme_override_fonts/font = ExtResource("3_font_title")
+theme_override_font_sizes/font_size = 22
+theme_override_colors/font_color = Color(1, 0.9, 0.6, 1)
+theme_override_colors/font_shadow_color = Color(0, 0, 0, 0.8)
+theme_override_constants/shadow_offset_x = 1
+theme_override_constants/shadow_offset_y = 1
+text = "VINCULAR CUENTA"
+horizontal_alignment = 1
+
+[node name="LoginDesc" type="Label" parent="MainLayout/CenterArea/CardPanel/CardMargin/ContentVBox/LoginBox"]
+layout_mode = 2
+theme_override_fonts/font = ExtResource("4_font_medieval")
+theme_override_font_sizes/font_size = 14
+theme_override_colors/font_color = Color(0.85, 0.85, 0.8, 0.9)
+text = "Sincroniza tus mazos creados en la nube."
+horizontal_alignment = 1
+
+[node name="LoginSep" type="HSeparator" parent="MainLayout/CenterArea/CardPanel/CardMargin/ContentVBox/LoginBox"]
+layout_mode = 2
+theme_override_styles/separator = SubResource("StyleBoxLine_separator")
+
+[node name="UsernameEdit" type="LineEdit" parent="MainLayout/CenterArea/CardPanel/CardMargin/ContentVBox/LoginBox" unique_id=10293847]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 50)
+layout_mode = 2
+theme_override_fonts/font = ExtResource("4_font_medieval")
+theme_override_font_sizes/font_size = 17
 theme_override_colors/font_color = Color(1, 0.95, 0.85, 1)
-theme_override_colors/font_placeholder_color = Color(0.65, 0.6, 0.5, 0.6)
+theme_override_colors/font_placeholder_color = Color(0.5, 0.65, 0.55, 0.6)
 theme_override_styles/normal = SubResource("StyleBoxFlat_input")
 theme_override_styles/focus = SubResource("StyleBoxFlat_input_focus")
-placeholder_text = "Usuario o correo electrónico"
+placeholder_text = "Usuario o correo"
 
-[node name="PasswordEdit" type="LineEdit" parent="CenterContainer/PanelContainer/MarginContainer/VBoxContainer" unique_id=20394857]
+[node name="PasswordEdit" type="LineEdit" parent="MainLayout/CenterArea/CardPanel/CardMargin/ContentVBox/LoginBox" unique_id=20394857]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(0, 48)
+custom_minimum_size = Vector2(0, 50)
 layout_mode = 2
 theme_override_fonts/font = ExtResource("4_font_medieval")
-theme_override_font_sizes/font_size = 16
+theme_override_font_sizes/font_size = 17
 theme_override_colors/font_color = Color(1, 0.95, 0.85, 1)
-theme_override_colors/font_placeholder_color = Color(0.65, 0.6, 0.5, 0.6)
+theme_override_colors/font_placeholder_color = Color(0.5, 0.65, 0.55, 0.6)
 theme_override_styles/normal = SubResource("StyleBoxFlat_input")
 theme_override_styles/focus = SubResource("StyleBoxFlat_input_focus")
 placeholder_text = "Contraseña"
 secret = true
 
-[node name="LoginButton" type="Button" parent="CenterContainer/PanelContainer/MarginContainer/VBoxContainer" unique_id=30495867]
+[node name="LoginButton" type="Button" parent="MainLayout/CenterArea/CardPanel/CardMargin/ContentVBox/LoginBox" unique_id=30495867]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(0, 50)
+custom_minimum_size = Vector2(0, 52)
 layout_mode = 2
 mouse_default_cursor_shape = 2
 theme_override_fonts/font = ExtResource("4_font_medieval")
-theme_override_font_sizes/font_size = 20
-theme_override_colors/font_color = Color(1, 0.95, 0.85, 1)
-theme_override_colors/font_hover_color = Color(1, 0.9, 0.5, 1)
-theme_override_styles/normal = SubResource("StyleBoxFlat_button")
-theme_override_styles/hover = SubResource("StyleBoxFlat_button_hover")
-theme_override_styles/pressed = SubResource("StyleBoxFlat_button_pressed")
+theme_override_font_sizes/font_size = 19
+theme_override_colors/font_color = Color(0.9, 1, 0.9, 1)
+theme_override_colors/font_hover_color = Color(1, 1, 1, 1)
+theme_override_styles/normal = SubResource("StyleBoxFlat_btn_emerald")
+theme_override_styles/hover = SubResource("StyleBoxFlat_btn_emerald_hover")
+theme_override_styles/pressed = SubResource("StyleBoxFlat_btn_emerald_pressed")
 text = "INICIAR SESIÓN"
 
-[node name="HSeparator" type="HSeparator" parent="CenterContainer/PanelContainer/MarginContainer/VBoxContainer"]
-layout_mode = 2
-theme_override_styles/separator = SubResource("StyleBoxLine_separator")
-
-[node name="StatusLabel" type="Label" parent="CenterContainer/PanelContainer/MarginContainer/VBoxContainer" unique_id=40596877]
+[node name="StatusLabel" type="Label" parent="MainLayout/CenterArea/CardPanel/CardMargin/ContentVBox/LoginBox" unique_id=40596877]
 unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 24)
 layout_mode = 2
 theme_override_fonts/font = ExtResource("4_font_medieval")
-theme_override_font_sizes/font_size = 14
-theme_override_colors/font_color = Color(0.95, 0.88, 0.65, 1)
-text = ""
+theme_override_font_sizes/font_size = 13
+theme_override_colors/font_color = Color(1, 0.85, 0.65, 1)
 horizontal_alignment = 1
+vertical_alignment = 1
 autowrap_mode = 2
 
-[node name="LogoutButton" type="Button" parent="CenterContainer/PanelContainer/MarginContainer/VBoxContainer" unique_id=50697887]
+[node name="FooterContainer" type="HBoxContainer" parent="MainLayout"]
+layout_mode = 2
+alignment = 1
+
+[node name="BackButton" type="TextureButton" parent="MainLayout/FooterContainer" unique_id=75892301]
 unique_name_in_owner = true
-visible = false
-custom_minimum_size = Vector2(0, 44)
+custom_minimum_size = Vector2(260, 64)
 layout_mode = 2
 mouse_default_cursor_shape = 2
-theme_override_fonts/font = ExtResource("4_font_medieval")
-theme_override_font_sizes/font_size = 16
-theme_override_colors/font_color = Color(0.95, 0.7, 0.7, 1)
-theme_override_colors/font_hover_color = Color(1, 0.5, 0.5, 1)
-theme_override_styles/normal = SubResource("StyleBoxFlat_button")
-theme_override_styles/hover = SubResource("StyleBoxFlat_button_hover")
-theme_override_styles/pressed = SubResource("StyleBoxFlat_button_pressed")
-text = "CERRAR SESIÓN"
+texture_normal = ExtResource("5_btn_back")
+texture_hover = ExtResource("6_btn_back_hover")
+texture_focused = ExtResource("6_btn_back_hover")
+ignore_texture_size = true
+stretch_mode = 5
