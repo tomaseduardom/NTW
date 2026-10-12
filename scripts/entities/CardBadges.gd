@@ -221,10 +221,25 @@ func _apply_strength_badge_text(value: int) -> void:
 
 
 func refresh_cost_badge(source_override: Node = null) -> void:
-	"""Recalcula y muestra el Coste efectivo AHORA — llamar después de cualquier acción que pueda cambiarlo."""
+	"""Recalcula y muestra el Coste efectivo AHORA — llamar después de cualquier acción que pueda cambiarlo.
+
+	Según la zona (2026-10-12, a pedido del usuario: "la reducción o aumento
+	de coste debe mostrarse solo desde la mano o el Cementerio; en juego no,
+	a menos que una carta en juego le cambie el coste"):
+	- Mano / Cementerio: lo que costaría JUGARLA ahora (PaymentManager.
+	  calcular_coste_real(): descuentos, 'cuesta un Oro adicional', etc.).
+	- En juego: solo el coste modificado por efectos sobre la carta en juego
+	  (ContinuousEffectManager.get_modified_cost(), p.ej. Cuerno de Titán
+	  'aumentar o disminuir el coste de hasta una carta en juego'); los
+	  impuestos y descuentos para jugar ya no aplican.
+	- Resto (Castillo, Destierro): sin insignia."""
 	var effective := _card.card_cost
-	if PaymentManager.has_method("calcular_coste_real"):
-		effective = PaymentManager.calcular_coste_real(source_override if source_override else _card)
+	var zone = _card.get("current_zone")
+	if zone == Constants.Zone.MANO or zone == Constants.Zone.CEMENTERIO:
+		if PaymentManager.has_method("calcular_coste_real"):
+			effective = PaymentManager.calcular_coste_real(source_override if source_override else _card)
+	elif zone in Constants.ZONES_IN_PLAY:
+		effective = ContinuousEffectManager.get_modified_cost(_card)
 	_apply_cost_badge_text(effective)
 
 

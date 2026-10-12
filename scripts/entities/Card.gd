@@ -889,6 +889,12 @@ func set_zone(zone: int) -> void:
 		scale = Constants.GOLD_CARD_SCALE
 		base_scale = Constants.GOLD_CARD_SCALE
 
+	# La insignia de coste depende de la zona (CardBadges.refresh_cost_badge(),
+	# 2026-10-12): al salir de la mano/Cementerio deja de mostrar descuentos e
+	# impuestos de jugarla.
+	if _badges:
+		refresh_cost_badge()
+
 	match zone:
 		Constants.Zone.MANO:
 			current_state = CardState.IN_HAND
