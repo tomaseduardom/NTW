@@ -28,7 +28,7 @@ func _ready() -> void:
 
 	# 2026-09-22: el botón muestra si ya hay una sesión de ShadowForge
 	if ExternalApiClient.is_authenticated():
-		shadowforge_button.text = "SHADOWFORGE (conectado)"
+		shadowforge_button.text = "SHADOWFORGE (CONECTADO)"
 	else:
 		shadowforge_button.text = "SHADOWFORGE"
 

@@ -4,258 +4,31 @@
 [ext_resource type="Texture2D" path="res://fondo_inicio.png" id="2_background"]
 [ext_resource type="FontFile" uid="uid://c4o8my2eqi3aj" path="res://assets/fonts/Cinzel-Bold.ttf" id="3_font_title"]
 [ext_resource type="FontFile" uid="uid://bamah0jf3ujug" path="res://assets/fonts/Marcellus-Regular.ttf" id="4_font_medieval"]
+[ext_resource type="Texture2D" path="res://assets/ui/menu/btn_menu_normal.png" id="5_btn_normal"]
+[ext_resource type="Texture2D" path="res://assets/ui/menu/btn_menu_hover.png" id="6_btn_hover"]
+[ext_resource type="Texture2D" path="res://assets/ui/menu/btn_menu_pressed.png" id="7_btn_pressed"]
+[ext_resource type="FontFile" path="res://assets/fonts/Palatino-Bold.ttf" id="8_font_btn"]
 
-[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_play_normal"]
-bg_color = Color(0.08, 0.06, 0.12, 0.94)
-border_width_left = 2
-border_width_top = 2
-border_width_right = 2
-border_width_bottom = 3
-border_color = Color(0.88, 0.74, 0.28, 1)
-corner_radius_top_left = 12
-corner_radius_top_right = 12
-corner_radius_bottom_right = 12
-corner_radius_bottom_left = 12
-shadow_color = Color(0.75, 0.6, 0.15, 0.22)
-shadow_size = 12
-content_margin_left = 28.0
-content_margin_top = 14.0
-content_margin_right = 28.0
-content_margin_bottom = 14.0
-
-[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_play_hover"]
-bg_color = Color(0.14, 0.1, 0.2, 0.97)
-border_width_left = 2
-border_width_top = 2
-border_width_right = 2
-border_width_bottom = 3
-border_color = Color(1, 0.88, 0.42, 1)
-corner_radius_top_left = 12
-corner_radius_top_right = 12
-corner_radius_bottom_right = 12
-corner_radius_bottom_left = 12
-shadow_color = Color(1, 0.85, 0.35, 0.38)
-shadow_size = 16
-content_margin_left = 28.0
-content_margin_top = 14.0
-content_margin_right = 28.0
-content_margin_bottom = 14.0
-
-[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_play_pressed"]
-bg_color = Color(0.05, 0.04, 0.08, 0.98)
-border_width_left = 2
-border_width_top = 3
-border_width_right = 2
-border_width_bottom = 2
-border_color = Color(0.7, 0.58, 0.2, 1)
-corner_radius_top_left = 12
-corner_radius_top_right = 12
-corner_radius_bottom_right = 12
-corner_radius_bottom_left = 12
-shadow_color = Color(0, 0, 0, 0.7)
-shadow_size = 4
-content_margin_left = 28.0
-content_margin_top = 14.0
-content_margin_right = 28.0
-content_margin_bottom = 14.0
-
-[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_play_focus"]
-bg_color = Color(0.12, 0.09, 0.18, 0.96)
-border_width_left = 2
-border_width_top = 2
-border_width_right = 2
-border_width_bottom = 3
-border_color = Color(1, 0.9, 0.5, 1)
-corner_radius_top_left = 12
-corner_radius_top_right = 12
-corner_radius_bottom_right = 12
-corner_radius_bottom_left = 12
-shadow_color = Color(1, 0.88, 0.4, 0.3)
-shadow_size = 14
-content_margin_left = 28.0
-content_margin_top = 14.0
-content_margin_right = 28.0
-content_margin_bottom = 14.0
-
-[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_btn_normal"]
-bg_color = Color(0.06, 0.05, 0.1, 0.92)
-border_width_left = 2
-border_width_top = 2
-border_width_right = 2
-border_width_bottom = 2
-border_color = Color(0.72, 0.6, 0.22, 0.85)
-corner_radius_top_left = 10
-corner_radius_top_right = 10
-corner_radius_bottom_right = 10
-corner_radius_bottom_left = 10
-shadow_color = Color(0, 0, 0, 0.7)
-shadow_size = 8
-content_margin_left = 24.0
+[sub_resource type="StyleBoxTexture" id="StyleBoxTexture_btn_normal"]
+texture = ExtResource("5_btn_normal")
+content_margin_left = 34.0
 content_margin_top = 10.0
-content_margin_right = 24.0
+content_margin_right = 34.0
 content_margin_bottom = 10.0
 
-[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_btn_hover"]
-bg_color = Color(0.12, 0.09, 0.16, 0.96)
-border_width_left = 2
-border_width_top = 2
-border_width_right = 2
-border_width_bottom = 2
-border_color = Color(1, 0.88, 0.42, 1)
-corner_radius_top_left = 10
-corner_radius_top_right = 10
-corner_radius_bottom_right = 10
-corner_radius_bottom_left = 10
-shadow_color = Color(1, 0.85, 0.35, 0.28)
-shadow_size = 12
-content_margin_left = 24.0
+[sub_resource type="StyleBoxTexture" id="StyleBoxTexture_btn_hover"]
+texture = ExtResource("6_btn_hover")
+content_margin_left = 34.0
 content_margin_top = 10.0
-content_margin_right = 24.0
+content_margin_right = 34.0
 content_margin_bottom = 10.0
 
-[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_btn_pressed"]
-bg_color = Color(0.04, 0.03, 0.06, 0.98)
-border_width_left = 2
-border_width_top = 2
-border_width_right = 2
-border_width_bottom = 2
-border_color = Color(0.65, 0.52, 0.18, 1)
-corner_radius_top_left = 10
-corner_radius_top_right = 10
-corner_radius_bottom_right = 10
-corner_radius_bottom_left = 10
-shadow_color = Color(0, 0, 0, 0.6)
-shadow_size = 3
-content_margin_left = 24.0
-content_margin_top = 10.0
-content_margin_right = 24.0
-content_margin_bottom = 10.0
-
-[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_btn_focus"]
-bg_color = Color(0.1, 0.08, 0.15, 0.95)
-border_width_left = 2
-border_width_top = 2
-border_width_right = 2
-border_width_bottom = 2
-border_color = Color(1, 0.9, 0.5, 1)
-corner_radius_top_left = 10
-corner_radius_top_right = 10
-corner_radius_bottom_right = 10
-corner_radius_bottom_left = 10
-shadow_color = Color(1, 0.88, 0.4, 0.22)
-shadow_size = 10
-content_margin_left = 24.0
-content_margin_top = 10.0
-content_margin_right = 24.0
-content_margin_bottom = 10.0
-
-[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_sf_normal"]
-bg_color = Color(0.05, 0.07, 0.06, 0.92)
-border_width_left = 2
-border_width_top = 2
-border_width_right = 2
-border_width_bottom = 2
-border_color = Color(0.35, 0.7, 0.3, 0.85)
-corner_radius_top_left = 10
-corner_radius_top_right = 10
-corner_radius_bottom_right = 10
-corner_radius_bottom_left = 10
-shadow_color = Color(0.2, 0.55, 0.15, 0.18)
-shadow_size = 8
-content_margin_left = 24.0
-content_margin_top = 10.0
-content_margin_right = 24.0
-content_margin_bottom = 10.0
-
-[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_sf_hover"]
-bg_color = Color(0.08, 0.13, 0.1, 0.96)
-border_width_left = 2
-border_width_top = 2
-border_width_right = 2
-border_width_bottom = 2
-border_color = Color(0.5, 0.95, 0.4, 1)
-corner_radius_top_left = 10
-corner_radius_top_right = 10
-corner_radius_bottom_right = 10
-corner_radius_bottom_left = 10
-shadow_color = Color(0.4, 0.9, 0.3, 0.32)
-shadow_size = 12
-content_margin_left = 24.0
-content_margin_top = 10.0
-content_margin_right = 24.0
-content_margin_bottom = 10.0
-
-[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_sf_pressed"]
-bg_color = Color(0.03, 0.05, 0.04, 0.98)
-border_width_left = 2
-border_width_top = 2
-border_width_right = 2
-border_width_bottom = 2
-border_color = Color(0.3, 0.55, 0.25, 1)
-corner_radius_top_left = 10
-corner_radius_top_right = 10
-corner_radius_bottom_right = 10
-corner_radius_bottom_left = 10
-shadow_color = Color(0, 0, 0, 0.6)
-shadow_size = 3
-content_margin_left = 24.0
-content_margin_top = 10.0
-content_margin_right = 24.0
-content_margin_bottom = 10.0
-
-[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_exit_normal"]
-bg_color = Color(0.08, 0.05, 0.05, 0.88)
-border_width_left = 2
-border_width_top = 2
-border_width_right = 2
-border_width_bottom = 2
-border_color = Color(0.6, 0.45, 0.35, 0.7)
-corner_radius_top_left = 10
-corner_radius_top_right = 10
-corner_radius_bottom_right = 10
-corner_radius_bottom_left = 10
-shadow_color = Color(0, 0, 0, 0.5)
-shadow_size = 6
-content_margin_left = 24.0
-content_margin_top = 10.0
-content_margin_right = 24.0
-content_margin_bottom = 10.0
-
-[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_exit_hover"]
-bg_color = Color(0.14, 0.08, 0.08, 0.94)
-border_width_left = 2
-border_width_top = 2
-border_width_right = 2
-border_width_bottom = 2
-border_color = Color(0.9, 0.5, 0.4, 1)
-corner_radius_top_left = 10
-corner_radius_top_right = 10
-corner_radius_bottom_right = 10
-corner_radius_bottom_left = 10
-shadow_color = Color(0.8, 0.4, 0.3, 0.25)
-shadow_size = 10
-content_margin_left = 24.0
-content_margin_top = 10.0
-content_margin_right = 24.0
-content_margin_bottom = 10.0
-
-[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_exit_pressed"]
-bg_color = Color(0.05, 0.03, 0.03, 0.98)
-border_width_left = 2
-border_width_top = 2
-border_width_right = 2
-border_width_bottom = 2
-border_color = Color(0.55, 0.35, 0.28, 1)
-corner_radius_top_left = 10
-corner_radius_top_right = 10
-corner_radius_bottom_right = 10
-corner_radius_bottom_left = 10
-shadow_color = Color(0, 0, 0, 0.6)
-shadow_size = 3
-content_margin_left = 24.0
-content_margin_top = 10.0
-content_margin_right = 24.0
-content_margin_bottom = 10.0
+[sub_resource type="StyleBoxTexture" id="StyleBoxTexture_btn_pressed"]
+texture = ExtResource("7_btn_pressed")
+content_margin_left = 34.0
+content_margin_top = 12.0
+content_margin_right = 34.0
+content_margin_bottom = 8.0
 
 [node name="MainMenu" type="Control"]
 layout_mode = 3
@@ -328,98 +101,110 @@ anchor_left = 0.5
 anchor_top = 0.5
 anchor_right = 0.5
 anchor_bottom = 0.5
-offset_left = -190.0
+offset_left = -210.0
 offset_top = 4.0
-offset_right = 190.0
-offset_bottom = 388.0
+offset_right = 210.0
+offset_bottom = 392.0
 grow_horizontal = 2
 grow_vertical = 2
-theme_override_constants/separation = 14
+theme_override_constants/separation = 12
 
 [node name="PlayButton" type="Button" parent="VBoxContainer"]
-custom_minimum_size = Vector2(380, 58)
+custom_minimum_size = Vector2(420, 62)
 layout_mode = 2
 mouse_default_cursor_shape = 2
-theme_override_fonts/font = ExtResource("4_font_medieval")
-theme_override_colors/font_color = Color(1, 0.95, 0.85, 1)
-theme_override_colors/font_hover_color = Color(1, 0.9, 0.5, 1)
-theme_override_colors/font_pressed_color = Color(0.85, 0.78, 0.55, 1)
-theme_override_colors/font_shadow_color = Color(0, 0, 0, 0.75)
-theme_override_constants/shadow_offset_x = 1
-theme_override_constants/shadow_offset_y = 1
-theme_override_font_sizes/font_size = 24
-theme_override_styles/normal = SubResource("StyleBoxFlat_play_normal")
-theme_override_styles/hover = SubResource("StyleBoxFlat_play_hover")
-theme_override_styles/pressed = SubResource("StyleBoxFlat_play_pressed")
-theme_override_styles/focus = SubResource("StyleBoxFlat_play_focus")
+theme_override_fonts/font = ExtResource("8_font_btn")
+theme_override_colors/font_color = Color(0.96, 0.87, 0.6, 1)
+theme_override_colors/font_focus_color = Color(0.96, 0.87, 0.6, 1)
+theme_override_colors/font_hover_color = Color(1, 0.96, 0.82, 1)
+theme_override_colors/font_hover_pressed_color = Color(0.86, 0.75, 0.48, 1)
+theme_override_colors/font_pressed_color = Color(0.86, 0.75, 0.48, 1)
+theme_override_colors/font_shadow_color = Color(0, 0, 0, 0.9)
+theme_override_constants/shadow_offset_x = 2
+theme_override_constants/shadow_offset_y = 2
+theme_override_font_sizes/font_size = 20
+theme_override_styles/normal = SubResource("StyleBoxTexture_btn_normal")
+theme_override_styles/hover = SubResource("StyleBoxTexture_btn_hover")
+theme_override_styles/pressed = SubResource("StyleBoxTexture_btn_pressed")
+theme_override_styles/focus = SubResource("StyleBoxTexture_btn_normal")
 text = "JUGAR"
 
 [node name="ShadowForgeButton" type="Button" parent="VBoxContainer"]
-custom_minimum_size = Vector2(380, 58)
+custom_minimum_size = Vector2(420, 62)
 layout_mode = 2
 mouse_default_cursor_shape = 2
-theme_override_fonts/font = ExtResource("4_font_medieval")
-theme_override_colors/font_color = Color(1, 0.95, 0.85, 1)
-theme_override_colors/font_hover_color = Color(1, 0.9, 0.5, 1)
-theme_override_colors/font_pressed_color = Color(0.85, 0.78, 0.55, 1)
-theme_override_colors/font_shadow_color = Color(0, 0, 0, 0.7)
-theme_override_constants/shadow_offset_x = 1
-theme_override_constants/shadow_offset_y = 1
-theme_override_font_sizes/font_size = 24
-theme_override_styles/normal = SubResource("StyleBoxFlat_sf_normal")
-theme_override_styles/hover = SubResource("StyleBoxFlat_sf_hover")
-theme_override_styles/pressed = SubResource("StyleBoxFlat_sf_pressed")
+theme_override_fonts/font = ExtResource("8_font_btn")
+theme_override_colors/font_color = Color(0.96, 0.87, 0.6, 1)
+theme_override_colors/font_focus_color = Color(0.96, 0.87, 0.6, 1)
+theme_override_colors/font_hover_color = Color(1, 0.96, 0.82, 1)
+theme_override_colors/font_hover_pressed_color = Color(0.86, 0.75, 0.48, 1)
+theme_override_colors/font_pressed_color = Color(0.86, 0.75, 0.48, 1)
+theme_override_colors/font_shadow_color = Color(0, 0, 0, 0.9)
+theme_override_constants/shadow_offset_x = 2
+theme_override_constants/shadow_offset_y = 2
+theme_override_font_sizes/font_size = 20
+theme_override_styles/normal = SubResource("StyleBoxTexture_btn_normal")
+theme_override_styles/hover = SubResource("StyleBoxTexture_btn_hover")
+theme_override_styles/pressed = SubResource("StyleBoxTexture_btn_pressed")
+theme_override_styles/focus = SubResource("StyleBoxTexture_btn_normal")
 text = "SHADOWFORGE"
 
 [node name="DecksButton" type="Button" parent="VBoxContainer"]
-custom_minimum_size = Vector2(380, 58)
+custom_minimum_size = Vector2(420, 62)
 layout_mode = 2
 mouse_default_cursor_shape = 2
-theme_override_fonts/font = ExtResource("4_font_medieval")
-theme_override_colors/font_color = Color(1, 0.95, 0.85, 1)
-theme_override_colors/font_hover_color = Color(1, 0.9, 0.5, 1)
-theme_override_colors/font_pressed_color = Color(0.85, 0.78, 0.55, 1)
-theme_override_colors/font_shadow_color = Color(0, 0, 0, 0.7)
-theme_override_constants/shadow_offset_x = 1
-theme_override_constants/shadow_offset_y = 1
-theme_override_font_sizes/font_size = 24
-theme_override_styles/normal = SubResource("StyleBoxFlat_btn_normal")
-theme_override_styles/hover = SubResource("StyleBoxFlat_btn_hover")
-theme_override_styles/pressed = SubResource("StyleBoxFlat_btn_pressed")
-theme_override_styles/focus = SubResource("StyleBoxFlat_btn_focus")
+theme_override_fonts/font = ExtResource("8_font_btn")
+theme_override_colors/font_color = Color(0.96, 0.87, 0.6, 1)
+theme_override_colors/font_focus_color = Color(0.96, 0.87, 0.6, 1)
+theme_override_colors/font_hover_color = Color(1, 0.96, 0.82, 1)
+theme_override_colors/font_hover_pressed_color = Color(0.86, 0.75, 0.48, 1)
+theme_override_colors/font_pressed_color = Color(0.86, 0.75, 0.48, 1)
+theme_override_colors/font_shadow_color = Color(0, 0, 0, 0.9)
+theme_override_constants/shadow_offset_x = 2
+theme_override_constants/shadow_offset_y = 2
+theme_override_font_sizes/font_size = 20
+theme_override_styles/normal = SubResource("StyleBoxTexture_btn_normal")
+theme_override_styles/hover = SubResource("StyleBoxTexture_btn_hover")
+theme_override_styles/pressed = SubResource("StyleBoxTexture_btn_pressed")
+theme_override_styles/focus = SubResource("StyleBoxTexture_btn_normal")
 text = "MAZOS"
 
 [node name="BacksButton" type="Button" parent="VBoxContainer"]
-custom_minimum_size = Vector2(380, 58)
+custom_minimum_size = Vector2(420, 62)
 layout_mode = 2
 mouse_default_cursor_shape = 2
-theme_override_fonts/font = ExtResource("4_font_medieval")
-theme_override_colors/font_color = Color(1, 0.95, 0.85, 1)
-theme_override_colors/font_hover_color = Color(1, 0.9, 0.5, 1)
-theme_override_colors/font_pressed_color = Color(0.85, 0.78, 0.55, 1)
-theme_override_colors/font_shadow_color = Color(0, 0, 0, 0.7)
-theme_override_constants/shadow_offset_x = 1
-theme_override_constants/shadow_offset_y = 1
-theme_override_font_sizes/font_size = 24
-theme_override_styles/normal = SubResource("StyleBoxFlat_btn_normal")
-theme_override_styles/hover = SubResource("StyleBoxFlat_btn_hover")
-theme_override_styles/pressed = SubResource("StyleBoxFlat_btn_pressed")
-theme_override_styles/focus = SubResource("StyleBoxFlat_btn_focus")
+theme_override_fonts/font = ExtResource("8_font_btn")
+theme_override_colors/font_color = Color(0.96, 0.87, 0.6, 1)
+theme_override_colors/font_focus_color = Color(0.96, 0.87, 0.6, 1)
+theme_override_colors/font_hover_color = Color(1, 0.96, 0.82, 1)
+theme_override_colors/font_hover_pressed_color = Color(0.86, 0.75, 0.48, 1)
+theme_override_colors/font_pressed_color = Color(0.86, 0.75, 0.48, 1)
+theme_override_colors/font_shadow_color = Color(0, 0, 0, 0.9)
+theme_override_constants/shadow_offset_x = 2
+theme_override_constants/shadow_offset_y = 2
+theme_override_font_sizes/font_size = 20
+theme_override_styles/normal = SubResource("StyleBoxTexture_btn_normal")
+theme_override_styles/hover = SubResource("StyleBoxTexture_btn_hover")
+theme_override_styles/pressed = SubResource("StyleBoxTexture_btn_pressed")
+theme_override_styles/focus = SubResource("StyleBoxTexture_btn_normal")
 text = "DORSOS"
 
 [node name="ExitButton" type="Button" parent="VBoxContainer"]
-custom_minimum_size = Vector2(380, 58)
+custom_minimum_size = Vector2(420, 62)
 layout_mode = 2
 mouse_default_cursor_shape = 2
-theme_override_fonts/font = ExtResource("4_font_medieval")
-theme_override_colors/font_color = Color(1, 0.95, 0.85, 1)
-theme_override_colors/font_hover_color = Color(1, 0.9, 0.5, 1)
-theme_override_colors/font_pressed_color = Color(0.85, 0.78, 0.55, 1)
-theme_override_colors/font_shadow_color = Color(0, 0, 0, 0.6)
-theme_override_constants/shadow_offset_x = 1
-theme_override_constants/shadow_offset_y = 1
-theme_override_font_sizes/font_size = 24
-theme_override_styles/normal = SubResource("StyleBoxFlat_exit_normal")
-theme_override_styles/hover = SubResource("StyleBoxFlat_exit_hover")
-theme_override_styles/pressed = SubResource("StyleBoxFlat_exit_pressed")
+theme_override_fonts/font = ExtResource("8_font_btn")
+theme_override_colors/font_color = Color(0.96, 0.87, 0.6, 1)
+theme_override_colors/font_focus_color = Color(0.96, 0.87, 0.6, 1)
+theme_override_colors/font_hover_color = Color(1, 0.96, 0.82, 1)
+theme_override_colors/font_hover_pressed_color = Color(0.86, 0.75, 0.48, 1)
+theme_override_colors/font_pressed_color = Color(0.86, 0.75, 0.48, 1)
+theme_override_colors/font_shadow_color = Color(0, 0, 0, 0.9)
+theme_override_constants/shadow_offset_x = 2
+theme_override_constants/shadow_offset_y = 2
+theme_override_font_sizes/font_size = 20
+theme_override_styles/normal = SubResource("StyleBoxTexture_btn_normal")
+theme_override_styles/hover = SubResource("StyleBoxTexture_btn_hover")
+theme_override_styles/pressed = SubResource("StyleBoxTexture_btn_pressed")
+theme_override_styles/focus = SubResource("StyleBoxTexture_btn_normal")
 text = "SALIR"
