@@ -241,6 +241,14 @@ func _resolve_look_and_play_patterns(card: Node, full_ability_text: String, isol
 	por la cola de triggers — 2026-08-27, a pedido del usuario: 'los
 	Talismanes no disparan, resuelven').
 	Returns: true si algo se ejecutó."""
+	# Efecto compilado por piezas (2026-10-12, arquitectura.md §54): si
+	# EffectCompiler entiende TODO el texto aislado y EffectInterpreter sabe
+	# ejecutar todos sus pasos, se resuelve por ahí; si no, sigue la cadena
+	# de patrones de siempre. Va primero a propósito: la cadena vieja busca
+	# sobre el texto COMPLETO y gana la primera coincidencia, que puede
+	# quedarse con una parte del efecto y saltarse el resto.
+	if await _main._effect_interpreter.try_execute(card, isolated_ability_text, controller_id):
+		return true
 	# Habilidades ACTIVADAS de Tótems (2026-09-20, arquitectura.md "539
 	# cartas sin cobertura") — llegan aquí también vía TriggerSystem.
 	# resolve_ability_effect() (mismo camino compartido que los triggers,
@@ -561,31 +569,48 @@ func _execute_trigger_effect(card: Node, trigger_type: String, event_data: Dicti
 			# hacer" genérico (arco del triunfo además necesita is_entering
 			# explícito, ver TotemAbilityPatterns.gd), se chequean aparte,
 			# ANTES del bucle de cláusulas genérico de abajo.
+			# 2026-10-12 (arquitectura.md §54): estas cartas tienen UNA sola
+			# cláusula de entrada y su patrón explícito la resuelve completa. Antes
+			# el bucle genérico de abajo corría IGUAL después, y la cadena vieja
+			# (o el extract_action() del final) volvía a ejecutar el mismo efecto
+			# (p.ej. azusa yumi robaba y hacía Botar dos veces). explicit_done
+			# corta ese doble disparo.
+			var explicit_done := false
 			if await _main._totem_patterns.try_execute_arco_del_triunfo_pattern(full_ability_text, card, controller_id, true):
 				result["no_handler"] = false
+				explicit_done = true
 			if await _main._totem_patterns.try_execute_kotoku_in_enter_pattern(full_ability_text, card, controller_id):
 				result["no_handler"] = false
+				explicit_done = true
 			if await _main._totem_patterns.try_execute_iga_ryu_enter_pattern(full_ability_text, card, controller_id):
 				result["no_handler"] = false
+				explicit_done = true
 			if await _main._totem_patterns.try_execute_hangar_ciudadela_enter_pattern(full_ability_text, card, controller_id):
 				result["no_handler"] = false
+				explicit_done = true
 			if await _main._totem_patterns.try_execute_metropolitan_enter_pattern(full_ability_text, card, controller_id):
 				result["no_handler"] = false
+				explicit_done = true
 			# Armas auditadas 2026-09-20 (arquitectura.md "539 cartas sin
 			# cobertura") — mismo criterio que los Tótems de arriba: no calzan
 			# en el despachador compartido porque necesitan saber si es
 			# ENTER u otras condiciones puntuales, se chequean aparte.
 			if await _main._weapon_patterns.try_execute_nodachi_enter_pattern(full_ability_text, card, controller_id):
 				result["no_handler"] = false
+				explicit_done = true
 			if await _main._weapon_patterns.try_execute_azusa_yumi_enter_leave_pattern(full_ability_text, card, controller_id):
 				result["no_handler"] = false
+				explicit_done = true
 			# hidromiel (2026-09-20, arquitectura.md "539 cartas sin
 			# cobertura") — única cláusula de la carta, sin riesgo de falso
 			# positivo con otra cláusula propia; se registra igual que los
 			# Tótems/Armas de arriba por consistencia de estilo.
 			if await _main._oro_patterns.try_execute_hidromiel_pattern(full_ability_text, card, controller_id):
 				result["no_handler"] = false
+				explicit_done = true
 			for ability_text: String in clauses:
+				if explicit_done:
+					break
 				var resolved := await _resolve_look_and_play_patterns(card, full_ability_text, ability_text, controller_id, event_data)
 				if resolved:
 					result["no_handler"] = false
@@ -609,21 +634,29 @@ func _execute_trigger_effect(card: Node, trigger_type: String, event_data: Dicti
 			# play, is_entering=false: desregistra el efecto continuo de
 			# daño al Destierro (el aura de Fuerza se limpia sola vía
 			# ModifierRegistry al salir la carta fuente de juego).
+			# Mismo corte de doble disparo que en on_enter_play (2026-10-12).
+			var explicit_done := false
 			if await _main._totem_patterns.try_execute_arco_del_triunfo_pattern(full_ability_text, card, controller_id, false):
 				result["no_handler"] = false
+				explicit_done = true
 			# Armas auditadas 2026-09-20 (arquitectura.md "539 cartas sin
 			# cobertura") — mismo criterio que arco del triunfo arriba.
 			if await _main._weapon_patterns.try_execute_azusa_yumi_enter_leave_pattern(full_ability_text, card, controller_id):
 				result["no_handler"] = false
+				explicit_done = true
 			if await _main._weapon_patterns.try_execute_armadura_celestial_leave_pattern(full_ability_text, card, controller_id):
 				result["no_handler"] = false
+				explicit_done = true
 			if await _main._weapon_patterns.try_execute_nehushtan_leave_pattern(full_ability_text, card, controller_id):
 				result["no_handler"] = false
+				explicit_done = true
 			if await _main._weapon_patterns.try_execute_flechar_xoon_leave_pattern(full_ability_text, card, controller_id):
 				result["no_handler"] = false
+				explicit_done = true
 			if await _main._weapon_patterns.try_execute_canon_naval_leave_pattern(full_ability_text, card, controller_id):
 				result["no_handler"] = false
-			if not ability_text.is_empty():
+				explicit_done = true
+			if not ability_text.is_empty() and not explicit_done:
 				var resolved := await _resolve_look_and_play_patterns(card, full_ability_text, ability_text, controller_id, event_data)
 				if resolved:
 					result["no_handler"] = false
@@ -658,6 +691,8 @@ func _execute_trigger_effect(card: Node, trigger_type: String, event_data: Dicti
 				elif await _main._look_and_play.try_execute_attacks_alone_draw_pattern(ability_text, controller_id, card):
 					result["no_handler"] = false
 				elif await _main._look_and_play.try_execute_banish_opponent_ally_search_ignis_titan_discount_pattern(ability_text, card, controller_id):
+					result["no_handler"] = false
+				elif await _main._effect_interpreter.try_execute(card, clause, controller_id):
 					result["no_handler"] = false
 				else:
 					var action := UniversalCardParser.extract_action(clause)
@@ -838,14 +873,20 @@ func _execute_trigger_effect(card: Node, trigger_type: String, event_data: Dicti
 			var ability_text: String = ""
 			if card.get("card_data") != null:
 				ability_text = card.card_data.get("habilidad", "")
+			# "cuando hace daño" (2026-10-12, p.ej. Sir Galahad: 'Cuando hace
+			# daño al Castillo oponente, ...') — on_damage_dealt ya solo se
+			# dispara por daño al Castillo (PhaseFlowController._fire_damage_
+			# dealt_triggers()).
 			var clause := _isolate_trigger_clause(ability_text, [
-				"cuando haga daño de combate", "cuando haga daño", "si hizo daño"
+				"cuando haga daño de combate", "cuando haga daño", "si hizo daño", "cuando hace daño"
 			])
 			if not clause.is_empty():
 				var controller_id: int = card.get("owner_id") if card.get("owner_id") != null else 0
 				if await _main._convert_misc_resolver.try_execute_convert_ally_to_gold_pattern(clause, card, controller_id):
 					result["no_handler"] = false
 				elif await _main._draw_shuffle_resolver.try_execute_banish_cemeteries_equal_to_own_strength_pattern(clause, card, controller_id):
+					result["no_handler"] = false
+				elif await _main._effect_interpreter.try_execute(card, clause, controller_id):
 					result["no_handler"] = false
 				else:
 					var action := UniversalCardParser.extract_action(clause)

@@ -174,6 +174,13 @@ func search_zones(player_id: int, zones: Array, filter: Dictionary, amount: int 
 			_main._notify_trigger("on_search_found", {
 				"player_id": player_id, "card": card_data, "from_zone": from_zone
 			})
+		elif destination == Constants.Zone.CASTILLO:
+			# "Baraja N cartas de tu Cementerio en tu Castillo" (2026-10-12,
+			# EffectInterpreter, p.ej. Cathach) — vuelve al mazo oculta y se
+			# baraja abajo, mismo selector de zonas que el resto de búsquedas.
+			card_data["esta_oculta"] = true
+			CardManager.get_deck(player_id).append(card_data)
+			result.must_shuffle = true
 		elif destination == Constants.Zone.ORO_PAGADO and main and main._gold_manager:
 			# Va directo al Oro Pagado (ya-gastado), sin pasar por la mano
 			# (2026-09-04, p.ej. Aurora de Chile: 'pon uno en tu Oro Pagado y

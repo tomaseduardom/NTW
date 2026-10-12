@@ -343,7 +343,8 @@ const TRIGGER_KEYWORDS: Dictionary = {
 	# esta frase puntual seguía sin cubrir).
 	"on_attack": ["cuando ataque", "al atacar", "cuando entra en juego o ataque", "cuando entra en juego o ataca", "cuando el portador ataque"],
 	"on_block": ["cuando bloquee", "al bloquear"],
-	"on_damage_dealt": ["cuando haga daño de combate", "cuando haga daño", "si hizo daño"],
+	# "cuando hace daño" (2026-10-12, p.ej. Sir Galahad).
+	"on_damage_dealt": ["cuando haga daño de combate", "cuando haga daño", "si hizo daño", "cuando hace daño"],
 	"on_damage_received": ["cuando fueras a recibir daño"],
 	"on_turn_start": ["al comienzo del turno", "al inicio del turno", "al comienzo de tu turno"],
 	# "en tu fase final" agregado (2026-08-30, p.ej. Espada de O'Higgins) —

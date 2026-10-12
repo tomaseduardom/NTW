@@ -29,7 +29,7 @@ const TRIGGER_PATTERNS: Dictionary = {
 	# "infligir"/"inflija"/"inflige" no es terminología real (2026-08-28) —
 	# se reemplazó por "cuando haga daño de combate", la forma más común en
 	# el texto real de las cartas junto a "cuando haga daño" a secas.
-	"on_damage_dealt": ["cuando haga daño de combate", "cuando haga daño", "si hizo daño"],
+	"on_damage_dealt": ["cuando haga daño de combate", "cuando haga daño", "si hizo daño", "cuando hace daño"],
 	# "cuando reciba daño"/"al recibir daño" no son la frase real — es
 	# "cuando fueras a recibir daño" (2026-08-28, a pedido del usuario).
 	"on_damage_received": ["cuando fueras a recibir daño"],

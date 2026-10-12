@@ -308,6 +308,9 @@ func confirm_attackers() -> void:  # coroutine — el llamador debe usar 'await'
 	# se declaró/desdeclaró antes de este punto.
 	for ally in attackers:
 		if is_instance_valid(ally):
+			# "si no fue declarado atacante este turno" (2026-10-12, p.ej.
+			# Guardia Real) — EffectInterpreter consulta esta marca.
+			ally.set_meta("declared_attacker_turn", current_turn)
 			EffectController.emit_signal("on_card_attacks", active_player_id, ally)
 			await TriggerSystem._collect_triggers_for_event("on_attack", {
 				"player_id": active_player_id, "card": ally

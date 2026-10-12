@@ -5674,3 +5674,104 @@ pero BanishOpponentPatterns ya la llamaba — se agregó la fachada.
 **Verificado:** compila con autoloads; regex de Arturo probado en Godot
 contra el texto real (n=dos, tipo=armas, descuento=un). Sin verificar en
 partida real todavía.
+
+## 54. Efectos por piezas: EffectCompiler + EffectInterpreter + auditor (2026-10-12)
+
+**A pedido del usuario ("vamos con el paso b"):** antes de implementar la
+edición Drácula (255 cartas nuevas: Rey Vampiro y Set Inmortal), cambiar
+el método. Hasta aquí cada carta nueva se resolvía con su propia función
+`try_execute_*_pattern()` (252 en el proyecto, 144 encadenadas en
+`TriggerResolution`), en orden fijo, buscando sobre el texto COMPLETO y
+ganando la primera coincidencia — una carta podía quedar "comida" a medias
+por un patrón de otra, y no había tests.
+
+**`EffectCompiler` (nuevo, `scripts/core/effects/compiler/`)** — clase pura
+(sin autoloads ni nodos). `compile_clause(texto)` devuelve
+`{ok, optional, activated, steps, unparsed}`: normaliza (minúsculas, sin
+tildes ni ñ), quita el disparador y, en las activadas, el momento/frecuencia
+("En tu Vigilia, una vez por turno, ..."), saltea líneas iniciales que no son
+efecto (keywords, "Cuando lo juegues, Destiérralo") y consume **átomos** de
+izquierda a derecha unidos por ", " / " y " / "Luego,". **Regla de oro: solo
+es válido si entendió TODO el texto**; si queda un resto, `ok = false` y el
+juego sigue con la cadena vieja — nunca se ejecuta un efecto a medias. Corta
+el bloque en oraciones estáticas o en otra habilidad condicional de la misma
+carta ("Si este Aliado es Destruido...").
+Átomos: robar, Botar (fijo o "por cada Aliado en tu Línea de Defensa/Tótem
+en juego/..."), descartar (propio o al azar del rival), barajar de la mano,
+barajar del Cementerio al Castillo, buscar (zonas explícitas), destruir/
+desterrar/barajar objetivos en juego (con tipo, "oponente", "que no sea Oro",
+"de Fuerza/coste N o menos/más", "hasta N"), destruir/desterrar todos,
+"pierde su habilidad y es Destruido" (uno o todos), "Destrúyelo" (la propia
+carta), subir a la mano (entendido pero todavía NO ejecutable). Estructuras:
+elección "A, o B", condición "si no fue declarado atacante este turno, ...",
+reemplazo "Si tiene Exhumar, en vez de eso, Destiérralo".
+
+**`EffectInterpreter` (nuevo)**, dueño `TriggerSystem._effect_interpreter`:
+declara todo primero (el "puedes", la rama de una elección, los objetivos con
+clic en el tablero) y después ejecuta en orden "en la medida de lo posible";
+un paso tras "Luego," solo corre si el anterior se resolvió completo. Usa las
+mismas acciones de siempre (`ActionModule.draw/mill/discard/destroy/banish/
+search_zones/return_to_deck`) y las mismas protecciones de objetivo que
+`TargetedEffectExecutor._select_ally_target()`. Quién elige: jugador local con
+clic; Remoto por red (await_target/await_multi_target/await_choice ya
+delegan); bot local con una heurística (cartas rivales, las más fuertes).
+El "puedes" no agrega un popup Sí/No si el primer paso ya se puede rechazar
+en su propio selector (búsqueda con mínimo 0, objetivo con ESC), ni en las
+activadas (el clic en el botón ya confirmó). **No abre ventana de respuesta
+propia**: todo camino que llega acá ya le dio al rival su Paso D
+(`resolve_next_trigger()`, `resolve_talisman()`, la Pila de las activadas);
+otra ventana lo haría pasar dos veces y, dentro de la resolución de la Pila,
+colgaría 8 s (`add_triggered_ability_to_stack_and_await()` no se procesa
+mientras `_is_resolving`).
+
+**Enganche:** primera línea de `TriggerResolution._resolve_look_and_play_
+patterns()` (triggers de todo tipo, Talismanes y activadas pasan por ahí) y
+en las ramas `on_attack`/`on_damage_dealt`, antes de `extract_action()`. Las
+piezas ejecutables viven en `EffectCompiler.EXECUTABLE_OPS/VERBS` (no en el
+intérprete) para que el auditor headless las consulte sin autoloads.
+
+**Piezas generales nuevas fuera del compilador:**
+- `ActionSearch`: destino `CASTILLO` (barajar al mazo lo elegido, con el
+  mismo selector de zonas de §53).
+- `GameManager.confirm_attackers…`: marca `declared_attacker_turn` en cada
+  atacante confirmado (condición de Guardia Real).
+- "cuando hace daño" agregado a `on_damage_dealt` (Card, CardFactory,
+  TriggerResolution) — Sir Galahad.
+
+**Arreglo de paso (doble disparo):** en `on_enter_play`/`on_leave_play`, las
+cartas con patrón explícito previo (arco del triunfo, kotoku-in, iga-ryu,
+hangar, metropolitan, nodachi, azusa yumi, hidromiel; y en salida armadura
+celestial, nehushtan, flechar xoon, cañón naval) resolvían su efecto y
+DESPUÉS el despachador genérico lo volvía a resolver (p.ej. nehushtan robaba
+4 en vez de 2). `explicit_done` corta el genérico; todas tienen una sola
+cláusula de ese disparador (verificado con el texto real).
+
+**Herramientas (`tools/`):**
+- `test_effect_compiler.gd` — 25 casos (texto real → plan esperado, y casos
+  que DEBEN rechazarse). `--headless --path . -s tools/test_effect_compiler.gd`.
+- `audit_cards.gd` — corre el compilador real sobre el cache (`-- "Drácula"`
+  o `-- "*"`, más un JSON de detalle opcional). Hoy, catálogo completo: 180
+  bloques compilados, 26 de ellos activadas; 121 cartas con todos sus bloques
+  de efecto por piezas.
+- `sync_cards.ps1` — agrega al cache las cartas de la API que faltan
+  (`-DryRun`, `-Update`), con copia en `cards.json.bak`. Se usó para bajar
+  las 257 nuevas (2683 en total).
+
+**Cambio de camino para cartas viejas:** 71 bloques distintos de cartas que
+ya existían ahora se resuelven por piezas en vez de su patrón (robar, buscar,
+destruir/desterrar/barajar con filtro de coste, Botar). Revisados uno por uno
+contra el texto real; ninguno depende de una regla especial de su patrón
+viejo. Efecto visible: menos ventanas de respuesta repetidas.
+
+**Drácula — de las 22 de la primera tanda**, por piezas completas: Sânziana
+(ETB), Destruir Refugio, Sir Peter Hawkins, Martillo Sacro, Patrulla Nocturna
+(ETB), Ileana (activada), Sir Persival, Sir Galahad, Guardia Real, Dragón de
+Magma, Cathach (ETB), Dragón Nival, Draco Conjurador, Bola de Fuego, Flecha
+Ácida, Espada Larga, Guardia Gozosa (ETB). Pendientes: Favor de la Corte
+(falta la pieza "subir a la mano"), Duque Godofredo y la mitad de Cathach
+(auras por Raza), Sânziana "deben atacar si pueden", Patrulla "ganan 1 de
+Fuerza" pegado a "Arma adicional", Jaques de Molay, la segunda habilidad de
+Draig Ifang, la activada con autodestrucción de Guardia Gozosa y Hy Brasil.
+Detalle de las 255 en `docs/plans/2026-10-12-cartas-nuevas-dracula.md`.
+
+**Sin verificar en partida real todavía.**

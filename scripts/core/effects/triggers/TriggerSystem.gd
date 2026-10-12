@@ -84,6 +84,10 @@ var _convert_misc_resolver: RefCounted
 var _totem_patterns: RefCounted
 var _weapon_patterns: RefCounted
 var _oro_patterns: RefCounted
+## Efectos compilados por piezas (EffectCompiler + EffectInterpreter,
+## 2026-10-12, arquitectura.md §54) — se prueba ANTES de la cadena de
+## patrones en TriggerResolution._resolve_look_and_play_patterns().
+var _effect_interpreter: EffectInterpreter
 
 
 func _ready() -> void:
@@ -101,6 +105,8 @@ func _ready() -> void:
 	_weapon_patterns.setup(self)
 	_oro_patterns = OroAbilityPatternsScript.new()
 	_oro_patterns.setup(self)
+	_effect_interpreter = EffectInterpreter.new()
+	_effect_interpreter.setup(self)
 	_restrictions = TriggerRestrictions.new()
 	_restrictions.setup(self)
 	_buffs = TemporaryBuffSystem.new()
