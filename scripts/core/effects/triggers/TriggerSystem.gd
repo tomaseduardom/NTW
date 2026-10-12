@@ -65,6 +65,10 @@ var _card_name_search: RefCounted
 ## que ya separó LookAndPlayResolver.gd de este mismo archivo. preload()
 ## en vez del nombre de clase global: son scripts NUEVOS de esta sesión, ver
 ## el comentario de arriba sobre CardNameSearchDialogScript.
+# preload y no el class_name global (2026-10-12): un editor de Godot abierto
+# desde antes de crear la clase no la tiene registrada y Main/TriggerSystem
+# fallaban con "Could not find type" hasta reabrir el proyecto.
+const EffectInterpreterScript = preload("res://scripts/core/effects/compiler/EffectInterpreter.gd")
 const DrawShuffleResolverScript = preload("res://scripts/core/effects/triggers/DrawShuffleResolver.gd")
 const ConvertAndMiscResolverScript = preload("res://scripts/core/effects/triggers/ConvertAndMiscResolver.gd")
 ## Patrones de Tótems detectados sin cobertura en la auditoría de 539 cartas
@@ -87,7 +91,7 @@ var _oro_patterns: RefCounted
 ## Efectos compilados por piezas (EffectCompiler + EffectInterpreter,
 ## 2026-10-12, arquitectura.md §54) — se prueba ANTES de la cadena de
 ## patrones en TriggerResolution._resolve_look_and_play_patterns().
-var _effect_interpreter: EffectInterpreter
+var _effect_interpreter: RefCounted
 
 
 func _ready() -> void:
@@ -105,7 +109,7 @@ func _ready() -> void:
 	_weapon_patterns.setup(self)
 	_oro_patterns = OroAbilityPatternsScript.new()
 	_oro_patterns.setup(self)
-	_effect_interpreter = EffectInterpreter.new()
+	_effect_interpreter = EffectInterpreterScript.new()
 	_effect_interpreter.setup(self)
 	_restrictions = TriggerRestrictions.new()
 	_restrictions.setup(self)

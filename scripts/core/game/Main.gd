@@ -7,6 +7,10 @@ extends Control
 # ESCENAS PRECARGADAS
 # =============================================================================
 const CardScene = preload("res://scenes/cards/Card.tscn")
+# preload y no el class_name global (2026-10-12): un editor de Godot abierto
+# desde antes de crear la clase no la tiene registrada y Main/TriggerSystem
+# fallaban con "Could not find type" hasta reabrir el proyecto.
+const ZoneBrowsePickerScript = preload("res://scripts/ui/zones/ZoneBrowsePicker.gd")
 const DropZoneScript = preload("res://scripts/ui/zones/DropZone.gd")
 const OpponentFanScript = preload("res://scripts/ui/hand/OpponentFan.gd")
 const GameStateScript = preload("res://scripts/core/config/GameState.gd")
@@ -85,7 +89,7 @@ var _gold_manager: GoldManager             = null
 var _mulligan_ctrl: MulliganController     = null
 var _card_inspector: CardInspectionLayer   = null
 var _zone_viewer: ZoneViewerModule         = null
-var _zone_browse_picker: ZoneBrowsePicker   = null
+var _zone_browse_picker: Node               = null  # ZoneBrowsePicker (ver ZoneBrowsePickerScript)
 var _selection: SelectionModule            = null
 var _zone_manager: ZoneManager             = null
 var _phase_flow: PhaseFlowController       = null
@@ -187,7 +191,7 @@ func _ready() -> void:
 	_zone_viewer = ZoneViewerModule.new(); _zone_viewer.name = "ZoneViewerModule"
 	add_child(_zone_viewer); _zone_viewer.setup(self)
 
-	_zone_browse_picker = ZoneBrowsePicker.new(); _zone_browse_picker.name = "ZoneBrowsePicker"
+	_zone_browse_picker = ZoneBrowsePickerScript.new(); _zone_browse_picker.name = "ZoneBrowsePicker"
 	add_child(_zone_browse_picker); _zone_browse_picker.setup(self)
 
 	_selection = SelectionModule.new(); _selection.name = "SelectionModule"

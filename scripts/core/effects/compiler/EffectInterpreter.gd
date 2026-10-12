@@ -39,6 +39,8 @@ const BOARD_CONTAINERS := ["player_field", "player_linea_ataque", "player_linea_
 	"opponent_field", "opponent_linea_ataque", "opponent_linea_apoyo"]
 const GOLD_CONTAINERS := ["player_gold", "opponent_gold", "player_oro_pagado", "opponent_oro_pagado"]
 
+const EffectCompilerScript = preload("res://scripts/core/effects/compiler/EffectCompiler.gd")
+
 var _ts: Node  # TriggerSystem (dueño de este intérprete)
 
 
@@ -55,8 +57,8 @@ func try_execute(card: Node, clause_text: String, controller_id: int) -> bool:
 	que seguir con la cadena de patrones vieja."""
 	if not is_instance_valid(card) or clause_text.strip_edges().is_empty():
 		return false
-	var plan: Dictionary = EffectCompiler.compile_clause(clause_text)
-	if not plan.ok or not EffectCompiler.is_executable(plan.steps):
+	var plan: Dictionary = EffectCompilerScript.compile_clause(clause_text)
+	if not plan.ok or not EffectCompilerScript.is_executable(plan.steps):
 		return false
 	print("[EffectInterpreter] %s: %d paso(s) compilados" % [_card_name(card), plan.steps.size()])
 	await execute_plan(plan, card, controller_id)
