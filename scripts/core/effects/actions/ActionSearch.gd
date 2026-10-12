@@ -4,6 +4,8 @@ extends RefCounted
 ## validador, filtro de cartas compartido).
 ## Extraído de ActionModule.gd (Fase 4 de reestructuración, "módulos gordos").
 
+const EffectContextScript = preload("res://scripts/core/effects/EffectContext.gd")  # detector de paridad (§56)
+
 var _main: Node
 
 
@@ -229,6 +231,7 @@ func _pick_from_zones(player_id: int, zone_infos: Array, to_select: int, min_cou
 	— en la pantalla del Anfitrión si elige él, por red si elige un Remoto
 	real (el Remoto corre el mismo selector y devuelve índices), o automática
 	para el bot local. Devuelve [{zone, zone_data, data}]."""
+	EffectContextScript.check_chooser(chooser, "buscar")
 	var main := _main.get_node_or_null("/root/Main")
 	var title: String = "Buscar"
 	if source_card and source_card.get("card_name") != null:

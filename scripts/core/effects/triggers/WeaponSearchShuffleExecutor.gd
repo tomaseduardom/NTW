@@ -14,6 +14,8 @@
 ## objetivo que se quedó en TargetedEffectExecutor.gd por ser el cluster de
 ## mayor tráfico externo de todo este archivo).
 
+const PlayerSideScript = preload("res://scripts/core/game/PlayerSide.gd")
+
 var _main: Node
 
 
@@ -234,8 +236,7 @@ func _execute_play_weapon_discount_draw(action: Dictionary, controller_id: int, 
 	desde el jugador 2 y no sucedió nada"): antes solo el jugador 0. Ahora
 	también el Remoto real (elige por red: Arma con clic en su mano o en el
 	popup del Cementerio, y portador). El bot local sigue declinando."""
-	var is_remote: bool = controller_id == 1 and NetworkClient.room_code != "" and NetworkClient.is_host
-	if controller_id != 0 and not is_remote:
+	if PlayerSideScript.is_bot(controller_id):
 		return
 	var params: Dictionary = action.get("params", {})
 	var discount: int = params.get("discount", 0)
@@ -248,8 +249,7 @@ func _execute_play_weapon_discount_draw(action: Dictionary, controller_id: int, 
 		return
 
 	var hand_weapons: Array = []
-	var own_hand_cards: Array = main.player_hand.cards if controller_id == 0 else main._opponent_fan.get_cards()
-	for c in own_hand_cards:
+	for c in PlayerSideScript.hand_cards(main, controller_id):
 		if is_instance_valid(c) and c.get("card_type") == Constants.CardType.ARMA:
 			hand_weapons.append(c)
 	var cemetery_weapons: Array = []
@@ -393,8 +393,7 @@ func _execute_play_weapon_discount_draw(action: Dictionary, controller_id: int, 
 		return
 
 	if from_hand and controller_id != 0:
-		main._opponent_fan.remove_card(weapon_node, false)
-		weapon_node.esta_oculta = false
+		PlayerSideScript.remove_from_hand(main, controller_id, weapon_node)
 	elif from_hand:
 		var idx = main.player_hand.cards.find(weapon_node)
 		if idx >= 0:
@@ -407,14 +406,8 @@ func _execute_play_weapon_discount_draw(action: Dictionary, controller_id: int, 
 		if cidx >= 0:
 			CardManager.remove_from_cemetery(controller_id, cidx)
 
-	if coste_real > 0 and controller_id != 0:
-		# Mismo pago que el resto de las jugadas del Remoto (mueve sus Oros
-		# físicos de Reserva a Oro Pagado).
-		main._easy_bot._pay_oro_for_bot(coste_real)
-	elif coste_real > 0:
-		var weapon_race: String = str(weapon_node.get("card_raza")) if weapon_node.get("card_raza") != null else ""
-		await main._gold_manager.pagar_coste(coste_real, weapon_node.card_type, weapon_race, weapon_node.card_cost)
-		PaymentManager.registrar_pago(coste_real)
+	if coste_real > 0:
+		await PlayerSideScript.pay(main, controller_id, coste_real, weapon_node)
 
 	await main._gold_manager._equip_weapon(weapon_node, ally)
 

@@ -31,6 +31,7 @@ const MODE_MAP: Dictionary = {
 	"CUSTOM": SelectionMode.CUSTOM
 }
 
+const EffectContextScript = preload("res://scripts/core/effects/EffectContext.gd")  # detector de paridad (§56)
 const CardScene = preload("res://scenes/cards/Card.tscn")
 const TEX_ALTAR_BG := preload("res://assets/backgrounds/pila_bautismal_altar.jpg")
 const SHADER_VIGNETTE := preload("res://assets/shaders/zone_modal_vignette.gdshader")
@@ -334,6 +335,7 @@ func open_selection(card_data_list: Array, mode: int, config: Dictionary = {}, c
 			conviertan a propósito para que el Remoto decida sus propias
 			cartas pasan chooser_id=1 explícito.
 	"""
+	EffectContextScript.check_chooser(chooser_id, str(config.get("title", "selección")))
 	if is_open:
 		push_warning("[SelectionManager] Ya hay una selección abierta")
 		return
@@ -491,10 +493,12 @@ func _delegate_selection_to_remote(card_data_list: Array, mode: int, config: Dic
 ## externa dominante de este autoload (54x/52x/33x/4x/2x llamadas en todo
 ## el proyecto).
 func await_single_pick(candidates: Array, title: String, can_cancel: bool = true, min_selections: int = 1, filter: Callable = Callable(), chooser_id: int = 0) -> Dictionary:
+	EffectContextScript.check_chooser(chooser_id, title)
 	return await _dialogs.await_single_pick(candidates, title, can_cancel, min_selections, filter, chooser_id)
 
 
 func await_two_choice(main: Node, title: String, option_a: String, option_b: String, chooser_id: int = 0) -> bool:
+	EffectContextScript.check_chooser(chooser_id, title)
 	return await _dialogs.await_two_choice(main, title, option_a, option_b, chooser_id)
 
 
@@ -509,16 +513,19 @@ func await_card_pair_choice(
 	face_down_a: bool = false,
 	chooser_id: int = 0
 ) -> bool:
+	EffectContextScript.check_chooser(chooser_id, title)
 	return await _dialogs.await_card_pair_choice(
 		main, title, card_data_a, card_data_b, label_a, label_b, face_down_b, face_down_a, chooser_id
 	)
 
 
 func await_choice(main: Node, title: String, options: Array, chooser_id: int = 0) -> int:
+	EffectContextScript.check_chooser(chooser_id, title)
 	return await _dialogs.await_choice(main, title, options, chooser_id)
 
 
 func await_castillo_pick(main: Node, title: String, chooser_id: int = 0) -> bool:
+	EffectContextScript.check_chooser(chooser_id, title)
 	return await _dialogs.await_castillo_pick(main, title, chooser_id)
 
 
@@ -531,6 +538,7 @@ func cancel_castillo_pick() -> void:
 
 
 func await_multi_pick(candidates: Array, title: String, max_selections: int, min_selections: int = 0, can_cancel: bool = true, filter: Callable = Callable(), chooser_id: int = 0) -> Dictionary:
+	EffectContextScript.check_chooser(chooser_id, title)
 	return await _dialogs.await_multi_pick(candidates, title, max_selections, min_selections, can_cancel, filter, chooser_id)
 
 

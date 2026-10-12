@@ -68,6 +68,7 @@ var _card_name_search: RefCounted
 # preload y no el class_name global (2026-10-12): un editor de Godot abierto
 # desde antes de crear la clase no la tiene registrada y Main/TriggerSystem
 # fallaban con "Could not find type" hasta reabrir el proyecto.
+const EffectContextScript = preload("res://scripts/core/effects/EffectContext.gd")  # detector de paridad (§56)
 const EffectInterpreterScript = preload("res://scripts/core/effects/compiler/EffectInterpreter.gd")
 const DrawShuffleResolverScript = preload("res://scripts/core/effects/triggers/DrawShuffleResolver.gd")
 const ConvertAndMiscResolverScript = preload("res://scripts/core/effects/triggers/ConvertAndMiscResolver.gd")
@@ -281,6 +282,17 @@ func clear_triggers() -> void:
 
 
 func resolve_talisman(card: Node) -> bool:
+	"""Envoltorio (2026-10-12, §56): marca el contexto de efecto (quién
+	controla este Talismán) para el detector de paridad mientras resuelve.
+	La lógica real está en _resolve_talisman_impl()."""
+	var controller: int = int(card.get("owner_id")) if is_instance_valid(card) and card.get("owner_id") != null else 0
+	var ctx_token: int = EffectContextScript.push(card, controller, "Talismán")
+	var annulled: bool = await _resolve_talisman_impl(card)
+	EffectContextScript.pop(ctx_token)
+	return annulled
+
+
+func _resolve_talisman_impl(card: Node) -> bool:
 	"""Resuelve el efecto impreso de un Talismán al jugarlo (DAR Sección 8).
 	A diferencia de una habilidad disparada (Sección 7.4), un Talismán no
 	'dispara' nada — su texto ES el efecto de jugarlo, se resuelve directo

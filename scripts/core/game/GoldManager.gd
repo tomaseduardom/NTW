@@ -29,6 +29,8 @@ signal gold_placed(player_id: int, count_this_turn: int)
 ## Conteo de Oros colocados este turno, por jugador — se resetea en cada
 ## turno nuevo (_on_turn_started_clear_virtual_gold), sea de quien sea el
 ## turno, porque el conteo es "este turno", no "en mi turno".
+const EffectContextScript = preload("res://scripts/core/effects/EffectContext.gd")  # detector de paridad (§56)
+
 var oro_colocado_conteo: Dictionary = {0: 0, 1: 0}
 
 ## 'Los jugadores no pueden poner Oros en juego por efectos si ya
@@ -2096,6 +2098,7 @@ func pagar_coste(cantidad: int, card_type: int = -1, card_race: String = "", car
 	— Oro Virtual, Oro Virtual restringido y Oro físico son todos por
 	jugador ahora. Default 0 preserva el comportamiento de todos los
 	llamadores existentes que no lo pasaban (siempre el Anfitrión)."""
+	EffectContextScript.check_payment(player_id, cantidad)
 	var reserva_container: HBoxContainer = _main.player_gold if player_id == 0 else _main.opponent_gold
 	if not puede_pagar(cantidad, card_type, card_race, card_cost, player_id):
 		# reserva_container.get_child_count() incluye los tokens visuales de

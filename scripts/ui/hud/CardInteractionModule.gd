@@ -3,6 +3,8 @@ class_name CardInteractionModule
 ## CardInteractionModule — Gestiona clicks, hover y arrastre de cartas.
 ## Se instancia como hijo de Main en _ready().
 
+const EffectContextScript = preload("res://scripts/core/effects/EffectContext.gd")  # detector de paridad (§56)
+
 var _main: Node = null
 
 var selected_card: Node = null
@@ -246,6 +248,7 @@ func await_target(prompt: String, filter: Callable, cancellable: bool = true, ch
 	esperaría un click en la pantalla del Anfitrión)."""
 	if not is_instance_valid(self):
 		return null
+	EffectContextScript.check_chooser(chooser_id, prompt)
 	if chooser_id == 1 and NetworkClient.room_code != "" and NetworkClient.is_host:
 		return await _delegate_target_to_remote(prompt, filter, cancellable)
 	var state := {"done": false, "chosen": null}
@@ -312,6 +315,7 @@ func await_multi_target(prompt_prefix: String, candidates: Array, max_count: int
 	# al recibir la respuesta completa (ver su propio comentario) en vez de
 	# en vivo por click — suficiente para que Tempilcahue/Ngenechén/asedio
 	# naval se puedan desbloquear de verdad (ver arquitectura.md §43).
+	EffectContextScript.check_chooser(chooser_id, prompt_prefix)
 	if chooser_id == 1 and NetworkClient.room_code != "" and NetworkClient.is_host:
 		return await _delegate_multi_target_to_remote(prompt_prefix, candidates, max_count, cancellable, lock_group_key, dynamic_filter)
 	var glow_of := func(c: Node) -> Color:
@@ -596,6 +600,7 @@ func await_target_or_castillo_pick(prompt: String, filter: Callable, castillo_ti
 	directo para el Remoto. Se delega a _delegate_target_or_castillo_to_
 	remote(), que junta ambas opciones (cartas candidatas + Castillo
 	propio/rival) en un solo prompt de texto."""
+	EffectContextScript.check_chooser(chooser_id, prompt)
 	if chooser_id == 1 and NetworkClient.room_code != "" and NetworkClient.is_host:
 		return await _delegate_target_or_castillo_to_remote(prompt, filter, castillo_title, allow_cancel, castillo_own_only)
 	if not is_instance_valid(self):

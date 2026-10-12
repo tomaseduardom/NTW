@@ -11,6 +11,8 @@ const SHADER_VIGNETTE := preload("res://assets/shaders/zone_modal_vignette.gdsha
 const FONT_TITLE := preload("res://assets/fonts/Cinzel-Bold.ttf")
 const FONT_BODY := preload("res://assets/fonts/Marcellus-Regular.ttf")
 
+const EffectContextScript = preload("res://scripts/core/effects/EffectContext.gd")  # detector de paridad (§56)
+
 var _main: Node = null
 
 
@@ -651,6 +653,7 @@ func open_cemetery_target_picker(prompt: String, filter: Callable, max_count: in
 	# real conectado, no se abre esta UI local (que igual asume SIEMPRE
 	# "jugador 0 = propio, jugador 1 = rival", sin mirar chooser_id) — se
 	# delega por red.
+	EffectContextScript.check_chooser(chooser_id, prompt)
 	if chooser_id == 1 and NetworkClient.room_code != "" and NetworkClient.is_host:
 		return await _delegate_cemetery_picker_to_remote(prompt, filter, max_count, own_data, opp_data)
 

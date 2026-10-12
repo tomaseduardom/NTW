@@ -40,6 +40,7 @@ const BOARD_CONTAINERS := ["player_field", "player_linea_ataque", "player_linea_
 const GOLD_CONTAINERS := ["player_gold", "opponent_gold", "player_oro_pagado", "opponent_oro_pagado"]
 
 const EffectCompilerScript = preload("res://scripts/core/effects/compiler/EffectCompiler.gd")
+const PlayerSideScript = preload("res://scripts/core/game/PlayerSide.gd")
 
 var _ts: Node  # TriggerSystem (dueño de este intérprete)
 
@@ -390,7 +391,7 @@ func _discard(main: Node, st: Dictionary, controller_id: int) -> bool:
 func _shuffle_from_hand(main: Node, st: Dictionary, controller_id: int) -> bool:
 	"""'Baraja (hasta) N cartas de tu mano (en tu Castillo)' — mismo
 	mecanismo que DSR_ShuffleDrawCombos (Manuel Bulnes)."""
-	var hand_container = main.player_hand if controller_id == 0 else main.get("_opponent_fan")
+	var hand_container = PlayerSideScript.hand(main, controller_id)
 	var hand := _hand_cards(main, controller_id)
 	if not hand_container or hand.is_empty():
 		return st.up_to  # "hasta N" con la mano vacía igual se resolvió
@@ -429,19 +430,12 @@ func _ask_yes_no(main: Node, title: String, chooser_id: int) -> bool:
 	return await SelectionManager.await_two_choice(main, title, "Sí", "No", chooser_id)
 
 
-func _is_remote(pid: int) -> bool:
-	return pid == 1 and NetworkClient.room_code != "" and NetworkClient.is_host
-
-
 func _is_bot(pid: int) -> bool:
-	return pid == 1 and not _is_remote(pid)
+	return PlayerSideScript.is_bot(pid)
 
 
 func _hand_cards(main: Node, pid: int) -> Array:
-	if pid == 0:
-		return main.player_hand.cards.duplicate() if main.player_hand and main.player_hand.get("cards") != null else []
-	var fan = main.get("_opponent_fan")
-	return fan.get_cards().duplicate() if fan and fan.has_method("get_cards") else []
+	return PlayerSideScript.hand_cards(main, pid)
 
 
 static func _controller_of(c: Node) -> int:

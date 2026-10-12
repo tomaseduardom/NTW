@@ -7,6 +7,8 @@ class_name StackStepResolver
 ## (Fase 4 de reestructuración) — ActionPipeline.gd es un autoload sin
 ## class_name (colisionaría con su propio nombre de autoload).
 
+const EffectContextScript = preload("res://scripts/core/effects/EffectContext.gd")  # detector de paridad (§56)
+
 var _main: Node
 
 
@@ -483,7 +485,9 @@ func _resolve_ability(stack_obj: Dictionary) -> Dictionary:
 	if effect_text.is_empty() or not source_card_node or not is_instance_valid(source_card_node):
 		return result
 
+	var ctx_token: int = EffectContextScript.push(source_card_node, controller_id, "activada")
 	var resolved: bool = await TriggerSystem.resolve_ability_effect(source_card_node, effect_text, controller_id)
+	EffectContextScript.pop(ctx_token)
 	if resolved:
 		result.effects_resolved.append(effect_text)
 	else:

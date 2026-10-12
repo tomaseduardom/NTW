@@ -6,6 +6,8 @@ class_name TriggerResolution
 ## TriggerSystem via _main (cola compartida, señales).
 ## Extraído de TriggerSystem.gd (Fase 4 de reestructuración).
 
+const EffectContextScript = preload("res://scripts/core/effects/EffectContext.gd")  # detector de paridad (§56)
+
 var _main: Node
 
 
@@ -106,7 +108,9 @@ func resolve_next_trigger() -> Dictionary:
 	# ventana anidada de un trigger, es suya" (comentario propio de ese
 	# archivo). El 'ambos pasaron' de la ventana nueva SÍ llegaba a la
 	# lógica de fin de fase, causando resoluciones dobles.
+	var ctx_token: int = EffectContextScript.push(card, controller_id, "disparada")
 	var result = await _execute_trigger_effect(card, trigger_type, event_data)
+	EffectContextScript.pop(ctx_token)
 	result["card"] = card
 	result["type"] = trigger_type
 

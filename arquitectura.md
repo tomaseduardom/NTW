@@ -5813,3 +5813,47 @@ LookRevealPatternsA, PlayFromCemeteryPatterns, TotemAbilityPatterns,
 Bernardo/WeaponSearchShuffleExecutor:168, ActionPipeline:443).
 
 **Sin verificar en partida real todavía.**
+
+## 56. Paridad Anfitrión/Remoto: detector [PARIDAD] y PlayerSide (2026-10-12)
+
+**A pedido del usuario** ("cómo podemos arreglar esas cartas que solo
+funcionan con el Anfitrión" → "haz el 1 y el 2"). Mucho código de efectos
+asume "jugador 0 = la persona": 159 usos de `player_hand` fijo en 33
+archivos, y de 243 selecciones hasta 182 sin "quién elige" en la misma línea
+(cota alta: muchas son legítimas o multilínea). Arreglarlo leyendo código a
+ciegas no escala; primero medir qué falla de verdad.
+
+**1. Detector — `EffectContext` (nuevo, `scripts/core/effects/`):** pila de
+"qué carta y qué jugador controlan el efecto que se resuelve ahora".
+- La empujan: `TriggerResolution.resolve_next_trigger()` (disparadas),
+  `TriggerSystem.resolve_talisman()` (ahora envoltorio de
+  `_resolve_talisman_impl()`) y `StackStepResolver._resolve_ability()`
+  (activadas). `push()` devuelve un token y `pop(token)` saca ESA entrada
+  (son coroutines, pueden terminar en otro orden).
+- Chequean: `CardInteractionModule.await_target/await_multi_target/
+  await_target_or_castillo_pick`, `SelectionManager.await_single_pick/
+  await_two_choice/await_card_pair_choice/await_choice/await_castillo_pick/
+  await_multi_pick/open_selection`, `ZoneViewerModule.open_cemetery_target_
+  picker`, `ActionSearch._pick_from_zones` y `GoldManager.pagar_coste`.
+- Si el efecto es del jugador 1 y elige o paga el 0, imprime
+  `[PARIDAD] <carta> (<disparada|activada|Talismán> del Remoto|bot) — elige
+  el Anfitrión: <título>` (máx. 3 por carta+detalle). Heurística: hay casos
+  legítimos ("tu oponente elige", prevenciones del rival); solo avisa.
+- **Funciona también contra el bot**: una partida local alcanza para
+  encontrar cartas que con un Remoto real fallarían.
+
+**2. Helpers — `PlayerSide` (nuevo, `scripts/core/game/`):** `is_online_host`,
+`is_remote`, `is_bot`, `label`, `hand`, `hand_cards`, `remove_from_hand`,
+`line_containers`, `ally_containers`, `gold_reserva`, `oro_pagado` y
+`pay(main, pid, amount, card)` — este último usa `GoldManager.pagar_coste(...,
+pid)` completo (Oro Virtual y restringido incluidos; antes el Remoto pagaba
+con `_pay_oro_for_bot()`, que solo mueve Oro físico). Primeros usuarios:
+`EffectInterpreter` y Lobo Sagrado (§55). Ambos archivos nuevos se usan por
+`preload` (ver §54, editor abierto sin la clase registrada).
+
+**Cómo seguir:** jugar (online o contra el bot), buscar `[PARIDAD]` en el log
+de `MitosOnline.console.exe`, y arreglar cada carta con PlayerSide (o
+pasándola a piezas, §54). Primeros candidatos ya conocidos: los cortes
+`controller_id != 0` listados en §55.
+
+**Sin verificar en partida real todavía.**
