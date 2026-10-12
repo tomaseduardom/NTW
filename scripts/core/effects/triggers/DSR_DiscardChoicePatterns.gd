@@ -39,10 +39,19 @@ func try_execute_tempilcahue_choice_pattern(full_text: String, card: Node, contr
 	if not main or not main._gold_manager:
 		return true
 
+	# Los botones muestran el texto EXACTO de cada opción de la carta
+	# (2026-10-12, a pedido del usuario: el texto del botón no coincidía con
+	# la carta); si no se encuentra, quedan los resúmenes de siempre.
+	var label_search := "Buscar una carta en tu Castillo y robar una (no juegas más cartas este turno)"
+	var label_shuffle := "Pagar 2 Oros: barajar cartas en juego (coste ≤4) y robar 2"
+	for raw_line in full_text.split("\n"):
+		var line: String = raw_line.strip_edges().trim_prefix("-").strip_edges()
+		if line.to_lower().begins_with("busca una carta en tu castillo"):
+			label_search = line
+		elif line.to_lower().begins_with("paga dos oros"):
+			label_shuffle = line
 	var choose_search: bool = await SelectionManager.await_two_choice(
-		main, "Tempilcahue",
-		"Buscar una carta en tu Castillo y robar una (no juegas más cartas este turno)",
-		"Pagar 2 Oros: barajar cartas en juego (coste ≤4) y robar 2", controller_id)
+		main, "Tempilcahue — elige un efecto", label_search, label_shuffle, controller_id)
 
 	if choose_search:
 		# Sin ventana genérica aquí (2026-09-09): Tempilcahue es un Talismán —

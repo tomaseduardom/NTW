@@ -804,6 +804,15 @@ func refresh_cost_badge(source_override: Node = null) -> void:
 
 
 func set_activatable(value: bool, glow_color: Color = CardBadges.GLOW_COLOR_GOLD, reason: StringName = &"ability") -> void:
+	# 2026-10-12, bug real reportado por el usuario ("Nonexistent function
+	# 'set_activatable' in base 'Nil'" al buscar con Tempilcahue): el visor
+	# del selector de zonas crea la carta y le pide el brillo ANTES de
+	# agregarla a la escena — _badges recién existe tras _ready(). Se aplica
+	# en cuanto la carta esté lista.
+	if not _badges:
+		if not is_node_ready():
+			ready.connect(func(): set_activatable(value, glow_color, reason), CONNECT_ONE_SHOT)
+		return
 	_badges.set_activatable(value, glow_color, reason)
 
 
