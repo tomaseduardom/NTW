@@ -5961,3 +5961,43 @@ el rival puede responder"; para los efectos el motivo es "efecto de <carta>
 
 Probado headless: ventana ya dada → no abre otra; cancelada → `draw()`
 devuelve `cancelled` sin robar. **Sin verificar en partida real todavía.**
+
+## 60. Miguel y las habilidades activadas: igual para el Remoto (2026-10-12)
+
+**A pedido del usuario:** "haz lo del selector de Miguel para el Remoto
+también; todos los cambios siempre tienen que ser para el Remoto igual"
+(regla permanente desde hoy).
+
+- **Selector de zonas con cartas de la mano, por red.** `ActionSearch.
+  pick_in_zones(chooser, title, pools, min, max, distinct, hand_nodes)`
+  (fachada `ActionModule.pick_in_zones()`) es el punto único: Anfitrión en
+  su pantalla, Remoto por red (prompt `zone_pick` con `hand_card_ids` = ids
+  de su mano espejo; el Remoto devuelve `[-1, índice]` para una carta de la
+  mano), bot automático. Las búsquedas (`_pick_from_zones`) también pasan
+  por ahí. `ZoneBrowsePicker.try_hand_click()` recibe el clic ANTES que
+  todo en `CardInteractionModule` (en el Remoto los clics van al espejo, no
+  a la selección de objetivo) — por eso funciona en las dos pantallas.
+- **Miguel**: un solo camino para ambos — mano jugable brillando + los dos
+  Cementerios (`is_own` relativo a quien elige). Se borró el popup de dos
+  Cementerios (`_open_dual_cemetery_reveal_popup`), sin otros usuarios.
+- **Habilidades activadas del Remoto con la misma lógica que el Anfitrión:**
+  - `CardInspectionLayer.usable_abilities_for(card, player_id)`: el filtro de
+    los botones (turno, prioridad, zona, Anular/Cancelar en turno rival,
+    costo, una vez por turno), extraído de `_build_ability_buttons()` y por
+    jugador; `AbilityButtonSupport._validate_ability(..., player_id)` dejó
+    de asumir jugador 0 (prioridad, Oro, mano, contexto).
+  - `CardInspectionLayer.activate_ability_for(card, ability, player_id)`:
+    misma activación que el botón — prueba los 65 patrones especiales de
+    `AbilityButtonPatternsA-D` (arma un botón sin mostrar y espera con
+    `await` la función conectada a `pressed`) y si no, la Pila genérica.
+  - `RemotePlayerController._collect_activatable_abilities()` usa el filtro
+    compartido (antes uno propio, que además excluía costos de Descarte) y
+    `_activate_chosen_ability()` la activación compartida.
+  - **El Remoto ahora puede activar habilidades en su propia Vigilia**
+    (antes solo en ventanas de respuesta — las de "una vez en tu turno",
+    como Miguel, nunca le aparecían): el prompt `vigilia` trae `abilities`,
+    sus cartas brillan en dorado y un clic manda `activate_ability`. Una
+    carta de la mano que también se puede jugar no se ofrece ahí (el primer
+    clic del doble clic la activaría).
+
+**Sin verificar en partida real todavía.**

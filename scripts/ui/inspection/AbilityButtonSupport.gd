@@ -7,6 +7,8 @@ extends RefCounted
 ## grep — CardInspectionLayer.gd sigue siendo el único punto de entrada,
 ## ahora vía _button_support, montado en setup().
 
+const PlayerSideScript = preload("res://scripts/core/game/PlayerSide.gd")
+
 var _inspector: CardInspectionLayer
 var _glowing_cards: Dictionary = {}
 
@@ -69,10 +71,12 @@ func _is_responding_to_opponent_action() -> bool:
 		and PriorityManager.current_priority_context == PriorityManager.PriorityContext.RESPONSE_WINDOW
 
 
-func _validate_ability(ability: Dictionary, source_card: Node) -> Dictionary:
+func _validate_ability(ability: Dictionary, source_card: Node, player_id: int = 0) -> Dictionary:
 	"""Valida si una habilidad activada puede ejecutarse ahora.
-	Comprueba: prioridad, oro disponible, cartas en mano, carta girada, ActionPipeline."""
-	if PriorityManager.priority_window_active and not PriorityManager.can_act(0):
+	Comprueba: prioridad, oro disponible, cartas en mano, carta girada, ActionPipeline.
+	'player_id' (2026-10-12): quién la activaría — el Remoto usa la misma
+	validación que los botones del Anfitrión (antes todo asumía jugador 0)."""
+	if PriorityManager.priority_window_active and not PriorityManager.can_act(player_id):
 		return {"can": false, "reason": "Sin prioridad ahora"}
 
 	# Silenciada (por instancia o por nombre, ver KeywordManager.is_silenced())
@@ -118,13 +122,12 @@ func _validate_ability(ability: Dictionary, source_card: Node) -> Dictionary:
 	match cost_type:
 		UniversalCardParser.CostType.GOLD:
 			if _inspector._main._gold_manager:
-				var available = _inspector._main._gold_manager.get_oro_disponible()
-				if not _inspector._main._gold_manager.puede_pagar(cost_amount):
+				var available = _inspector._main._gold_manager.get_oro_disponible(player_id)
+				if not _inspector._main._gold_manager.puede_pagar(cost_amount, -1, "", -1, player_id):
 					return {"can": false, "reason": "Oro insuficiente (%d/%d)" % [available, cost_amount]}
 
 		UniversalCardParser.CostType.DISCARD:
-			var hand = _inspector._main.player_hand
-			var count = hand.cards.size() if hand and hand.get("cards") != null else hand.get_child_count() if hand else 0
+			var count: int = PlayerSideScript.hand_cards(_inspector._main, player_id).size()
 			if count == 0:
 				return {"can": false, "reason": "Mano vacía"}
 
@@ -154,7 +157,7 @@ func _validate_ability(ability: Dictionary, source_card: Node) -> Dictionary:
 	# Verificación adicional con ActionPipeline — source_card_node en el
 	# context (2026-08-30) para que can_activate_ability() también use el
 	# instance_id, no el id compartido entre copias.
-	var context = {"controller_id": 0, "source_card_node": source_card}
+	var context = {"controller_id": player_id, "source_card_node": source_card}
 	var check = ActionPipeline.can_activate_ability(source_card.card_data, ability, context)
 	if not check.get("can", true):
 		return {"can": false, "reason": check.get("reason", "No disponible")}

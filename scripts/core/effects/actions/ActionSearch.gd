@@ -247,20 +247,35 @@ func _pick_from_zones(player_id: int, zone_infos: Array, to_select: int, min_cou
 			cards.append({"data": d, "eligible": info.matching.has(d)})
 		pools.append({"is_own": player_id == chooser, "zone": info.zone, "cards": cards})
 
-	var raw_picks: Array = []  # [[pool_idx, card_idx]]
-	var is_remote: bool = chooser == 1 and NetworkClient.room_code != "" and NetworkClient.is_host
-	if is_remote:
-		raw_picks = await _delegate_zone_pick_to_remote(title, pools, min_count, to_select, distinct_names)
+	var raw_picks: Array = await pick_in_zones(chooser, title, pools, min_count, to_select, distinct_names)
+	return _validated_picks(raw_picks, pools, zone_infos, to_select, distinct_names)
+
+
+func pick_in_zones(chooser: int, title: String, pools: Array, min_count: int, max_count: int,
+		distinct_names: bool = false, hand_nodes: Array = []) -> Array:
+	"""Selector de zonas para QUIEN elige (2026-10-12, a pedido del usuario:
+	"todos los cambios siempre tienen que ser para el Remoto igual"): en la
+	pantalla del Anfitrión, por red en la del Remoto (corre el mismo
+	ZoneBrowsePicker, también con sus cartas de la mano), o automático para
+	el bot local. 'pools' con is_own relativo a 'chooser'; 'hand_nodes'
+	(opcional) = cartas de la mano de 'chooser' también elegibles. Devuelve
+	[[pool_idx, card_idx]], con pool_idx -1 para una carta de hand_nodes.
+	El llamador revalida (por red puede llegar cualquier cosa)."""
+	var main := _main.get_node_or_null("/root/Main")
+	var raw_picks: Array = []
+	if chooser == 1 and NetworkClient.room_code != "" and NetworkClient.is_host:
+		raw_picks = await _delegate_zone_pick_to_remote(title, pools, min_count, max_count, distinct_names, hand_nodes)
 	elif chooser == 1 or not main or not main.get("_zone_browse_picker") or not main._zone_browse_picker:
 		# Bot local (o sin selector disponible): las primeras elegibles.
 		for pi in range(pools.size()):
 			for ci in range(pools[pi].cards.size()):
-				if raw_picks.size() < to_select and pools[pi].cards[ci].eligible:
+				if raw_picks.size() < max_count and pools[pi].cards[ci].eligible:
 					raw_picks.append([pi, ci])
+		if raw_picks.is_empty() and not hand_nodes.is_empty() and min_count > 0:
+			raw_picks.append([-1, 0])
 	else:
-		raw_picks = await main._zone_browse_picker.pick(title, pools, min_count, to_select, distinct_names)
-
-	return _validated_picks(raw_picks, pools, zone_infos, to_select, distinct_names)
+		raw_picks = await main._zone_browse_picker.pick(title, pools, min_count, max_count, distinct_names, hand_nodes)
+	return raw_picks
 
 
 func _validated_picks(raw_picks: Array, pools: Array, zone_infos: Array, to_select: int, distinct_names: bool) -> Array:
@@ -290,10 +305,16 @@ func _validated_picks(raw_picks: Array, pools: Array, zone_infos: Array, to_sele
 
 
 func _delegate_zone_pick_to_remote(title: String, pools: Array, min_count: int, max_count: int,
-		distinct_names: bool) -> Array:
+		distinct_names: bool, hand_nodes: Array = []) -> Array:
 	"""Contraparte en red del selector: el Remoto lo corre en su pantalla
 	(RemoteMirrorController._show_zone_pick_prompt()). 'is_own' ya viene
-	relativo al Remoto (chooser == 1)."""
+	relativo al Remoto (chooser == 1). Las cartas de la mano viajan por id
+	(get_instance_id(), el mismo que usa hand_card_added para su mano
+	espejo)."""
+	var hand_ids: Array = []
+	for c in hand_nodes:
+		if is_instance_valid(c):
+			hand_ids.append(str(c.get_instance_id()))
 	NetworkClient.send_message({
 		"op": "prompt", "kind": "zone_pick",
 		"title": title,
@@ -301,6 +322,7 @@ func _delegate_zone_pick_to_remote(title: String, pools: Array, min_count: int, 
 		"min_selections": min_count,
 		"max_selections": max_count,
 		"distinct_names": distinct_names,
+		"hand_card_ids": hand_ids,
 	})
 	var intent: Dictionary = await NetworkClient.await_intent(["zone_pick_choice"])
 	return intent.get("picks", [])

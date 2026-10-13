@@ -430,21 +430,57 @@ func _ability_is_hand_or_cementerio_only(full_text: String) -> bool:
 	return not ("en juego" in full_text.to_lower())
 
 
-func _build_ability_buttons(source_card: Node) -> void:
+func activate_ability_for(source_card: Node, ability: Dictionary, controller_id: int) -> void:
+	"""Activa una habilidad con EXACTAMENTE la misma lógica que su botón en
+	la inspección de carta (2026-10-12, a pedido del usuario: "todos los
+	cambios siempre tienen que ser para el Remoto igual") — los 65 patrones
+	especiales de AbilityButtonPatternsA-D (p.ej. Miguel) y, si ninguno
+	aplica, la Pila genérica. Lo usa RemotePlayerController para que el
+	Remoto no vaya por un camino distinto (antes iba directo a
+	ActionPipeline y se salteaba esos patrones). Los patrones conectan su
+	lógica al 'pressed' de un botón: aquí se arma un botón sin mostrar y se
+	llama y espera (await) esa misma función."""
 	if not is_instance_valid(source_card):
 		return
+	var captured: Dictionary = ability.duplicate()
+	var captured_card_data: Dictionary = source_card.card_data.duplicate()
+	var ability_lower: String = str(captured.get("raw_text", "")).to_lower()
+	var btn := Button.new()
+	var panel := Control.new()
+	var handled := false
+	for group in [_pattern_group_a, _pattern_group_b, _pattern_group_c, _pattern_group_d]:
+		if group.try_build(ability_lower, btn, panel, source_card, captured):
+			handled = true
+			for conn in btn.pressed.get_connections():
+				await conn.callable.call()
+			break
+	panel.queue_free()
+	if not handled:
+		var context := {"controller_id": controller_id, "source_card_node": source_card}
+		await _button_support._activate_ability_via_pipeline(source_card, captured_card_data, captured, context)
+
+
+func usable_abilities_for(source_card: Node, player_id: int) -> Array:
+	"""Habilidades ACTIVADAS de esta carta que 'player_id' puede usar AHORA:
+	[{ability, validation}]. Mismo filtro que los botones de la
+	inspección (turno, prioridad, zona, Anular/Cancelar en turno rival,
+	costo, una vez por turno) — 2026-10-12: extraído de
+	_build_ability_buttons() y parametrizado por jugador para que el
+	Remoto vea exactamente las mismas opciones que el Anfitrión."""
+	if not is_instance_valid(source_card):
+		return []
 	if not GameManager.is_game_active:
-		return
+		return []
 	# 2026-09-19, arquitectura.md §10.11 caso 4: en tu propio turno, cualquier
 	# ACTIVATED puede mostrarse (el resto de la función/validate_ability sigue
 	# filtrando fase/costo). En el turno RIVAL, solo tiene sentido ofrecer el
 	# botón si además hay una ventana de prioridad real donde el humano puede
-	# actuar (PriorityManager.can_act(0)) — si no, ni vale la pena parsear
+	# actuar (PriorityManager.can_act(player_id)) — si no, ni vale la pena parsear
 	# habilidades. Cuál habilidad puntual se filtra más abajo (solo
 	# Anular/Cancelar durante el turno rival, ver is_own_turn en el loop).
-	var is_own_turn: bool = GameManager.active_player_id == 0
-	if not is_own_turn and not (PriorityManager.priority_window_active and PriorityManager.can_act(0)):
-		return
+	var is_own_turn: bool = GameManager.active_player_id == player_id
+	if not is_own_turn and not (PriorityManager.priority_window_active and PriorityManager.can_act(player_id)):
+		return []
 	# controller_id, no owner_id (2026-08-29, a pedido del usuario): quién
 	# puede activar la habilidad de una carta es quién la CONTROLA, no
 	# necesariamente su dueño — importa para poder usar habilidades de una
@@ -452,8 +488,8 @@ func _build_ability_buttons(source_card: Node) -> void:
 	# rival). controller_id sigue a owner_id por defecto, así que para toda
 	# carta normal esto se comporta igual que antes.
 	var source_controller_id: int = source_card.controller_id if source_card.get("controller_id") != null else -1
-	if source_controller_id != 0:
-		return
+	if source_controller_id != player_id:
+		return []
 
 	# Solo cartas EN JUEGO pueden activar habilidades (DAR) — sin esto,
 	# zoomear una carta en la mano con una habilidad "Una vez por turno"
@@ -474,23 +510,23 @@ func _build_ability_buttons(source_card: Node) -> void:
 	# habilidad puntual aplica se filtra en el loop de usable_abilities.
 	var source_zone = source_card.get("current_zone")
 	if source_zone == null:
-		return
+		return []
 	var in_play: bool = source_zone in Constants.ZONES_IN_PLAY
 	if not in_play and source_zone != Constants.Zone.MANO and source_zone != Constants.Zone.CEMENTERIO:
-		return
+		return []
 	# Silencio de Cementerio (2026-08-30, Sable de Napoleón) — 'pierde su
 	# habilidad' bloquea también las habilidades usables DESDE el
 	# Cementerio (p.ej. Espada del Juicio). No aplica a Mano/en juego, solo
 	# a cartas efectivamente marcadas mientras están en el Cementerio.
 	if source_zone == Constants.Zone.CEMENTERIO and source_card.get("card_data") != null \
 			and CardManager.is_cemetery_card_silenced(source_card.card_data):
-		return
+		return []
 
 	# Permitir en Vigilia O cuando hay ventana de prioridad activa
 	var in_vigilia = GameManager.current_phase == Constants.Phase.VIGILIA
-	var has_priority_window = PriorityManager.priority_window_active and PriorityManager.can_act(0)
+	var has_priority_window = PriorityManager.priority_window_active and PriorityManager.can_act(player_id)
 	if not in_vigilia and not has_priority_window:
-		return
+		return []
 
 	# parse_abilities() es el Compilador Fase 1: detecta TRIGGER y ACTIVATED por Regex.
 	# Solo mostramos botones para habilidades ACTIVATED (las que el jugador activa manualmente).
@@ -500,7 +536,7 @@ func _build_ability_buttons(source_card: Node) -> void:
 	var abilities: Array = all_parsed.filter(func(a): return a.get("ability_type", "") == "ACTIVATED")
 
 	if abilities.is_empty():
-		return
+		return []
 
 	# Solo se muestran las habilidades usables ahora mismo — las bloqueadas
 	# (sin oro, ya usadas este turno, etc.) se ocultan en vez de listarse en gris.
@@ -537,12 +573,20 @@ func _build_ability_buttons(source_card: Node) -> void:
 			# ataque de Drácula) — esas solo tienen sentido con la carta
 			# literalmente en esa zona, no ya jugada.
 			continue
-		var validation = _button_support._validate_ability(ability, source_card)
+		var validation = _button_support._validate_ability(ability, source_card, player_id)
 		if validation.get("can", false):
 			usable_abilities.append({"ability": ability, "validation": validation})
 
+	return usable_abilities
+
+
+func _build_ability_buttons(source_card: Node) -> void:
+	var usable_abilities: Array = usable_abilities_for(source_card, 0)
 	if usable_abilities.is_empty():
 		return
+	var card_id: String = str(source_card.card_data.get("id", ""))
+	var habilidad_text: String = source_card.card_data.get("habilidad", "")
+	var all_parsed := UniversalCardParser.parse_abilities(habilidad_text, card_id)
 
 	if not is_instance_valid(inspected_card):
 		return

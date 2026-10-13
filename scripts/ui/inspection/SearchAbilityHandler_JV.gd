@@ -17,86 +17,6 @@ func setup(inspector: CardInspectionLayer) -> void:
 	_inspector = inspector
 
 
-func _open_dual_cemetery_reveal_popup(affordable_filter: Callable, owner_id: int = 0) -> Dictionary:
-	"""Popup liviano (sin oscurecer el resto de la pantalla — mano sigue
-	clickeable, mismo criterio que GoldManagerTax._open_cemetery_reveal_
-	popup()/PreventionAbilityHandler_PV._open_cemetery_reveal_popup_oro(),
-	arquitectura.md §10.17/§10.23) mostrando AMBOS Cementerios como dos
-	columnas de Nodos temporales interactivos — usado por Miguel ('de tu
-	mano o de un Cementerio'), a diferencia de Sake (una sola columna,
-	solo el propio). 'affordable_filter' recibe el card_data crudo (no hay
-	Nodo todavía) y decide si esa carta entra en el popup. 'owner_id' solo
-	decide el ORDEN/etiqueta de las columnas ("Tu Cementerio" primero) —
-	cada Nodo ya se etiqueta con su cementerio real de origen (side_idx)
-	sin importar quién mira, así que Miguel.owner_id/cemetery_owner sigue
-	funcionando igual de cualquier lado.
-	Returns: {popup: CanvasLayer, nodes: Array[Node]}."""
-	var main := _inspector._main
-	var CardScene = load("res://scenes/cards/Card.tscn")
-	var sides: Array = [CardManager.get_cemetery(0).filter(affordable_filter),
-			CardManager.get_cemetery(1).filter(affordable_filter)]
-	if sides[0].is_empty() and sides[1].is_empty():
-		return {"popup": null, "nodes": []}
-
-	var popup := CanvasLayer.new()
-	popup.layer = 40
-	main.add_child(popup)
-	var panel := PanelContainer.new()
-	panel.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
-	panel.position = Vector2(20, -240)
-	var pstyle := StyleBoxFlat.new()
-	pstyle.bg_color = Color(0.04, 0.03, 0.06, 0.92)
-	pstyle.border_color = Color(0.85, 0.72, 0.28, 0.85)
-	pstyle.set_border_width_all(2)
-	pstyle.set_corner_radius_all(12)
-	pstyle.content_margin_left = 10
-	pstyle.content_margin_right = 10
-	pstyle.content_margin_top = 8
-	pstyle.content_margin_bottom = 8
-	panel.add_theme_stylebox_override("panel", pstyle)
-	popup.add_child(panel)
-	var columns := HBoxContainer.new()
-	columns.add_theme_constant_override("separation", 14)
-	panel.add_child(columns)
-
-	var nodes: Array = []
-	var labels: Array = ["Tu Cementerio", "Cementerio Rival"] if owner_id == 0 else ["Cementerio Rival", "Tu Cementerio"]
-	for side_idx in [0, 1]:
-		var col := VBoxContainer.new()
-		columns.add_child(col)
-		var lbl := Label.new()
-		lbl.text = labels[side_idx]
-		lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		col.add_child(lbl)
-		var scroll := ScrollContainer.new()
-		scroll.custom_minimum_size = Vector2(0, 190)
-		scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-		col.add_child(scroll)
-		var hbox := HBoxContainer.new()
-		hbox.add_theme_constant_override("separation", 8)
-		scroll.add_child(hbox)
-		for data in sides[side_idx]:
-			var wrapper := Control.new()
-			wrapper.custom_minimum_size = Vector2(80.0, 112.0)
-			var c_node = CardScene.instantiate()
-			c_node.load_from_data(data)
-			c_node.set_zone(Constants.Zone.CEMENTERIO)
-			c_node.owner_id = side_idx
-			c_node.controller_id = side_idx
-			c_node.can_interact = true
-			c_node.drag_enabled = false
-			c_node.custom_minimum_size = Vector2(150.0, 210.0)
-			c_node.size = Vector2(150.0, 210.0)
-			c_node.scale = Vector2(0.533, 0.533)
-			c_node.base_scale = Vector2(0.533, 0.533)
-			main._connect_card_signals(c_node)
-			wrapper.add_child(c_node)
-			hbox.add_child(wrapper)
-			nodes.append(c_node)
-
-	return {"popup": popup, "nodes": nodes}
-
-
 func _activate_jinete_peste_search_banish_two(source_card: Node, ability: Dictionary) -> void:
 	"""'Una vez por turno, busca en un Castillo dos cartas de distinto
 	nombre y Destiérralas. Si controlas otro Jinete, además Roba una
@@ -359,135 +279,80 @@ func _activate_miguel_discount_play(source_card: Node, ability: Dictionary) -> v
 	"""'Una vez en tu turno, juega una carta de tu mano o de un Cementerio
 	reduciendo su coste en un Oro, hasta un mínimo de 0' (Miguel,
 	2026-08-29). 'Un Cementerio' sin posesivo = cualquiera de los dos, el
-	propio o el rival (confirmado por el usuario) — jugarla la vuelve TUYA
-	(owner_id del activador), sea de donde sea que salió. Reusa
-	GoldManager.play_card() completo (fases, portador de Armas, Talismanes,
-	pago real) con un descuento de -1/piso 0 aplicado solo a la carta
-	elegida — mismo mecanismo que 'Muestra X para reducir el coste' (El Rey
-	y el Verdugo, ya resuelto dentro de GoldManager.play_card())."""
+	propio o el rival (confirmado por el usuario) — jugarla te vuelve su
+	CONTROLADOR; si sale de juego vuelve al Cementerio/Destierro de su dueño.
+
+	2026-10-12, a pedido del usuario: se elige desde el tablero, igual para
+	el Anfitrión y el Remoto ("todos los cambios siempre tienen que ser para
+	el Remoto igual") — las cartas jugables de la mano brillan (clic
+	directo) y los Cementerios brillan y se abren con clic (ZoneBrowsePicker
+	vía ActionModule.pick_in_zones(), el mismo selector de las búsquedas,
+	§53). Antes era un popup con los dos Cementerios. Nunca ofrece Oros: un
+	Oro no se juega, y "reduciendo su coste" solo aplica a cartas con coste."""
 	if not is_instance_valid(source_card) or not _inspector._main._gold_manager:
 		return
+	var main = _inspector._main
 	var owner_id: int = source_card.owner_id if source_card.get("owner_id") != null else 0
-	var hand_container_miguel = _inspector._main.player_hand if owner_id == 0 else _inspector._main._opponent_fan
-	if not hand_container_miguel or not _inspector._main._card_interaction:
-		return
 
-	# Filtro de asequibilidad ANTES de ofrecer la carta como opción (2026-09-08,
-	# bug real reportado por el usuario: dejaba elegir un Arma que no podía
-	# pagar ni con el descuento, y GoldManager.play_card() la rechazaba solo
-	# al final sin buena UX) — mismo criterio que Tangata Manu/
-	# _make_look_play_free_filter ya usan para no ofrecer nunca una opción
-	# que se sabe de antemano que no se puede pagar. Aproximado con el dato
-	# crudo de coste (no hay nodo todavía para las candidatas de Cementerio,
-	# así que no se puede calcular_coste_real() con modificadores reales).
-	var available_gold: int = GameState.get_oro_reserva(owner_id) + _inspector._main._gold_manager.oros_virtuales.get(owner_id, 0)
+	# Asequible con el descuento (dato crudo de coste: las del Cementerio
+	# todavía no tienen Nodo para calcular_coste_real()).
+	var available_gold: int = GameState.get_oro_reserva(owner_id) + main._gold_manager.oros_virtuales.get(owner_id, 0)
 	var affordable := func(data: Dictionary) -> bool:
-		# Un Oro nunca se JUEGA (2026-10-12, regla confirmada por el usuario:
-		# "juega una carta... reduciendo su coste" no incluye Oros — no
-		# tienen coste; solo se ponen en juego por efectos que lo digan).
 		if int(data.get("tipo", -1)) == Constants.CardType.ORO:
 			return false
 		var raw_cost = data.get("coste")
 		if raw_cost == null or not (raw_cost is int or raw_cost is float or (raw_cost is String and raw_cost.is_valid_int())):
 			return false
-		var discounted: int = maxi(int(raw_cost) - 1, 0)
-		return discounted <= available_gold
+		return maxi(int(raw_cost) - 1, 0) <= available_gold
 
-	# 2026-09-13, a pedido del usuario: click directo — mano (Nodos ya
-	# visibles) + un popup liviano con AMBOS Cementerios (mismo patrón de
-	# Sake, arquitectura.md §10.23, extendido a dos columnas) — en vez del
-	# modal de lista viejo combinando las tres fuentes.
 	var hand_candidates: Array = []
-	for c in PlayerSideScript.hand_cards(_inspector._main, owner_id):
+	for c in PlayerSideScript.hand_cards(main, owner_id):
 		if is_instance_valid(c) and affordable.call(c.card_data):
 			hand_candidates.append(c)
+	# Los dos Cementerios, con is_own relativo a quien elige (owner_id).
+	var pools: Array = []
+	var cem_owners: Array = []
+	var any_cemetery := false
+	for cem_owner in [owner_id, 1 - owner_id]:
+		var entries: Array = []
+		for d in CardManager.get_cemetery(cem_owner):
+			var ok: bool = affordable.call(d)
+			any_cemetery = any_cemetery or ok
+			entries.append({"data": d, "eligible": ok})
+		pools.append({"is_own": cem_owner == owner_id, "zone": Constants.Zone.CEMENTERIO, "cards": entries})
+		cem_owners.append(cem_owner)
+	if hand_candidates.is_empty() and not any_cemetery:
+		main._update_debug("No tienes ninguna carta que puedas jugar ni con el descuento")
+		return
 
-	# 2026-10-12, a pedido del usuario: en vez del popup con los dos
-	# Cementerios, se elige desde el propio tablero — las cartas jugables de
-	# la mano brillan (clic directo) y los Cementerios brillan y se abren con
-	# clic (ZoneBrowsePicker, el mismo selector de las búsquedas, §53). Solo
-	# en la pantalla local; el Remoto sigue con el popup de abajo.
-	var picker = _inspector._main.get("_zone_browse_picker")
-	if owner_id == 0 and picker:
-		var pools: Array = []
-		var any_cemetery := false
-		for cem_owner in [0, 1]:
-			var entries: Array = []
-			for d in CardManager.get_cemetery(cem_owner):
-				var ok: bool = affordable.call(d)
-				any_cemetery = any_cemetery or ok
-				entries.append({"data": d, "eligible": ok})
-			pools.append({"is_own": cem_owner == 0, "zone": Constants.Zone.CEMENTERIO, "cards": entries})
-		if hand_candidates.is_empty() and not any_cemetery:
-			_inspector._main._update_debug("No tienes ninguna carta que puedas jugar ni con el descuento")
+	var picks: Array = await ActionModule.pick_in_zones(owner_id, "Miguel: juega una carta con 1 Oro de descuento",
+		pools, 0, 1, false, hand_candidates)
+	if picks.is_empty() or not (picks[0] is Array) or picks[0].size() != 2:
+		return
+	var pi: int = int(picks[0][0])
+	var ci: int = int(picks[0][1])
+	var card_node: Node = null
+	if pi == -1:
+		if ci < 0 or ci >= hand_candidates.size():
 			return
-		var picks: Array = await picker.pick("Miguel: juega una carta con 1 Oro de descuento", pools, 0, 1, false,
-			hand_candidates)
-		if picks.is_empty():
+		card_node = hand_candidates[ci]
+	else:
+		# Revalidación (por red puede llegar cualquier cosa).
+		if pi < 0 or pi >= pools.size() or ci < 0 or ci >= pools[pi].cards.size() or not pools[pi].cards[ci].eligible:
 			return
-		var pi: int = int(picks[0][0])
-		var ci: int = int(picks[0][1])
-		var picked_node: Node = null
-		if pi < 0:
-			picked_node = hand_candidates[ci]
-		else:
-			var picked_data: Dictionary = pools[pi].cards[ci].data
-			var cem_owner_p: int = 0 if pools[pi].is_own else 1
-			var idx_p: int = CardManager.get_cemetery(cem_owner_p).find(picked_data)
-			if idx_p < 0:
-				return
-			CardManager.remove_from_cemetery(cem_owner_p, idx_p)
-			picked_node = _inspector._main._create_card(picked_data, false)
-			picked_node.owner_id = cem_owner_p
-			picked_node.controller_id = owner_id
-			hand_container_miguel.add_card(picked_node)
-			_inspector._main._connect_card_signals(picked_node)
-		await _play_miguel_choice(source_card, ability, picked_node, owner_id)
-		return
-
-	var cemetery_popup_result: Dictionary = _open_dual_cemetery_reveal_popup(affordable, owner_id)
-	var cemetery_popup: CanvasLayer = cemetery_popup_result.get("popup")
-	var candidates: Array = hand_candidates + cemetery_popup_result.get("nodes", [])
-	# Para que la delegación al Remoto también ofrezca las del Cementerio
-	# (CardInteractionModule._delegate_target_to_remote(), §55).
-	_inspector._main._card_interaction._cemetery_target_nodes = cemetery_popup_result.get("nodes", [])
-	if candidates.is_empty():
-		if is_instance_valid(cemetery_popup):
-			cemetery_popup.queue_free()
-		_inspector._main._update_debug("No tienes ninguna carta que puedas pagar ni con el descuento")
-		return
-
-	var filter := func(c: Node) -> bool: return c in candidates
-	var chosen_node: Node = await _inspector._main._card_interaction.await_target(
-		"Elige una carta (tu mano o cualquier Cementerio) para jugar con 1 Oro de descuento", filter, true, owner_id)
-	if is_instance_valid(cemetery_popup):
-		cemetery_popup.queue_free()
-	if not chosen_node or not is_instance_valid(chosen_node):
-		return
-	var chosen_data: Dictionary = chosen_node.card_data
-	var from_hand: bool = chosen_node in hand_candidates
-
-	var card_node: Node = chosen_node if from_hand else null
-	if not from_hand:
-		var cemetery_owner: int = chosen_node.owner_id
-		var idx: int = CardManager.get_cemetery(cemetery_owner).find(chosen_data)
+		var picked_data: Dictionary = pools[pi].cards[ci].data
+		var cemetery_owner: int = cem_owners[pi]
+		var idx: int = CardManager.get_cemetery(cemetery_owner).find(picked_data)
 		if idx < 0:
 			return
 		CardManager.remove_from_cemetery(cemetery_owner, idx)
-		card_node = _inspector._main._create_card(chosen_data, false)
-		# Dueño real = de qué Cementerio salió, NO quien la juega (2026-08-29,
-		# corregido a pedido del usuario): jugar una carta ajena te vuelve
-		# CONTROLADOR, no dueño — si es Aliado/Tótem/Arma/Oro pelea de tu
-		# lado, pero si sale de juego (destruida/desterrada) vuelve al
-		# Cementerio/Destierro de su dueño original, no al tuyo. 2026-10-07:
-		# GoldManager.play_card()/_play_card_to_field()/_play_talisman() ya
-		# enrutan por controller_id (ver arquitectura.md §38), así que esto
-		# SÍ decide de qué lado del tablero aparece (controller_id=owner_id,
-		# el activador) y a dónde vuelve si muere (owner_id=cemetery_owner).
+		card_node = main._create_card(picked_data, owner_id != 0)
+		# Dueño = de qué Cementerio salió; controlador = quien la juega
+		# (ver arquitectura.md §38).
 		card_node.owner_id = cemetery_owner
 		card_node.controller_id = owner_id
-		hand_container_miguel.add_card(card_node)
-		_inspector._main._connect_card_signals(card_node)
+		PlayerSideScript.hand(main, owner_id).add_card(card_node)
+		main._connect_card_signals(card_node)
 
 	await _play_miguel_choice(source_card, ability, card_node, owner_id)
 

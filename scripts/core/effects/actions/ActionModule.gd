@@ -160,6 +160,13 @@ func search_zones(player_id: int, zones: Array, filter: Dictionary, amount: int 
 		source_card, destination, distinct_names, chooser_id, cost_reduction)
 
 
+## Selector de zonas (+ cartas de la mano) para quien elige: Anfitrión,
+## Remoto o bot (2026-10-12, ver ActionSearch.pick_in_zones()).
+func pick_in_zones(chooser: int, title: String, pools: Array, min_count: int, max_count: int,
+		distinct_names: bool = false, hand_nodes: Array = []) -> Array:
+	return await _action_search.pick_in_zones(chooser, title, pools, min_count, max_count, distinct_names, hand_nodes)
+
+
 ## BanishOpponentPatterns ya llamaba a esto vía ActionModule, pero la fachada
 ## no existía (2026-10-11).
 func _put_found_card_into_play(main: Node, player_id: int, card_data: Dictionary, may_play: bool) -> Node:

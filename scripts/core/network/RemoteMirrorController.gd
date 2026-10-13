@@ -422,7 +422,7 @@ func _build_card_row(parent: Container, cards_data: Array) -> void:
 
 
 func _send_intent_and_close(intent: Dictionary) -> void:
-	if intent.get("kind", "") in ["place_gold", "play_card", "end_vigilia"]:
+	if intent.get("kind", "") in ["place_gold", "play_card", "end_vigilia", "activate_ability"]:
 		_pending_vigilia = {}
 	NetworkClient.send_message(intent)
 	_close_current_overlay()
@@ -509,8 +509,22 @@ func _show_vigilia_prompt(data: Dictionary) -> void:
 			var card_id: String = str(card.get("card_id", ""))
 			actions[card_id] = {"op": "intent", "kind": "play_card", "card_id": card_id}
 	_set_hand_actions(actions)
-	_main._update_debug("Tu Vigilia — Oro disponible: %d. Doble clic en una carta brillante para jugarla." % int(
-		data.get("gold_reserva", 0)))
+	# Habilidades activadas de sus cartas en juego (2026-10-12): brillan en
+	# dorado; clic en la carta para usarla (misma UI que en las ventanas de
+	# respuesta).
+	var abilities: Array = []
+	for a in data.get("abilities", []):
+		# Una carta de la mano que también se puede jugar (doble clic) no se
+		# ofrece para habilidad aquí: el primer clic del doble clic la
+		# activaría sin querer.
+		if not actions.has(str(a.get("card_id", ""))):
+			abilities.append(a)
+	if not abilities.is_empty():
+		_start_ability_pick(abilities, func(choice: Dictionary) -> void:
+			_send_intent_and_close({"op": "intent", "kind": "activate_ability",
+				"card_id": str(choice.get("card_id", "")), "ability_index": int(choice.get("ability_index", 0))}))
+	_main._update_debug("Tu Vigilia — Oro disponible: %d. Doble clic en una carta brillante para jugarla%s." % [
+		int(data.get("gold_reserva", 0)), "; clic en una carta dorada para usar su habilidad" if not abilities.is_empty() else ""])
 	_set_remote_paso("Atacar [P]", false, func():
 		_send_intent_and_close({"op": "intent", "kind": "end_vigilia"}))
 
@@ -1323,6 +1337,21 @@ func _show_zone_pick_prompt(data: Dictionary) -> void:
 	if not _main._zone_browse_picker:
 		NetworkClient.send_message({"op": "intent", "kind": "zone_pick_choice", "picks": []})
 		return
+	# Cartas de la mano candidatas (2026-10-12, p.ej. Miguel): los ids son los
+	# de la mano espejo (_hand_card_nodes). Se guarda el índice original para
+	# devolverle al Anfitrión la posición en SU lista.
+	var hand_ids: Array = data.get("hand_card_ids", [])
+	var hand_nodes: Array = []
+	var hand_index_map: Array = []
+	for i in range(hand_ids.size()):
+		var node: Node = _hand_card_nodes.get(str(hand_ids[i]), null)
+		if node and is_instance_valid(node):
+			hand_nodes.append(node)
+			hand_index_map.append(i)
 	var picks: Array = await _main._zone_browse_picker.pick(str(data.get("title", "Buscar")), pools,
-		int(data.get("min_selections", 0)), int(data.get("max_selections", 1)), bool(data.get("distinct_names", false)))
+		int(data.get("min_selections", 0)), int(data.get("max_selections", 1)), bool(data.get("distinct_names", false)),
+		hand_nodes)
+	for p in picks:
+		if int(p[0]) == -1 and int(p[1]) < hand_index_map.size():
+			p[1] = hand_index_map[int(p[1])]
 	NetworkClient.send_message({"op": "intent", "kind": "zone_pick_choice", "picks": picks})

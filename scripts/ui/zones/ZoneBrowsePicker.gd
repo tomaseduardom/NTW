@@ -66,7 +66,8 @@ func pick(title: String, pools: Array, min_count: int, max_count: int, distinct_
 	'hand_nodes' (opcional, 2026-10-12): cartas de la mano que también son
 	elegibles — brillan y un clic en una termina la selección con
 	[[-1, índice_en_hand_nodes]] (pensado para elegir UNA carta, p.ej.
-	Miguel). Solo en la pantalla local: el Remoto no lo usa todavía."""
+	Miguel). El clic llega por try_hand_click(); en el Remoto los Nodos son
+	los de su mano espejo (ver ActionSearch.pick_in_zones())."""
 	if _active:
 		push_warning("[ZoneBrowsePicker] Ya hay una selección en curso")
 		return []
@@ -108,34 +109,26 @@ func pick(title: String, pools: Array, min_count: int, max_count: int, distinct_
 
 
 func _arm_hand_pick() -> void:
-	if _hand_nodes.is_empty() or not _main.get("_card_interaction") or not _main._card_interaction:
-		return
 	for c in _hand_nodes:
 		if is_instance_valid(c):
 			c.set_activatable(true, CardBadges.GLOW_COLOR_CELESTE, &"zone_pick")
-	var filter := func(c: Node) -> bool: return c in _hand_nodes
-	_main._card_interaction.start_target_selection(
-		"%s — clic en una carta de tu mano, o abre un Cementerio" % _title, filter, _on_hand_picked, true)
+	_main._update_debug("%s — clic en una carta brillante de tu mano, o abre un Cementerio" % _title)
 
 
-func _on_hand_picked(card: Node) -> void:
-	if not _active or _done:
-		return
-	if card and is_instance_valid(card) and card in _hand_nodes:
-		_selected = [[-1, _hand_nodes.find(card)]]
-		_done = true
-		return
-	# ESC/cancelado: la mano deja de escuchar, pero el selector sigue (se
-	# puede elegir del Cementerio o confirmar sin elegir).
-	_unglow_hand()
+func try_hand_click(card: Node) -> bool:
+	"""Lo llama CardInteractionModule ANTES de cualquier otro manejo del
+	clic (en el Anfitrión y en el Remoto, donde los clics van al espejo):
+	si es una carta candidata de la mano, la elige y termina la selección."""
+	if not _active or _done or _hand_nodes.is_empty() or not (card in _hand_nodes):
+		return false
+	_selected = [[-1, _hand_nodes.find(card)]]
+	_done = true
+	return true
 
 
 func _disarm_hand_pick() -> void:
 	if _hand_nodes.is_empty():
 		return
-	var ci = _main.get("_card_interaction")
-	if ci and ci.is_selecting_target and ci.get("_target_callback") == Callable(self, "_on_hand_picked"):
-		ci.cancel_target_selection()
 	_unglow_hand()
 	_hand_nodes = []
 

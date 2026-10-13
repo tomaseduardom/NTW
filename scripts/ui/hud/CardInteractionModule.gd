@@ -727,6 +727,10 @@ func check_deselect() -> void:
 # =============================================================================
 func _on_card_clicked(card: Node) -> void:
 	_card_clicked_this_frame = true
+	# Selector de zonas con candidatas en la mano (Miguel) — antes que el
+	# desvío del Remoto y que cualquier otro modo (2026-10-12).
+	if _main.get("_zone_browse_picker") and _main._zone_browse_picker.try_hand_click(card):
+		return
 	# 2026-10-11: el cliente Remoto no corre la partida — un click nunca debe
 	# llegar a la lógica local (atacar, bloquear, jugar). Ver on_card_double_clicked().
 	if NetworkClient.room_code != "" and not NetworkClient.is_host:
@@ -798,6 +802,8 @@ func _on_card_clicked(card: Node) -> void:
 
 
 func _on_card_double_clicked(card: Node) -> void:
+	if _main.get("_zone_browse_picker") and _main._zone_browse_picker.try_hand_click(card):
+		return
 	# 2026-10-11: en el cliente Remoto, jugar desde la mano física manda la
 	# jugada al Anfitrión (RemoteMirrorController), nunca GoldManager local.
 	if NetworkClient.room_code != "" and not NetworkClient.is_host:

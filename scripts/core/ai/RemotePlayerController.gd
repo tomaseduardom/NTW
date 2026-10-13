@@ -304,6 +304,10 @@ func take_vigilia_actions() -> void:
 		for c in _main._opponent_fan.get_cards():
 			if is_instance_valid(c):
 				hand_data.append(_card_public_data(c))
+		# Habilidades activadas en su propia Vigilia (2026-10-12): antes el
+		# Remoto solo podía activarlas en ventanas de respuesta, así que las
+		# de "una vez en tu turno" (p.ej. Miguel) nunca le aparecían.
+		var ability_candidates: Array = _collect_activatable_abilities()
 
 		if Constants.VERBOSE_DIAG_LOGS:
 			print("[RemotePlayerController] Mandando prompt de vigilia — mano=%d oro=%d aliados=%d armas=%d talismanes=%d totems=%d" % [
@@ -318,9 +322,10 @@ func take_vigilia_actions() -> void:
 			"weapon_candidates": weapon_candidates,
 			"talisman_candidates": talisman_candidates,
 			"totem_candidates": totem_candidates,
+			"abilities": _abilities_payload(ability_candidates),
 			"gold_reserva": GameState.get_oro_reserva(1),
 		})
-		var intent: Dictionary = await _await_intent(["place_gold", "play_card", "end_vigilia"])
+		var intent: Dictionary = await _await_intent(["place_gold", "play_card", "end_vigilia", "activate_ability"])
 
 		match intent.get("kind", ""):
 			"place_gold":
@@ -339,6 +344,9 @@ func take_vigilia_actions() -> void:
 							await _play_talisman_remote(card)
 						Constants.CardType.TOTEM:
 							await _play_totem_remote(card)
+			"activate_ability":
+				await _activate_chosen_ability(str(intent.get("card_id", "")), int(intent.get("ability_index", 0)),
+					ability_candidates)
 			"end_vigilia":
 				if GameManager.is_game_active and GameManager.active_player_id == 1 \
 						and GameManager.current_phase == Constants.Phase.VIGILIA:
@@ -404,39 +412,31 @@ func try_respond_with_activated_ability() -> bool:
 
 
 func _collect_activatable_abilities() -> Array:
-	"""Habilidades activadas que el Remoto puede usar ahora mismo: [{card, ability}]."""
-	var fields: Array = [_main.opponent_field, _main.opponent_linea_ataque, _main.opponent_linea_apoyo,
-		_main.opponent_gold, _main.opponent_oro_pagado]
+	"""Habilidades activadas que el Remoto puede usar ahora mismo: [{card, ability}].
+	2026-10-12: mismo filtro que los botones del Anfitrión
+	(CardInspectionLayer.usable_abilities_for(card, 1)) — turno, prioridad,
+	zona, costo, una vez por turno, Anular/Cancelar en turno rival. Incluye
+	cartas de su mano con habilidades usables desde ahí."""
 	var candidates: Array = []
-	for field in fields:
+	if not _main._card_inspector:
+		return candidates
+	var cards: Array = []
+	for field in [_main.opponent_field, _main.opponent_linea_ataque, _main.opponent_linea_apoyo,
+			_main.opponent_gold, _main.opponent_oro_pagado,
+			_main.player_field, _main.player_linea_ataque, _main.player_linea_apoyo]:
 		if not field:
 			continue
 		for card in field.get_children():
-			if not is_instance_valid(card) or KeywordManager.is_silenced(card):
-				continue
-			var ability_text: String = str(card.card_ability) if card.get("card_ability") != null else ""
-			if ability_text.is_empty():
-				continue
-			var abilities: Array[Dictionary] = UniversalCardParser.parse_abilities(ability_text, str(card.get_instance_id()))
-			for ability in abilities:
-				if ability.get("ability_type", "") != "ACTIVATED":
-					continue
-				var cost_type = ability.get("cost_type", UniversalCardParser.CostType.NONE)
-				# A diferencia de la IA (que se limita a NONE/ONCE_PER_TURN/
-				# GOLD/TAP), aquí se ofrecen todas salvo Descarte — el Remoto
-				# todavía no tiene su mano representada como Nodos del lado
-				# del pago (mismo hueco ya documentado para el bot).
-				if cost_type == UniversalCardParser.CostType.DISCARD:
-					continue
-				if cost_type == UniversalCardParser.CostType.GOLD and not GameState.puede_pagar(1, ability.get("cost_amount", 0)):
-					continue
-				if cost_type == UniversalCardParser.CostType.TAP and card.get("is_tapped") == true:
-					continue
-				if ability.get("once_per_turn", false) or cost_type == UniversalCardParser.CostType.ONCE_PER_TURN:
-					var card_id: String = str(card.get_instance_id())
-					if UniversalCardParser.turn_registry.was_used(card_id, ability.get("ability_index", 0), GameManager.current_turn):
-						continue
-				candidates.append({"card": card, "ability": ability})
+			if is_instance_valid(card):
+				cards.append(card)
+	if _main._opponent_fan:
+		cards.append_array(_main._opponent_fan.get_cards())
+	for card in cards:
+		# usable_abilities_for() ya descarta las que no controla el jugador 1
+		# (controller_id), así que las del lado del Anfitrión solo entran si
+		# el Remoto las controla (p.ej. jugadas con Miguel).
+		for entry in _main._card_inspector.usable_abilities_for(card, 1):
+			candidates.append({"card": card, "ability": entry.ability})
 	return candidates
 
 
@@ -466,6 +466,11 @@ func _activate_chosen_ability(card_id: String, ability_index: int, candidates: A
 			break
 	if chosen_ability.is_empty():
 		return false
+	# Misma lógica que el botón del Anfitrión (patrones especiales incluidos,
+	# p.ej. Miguel) — 2026-10-12.
+	if _main._card_inspector:
+		await _main._card_inspector.activate_ability_for(chosen_card, chosen_ability, 1)
+		return true
 	var context := {"controller_id": 1, "source_card_node": chosen_card}
 	var result: Dictionary = await ActionPipeline.activate_ability(chosen_card.card_data, chosen_ability, context)
 	return result.get("success", false)
