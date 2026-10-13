@@ -205,10 +205,7 @@ func search_zones(player_id: int, zones: Array, filter: Dictionary, amount: int 
 		var deck = _get_searchable_zone_data(player_id, Constants.Zone.CASTILLO)
 		if deck != null:
 			deck.shuffle()
-		AnimationQueue.add_command(AnimationQueue.CommandType.CUSTOM, {
-			"callable": Callable(AnimationQueue, "animate_shuffle").bind(player_id),
-			"description": "Barajar mazo"
-		})
+		AnimationQueue.queue_shuffle(player_id, "Barajar mazo")
 
 	# 2026-09-14, a pedido del usuario (La Ouija): buscar en el Castillo saca
 	# cartas y después lo baraja (arriba), pero esta función genérica nunca

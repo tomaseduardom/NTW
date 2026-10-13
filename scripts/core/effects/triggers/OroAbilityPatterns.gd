@@ -66,10 +66,8 @@ func try_execute_hidromiel_pattern(ability_text: String, card: Node, controller_
 	for entry in picked:
 		var owner_of_picked: int = entry.owner_id
 		var picked_data: Dictionary = entry.data
-		var idx: int = CardManager.get_cemetery(owner_of_picked).find(picked_data)
-		if idx < 0:
+		if not CardManager.take_from_cemetery(owner_of_picked, picked_data):
 			continue
-		CardManager.remove_from_cemetery(owner_of_picked, idx)
 		CardManager.get_deck(owner_of_picked).append(picked_data)
 		CardManager.shuffle_deck(owner_of_picked)
 
@@ -133,10 +131,7 @@ func try_execute_udjat_vigilia_pattern(ability_text: String, card: Node, control
 		to_shuffle.queue_free()
 		CardManager.get_deck(controller_id).append(data)
 		CardManager.shuffle_deck(controller_id)
-		AnimationQueue.add_command(AnimationQueue.CommandType.CUSTOM, {
-			"callable": Callable(AnimationQueue, "animate_shuffle").bind(controller_id),
-			"description": "Barajar mazo (udjat)"
-		})
+		AnimationQueue.queue_shuffle(controller_id, "Barajar mazo (udjat)")
 		await ActionModule.draw(controller_id, 1, "udjat", true)
 	return true
 
@@ -164,10 +159,8 @@ func try_execute_udjat_final_pattern(ability_text: String, card: Node, controlle
 	if own_picked.is_empty():
 		return true
 	var own_entry: Dictionary = own_picked[0]
-	var own_idx: int = CardManager.get_cemetery(controller_id).find(own_entry.data)
-	if own_idx < 0:
+	if not CardManager.take_from_cemetery(controller_id, own_entry.data):
 		return true
-	CardManager.remove_from_cemetery(controller_id, own_idx)
 	CardManager.add_to_exile(controller_id, own_entry.data)
 
 	var opponent_id: int = 1 - controller_id
@@ -314,10 +307,7 @@ func try_execute_torii_agrupacion_pattern(ability_text: String, card: Node, cont
 	for c in top_two:
 		deck.append(c)
 	CardManager.shuffle_deck(controller_id)
-	AnimationQueue.add_command(AnimationQueue.CommandType.CUSTOM, {
-		"callable": Callable(AnimationQueue, "animate_shuffle").bind(controller_id),
-		"description": "Barajar mazo (torii)"
-	})
+	AnimationQueue.queue_shuffle(controller_id, "Barajar mazo (torii)")
 	if main.get("_zone_manager"):
 		main._zone_manager._update_castillo_counts()
 

@@ -63,10 +63,7 @@ func try_execute_shuffle_exile_and_draw_pattern(ability_text: String, controller
 		CardManager.shuffle_deck(controller_id)
 		# 2026-09-30, mismo criterio que el fix de Azi Sruvara: sin esto no
 		# había ninguna retroalimentación visual del barajado.
-		AnimationQueue.add_command(AnimationQueue.CommandType.CUSTOM, {
-			"callable": Callable(AnimationQueue, "animate_shuffle").bind(controller_id),
-			"description": "Barajar mazo (El Rey y el Verdugo)"
-		})
+		AnimationQueue.queue_shuffle(controller_id, "Barajar mazo (El Rey y el Verdugo)")
 		var main := _executor._main.get_node_or_null("/root/Main")
 		if main and main.get("_zone_manager"):
 			main._zone_manager._update_castillo_counts()
@@ -119,10 +116,7 @@ func try_execute_shuffle_hand_and_draw_plus_two_pattern(ability_text: String, co
 					shuffled_amount += 1
 			if shuffled_amount > 0:
 				CardManager.shuffle_deck(controller_id)
-				AnimationQueue.add_command(AnimationQueue.CommandType.CUSTOM, {
-					"callable": Callable(AnimationQueue, "animate_shuffle").bind(controller_id),
-					"description": "Barajar mazo (Aaru)"
-				})
+				AnimationQueue.queue_shuffle(controller_id, "Barajar mazo (Aaru)")
 
 	# Equivale a barajar 0 si no había candidatos — sigue siendo una
 	# resolución completa según el texto ('cualquier cantidad' incluye 0).
@@ -185,10 +179,7 @@ func try_execute_draw_and_shuffle_hand_pattern(ability_text: String, controller_
 						shuffled += 1
 				if shuffled > 0:
 					CardManager.shuffle_deck(controller_id)
-					AnimationQueue.add_command(AnimationQueue.CommandType.CUSTOM, {
-						"callable": Callable(AnimationQueue, "animate_shuffle").bind(controller_id),
-						"description": "Barajar mazo (Manuel Bulnes)"
-					})
+					AnimationQueue.queue_shuffle(controller_id, "Barajar mazo (Manuel Bulnes)")
 
 	return true
 
@@ -338,10 +329,7 @@ func try_execute_shuffle_hand_then_draw_pattern(ability_text: String, controller
 						shuffled += 1
 				if shuffled > 0:
 					CardManager.shuffle_deck(controller_id)
-					AnimationQueue.add_command(AnimationQueue.CommandType.CUSTOM, {
-						"callable": Callable(AnimationQueue, "animate_shuffle").bind(controller_id),
-						"description": "Barajar mazo (Trono del Dragón)"
-					})
+					AnimationQueue.queue_shuffle(controller_id, "Barajar mazo (Trono del Dragón)")
 
 	if draw_amount > 0:
 		await ActionModule.draw(controller_id, draw_amount, "etb_trigger", true)

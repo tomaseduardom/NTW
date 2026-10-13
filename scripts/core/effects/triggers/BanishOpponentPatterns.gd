@@ -515,10 +515,7 @@ func try_execute_annul_then_shuffle_hand_by_cost_pattern(ability_text: String, c
 						hand_container.remove_card(node, true)
 						CardManager.get_deck(controller_id).append(data)
 				CardManager.shuffle_deck(controller_id)
-				AnimationQueue.add_command(AnimationQueue.CommandType.CUSTOM, {
-					"callable": Callable(AnimationQueue, "animate_shuffle").bind(controller_id),
-					"description": "Barajar mazo (Dragón Dorado)"
-				})
+				AnimationQueue.queue_shuffle(controller_id, "Barajar mazo (Dragón Dorado)")
 	return true
 
 

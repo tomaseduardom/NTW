@@ -106,10 +106,7 @@ func _activate_kotaix_draw_and_shuffle_opponent(source_card: Node, ability: Dict
 
 	await ActionModule.return_to_deck(target, opponent_id, true, source_card)
 	CardManager.shuffle_deck(opponent_id)
-	AnimationQueue.add_command(AnimationQueue.CommandType.CUSTOM, {
-		"callable": Callable(AnimationQueue, "animate_shuffle").bind(opponent_id),
-		"description": "Barajar mazo (Espíritu Kotaix)"
-	})
+	AnimationQueue.queue_shuffle(opponent_id, "Barajar mazo (Espíritu Kotaix)")
 
 
 func _activate_kuchiku_cazador_search_and_play_discount(source_card: Node, ability: Dictionary) -> void:
@@ -342,10 +339,8 @@ func _activate_miguel_discount_play(source_card: Node, ability: Dictionary) -> v
 			return
 		var picked_data: Dictionary = pools[pi].cards[ci].data
 		var cemetery_owner: int = cem_owners[pi]
-		var idx: int = CardManager.get_cemetery(cemetery_owner).find(picked_data)
-		if idx < 0:
+		if not CardManager.take_from_cemetery(cemetery_owner, picked_data):
 			return
-		CardManager.remove_from_cemetery(cemetery_owner, idx)
 		card_node = main._create_card(picked_data, owner_id != 0)
 		# Dueño = de qué Cementerio salió; controlador = quien la juega
 		# (ver arquitectura.md §38).
@@ -452,10 +447,8 @@ func _activate_quimera_voragh_mill_and_revive(source_card: Node, ability: Dictio
 	var chosen_owner: int = picked_list[0].owner_id
 	var picked: Dictionary = picked_list[0].data
 
-	var idx: int = CardManager.get_cemetery(chosen_owner).find(picked)
-	if idx < 0:
+	if not CardManager.take_from_cemetery(chosen_owner, picked):
 		return
-	CardManager.remove_from_cemetery(chosen_owner, idx)
 
 	var new_data: Dictionary = picked.duplicate()
 	new_data["tipo"] = Constants.CardType.ALIADO
@@ -536,10 +529,7 @@ func _activate_tenshi_z_shuffle_hand_to_annul(source_card: Node, ability: Dictio
 	hand_container.remove_card(hand_node, true)
 	CardManager.get_deck(owner_id).append(data)
 	CardManager.shuffle_deck(owner_id)
-	AnimationQueue.add_command(AnimationQueue.CommandType.CUSTOM, {
-		"callable": Callable(AnimationQueue, "animate_shuffle").bind(owner_id),
-		"description": "Barajar mazo (Tenshi Z)"
-	})
+	AnimationQueue.queue_shuffle(owner_id, "Barajar mazo (Tenshi Z)")
 
 	await ActionModule.destroy([target], source_card, true, true)
 

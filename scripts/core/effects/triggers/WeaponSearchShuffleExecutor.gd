@@ -16,6 +16,8 @@
 
 const PlayerSideScript = preload("res://scripts/core/game/PlayerSide.gd")
 
+const CemeteryPopupScript = preload("res://scripts/ui/zones/CemeteryRevealPopup.gd")
+
 var _main: Node
 
 
@@ -284,65 +286,9 @@ func _execute_play_weapon_discount_draw(action: Dictionary, controller_id: int, 
 	# 2026-09-13, a pedido del usuario: click directo — mano (Nodos ya
 	# visibles) + un popup liviano con el Cementerio propio (mismo patrón
 	# que Sake, arquitectura.md §10.23) — en vez del modal de lista viejo.
-	var cemetery_popup: CanvasLayer = null
-	var cemetery_nodes: Array = []
-	if not cemetery_weapons.is_empty():
-		var CardScene = load("res://scenes/cards/Card.tscn")
-		cemetery_popup = CanvasLayer.new()
-		cemetery_popup.layer = 40
-		# Si elige el Remoto, el popup no se muestra en la pantalla del
-		# Anfitrión — sus Nodos solo sirven de candidatos para la delegación.
-		cemetery_popup.visible = controller_id == 0
-		main.add_child(cemetery_popup)
-		var panel := PanelContainer.new()
-		# 2026-09-25, bug real reportado por el usuario ("el popup del
-		# Cementerio ni aparece"): set_anchors_preset(BOTTOM_LEFT) +
-		# position=Vector2(20,-240) dependía de que el PanelContainer ya
-		# tuviera su tamaño final calculado (recién se agrega el contenido
-		# DESPUÉS, más abajo) — con rect_size todavía en (0,0) en este
-		# instante, la posición resultante podía terminar fuera de pantalla
-		# o desalineada. Posición absoluta calculada directo del viewport
-		# actual, sin depender del timing de layout de los anchors.
-		var viewport_size: Vector2 = main.get_viewport().get_visible_rect().size
-		panel.position = Vector2(20, viewport_size.y - 260)
-		var pstyle := StyleBoxFlat.new()
-		pstyle.bg_color = Color(0.04, 0.03, 0.06, 0.92)
-		pstyle.border_color = Color(0.85, 0.72, 0.28, 0.85)
-		pstyle.set_border_width_all(2)
-		pstyle.set_corner_radius_all(12)
-		panel.add_theme_stylebox_override("panel", pstyle)
-		cemetery_popup.add_child(panel)
-		var vbox := VBoxContainer.new()
-		panel.add_child(vbox)
-		var lbl := Label.new()
-		lbl.text = "Tu Cementerio"
-		lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		vbox.add_child(lbl)
-		var scroll := ScrollContainer.new()
-		scroll.custom_minimum_size = Vector2(0, 190)
-		scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-		vbox.add_child(scroll)
-		var hbox := HBoxContainer.new()
-		hbox.add_theme_constant_override("separation", 8)
-		scroll.add_child(hbox)
-		for data in cemetery_weapons:
-			var wrapper := Control.new()
-			wrapper.custom_minimum_size = Vector2(80.0, 112.0)
-			var c_node = CardScene.instantiate()
-			c_node.load_from_data(data)
-			c_node.set_zone(Constants.Zone.CEMENTERIO)
-			c_node.owner_id = controller_id
-			c_node.controller_id = controller_id
-			c_node.can_interact = true
-			c_node.drag_enabled = false
-			c_node.custom_minimum_size = Vector2(150.0, 210.0)
-			c_node.size = Vector2(150.0, 210.0)
-			c_node.scale = Vector2(0.533, 0.533)
-			c_node.base_scale = Vector2(0.533, 0.533)
-			main._connect_card_signals(c_node)
-			wrapper.add_child(c_node)
-			hbox.add_child(wrapper)
-			cemetery_nodes.append(c_node)
+	var popup_result: Dictionary = CemeteryPopupScript.open(main, cemetery_weapons, controller_id, controller_id == 0)
+	var cemetery_popup: CanvasLayer = popup_result.popup
+	var cemetery_nodes: Array = popup_result.nodes
 
 	var weapon_candidates: Array = hand_weapons + cemetery_nodes
 	var weapon_filter := func(c: Node) -> bool: return c in weapon_candidates

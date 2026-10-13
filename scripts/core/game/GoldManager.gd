@@ -485,10 +485,7 @@ func _resolve_armeria_barajar_desterrar(max_amount: int = 2, title: String = "Ar
 			CardManager.shuffle_deck(owner_of_picked)
 			# 2026-09-30, mismo criterio que el fix de Azi Sruvara: sin esto
 			# no había ninguna retroalimentación visual del barajado.
-			AnimationQueue.add_command(AnimationQueue.CommandType.CUSTOM, {
-				"callable": Callable(AnimationQueue, "animate_shuffle").bind(owner_of_picked),
-				"description": "Barajar mazo (%s)" % title
-			})
+			AnimationQueue.queue_shuffle(owner_of_picked, "Barajar mazo (%s)" % title)
 		else:
 			CardManager.add_to_exile(owner_of_picked, picked_data)
 

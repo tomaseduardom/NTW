@@ -238,10 +238,7 @@ func try_execute_reveal_gold_to_pagado_weapon_or_totem_to_hand_pattern(ability_t
 	for c in revealed:
 		deck.append(c)
 	CardManager.shuffle_deck(controller_id)
-	AnimationQueue.add_command(AnimationQueue.CommandType.CUSTOM, {
-		"callable": Callable(AnimationQueue, "animate_shuffle").bind(controller_id),
-		"description": "Barajar mazo (Activar Tenshi Z)"
-	})
+	AnimationQueue.queue_shuffle(controller_id, "Barajar mazo (Activar Tenshi Z)")
 	if main.get("_zone_manager"):
 		main._zone_manager._update_castillo_counts()
 	return true
@@ -305,10 +302,7 @@ func try_execute_reveal_gold_weapon_totem_split_pattern(ability_text: String, co
 	for c in revealed:
 		deck.append(c)
 	CardManager.shuffle_deck(controller_id)
-	AnimationQueue.add_command(AnimationQueue.CommandType.CUSTOM, {
-		"callable": Callable(AnimationQueue, "animate_shuffle").bind(controller_id),
-		"description": "Barajar mazo (akari)"
-	})
+	AnimationQueue.queue_shuffle(controller_id, "Barajar mazo (akari)")
 	if main and main.get("_zone_manager"):
 		main._zone_manager._update_castillo_counts()
 	return true
@@ -356,10 +350,7 @@ func try_execute_reveal_until_ally_and_gold_pattern(ability_text: String, contro
 	for c in revealed:
 		deck.append(c)
 	CardManager.shuffle_deck(controller_id)
-	AnimationQueue.add_command(AnimationQueue.CommandType.CUSTOM, {
-		"callable": Callable(AnimationQueue, "animate_shuffle").bind(controller_id),
-		"description": "Barajar mazo (Cabeza de Mimir)"
-	})
+	AnimationQueue.queue_shuffle(controller_id, "Barajar mazo (Cabeza de Mimir)")
 	if main and main.get("_zone_manager"):
 		main._zone_manager._update_castillo_counts()
 	return true
@@ -403,10 +394,7 @@ func try_execute_reveal_until_ally_and_weapon_pattern(ability_text: String, cont
 	for c in revealed:
 		deck.append(c)
 	CardManager.shuffle_deck(controller_id)
-	AnimationQueue.add_command(AnimationQueue.CommandType.CUSTOM, {
-		"callable": Callable(AnimationQueue, "animate_shuffle").bind(controller_id),
-		"description": "Barajar mazo (metalmorfo)"
-	})
+	AnimationQueue.queue_shuffle(controller_id, "Barajar mazo (metalmorfo)")
 	if main and main.get("_zone_manager"):
 		main._zone_manager._update_castillo_counts()
 	return true
@@ -453,10 +441,7 @@ func try_execute_reveal_until_ally_and_talisman_pattern(ability_text: String, co
 	for c in revealed:
 		deck.append(c)
 	CardManager.shuffle_deck(controller_id)
-	AnimationQueue.add_command(AnimationQueue.CommandType.CUSTOM, {
-		"callable": Callable(AnimationQueue, "animate_shuffle").bind(controller_id),
-		"description": "Barajar mazo (Diadema Celestial)"
-	})
+	AnimationQueue.queue_shuffle(controller_id, "Barajar mazo (Diadema Celestial)")
 	if main and main.get("_zone_manager"):
 		main._zone_manager._update_castillo_counts()
 	return true
@@ -528,10 +513,7 @@ func try_execute_reveal_until_distinct_cost_allies_pattern(ability_text: String,
 	for c in revealed:
 		deck.append(c)
 	cm.shuffle_deck(controller_id)
-	AnimationQueue.add_command(AnimationQueue.CommandType.CUSTOM, {
-		"callable": Callable(AnimationQueue, "animate_shuffle").bind(controller_id),
-		"description": "Barajar mazo (Alicia en Wonderland)"
-	})
+	AnimationQueue.queue_shuffle(controller_id, "Barajar mazo (Alicia en Wonderland)")
 
 	if main2 and main2.get("_zone_manager"):
 		main2._zone_manager._update_castillo_counts()
@@ -576,10 +558,7 @@ func try_execute_reveal_until_three_cost1_allies_play_one_pattern(ability_text: 
 	for c in revealed:
 		deck.append(c)
 	CardManager.shuffle_deck(controller_id)
-	AnimationQueue.add_command(AnimationQueue.CommandType.CUSTOM, {
-		"callable": Callable(AnimationQueue, "animate_shuffle").bind(controller_id),
-		"description": "Barajar mazo (gran kraken)"
-	})
+	AnimationQueue.queue_shuffle(controller_id, "Barajar mazo (gran kraken)")
 	if main and main.get("_zone_manager"):
 		main._zone_manager._update_castillo_counts()
 	return true
@@ -627,10 +606,7 @@ func try_execute_reveal_until_weapon_or_totem_and_ally_pattern(ability_text: Str
 	for c in revealed:
 		deck.append(c)
 	CardManager.shuffle_deck(controller_id)
-	AnimationQueue.add_command(AnimationQueue.CommandType.CUSTOM, {
-		"callable": Callable(AnimationQueue, "animate_shuffle").bind(controller_id),
-		"description": "Barajar mazo (atenea en wonderland)"
-	})
+	AnimationQueue.queue_shuffle(controller_id, "Barajar mazo (atenea en wonderland)")
 	if main and main.get("_zone_manager"):
 		main._zone_manager._update_castillo_counts()
 	return true

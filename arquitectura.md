@@ -6030,3 +6030,32 @@ no hayas chequeado bien"). Rama `limpieza-codigo-muerto`.
 - **Verificado:** los 157 scripts compilan con autoloads; 25/25 tests del
   compilador; el auditor da los mismos números; el menú y la escena de
   partida cargan headless sin errores.
+
+## 62. Código repetido: barajado, sacar del Cementerio y popup del Cementerio (2026-10-13)
+
+**A pedido del usuario** (punto 2 de la revisión de líneas). Solo bloques
+de VARIAS líneas repetidos con la misma forma exacta, reemplazados por un
+ayudante con el mismo comportamiento; cada uno compilado y probado.
+
+- **Animación de barajado:** 49 bloques de 4 líneas `AnimationQueue.
+  add_command(CUSTOM, {callable: animate_shuffle..., description})` →
+  `AnimationQueue.queue_shuffle(jugador, descripción)` (nuevo, hace
+  exactamente lo mismo; el `queue_shuffle_animation()` que ya existía llama
+  a otra función interna y deja su propio log, por eso no se reusó).
+- **Sacar una carta del Cementerio:** 17 bloques `find / if idx < 0 /
+  remove_from_cemetery(idx)` → `if not CardManager.take_from_cemetery(dueño,
+  datos):` (nuevo). Solo donde el índice no se vuelve a usar después (1
+  caso se dejó como estaba).
+- **Popup liviano del Cementerio:** ~44 líneas copiadas en 6 lugares (Golpe
+  Solar, Shiji, búsqueda Aliado/Tótem del Cementerio, Lobo Sagrado,
+  GoldManagerTax y Prevención con Oro — estos dos ya tenían cada uno su
+  propia copia de la función) → `scripts/ui/zones/CemeteryRevealPopup.gd`,
+  `open(main, cartas, dueño, visible, título)`. Usa la posición absoluta del
+  arreglo de Lobo Sagrado ("el popup del Cementerio ni aparece", 2026-09-25)
+  para los 6 — los otros 5 seguían con el anchor que podía dejarlo fuera de
+  pantalla — y los márgenes internos de los dos que los tenían.
+
+Total: −439 líneas netas (−552 / +113, más el archivo nuevo). Verificado: los
+158 scripts compilan, 25/25 tests, el auditor da los mismos números, el menú
+y la escena de partida cargan sin errores. Sin tocar los archivos de
+Antigravity.

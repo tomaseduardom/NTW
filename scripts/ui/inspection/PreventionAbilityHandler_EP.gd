@@ -116,10 +116,7 @@ func _activate_frankenstein_pay_shuffle_cancel(source_card: Node, ability: Dicti
 	hand_container_frank2.remove_card(hand_node, true)
 	CardManager.get_deck(owner_id).append(to_shuffle_data)
 	CardManager.shuffle_deck(owner_id)
-	AnimationQueue.add_command(AnimationQueue.CommandType.CUSTOM, {
-		"callable": Callable(AnimationQueue, "animate_shuffle").bind(owner_id),
-		"description": "Barajar mazo (Frankenstein)"
-	})
+	AnimationQueue.queue_shuffle(owner_id, "Barajar mazo (Frankenstein)")
 	await main._gold_manager._mover_oro_a_pagado(source_card)
 	await KeywordManager.silence_card(target, source_card, "permanent")
 
@@ -383,10 +380,8 @@ func _activate_nu_galahad_wear_cemetery_as_weapons(source_card: Node, ability: D
 	for entry in picked:
 		var zone_owner: int = entry.owner_id
 		var picked_data: Dictionary = entry.data
-		var idx: int = CardManager.get_cemetery(zone_owner).find(picked_data)
-		if idx < 0:
+		if not CardManager.take_from_cemetery(zone_owner, picked_data):
 			continue
-		CardManager.remove_from_cemetery(zone_owner, idx)
 		var new_data: Dictionary = picked_data.duplicate()
 		new_data["tipo"] = Constants.CardType.ARMA
 		new_data["esta_oculta"] = false

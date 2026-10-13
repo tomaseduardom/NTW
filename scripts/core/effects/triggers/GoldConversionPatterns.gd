@@ -92,10 +92,7 @@ func try_execute_convert_then_reveal_until_same_type_pattern(ability_text: Strin
 	for c in revealed:
 		deck.append(c)
 	CardManager.shuffle_deck(controller_id)
-	AnimationQueue.add_command(AnimationQueue.CommandType.CUSTOM, {
-		"callable": Callable(AnimationQueue, "animate_shuffle").bind(controller_id),
-		"description": "Barajar mazo (Acabar la Esperanza)"
-	})
+	AnimationQueue.queue_shuffle(controller_id, "Barajar mazo (Acabar la Esperanza)")
 
 	if main.get("_zone_manager"):
 		main._zone_manager._update_castillo_counts()
@@ -180,10 +177,7 @@ func try_execute_gold_for_allies_or_shuffle_cost_max_pattern(ability_text: Strin
 			var target_owner: int = target.controller_id if target.get("controller_id") != null else 0
 			if await ActionModule.return_to_deck(target, target_owner, true, card):
 				CardManager.shuffle_deck(target_owner)
-				AnimationQueue.add_command(AnimationQueue.CommandType.CUSTOM, {
-					"callable": Callable(AnimationQueue, "animate_shuffle").bind(target_owner),
-					"description": "Barajar mazo (manuel rodriguez)"
-				})
+				AnimationQueue.queue_shuffle(target_owner, "Barajar mazo (manuel rodriguez)")
 	return true
 
 

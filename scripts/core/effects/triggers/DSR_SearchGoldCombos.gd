@@ -12,6 +12,8 @@ extends RefCounted
 ## mismo nombre y firma de siempre, así que TriggerResolution.gd (único
 ## llamador) no necesitó cambiar una sola línea por este split.
 
+const CemeteryPopupScript = preload("res://scripts/ui/zones/CemeteryRevealPopup.gd")
+
 var _executor: TargetedEffectExecutor
 
 
@@ -68,54 +70,9 @@ func try_execute_free_play_weapon_or_totem_cost1_hand_cemetery_pattern(
 	# visibles) + un popup liviano con el Cementerio propio (mismo patrón
 	# que Golpe Solar, ver DSR_DiscardChoicePatterns.gd), en vez del modal
 	# de lista viejo combinando ambas zonas.
-	var cemetery_popup: CanvasLayer = null
-	var cemetery_nodes: Array = []
-	if not cemetery_data.is_empty():
-		var CardScene = load("res://scenes/cards/Card.tscn")
-		cemetery_popup = CanvasLayer.new()
-		cemetery_popup.layer = 40
-		main.add_child(cemetery_popup)
-		var panel := PanelContainer.new()
-		panel.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
-		panel.position = Vector2(20, -240)
-		var pstyle := StyleBoxFlat.new()
-		pstyle.bg_color = Color(0.04, 0.03, 0.06, 0.92)
-		pstyle.border_color = Color(0.85, 0.72, 0.28, 0.85)
-		pstyle.set_border_width_all(2)
-		pstyle.set_corner_radius_all(12)
-		panel.add_theme_stylebox_override("panel", pstyle)
-		cemetery_popup.add_child(panel)
-		var vbox := VBoxContainer.new()
-		panel.add_child(vbox)
-		var lbl := Label.new()
-		lbl.text = "Tu Cementerio"
-		lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		vbox.add_child(lbl)
-		var scroll := ScrollContainer.new()
-		scroll.custom_minimum_size = Vector2(0, 190)
-		scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-		vbox.add_child(scroll)
-		var hbox := HBoxContainer.new()
-		hbox.add_theme_constant_override("separation", 8)
-		scroll.add_child(hbox)
-		for d in cemetery_data:
-			var wrapper := Control.new()
-			wrapper.custom_minimum_size = Vector2(80.0, 112.0)
-			var c_node = CardScene.instantiate()
-			c_node.load_from_data(d)
-			c_node.set_zone(Constants.Zone.CEMENTERIO)
-			c_node.owner_id = controller_id
-			c_node.controller_id = controller_id
-			c_node.can_interact = true
-			c_node.drag_enabled = false
-			c_node.custom_minimum_size = Vector2(150.0, 210.0)
-			c_node.size = Vector2(150.0, 210.0)
-			c_node.scale = Vector2(0.533, 0.533)
-			c_node.base_scale = Vector2(0.533, 0.533)
-			main._connect_card_signals(c_node)
-			wrapper.add_child(c_node)
-			hbox.add_child(wrapper)
-			cemetery_nodes.append(c_node)
+	var popup_result: Dictionary = CemeteryPopupScript.open(main, cemetery_data, controller_id)
+	var cemetery_popup: CanvasLayer = popup_result.popup
+	var cemetery_nodes: Array = popup_result.nodes
 
 	var candidates: Array = hand_candidates + cemetery_nodes
 	var filter := func(c: Node) -> bool: return c in candidates

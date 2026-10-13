@@ -47,10 +47,8 @@ func _resolve_search_cemetery_to_hand(controller_id: int, max_amount: int, type_
 
 	var hand_container = main.player_hand if controller_id == 0 else main._opponent_fan
 	for entry in picked:
-		var idx: int = CardManager.get_cemetery(controller_id).find(entry.data)
-		if idx < 0:
+		if not CardManager.take_from_cemetery(controller_id, entry.data):
 			continue
-		CardManager.remove_from_cemetery(controller_id, idx)
 		if hand_container:
 			var node = main._create_card(entry.data, false)
 			main._connect_card_signals(node)

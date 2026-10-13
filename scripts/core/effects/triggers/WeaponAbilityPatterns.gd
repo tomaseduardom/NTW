@@ -81,10 +81,8 @@ func _execute_canon_naval_effect(card: Node, controller_id: int) -> void:
 	for entry in picked:
 		var owner_of_picked: int = entry.owner_id
 		var picked_data: Dictionary = entry.data
-		var idx: int = CardManager.get_cemetery(owner_of_picked).find(picked_data)
-		if idx < 0:
+		if not CardManager.take_from_cemetery(owner_of_picked, picked_data):
 			continue
-		CardManager.remove_from_cemetery(owner_of_picked, idx)
 
 
 func try_execute_canon_naval_final_pattern(ability_text: String, card: Node, controller_id: int) -> bool:

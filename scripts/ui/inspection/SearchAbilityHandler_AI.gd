@@ -260,10 +260,7 @@ func _activate_cuerno_titan_discard_search_cost_adjust(source_card: Node, abilit
 		var found_data: Dictionary = deck[found_idx]
 		deck.remove_at(found_idx)
 		CardManager.shuffle_deck(owner_id)
-		AnimationQueue.add_command(AnimationQueue.CommandType.CUSTOM, {
-			"callable": Callable(AnimationQueue, "animate_shuffle").bind(owner_id),
-			"description": "Barajar mazo (Cuerno de Titán)"
-		})
+		AnimationQueue.queue_shuffle(owner_id, "Barajar mazo (Cuerno de Titán)")
 		var card_node = main._create_card(found_data, false)
 		hand_container_cuerno.add_card(card_node)
 		main._connect_card_signals(card_node)

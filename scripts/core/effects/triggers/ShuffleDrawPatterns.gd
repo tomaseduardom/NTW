@@ -54,10 +54,7 @@ func try_execute_shuffle_or_draw_choice_pattern(ability_text: String, controller
 		var owner: int = target.owner_id if target.get("owner_id") != null else controller_id
 		await ActionModule.return_to_deck(target, owner, true)
 		CardManager.shuffle_deck(owner)
-		AnimationQueue.add_command(AnimationQueue.CommandType.CUSTOM, {
-			"callable": Callable(AnimationQueue, "animate_shuffle").bind(owner),
-			"description": "Barajar mazo (Caín)"
-		})
+		AnimationQueue.queue_shuffle(owner, "Barajar mazo (Caín)")
 	return true
 
 
@@ -107,10 +104,7 @@ func try_execute_cain_damage_shuffle_search_pattern(isolated_text: String, card:
 	# vuelve a su Castillo y se mezcla.
 	await ActionModule.return_to_deck(card, controller_id, false, card)
 	CardManager.shuffle_deck(controller_id)
-	AnimationQueue.add_command(AnimationQueue.CommandType.CUSTOM, {
-		"callable": Callable(AnimationQueue, "animate_shuffle").bind(controller_id),
-		"description": "Barajar mazo (Caín)"
-	})
+	AnimationQueue.queue_shuffle(controller_id, "Barajar mazo (Caín)")
 
 	for picked_data in found:
 		deck.erase(picked_data)
@@ -170,10 +164,7 @@ func try_execute_shuffle_cost_max_three_pattern(ability_text: String, controller
 		var target_owner: int = target.controller_id if target.get("controller_id") != null else controller_id
 		if await ActionModule.return_to_deck(target, target_owner, true):
 			CardManager.shuffle_deck(target_owner)
-			AnimationQueue.add_command(AnimationQueue.CommandType.CUSTOM, {
-				"callable": Callable(AnimationQueue, "animate_shuffle").bind(target_owner),
-				"description": "Barajar mazo (vision heroica)"
-			})
+			AnimationQueue.queue_shuffle(target_owner, "Barajar mazo (vision heroica)")
 	return true
 
 
@@ -204,10 +195,7 @@ func try_execute_shuffle_cost_max_two_draw_two_pattern(ability_text: String, con
 		var target_owner: int = target.controller_id if target.get("controller_id") != null else controller_id
 		if await ActionModule.return_to_deck(target, target_owner, true):
 			CardManager.shuffle_deck(target_owner)
-			AnimationQueue.add_command(AnimationQueue.CommandType.CUSTOM, {
-				"callable": Callable(AnimationQueue, "animate_shuffle").bind(target_owner),
-				"description": "Barajar mazo (el caleuche)"
-			})
+			AnimationQueue.queue_shuffle(target_owner, "Barajar mazo (el caleuche)")
 	await ActionModule.draw(controller_id, 2, "etb_trigger", true)
 	return true
 
@@ -275,10 +263,7 @@ func try_execute_shuffle_one_in_play_and_four_cemetery_pattern(ability_text: Str
 			picked1_node.queue_free()
 			CardManager.get_deck(owner_id).append(data)
 			CardManager.shuffle_deck(owner_id)
-			AnimationQueue.add_command(AnimationQueue.CommandType.CUSTOM, {
-				"callable": Callable(AnimationQueue, "animate_shuffle").bind(owner_id),
-				"description": "Barajar mazo (amazona desafiante)"
-			})
+			AnimationQueue.queue_shuffle(owner_id, "Barajar mazo (amazona desafiante)")
 
 	# Parte 2: hasta cuatro cartas de los Cementerios (barajar, no desterrar
 	# — a diferencia de Ofrendas al Dragón, esta carta no ofrece la opción
@@ -295,10 +280,7 @@ func try_execute_shuffle_one_in_play_and_four_cemetery_pattern(ability_text: Str
 				data2["esta_oculta"] = true
 				CardManager.get_deck(entry.owner_id).append(data2)
 				CardManager.shuffle_deck(entry.owner_id)
-				AnimationQueue.add_command(AnimationQueue.CommandType.CUSTOM, {
-					"callable": Callable(AnimationQueue, "animate_shuffle").bind(entry.owner_id),
-					"description": "Barajar mazo (amazona desafiante)"
-				})
+				AnimationQueue.queue_shuffle(entry.owner_id, "Barajar mazo (amazona desafiante)")
 	return true
 
 
@@ -337,10 +319,7 @@ func try_execute_shuffle_any_cemetery_or_exile_into_castillo_then_draw_pattern(a
 			CardManager.get_deck(controller_id).append(entry.data)
 		if not picked.is_empty():
 			CardManager.shuffle_deck(controller_id)
-			AnimationQueue.add_command(AnimationQueue.CommandType.CUSTOM, {
-				"callable": Callable(AnimationQueue, "animate_shuffle").bind(controller_id),
-				"description": "Barajar mazo (Abrazo de Maipú)"
-			})
+			AnimationQueue.queue_shuffle(controller_id, "Barajar mazo (Abrazo de Maipú)")
 
 	await ActionModule.draw(controller_id, 3, "etb_trigger", true)
 	return true
@@ -422,10 +401,8 @@ func try_execute_draw_or_raise_cemetery_ally_pattern(ability_text: String, contr
 		if picked.is_empty():
 			return true
 		var picked_data: Dictionary = picked[0].data
-		var idx: int = CardManager.get_cemetery(controller_id).find(picked_data)
-		if idx < 0:
+		if not CardManager.take_from_cemetery(controller_id, picked_data):
 			return true
-		CardManager.remove_from_cemetery(controller_id, idx)
 		var card_node = main._create_card(picked_data, false)
 		var hand_container_orion = main.player_hand if controller_id == 0 else main._opponent_fan
 		hand_container_orion.add_card(card_node)
@@ -457,10 +434,7 @@ func try_execute_shuffle_up_to_one_ally_pattern(ability_text: String, card: Node
 		var target_owner: int = target.controller_id if target.get("controller_id") != null else controller_id
 		if await ActionModule.return_to_deck(target, target_owner, true, card):
 			CardManager.shuffle_deck(target_owner)
-			AnimationQueue.add_command(AnimationQueue.CommandType.CUSTOM, {
-				"callable": Callable(AnimationQueue, "animate_shuffle").bind(target_owner),
-				"description": "Barajar mazo (blanca nieves)"
-			})
+			AnimationQueue.queue_shuffle(target_owner, "Barajar mazo (blanca nieves)")
 	return true
 
 
@@ -526,10 +500,7 @@ func try_execute_shuffle_non_gold_or_draw_two_pattern(ability_text: String, card
 			var target_owner: int = target.controller_id if target.get("controller_id") != null else controller_id
 			if await ActionModule.return_to_deck(target, target_owner, true, card):
 				CardManager.shuffle_deck(target_owner)
-				AnimationQueue.add_command(AnimationQueue.CommandType.CUSTOM, {
-					"callable": Callable(AnimationQueue, "animate_shuffle").bind(target_owner),
-					"description": "Barajar mazo (rafael)"
-				})
+				AnimationQueue.queue_shuffle(target_owner, "Barajar mazo (rafael)")
 	elif not await TriggerSystem.open_response_window(card, str(card.card_name), controller_id):
 		await ActionModule.draw(controller_id, 2, "etb_trigger", true)
 	return true

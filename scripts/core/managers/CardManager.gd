@@ -490,6 +490,17 @@ func destroy_card(player_id: int, card: Node) -> void:
 		main_node._zone_manager.call_deferred("compact_all_fields", true)
 
 
+func take_from_cemetery(player_id: int, card_data: Dictionary) -> bool:
+	"""Saca esa carta (por referencia) del Cementerio de player_id. Devuelve
+	false si ya no estaba — atajo del bloque find/if idx < 0/remove que se
+	repetía en los patrones (2026-10-13, §62)."""
+	var idx: int = get_cemetery(player_id).find(card_data)
+	if idx < 0:
+		return false
+	remove_from_cemetery(player_id, idx)
+	return true
+
+
 func remove_from_cemetery(player_id: int, index: int = -1) -> Dictionary:
 	"""Remueve una carta del cementerio (para Exhumar)
 

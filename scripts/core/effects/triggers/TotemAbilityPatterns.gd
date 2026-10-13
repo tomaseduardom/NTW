@@ -128,10 +128,7 @@ func try_execute_arco_del_triunfo_pattern(ability_text: String, card: Node, cont
 	for c in revealed:
 		deck.append(c)
 	CardManager.shuffle_deck(controller_id)
-	AnimationQueue.add_command(AnimationQueue.CommandType.CUSTOM, {
-		"callable": Callable(AnimationQueue, "animate_shuffle").bind(controller_id),
-		"description": "Barajar mazo (arco del triunfo)"
-	})
+	AnimationQueue.queue_shuffle(controller_id, "Barajar mazo (arco del triunfo)")
 	if main.get("_zone_manager"):
 		main._zone_manager._update_castillo_counts()
 	return true

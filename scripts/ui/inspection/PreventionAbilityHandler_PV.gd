@@ -9,6 +9,8 @@
 ## sola línea por este split. Opera sobre CardInspectionLayer via _inspector
 ## (y sobre el Main del juego via _inspector._main).
 
+const CemeteryPopupScript = preload("res://scripts/ui/zones/CemeteryRevealPopup.gd")
+
 var _inspector: CardInspectionLayer
 
 
@@ -28,58 +30,7 @@ func _open_cemetery_reveal_popup_oro(main: Node, owner_id: int) -> Dictionary:
 	if own_cemetery.is_empty():
 		return {"popup": null, "nodes": nodes}
 
-	var CardScene = load("res://scenes/cards/Card.tscn")
-	var popup := CanvasLayer.new()
-	popup.layer = 40
-	main.add_child(popup)
-	var panel := PanelContainer.new()
-	panel.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
-	panel.position = Vector2(20, -240)
-	var pstyle := StyleBoxFlat.new()
-	pstyle.bg_color = Color(0.04, 0.03, 0.06, 0.92)
-	pstyle.border_color = Color(0.85, 0.72, 0.28, 0.85)
-	pstyle.set_border_width_all(2)
-	pstyle.set_corner_radius_all(12)
-	pstyle.content_margin_left = 10
-	pstyle.content_margin_right = 10
-	pstyle.content_margin_top = 8
-	pstyle.content_margin_bottom = 8
-	panel.add_theme_stylebox_override("panel", pstyle)
-	popup.add_child(panel)
-	var vbox := VBoxContainer.new()
-	panel.add_child(vbox)
-	var lbl := Label.new()
-	lbl.text = "Tu Cementerio"
-	lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	vbox.add_child(lbl)
-	var scroll := ScrollContainer.new()
-	scroll.custom_minimum_size = Vector2(0, 190)
-	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	vbox.add_child(scroll)
-	var hbox := HBoxContainer.new()
-	hbox.add_theme_constant_override("separation", 8)
-	scroll.add_child(hbox)
-
-	for data in own_cemetery:
-		var wrapper := Control.new()
-		wrapper.custom_minimum_size = Vector2(80.0, 112.0)
-		var c_node = CardScene.instantiate()
-		c_node.load_from_data(data)
-		c_node.set_zone(Constants.Zone.CEMENTERIO)
-		c_node.owner_id = owner_id
-		c_node.controller_id = owner_id
-		c_node.can_interact = true
-		c_node.drag_enabled = false
-		c_node.custom_minimum_size = Vector2(150.0, 210.0)
-		c_node.size = Vector2(150.0, 210.0)
-		c_node.scale = Vector2(0.533, 0.533)
-		c_node.base_scale = Vector2(0.533, 0.533)
-		main._connect_card_signals(c_node)
-		wrapper.add_child(c_node)
-		hbox.add_child(wrapper)
-		nodes.append(c_node)
-
-	return {"popup": popup, "nodes": nodes}
+	return CemeteryPopupScript.open(main, own_cemetery, owner_id)
 
 
 func _activate_perla_de_sangre_convert_barajar_desterrar_draw(source_card: Node, ability: Dictionary) -> void:
@@ -228,10 +179,7 @@ func _activate_quantum_megumi(source_card: Node, ability: Dictionary) -> void:
 	hand_container_qm.remove_card(hand_node, true)
 	CardManager.get_deck(owner_id).append(to_shuffle_data)
 	CardManager.shuffle_deck(owner_id)
-	AnimationQueue.add_command(AnimationQueue.CommandType.CUSTOM, {
-		"callable": Callable(AnimationQueue, "animate_shuffle").bind(owner_id),
-		"description": "Barajar mazo (Quantum Megumi)"
-	})
+	AnimationQueue.queue_shuffle(owner_id, "Barajar mazo (Quantum Megumi)")
 
 	if not CardManager.get_cemetery(owner_id).is_empty() and main._zone_viewer:
 		# 2026-09-13: click directo en el propio Cementerio en vez del modal
@@ -250,10 +198,7 @@ func _activate_quantum_megumi(source_card: Node, ability: Dictionary) -> void:
 				shuffled += 1
 		if shuffled > 0:
 			CardManager.shuffle_deck(owner_id)
-			AnimationQueue.add_command(AnimationQueue.CommandType.CUSTOM, {
-				"callable": Callable(AnimationQueue, "animate_shuffle").bind(owner_id),
-				"description": "Barajar mazo (Quantum Megumi)"
-			})
+			AnimationQueue.queue_shuffle(owner_id, "Barajar mazo (Quantum Megumi)")
 		await ActionModule.draw(owner_id, 1, "activated_ability", true)
 		return
 
@@ -440,10 +385,7 @@ func _activate_shub_niggurath_shuffle_or_mill_opponent(source_card: Node, abilit
 		var target_owner: int = target.controller_id if target.get("controller_id") != null else owner_id
 		if await ActionModule.return_to_deck(target, target_owner, true, source_card):
 			CardManager.shuffle_deck(target_owner)
-			AnimationQueue.add_command(AnimationQueue.CommandType.CUSTOM, {
-				"callable": Callable(AnimationQueue, "animate_shuffle").bind(target_owner),
-				"description": "Barajar mazo (Shub-Niggurath)"
-			})
+			AnimationQueue.queue_shuffle(target_owner, "Barajar mazo (Shub-Niggurath)")
 	else:
 		UniversalCardParser.turn_registry.register_ability_use(source_card, ability)
 		var count: int = 0
@@ -480,10 +422,7 @@ func _activate_skofnung_shuffle_self_search_gold(source_card: Node, ability: Dic
 	hand_container_skof.remove_card(source_card, true)
 	CardManager.get_deck(owner_id).append(card_data)
 	CardManager.shuffle_deck(owner_id)
-	AnimationQueue.add_command(AnimationQueue.CommandType.CUSTOM, {
-		"callable": Callable(AnimationQueue, "animate_shuffle").bind(owner_id),
-		"description": "Barajar mazo (skofnung)"
-	})
+	AnimationQueue.queue_shuffle(owner_id, "Barajar mazo (skofnung)")
 	await ActionModule.search(owner_id, Constants.Zone.CASTILLO, {"type": Constants.CardType.ORO}, 1, true, false, false, null, Constants.Zone.MANO)
 
 
@@ -567,10 +506,7 @@ func _activate_torre_babel_shuffle_hand_for_cemeteries_draw(source_card: Node, a
 	hand_container.remove_card(to_shuffle_node, true)
 	CardManager.get_deck(owner_id).append(shuffled_data)
 	ActionModule.shuffle_deck(owner_id)
-	AnimationQueue.add_command(AnimationQueue.CommandType.CUSTOM, {
-		"callable": Callable(AnimationQueue, "animate_shuffle").bind(owner_id),
-		"description": "Barajar mazo (Torre de Babel)"
-	})
+	AnimationQueue.queue_shuffle(owner_id, "Barajar mazo (Torre de Babel)")
 
 	if await TriggerSystem.open_response_window(source_card, "Torre de Babel", owner_id):
 		return
@@ -613,10 +549,7 @@ func _activate_totem_dragon_ancestral_shuffle_self_annul_or_cancel(source_card: 
 	var self_owner: int = owner_id
 	if await ActionModule.return_to_deck(source_card, self_owner, true, source_card):
 		CardManager.shuffle_deck(self_owner)
-		AnimationQueue.add_command(AnimationQueue.CommandType.CUSTOM, {
-			"callable": Callable(AnimationQueue, "animate_shuffle").bind(self_owner),
-			"description": "Barajar mazo (Tótem del Dragón Ancestral)"
-		})
+		AnimationQueue.queue_shuffle(self_owner, "Barajar mazo (Tótem del Dragón Ancestral)")
 
 	if choose_annul:
 		if TriggerSystem._targeted_executor._target_text_denies(target, ["no puede ser anulad"]):

@@ -64,10 +64,8 @@ func try_execute_titan_abismal_conditional_play_or_draw_pattern(ability_text: St
 		if await TriggerSystem.open_response_window(card, "Titán Abismal", controller_id):
 			return true
 		var picked_data: Dictionary = picked[0].data
-		var idx: int = CardManager.get_cemetery(controller_id).find(picked_data)
-		if idx < 0:
+		if not CardManager.take_from_cemetery(controller_id, picked_data):
 			return true
-		CardManager.remove_from_cemetery(controller_id, idx)
 		await main._gold_manager.play_card_for_free(picked_data, controller_id)
 	else:
 		if await TriggerSystem.open_response_window(card, "Titán Abismal", controller_id):
@@ -166,10 +164,8 @@ func try_execute_play_cemetery_ally_free_or_draw_three_pattern(ability_text: Str
 		if await TriggerSystem.open_response_window(card, "sumi el terrible", controller_id):
 			return true
 		var picked_data: Dictionary = picked[0].data
-		var idx: int = CardManager.get_cemetery(controller_id).find(picked_data)
-		if idx < 0:
+		if not CardManager.take_from_cemetery(controller_id, picked_data):
 			return true
-		CardManager.remove_from_cemetery(controller_id, idx)
 		await main._gold_manager.play_card_for_free(picked_data, controller_id)
 	else:
 		if await TriggerSystem.open_response_window(card, "sumi el terrible", controller_id):

@@ -51,10 +51,8 @@ func try_execute_banish_cemeteries_equal_to_own_strength_pattern(ability_text: S
 	for entry in picked:
 		var owner_of_picked: int = entry.owner_id
 		var picked_data: Dictionary = entry.data
-		var idx: int = CardManager.get_cemetery(owner_of_picked).find(picked_data)
-		if idx < 0:
+		if not CardManager.take_from_cemetery(owner_of_picked, picked_data):
 			continue
-		CardManager.remove_from_cemetery(owner_of_picked, idx)
 		CardManager.add_to_exile(owner_of_picked, picked_data)
 	return true
 
@@ -116,10 +114,7 @@ func try_execute_shuffle_cemeteries_or_raise_ally_totem_pattern(ability_text: St
 			CardManager.remove_from_cemetery(owner_of_picked, idx)
 			CardManager.get_deck(owner_of_picked).append(picked_data)
 			CardManager.shuffle_deck(owner_of_picked)
-			AnimationQueue.add_command(AnimationQueue.CommandType.CUSTOM, {
-				"callable": Callable(AnimationQueue, "animate_shuffle").bind(owner_of_picked),
-				"description": "Barajar mazo (Campanita)"
-			})
+			AnimationQueue.queue_shuffle(owner_of_picked, "Barajar mazo (Campanita)")
 	else:
 		# 'de TU Cementerio' (posesivo, solo propio) + filtrado por tipo —
 		# el filtro rechaza tanto el lado rival como Armas/Talismanes/Oro;
@@ -133,10 +128,8 @@ func try_execute_shuffle_cemeteries_or_raise_ally_totem_pattern(ability_text: St
 		if await TriggerSystem.open_response_window(card, str(card.card_name) if card else "Campanita", controller_id):
 			return true
 		var picked_data: Dictionary = picked[0].data
-		var idx: int = CardManager.get_cemetery(controller_id).find(picked_data)
-		if idx < 0:
+		if not CardManager.take_from_cemetery(controller_id, picked_data):
 			return true
-		CardManager.remove_from_cemetery(controller_id, idx)
 		var card_node = main._create_card(picked_data, false)
 		var hand_container_campanita = main.player_hand if controller_id == 0 else main._opponent_fan
 		hand_container_campanita.add_card(card_node)
@@ -180,16 +173,11 @@ func try_execute_shuffle_up_to_n_cemeteries_pattern(ability_text: String, contro
 	for entry in picked:
 		var owner_of_picked: int = entry.owner_id
 		var picked_data: Dictionary = entry.data
-		var idx: int = CardManager.get_cemetery(owner_of_picked).find(picked_data)
-		if idx < 0:
+		if not CardManager.take_from_cemetery(owner_of_picked, picked_data):
 			continue
-		CardManager.remove_from_cemetery(owner_of_picked, idx)
 		CardManager.get_deck(owner_of_picked).append(picked_data)
 		CardManager.shuffle_deck(owner_of_picked)
-		AnimationQueue.add_command(AnimationQueue.CommandType.CUSTOM, {
-			"callable": Callable(AnimationQueue, "animate_shuffle").bind(owner_of_picked),
-			"description": "Barajar mazo (Tamales)"
-		})
+		AnimationQueue.queue_shuffle(owner_of_picked, "Barajar mazo (Tamales)")
 	return true
 
 
@@ -225,10 +213,8 @@ func try_execute_banish_up_to_n_cemeteries_pattern(ability_text: String, control
 	for entry in picked:
 		var owner_of_picked: int = entry.owner_id
 		var picked_data: Dictionary = entry.data
-		var idx: int = CardManager.get_cemetery(owner_of_picked).find(picked_data)
-		if idx < 0:
+		if not CardManager.take_from_cemetery(owner_of_picked, picked_data):
 			continue
-		CardManager.remove_from_cemetery(owner_of_picked, idx)
 		CardManager.add_to_exile(owner_of_picked, picked_data)
 	return true
 

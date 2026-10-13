@@ -417,10 +417,7 @@ func _shuffle_from_hand(main: Node, st: Dictionary, controller_id: int) -> bool:
 			shuffled += 1
 	if shuffled > 0:
 		CardManager.shuffle_deck(controller_id)
-		AnimationQueue.add_command(AnimationQueue.CommandType.CUSTOM, {
-			"callable": Callable(AnimationQueue, "animate_shuffle").bind(controller_id),
-			"description": "Barajar mazo (efecto compilado)"
-		})
+		AnimationQueue.queue_shuffle(controller_id, "Barajar mazo (efecto compilado)")
 	return st.up_to or shuffled >= st.amount
 
 

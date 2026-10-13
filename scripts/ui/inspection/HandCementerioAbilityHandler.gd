@@ -437,10 +437,7 @@ func _activate_estaca_draw_and_shuffle(source_card: Node, ability: Dictionary) -
 
 	await ActionModule.return_to_deck(target, opponent_id, true, source_card)
 	CardManager.shuffle_deck(opponent_id)
-	AnimationQueue.add_command(AnimationQueue.CommandType.CUSTOM, {
-		"callable": Callable(AnimationQueue, "animate_shuffle").bind(opponent_id),
-		"description": "Barajar mazo (Estaca)"
-	})
+	AnimationQueue.queue_shuffle(opponent_id, "Barajar mazo (Estaca)")
 
 	var hand_container_estaca = _inspector._main.player_hand if owner_id == 0 else _inspector._main._opponent_fan
 	if opp_cost > 0 and hand_container_estaca and not hand_container_estaca.cards.is_empty() \
@@ -459,10 +456,7 @@ func _activate_estaca_draw_and_shuffle(source_card: Node, ability: Dictionary) -
 					hand_container_estaca.remove_card(c, true)
 					CardManager.get_deck(owner_id).append(data)
 			CardManager.shuffle_deck(owner_id)
-			AnimationQueue.add_command(AnimationQueue.CommandType.CUSTOM, {
-				"callable": Callable(AnimationQueue, "animate_shuffle").bind(owner_id),
-				"description": "Barajar mazo (Estaca)"
-			})
+			AnimationQueue.queue_shuffle(owner_id, "Barajar mazo (Estaca)")
 
 
 func _activate_ouija_play_from_cemetery_or_deck_top(source_card: Node, ability: Dictionary) -> void:
@@ -579,10 +573,8 @@ func _activate_ouija_play_from_cemetery_or_deck_top(source_card: Node, ability: 
 	UniversalCardParser.turn_registry.register_ability_use(source_card, ability)
 
 	if chosen_from == "cemetery":
-		var idx: int = CardManager.get_cemetery(owner_id).find(chosen_data)
-		if idx < 0:
+		if not CardManager.take_from_cemetery(owner_id, chosen_data):
 			return
-		CardManager.remove_from_cemetery(owner_id, idx)
 	else:
 		deck.pop_front()
 		if _inspector._main._zone_manager:
@@ -674,10 +666,7 @@ func _activate_sacrificio_solar_self_shuffle_banish_or_shuffle(source_card: Node
 	else:
 		await ActionModule.return_to_deck(target, target_owner, true, source_card)
 		CardManager.shuffle_deck(target_owner)
-		AnimationQueue.add_command(AnimationQueue.CommandType.CUSTOM, {
-			"callable": Callable(AnimationQueue, "animate_shuffle").bind(target_owner),
-			"description": "Barajar mazo (Sacrificio Solar)"
-		})
+		AnimationQueue.queue_shuffle(target_owner, "Barajar mazo (Sacrificio Solar)")
 
 	var hand_container_sacrificio = _inspector._main.player_hand if owner_id == 0 else _inspector._main._opponent_fan
 	if hand_container_sacrificio and hand_container_sacrificio.cards.find(source_card) >= 0:
@@ -685,9 +674,6 @@ func _activate_sacrificio_solar_self_shuffle_banish_or_shuffle(source_card: Node
 		hand_container_sacrificio.remove_card(source_card, true)
 		CardManager.get_deck(owner_id).append(self_data)
 		CardManager.shuffle_deck(owner_id)
-		AnimationQueue.add_command(AnimationQueue.CommandType.CUSTOM, {
-			"callable": Callable(AnimationQueue, "animate_shuffle").bind(owner_id),
-			"description": "Barajar mazo (Sacrificio Solar)"
-		})
+		AnimationQueue.queue_shuffle(owner_id, "Barajar mazo (Sacrificio Solar)")
 
 	await ActionModule.draw(owner_id, 1, "ability_activated", true)

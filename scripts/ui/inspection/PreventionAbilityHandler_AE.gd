@@ -78,10 +78,8 @@ func _activate_akuma_banish_or_draw(source_card: Node, ability: Dictionary) -> v
 		for entry in picked:
 			var owner_of_picked: int = entry.owner_id
 			var picked_data: Dictionary = entry.data
-			var idx: int = CardManager.get_cemetery(owner_of_picked).find(picked_data)
-			if idx < 0:
+			if not CardManager.take_from_cemetery(owner_of_picked, picked_data):
 				continue
-			CardManager.remove_from_cemetery(owner_of_picked, idx)
 			CardManager.add_to_exile(owner_of_picked, picked_data)
 	else:
 		if await TriggerSystem.open_response_window(source_card, "akuma el terrible", owner_id):
@@ -503,9 +501,6 @@ func _activate_espiritu_maquina_shuffle_or_banish_cemetery(source_card: Node, ab
 	if barajar:
 		CardManager.get_deck(target_owner).append(picked_data)
 		CardManager.shuffle_deck(target_owner)
-		AnimationQueue.add_command(AnimationQueue.CommandType.CUSTOM, {
-			"callable": Callable(AnimationQueue, "animate_shuffle").bind(target_owner),
-			"description": "Barajar mazo (Espíritu de la Máquina)"
-		})
+		AnimationQueue.queue_shuffle(target_owner, "Barajar mazo (Espíritu de la Máquina)")
 	else:
 		CardManager.add_to_exile(target_owner, picked_data)

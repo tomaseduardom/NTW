@@ -21,6 +21,8 @@ extends RefCounted
 ## (mismo patrón que ya usan CardInteractionModule/DropZone/CardManager/
 ## LookRevealPatterns para llamar a GoldManager desde afuera).
 
+const CemeteryPopupScript = preload("res://scripts/ui/zones/CemeteryRevealPopup.gd")
+
 var _main: Node = null
 
 
@@ -359,55 +361,4 @@ func _open_cemetery_reveal_popup(card_types, player_id: int = 0) -> Dictionary:
 	if own_cemetery.is_empty():
 		return {"popup": null, "nodes": nodes}
 
-	var CardScene = load("res://scenes/cards/Card.tscn")
-	var popup := CanvasLayer.new()
-	popup.layer = 40
-	_main.add_child(popup)
-	var panel := PanelContainer.new()
-	panel.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
-	panel.position = Vector2(20, -240)
-	var pstyle := StyleBoxFlat.new()
-	pstyle.bg_color = Color(0.04, 0.03, 0.06, 0.92)
-	pstyle.border_color = Color(0.85, 0.72, 0.28, 0.85)
-	pstyle.set_border_width_all(2)
-	pstyle.set_corner_radius_all(12)
-	pstyle.content_margin_left = 10
-	pstyle.content_margin_right = 10
-	pstyle.content_margin_top = 8
-	pstyle.content_margin_bottom = 8
-	panel.add_theme_stylebox_override("panel", pstyle)
-	popup.add_child(panel)
-	var vbox := VBoxContainer.new()
-	panel.add_child(vbox)
-	var lbl := Label.new()
-	lbl.text = "Tu Cementerio"
-	lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	vbox.add_child(lbl)
-	var scroll := ScrollContainer.new()
-	scroll.custom_minimum_size = Vector2(0, 190)
-	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	vbox.add_child(scroll)
-	var hbox := HBoxContainer.new()
-	hbox.add_theme_constant_override("separation", 8)
-	scroll.add_child(hbox)
-
-	for data in own_cemetery:
-		var wrapper := Control.new()
-		wrapper.custom_minimum_size = Vector2(80.0, 112.0)
-		var c_node = CardScene.instantiate()
-		c_node.load_from_data(data)
-		c_node.set_zone(Constants.Zone.CEMENTERIO)
-		c_node.owner_id = player_id
-		c_node.controller_id = player_id
-		c_node.can_interact = true
-		c_node.drag_enabled = false
-		c_node.custom_minimum_size = Vector2(150.0, 210.0)
-		c_node.size = Vector2(150.0, 210.0)
-		c_node.scale = Vector2(0.533, 0.533)
-		c_node.base_scale = Vector2(0.533, 0.533)
-		_main._connect_card_signals(c_node)
-		wrapper.add_child(c_node)
-		hbox.add_child(wrapper)
-		nodes.append(c_node)
-
-	return {"popup": popup, "nodes": nodes}
+	return CemeteryPopupScript.open(_main, own_cemetery, player_id)

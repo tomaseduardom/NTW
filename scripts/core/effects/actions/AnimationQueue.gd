@@ -717,6 +717,16 @@ func queue_shuffle_animation(player_id: int, source: String = "") -> String:
 	return batch_id
 
 
+func queue_shuffle(player_id: int, description: String = "Barajar mazo") -> void:
+	"""Encola la animación de barajado del Castillo — atajo del bloque de 4
+	líneas add_command(CUSTOM, {callable: animate_shuffle, description})
+	que se repetía 49 veces en los patrones (2026-10-13, §62)."""
+	add_command(CommandType.CUSTOM, {
+		"callable": Callable(self, "animate_shuffle").bind(player_id),
+		"description": description
+	})
+
+
 func animate_shuffle(player_id: int) -> void:
 	"""Ejecuta animación de barajado directamente (sin encolar)"""
 	await _animate_shuffle(player_id)
