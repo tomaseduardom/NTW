@@ -876,68 +876,9 @@ func _on_card_unhovered(_card: Node) -> void:
 # =============================================================================
 # HOVER EN CARTAS DEL OPONENTE
 # =============================================================================
-func _on_opponent_card_hovered(card: Node) -> void:
-	if not _opponent_card_original_pos.has(card):
-		_opponent_card_original_pos[card] = card.position
-	card.z_index = 100
-	var tween = create_tween()
-	tween.set_parallel(true)
-	tween.tween_property(card, "position:y", card.position.y + 15, 0.15)
-	tween.tween_property(card, "scale", card.base_scale * 1.08, 0.15)
-
-
-func _on_opponent_card_unhovered(card: Node) -> void:
-	card.z_index = 0
-	var original_pos = _opponent_card_original_pos.get(card, card.position)
-	var tween = create_tween()
-	tween.set_parallel(true)
-	tween.tween_property(card, "position", original_pos, 0.15)
-	tween.tween_property(card, "scale", card.base_scale, 0.15)
-
-
 func _on_card_dropped(card: Node, pos: Vector2) -> void:
 	if card.has_method("move_to"):
 		card.move_to(card.original_position)
-
-
-# =============================================================================
-# COLOCAR ORO
-# =============================================================================
-func _on_place_gold_pressed() -> void:
-	# Excepción de mano (2026-08-30, p.ej. Infernum Vox): este botón genérico
-	# no tiene todavía una carta elegida, así que el chequeo por-carta de
-	# TurnManager.can_place_oro(phase, card) no aplica aquí — se escanea la
-	# mano por si hay algún Oro con la excepción de texto propia antes de
-	# bloquear la sola ENTRADA al modo "colocar Oro" (el chequeo real, con
-	# la carta específica, sigue en GoldManager._place_card_as_gold()).
-	if not TurnManager.can_place_oro(GameManager.current_phase) and not _hand_has_oro_chance_exception():
-		if TurnManager.oro_placed_this_turn:
-			_main._update_debug("Ya colocaste Oro este turno")
-		elif TurnManager.oro_chance_lost:
-			_main._update_debug("Perdiste la oportunidad de colocar Oro (jugaste otra carta primero)")
-		else:
-			_main._update_debug("Solo puedes colocar Oro en Fase de Vigilia")
-		return
-	is_placing_gold = not is_placing_gold
-	if is_placing_gold:
-		_main._update_debug("Selecciona una carta para colocar como Oro (debe ser tu primera acción)")
-	else:
-		_main._update_debug("Modo Oro cancelado")
-
-
-func _hand_has_oro_chance_exception() -> bool:
-	"""¿Hay en la mano algún Oro con la excepción de Infernum Vox (ver
-	TurnManager.ignores_oro_chance_lost())? oro_placed_this_turn NO tiene
-	excepción (ni Infernum Vox se salta esa parte), así que se corta antes
-	si ya se colocó Oro este turno o no es Vigilia."""
-	if TurnManager.oro_placed_this_turn or GameManager.current_phase != Constants.Phase.VIGILIA:
-		return false
-	if not _main.player_hand:
-		return false
-	for c in _main.player_hand.cards:
-		if is_instance_valid(c) and c.get("card_type") == Constants.CardType.ORO and TurnManager.ignores_oro_chance_lost(c):
-			return true
-	return false
 
 
 # =============================================================================

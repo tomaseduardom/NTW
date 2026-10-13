@@ -422,14 +422,6 @@ func remover_oros_mas(source: Node) -> void:
 	_cost_modifiers_mod.remover_oros_mas(source)
 
 
-func puede_pagar_carta(card: Node) -> bool:
-	"""Verifica si el jugador (player 0) puede pagar el coste real de una carta"""
-	var main = get_node_or_null("/root/Main")
-	if main and main.get("_gold_manager"):
-		return main._gold_manager.puede_pagar(calcular_coste_real(card))
-	return false
-
-
 ## NOTA: Esta función es una coroutine. Siempre llamar con: await pagar_carta(card)
 func pagar_carta(card: Node) -> bool:
 	"""Paga el coste real de una carta delegando el pago físico a GoldManager
@@ -569,15 +561,6 @@ func get_exile_play_discount(card_data: Dictionary) -> int:
 
 
 # =============================================================================
-# INTERFAZ DE PAGO (popup + procesamiento) — ver PaymentUI.gd (2026-08-28,
-# "módulos gordos"): show_payment_options/_detect_payment_options/
-# _create_payment_popup/_process_payment/_pay_with_*/etc. se movieron ahí,
-# acceso vía _payment_ui. El estado (_current_card/_payment_popup/_state/
-# etc.) se quedó aquí — ver nota arriba.
-# =============================================================================
-
-
-# =============================================================================
 # COSTE VARIABLE X (implementación en XCostSelector.gd)
 # =============================================================================
 func has_variable_x_cost(card_data: Dictionary) -> bool:
@@ -616,27 +599,3 @@ func _get_player_name(player_id: int) -> String:
 	fallback como único comportamiento real en vez de simular una lectura
 	que nunca funcionó.)"""
 	return "Jugador %d" % (player_id + 1)
-
-
-
-# =============================================================================
-# API PÚBLICA
-# =============================================================================
-func get_state() -> PaymentState:
-	"""Retorna el estado actual del PaymentManager"""
-	return _state
-
-
-func is_awaiting_payment() -> bool:
-	"""Retorna si está esperando un pago"""
-	return _state in [PaymentState.AWAITING_SELECTION, PaymentState.AWAITING_PAYMENT]
-
-
-func get_current_card() -> Dictionary:
-	"""Retorna la carta actual en proceso de pago"""
-	return _current_card
-
-
-func cancel_current_payment() -> void:
-	"""Cancela el pago actual"""
-	_payment_ui._on_payment_cancelled()

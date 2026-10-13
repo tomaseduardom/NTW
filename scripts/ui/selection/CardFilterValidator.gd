@@ -159,20 +159,6 @@ func card_passes_filter(card: Node, filter: Dictionary) -> bool:
 	return true
 
 
-func matches_required_type(card: Node) -> bool:
-	"""Verifica si la carta coincide con el tipo requerido por el filtro
-
-	DAR Sección 1.D: Solo cartas del tipo correcto pueden ser seleccionadas
-	"""
-	if not _main.selection_filter.has("card_type"):
-		return true  # Sin filtro de tipo, todas coinciden
-
-	var required_type = _main.selection_filter.card_type
-	var card_type = card.card_type if card.get("card_type") != null else -1
-
-	return card_type == required_type
-
-
 func all_selected_pass_filter() -> bool:
 	"""Verifica que todas las cartas seleccionadas cumplan el filtro"""
 	if _main.selection_filter.is_empty():

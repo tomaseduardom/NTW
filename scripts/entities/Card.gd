@@ -294,19 +294,6 @@ func _refresh_disabled_rotation() -> void:
 			card_art.modulate = target_tint
 
 
-func _apply_frozen_weapon_transform(_t: float, weapon: Node, frozen_pos: Vector2, frozen_rot: float, base_self_rot: float) -> void:
-	"""Callback de tween_method() para congelar la posición/rotación visual
-	de un Arma equipada mientras su portador gira (Convertir/Silenciar) —
-	extraído a método con nombre en vez de lambda inline (2026-08-30:
-	un lambda multilínea como argumento directo de tween_method(), anidado
-	dentro de if/for, le rompía el parser a GDScript — 'Expected indented
-	block after else' en un bloque totalmente ajeno del archivo)."""
-	if not is_instance_valid(weapon):
-		return
-	weapon.global_position = frozen_pos
-	weapon.rotation_degrees = frozen_rot - (rotation_degrees - base_self_rot)
-
-
 ## Enfermedad de invocación (DAR 3.1): true mientras la carta no haya pasado
 ## por una Agrupación del dueño — solo con Furia puede atacar en ese estado.
 ## Antes solo se guardaba como metadato (set_meta), pero TurnManager.can_attack()
@@ -662,11 +649,6 @@ func voltear() -> void:
 	tween.tween_property(self, "scale:x", scale.y, flip_duration / 2.0)
 
 
-func _show_card_back() -> void:
-	"""Muestra el dorso de la carta (compatibilidad)"""
-	esta_oculta = true
-
-
 func _on_card_back_changed(_back_id: String) -> void:
 	"""Actualiza el dorso cuando cambia en GameSettings"""
 	if esta_oculta and card_art:
@@ -674,13 +656,6 @@ func _on_card_back_changed(_back_id: String) -> void:
 		var back_texture = GameSettings.get_card_back_texture(owner_id)
 		if back_texture:
 			card_art.texture = back_texture
-
-
-func load_from_id(id: String) -> void:
-	"""Carga la carta desde su ID usando CardDatabase"""
-	var data = CardDatabase.get_card(id)
-	if not data.is_empty():
-		load_from_data(data)
 
 
 func _on_strength_visual_update_required(card: Node, stat: String, _base_value: int, _modified_value: int) -> void:

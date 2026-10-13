@@ -136,10 +136,6 @@ func update_destierro_count(player_id: int, count: int) -> void:
 		_set_label(opponent_destierro_count, str(count))
 
 
-func get_destierro_count(player_id: int) -> int:
-	return _zone_counts.get("destierro_%d" % player_id, 0)
-
-
 func update_oro_reserva(player_id: int, amount: int) -> void:
 	var text = "RESERVA · %d" % amount
 	if player_id == 0:
@@ -160,11 +156,6 @@ func sync_castillo_counts(player_deck_size: int, opponent_deck_size: int) -> voi
 	"""Sincronización directa cuando CardManager no tiene los datos."""
 	_set_label(player_castillo_count, str(player_deck_size))
 	_set_label(opponent_castillo_count, str(opponent_deck_size))
-
-
-func update_timer(seconds_remaining: int) -> void:
-	"""Actualiza el label del temporizador."""
-	_set_label(timer_label, str(seconds_remaining))
 
 
 func set_phase_text(text: String) -> void:

@@ -39,11 +39,6 @@ func setup(main: Node) -> void:
 		GameManager.turn_started.connect(_on_turn_started)
 
 
-func reset_phase_guard() -> void:
-	"""Resetea el guard de doble-disparo al inicio de cada turno nuevo."""
-	_last_state_machine_phase = -1
-
-
 # =============================================================================
 # MÁQUINA DE ESTADOS DE FASES
 # Punto de entrada unificado para cualquier cambio de fase,

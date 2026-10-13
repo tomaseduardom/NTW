@@ -117,20 +117,6 @@ func _disconnect_exhume_signals() -> void:
 # =============================================================================
 # BUSCAR EN MAZO
 # =============================================================================
-func open_search_deck(player_id: int = 0, filter: Callable = Callable(), on_selected: Callable = Callable()) -> void:
-	var deck = CardManager.get_deck(player_id)
-	if deck.is_empty():
-		_main._update_debug("El mazo está vacío")
-		return
-	_pending_search_player_id = player_id
-	_pending_search_callback = on_selected
-	if not SelectionManager.card_selected.is_connected(_on_search_card_selected):
-		SelectionManager.card_selected.connect(_on_search_card_selected)
-	if not SelectionManager.selection_cancelled.is_connected(_on_search_cancelled):
-		SelectionManager.selection_cancelled.connect(_on_search_cancelled)
-	SelectionManager.open_search(deck, 1, filter)
-
-
 func _on_search_card_selected(card_data: Dictionary) -> void:
 	_disconnect_search_signals()
 	_main._update_debug("Buscado: %s" % card_data.get("nombre", "?"))
@@ -149,15 +135,6 @@ func _disconnect_search_signals() -> void:
 	if SelectionManager.selection_cancelled.is_connected(_on_search_cancelled):
 		SelectionManager.selection_cancelled.disconnect(_on_search_cancelled)
 	_pending_search_callback = Callable()
-
-
-# =============================================================================
-# REVELAR CARTAS DE DAÑO
-# =============================================================================
-func reveal_damage_cards(cards: Array) -> void:
-	if cards.is_empty():
-		return
-	SelectionManager.open_reveal(cards, "Cartas enviadas al Cementerio")
 
 
 # =============================================================================

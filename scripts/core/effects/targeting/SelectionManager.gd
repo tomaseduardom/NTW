@@ -668,23 +668,6 @@ func _can_be_exhumed(card_data: Dictionary) -> bool:
 	return true
 
 
-func _has_exhumar_ability(card_data: Dictionary) -> bool:
-	"""Verifica si una carta tiene la habilidad Exhumar en su texto"""
-	var habilidad = card_data.get("habilidad", "").to_lower()
-	var keywords = card_data.get("keywords", [])
-
-	# Buscar en habilidad
-	if "exhumar" in habilidad:
-		return true
-
-	# Buscar en keywords
-	for kw in keywords:
-		if typeof(kw) == TYPE_STRING and "exhumar" in kw.to_lower():
-			return true
-
-	return false
-
-
 func _clear_cards() -> void:
 	"""Limpia todas las cartas instanciadas"""
 	for card in displayed_cards:

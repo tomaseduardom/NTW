@@ -195,31 +195,6 @@ func _broadcast_turn_start(turn_number: int, player_id: int) -> void:
 	emit_signal("sync_to_opponent", "turn_start", sync_data)
 
 
-func receive_remote_entry(entry_data: Dictionary) -> void:
-	"""Recibe una entrada de log desde el cliente remoto
-
-	Usado para sincronizar el log entre clientes en multiplayer.
-
-	Args:
-		entry_data: Datos de la entrada recibida
-	"""
-	var entry = {
-		"timestamp": entry_data.get("timestamp", Time.get_unix_time_from_system()),
-		"time_string": Time.get_time_string_from_system().substr(0, 8),
-		"type": entry_data.get("type", "remote"),
-		"message": entry_data.get("message", ""),
-		"data": entry_data.get("data", {}),
-		"level": entry_data.get("level", 0),
-		"phase": entry_data.get("phase", ""),
-		"turn": entry_data.get("turn", 0),
-		"is_public": true,
-		"is_remote": true
-	}
-
-	_log_entries.append(entry)
-	emit_signal("log_entry_added", entry)
-
-
 # =============================================================================
 # HEADERS DE FASE Y TURNO
 # =============================================================================
@@ -341,25 +316,6 @@ func add_entry(type: String, message: String, data: Dictionary = {}, level: int 
 	print("[CombatLog] %s" % plain_text)
 
 
-func get_public_entries_since(timestamp: float) -> Array[Dictionary]:
-	"""Obtiene entradas públicas desde un timestamp
-
-	Útil para sincronización cuando un cliente se reconecta.
-
-	Args:
-		timestamp: Timestamp desde el cual obtener entradas
-
-	Returns: Array de entradas públicas
-	"""
-	var result: Array[Dictionary] = []
-
-	for entry in _log_entries:
-		if entry.timestamp > timestamp and entry.get("is_public", false):
-			result.append(entry)
-
-	return result
-
-
 func get_entries(count: int = -1, type_filter: String = "") -> Array[Dictionary]:
 	"""Obtiene entradas del log
 
@@ -377,21 +333,6 @@ func get_entries(count: int = -1, type_filter: String = "") -> Array[Dictionary]
 		return result.slice(-count)
 
 	return result
-
-
-func get_formatted_log(count: int = -1, include_timestamp: bool = true) -> String:
-	"""Obtiene el log formateado como string BBCode"""
-	var entries = get_entries(count)
-	var lines: Array[String] = []
-
-	for entry in entries:
-		var line = ""
-		if include_timestamp and _show_timestamps:
-			line = "[color=#666666][%s][/color] " % entry.time_string
-		line += entry.message
-		lines.append(line)
-
-	return "\n".join(lines)
 
 
 func clear() -> void:
@@ -453,22 +394,3 @@ func log_x_effect_result(effect_type: String, x_value: int, actual: int, target_
 
 func log_x_cost_selection(card_name: String, player_id: int, x_value: int, total_cost: int, formula: String = "X") -> void:
 	_detailed_play.log_x_cost_selection(card_name, player_id, x_value, total_cost, formula)
-
-
-# =============================================================================
-# CONFIGURACIÓN
-# =============================================================================
-func set_max_entries(max_count: int) -> void:
-	_max_entries = max(100, max_count)
-
-
-func set_log_level(level: int) -> void:
-	_log_level = clamp(level, 0, 2)
-
-
-func set_show_timestamps(show: bool) -> void:
-	_show_timestamps = show
-
-
-func set_auto_scroll(enabled: bool) -> void:
-	_auto_scroll = enabled

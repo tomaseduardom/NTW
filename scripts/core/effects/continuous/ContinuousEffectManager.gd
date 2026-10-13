@@ -406,19 +406,6 @@ func _get_card_type(card: Node) -> String:
 	return ""
 
 
-func _get_card_faction(card: Node) -> String:
-	"""Obtiene la facción/mitología de una carta"""
-	if card == null:
-		return ""
-
-	if card.get("faction"):
-		return card.faction
-	if card.get("mitologia"):
-		return card.mitologia
-
-	return ""
-
-
 func _get_card_owner(card: Node) -> int:
 	"""Obtiene el jugador que CONTROLA la carta ahora mismo (pese al nombre
 	histórico de la función) — usado para targeting ALLIES/ENEMIES real.

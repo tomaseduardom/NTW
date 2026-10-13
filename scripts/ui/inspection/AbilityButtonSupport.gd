@@ -261,11 +261,6 @@ func _activate_ability_via_pipeline(card_node: Node, card_data: Dictionary, abil
 		_start_card_glow(card_node)
 
 
-func _activate_ability_with_glow(card_node: Node, card_data: Dictionary, ability: Dictionary, context: Dictionary) -> void:
-	# Alias mantenido por compatibilidad — delega al nuevo método
-	await _activate_ability_via_pipeline(card_node, card_data, ability, context)
-
-
 func _start_card_glow(card_node: Node) -> void:
 	if not is_instance_valid(card_node):
 		return

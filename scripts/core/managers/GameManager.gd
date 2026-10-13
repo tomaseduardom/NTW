@@ -198,11 +198,6 @@ func can_play_oro() -> bool:
 	return current_phase == Constants.Phase.VIGILIA and not oro_played_this_turn
 
 
-func play_oro() -> void:
-	"""Registra que se ha puesto un Oro este turno"""
-	oro_played_this_turn = true
-
-
 func proceed_to_battle() -> void:
 	"""Pasa de Vigilia a Batalla Mitológica — único disparador ahora es el
 	botón "Atacar" (2026-08-28). Si nadie ataca, confirm_attackers() con la

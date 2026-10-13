@@ -169,26 +169,3 @@ func flash_item(item: Control, flash_color: Color) -> void:
 	tween.tween_property(item, "modulate", original_modulate, 0.1)
 
 	await tween.finished
-
-
-func animate_stack_shift_up() -> void:
-	"""Anima los items restantes subiendo cuando se remueve el tope"""
-	var items = _main._stack_items.values()
-
-	if items.is_empty():
-		return
-
-	var tween = _main.create_tween()
-	tween.set_parallel(true)
-	tween.set_ease(Tween.EASE_OUT)
-	tween.set_trans(Tween.TRANS_BACK)
-
-	for item in items:
-		if is_instance_valid(item):
-			# Pequeño salto hacia arriba
-			var current_y = item.position.y
-			tween.tween_property(item, "position:y", current_y - 5.0, 0.1)
-
-	await tween.finished
-
-	# El VBoxContainer restaurará las posiciones

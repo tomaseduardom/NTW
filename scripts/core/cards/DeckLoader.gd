@@ -39,21 +39,6 @@ func _ready() -> void:
 # =============================================================================
 # API PÚBLICA
 # =============================================================================
-func load_deck_for_player(player_id: int, deck_slug: String) -> void:
-	"""Carga un mazo desde la API para un jugador específico
-
-	Args:
-		player_id: ID del jugador (0 = local, 1 = oponente)
-		deck_slug: Slug único del mazo en la base de datos
-	"""
-	if _is_loading and player_id in _pending_requests:
-		push_warning("[DeckLoader] Ya hay una carga en progreso para jugador %d" % player_id)
-		return
-
-	print("[DeckLoader] Cargando mazo '%s' para jugador %d..." % [deck_slug, player_id])
-	_fetch_deck_from_api(player_id, deck_slug)
-
-
 func load_deck_from_data(player_id: int, deck_data: Dictionary) -> void:
 	"""Carga un mazo directamente desde datos ya obtenidos
 
@@ -70,18 +55,6 @@ func load_deck_from_external_data(player_id: int, deck_data: Dictionary) -> void
 	defensivo que load_deck_from_data() porque la forma exacta de la
 	respuesta de /external/my-decks/ no se pudo verificar sin credenciales."""
 	_process_external_deck_data(player_id, deck_data)
-
-
-func load_decks_for_match(player_deck_slug: String, opponent_deck_slug: String) -> void:
-	"""Carga ambos mazos para iniciar una partida
-
-	Args:
-		player_deck_slug: Slug del mazo del jugador local
-		opponent_deck_slug: Slug del mazo del oponente
-	"""
-	_decks_loaded.clear()
-	load_deck_for_player(0, player_deck_slug)
-	load_deck_for_player(1, opponent_deck_slug)
 
 
 func is_deck_loaded(player_id: int) -> bool:
@@ -116,60 +89,6 @@ func _ensure_card_database_loaded() -> void:
 	CardDatabase.load_cards_from_api("all")
 	await CardDatabase.cards_loaded
 	print("[DeckLoader] CardDatabase cargado: %d cartas" % CardDatabase.cards.size())
-
-
-# =============================================================================
-# CARGA DESDE API
-# =============================================================================
-func _fetch_deck_from_api(player_id: int, deck_slug: String) -> void:
-	"""Hace la petición HTTP para obtener el mazo"""
-	var http = HTTPRequest.new()
-	add_child(http)
-	_pending_requests[player_id] = http
-
-	http.request_completed.connect(_on_deck_request_completed.bind(http, player_id, deck_slug))
-
-	var url = "%s/mazo/%s" % [API_BASE_URL, deck_slug]
-	print("[DeckLoader] Fetching: %s" % url)
-
-	var error = http.request(url)
-	if error != OK:
-		_cleanup_request(player_id)
-		emit_signal("deck_load_failed", player_id, "Error al conectar con la API: %d" % error)
-
-
-func _on_deck_request_completed(result: int, response_code: int, headers: PackedStringArray, body: PackedByteArray, http: HTTPRequest, player_id: int, deck_slug: String) -> void:
-	"""Callback cuando se recibe la respuesta del mazo"""
-	_cleanup_request(player_id)
-
-	if result != HTTPRequest.RESULT_SUCCESS:
-		emit_signal("deck_load_failed", player_id, "Error de conexión: %d" % result)
-		return
-
-	if response_code != 200:
-		var error_msg = "Error HTTP %d" % response_code
-		if response_code == 404:
-			error_msg = "Mazo '%s' no encontrado" % deck_slug
-		elif response_code == 403:
-			error_msg = "Sin permiso para acceder al mazo '%s'" % deck_slug
-		emit_signal("deck_load_failed", player_id, error_msg)
-		return
-
-	var json = JSON.parse_string(body.get_string_from_utf8())
-	if json == null:
-		emit_signal("deck_load_failed", player_id, "Error parseando respuesta JSON")
-		return
-
-	_process_deck_data(player_id, json)
-
-
-func _cleanup_request(player_id: int) -> void:
-	"""Limpia la petición HTTP pendiente"""
-	if player_id in _pending_requests:
-		var http = _pending_requests[player_id]
-		if is_instance_valid(http):
-			http.queue_free()
-		_pending_requests.erase(player_id)
 
 
 # =============================================================================
@@ -398,30 +317,6 @@ func _get_card_data(uuid: String) -> Dictionary:
 	return CardDatabase.get_card(uuid)
 
 
-func _create_card_instance(card_data: Dictionary, player_id: int) -> Node:
-	"""Crea una instancia de Card desde los datos
-
-	Args:
-		card_data: Diccionario con datos de la carta
-		player_id: Dueño de la carta
-
-	Returns: Nodo Card o null si falla
-	"""
-	var card = CardFactory.create_card_from_json(card_data)
-	if card:
-		# Asignar dueño
-		card.set_meta("owner_id", player_id)
-		card.set_meta("original_owner_id", player_id)
-
-		# La carta empieza boca abajo en el Castillo
-		if card.has_method("set"):
-			card.set("esta_oculta", true)
-		else:
-			card.esta_oculta = true
-
-	return card
-
-
 # =============================================================================
 # ACCESO A DATOS DE MAZOS
 # =============================================================================
@@ -469,48 +364,10 @@ func get_bundled_decks() -> Array:
 	return result
 
 
-func export_deck_for_bundling(deck_data: Dictionary) -> void:
-	"""Exporta un mazo a user://data/decks/slug.json para luego moverlo a res://data/decks/.
-	Llamar con el servidor levantado para generar archivos bundleables."""
-	var slug = deck_data.get("slug", "")
-	if slug.is_empty():
-		push_warning("[DeckLoader] No se puede exportar mazo sin slug")
-		return
-	DirAccess.make_dir_recursive_absolute(OS.get_user_data_dir() + "/data/decks")
-	var path = "user://data/decks/" + slug + ".json"
-	var file = FileAccess.open(path, FileAccess.WRITE)
-	if file == null:
-		push_error("[DeckLoader] No se pudo escribir %s" % path)
-		return
-	file.store_string(JSON.stringify(deck_data, "\t"))
-	file.close()
-	print("[DeckLoader] EXPORTADO → %s\nCopia a game/data/decks/%s.json" % [
-		OS.get_user_data_dir() + "/data/decks/" + slug + ".json", slug])
-
-
 # =============================================================================
 # MAZOS LOCALES — Guardar y cargar desde user://decks/
 # =============================================================================
 const LOCAL_DECKS_PATH: String = "user://decks/"
-
-func save_deck_locally(deck_data: Dictionary) -> void:
-	"""Guarda un mazo en disco local para uso offline.
-	Usa el slug como nombre de archivo."""
-	var slug = deck_data.get("slug", "")
-	if slug.is_empty():
-		push_warning("[DeckLoader] No se puede guardar mazo sin slug")
-		return
-	DirAccess.make_dir_recursive_absolute(
-		LOCAL_DECKS_PATH.replace("user://", OS.get_user_data_dir() + "/"))
-	var path = LOCAL_DECKS_PATH + slug + ".json"
-	var file = FileAccess.open(path, FileAccess.WRITE)
-	if file == null:
-		push_warning("[DeckLoader] No se pudo guardar mazo en %s" % path)
-		return
-	file.store_string(JSON.stringify(deck_data))
-	file.close()
-	print("[DeckLoader] Mazo '%s' guardado localmente en %s" % [slug, path])
-
 
 func get_local_decks() -> Array:
 	"""Devuelve lista de mazos guardados localmente [{slug, nombre, arquetipo, formato}]."""
@@ -538,21 +395,6 @@ func get_local_decks() -> Array:
 		fname = dir.get_next()
 	print("[DeckLoader] %d mazos locales encontrados" % result.size())
 	return result
-
-
-func load_deck_from_local(player_id: int, slug: String) -> void:
-	"""Carga un mazo guardado localmente por su slug."""
-	var path = LOCAL_DECKS_PATH + slug + ".json"
-	var file = FileAccess.open(path, FileAccess.READ)
-	if file == null:
-		emit_signal("deck_load_failed", player_id, "Mazo local '%s' no encontrado" % slug)
-		return
-	var data = JSON.parse_string(file.get_as_text())
-	file.close()
-	if not data is Dictionary:
-		emit_signal("deck_load_failed", player_id, "Archivo de mazo corrupto: %s" % slug)
-		return
-	_process_deck_data(player_id, data)
 
 
 # =============================================================================

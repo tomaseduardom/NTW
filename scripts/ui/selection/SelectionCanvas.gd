@@ -307,40 +307,6 @@ func open_selection(cards: Array, amount: int = 1, can_fail_selection: bool = fa
 
 
 # =============================================================================
-# VERSIÓN CON SEÑALES (alternativa sin await)
-# =============================================================================
-func open_selection_async(cards: Array, amount: int = 1, can_fail_selection: bool = false, mode: SelectionMode = SelectionMode.SEARCH) -> void:
-	"""Versión asíncrona que usa señales en lugar de await
-	Escuchar: selection_confirmed, selection_cancelled, selection_failed
-	"""
-	if cards.is_empty():
-		emit_signal("selection_failed")
-		return
-
-	current_mode = mode
-	available_cards = cards.duplicate()
-	selected_cards.clear()
-	amount_to_select = amount
-	min_to_select = 1 if not can_fail_selection else 0
-	max_to_select = amount
-	can_fail = can_fail_selection
-	is_public = (mode == SelectionMode.SHOW)
-	is_reorder_mode = (mode == SelectionMode.REORDER or mode == SelectionMode.LOOK)
-	selection_complete = false
-
-	if is_reorder_mode:
-		card_order = cards.duplicate()
-
-	_setup_ui_for_mode(mode, amount)
-	_display_cards(cards)
-
-	visible = true
-	is_active = true
-
-	emit_signal("selection_started", mode, cards)
-
-
-# =============================================================================
 # CONFIGURACIÓN DE UI
 # =============================================================================
 func _setup_ui_for_mode(mode: SelectionMode, amount: int) -> void:
@@ -745,21 +711,6 @@ func _on_fail_pressed() -> void:
 	emit_signal("selection_failed")
 
 
-func is_selection_active() -> bool:
-	"""Verifica si hay una selección activa"""
-	return is_active
-
-
-func get_selected_cards() -> Array:
-	"""Retorna las cartas actualmente seleccionadas"""
-	return selected_cards.duplicate()
-
-
-func get_card_order() -> Array:
-	"""Retorna el orden actual de cartas (modo reordenar)"""
-	return card_order.duplicate()
-
-
 func force_close() -> void:
 	"""Fuerza el cierre de la selección"""
 	selection_complete = false
@@ -858,77 +809,6 @@ func await_selection(cards: Array, count: int, is_private: bool, filter: Diction
 		return result.selected
 
 	return []
-
-
-func await_discard_selection(cards: Array, count: int, can_select_less: bool = false) -> Array:
-	"""Interfaz simplificada para descarte de cartas
-
-	Args:
-		cards: Cartas disponibles para descartar (normalmente la mano)
-		count: Cantidad de cartas a descartar
-		can_select_less: Si puede descartar menos de count (para "en medida de lo posible")
-
-	Returns: Array de cartas seleccionadas para descartar
-	"""
-	var result = await open_selection(
-		cards,
-		count,
-		can_select_less,
-		SelectionMode.DISCARD
-	)
-
-	if result.success:
-		return result.selected
-
-	return []
-
-
-func await_target_selection(targets: Array, count: int = 1, can_cancel: bool = true, filter: Dictionary = {}) -> Array:
-	"""Interfaz simplificada para selección de objetivos
-
-	Args:
-		targets: Posibles objetivos (cartas en juego)
-		count: Cantidad de objetivos a seleccionar
-		can_cancel: Si puede cancelar sin seleccionar
-		filter: Filtro de requisitos para objetivos válidos
-
-	Returns: Array de objetivos seleccionados
-	"""
-	var result = await open_selection(
-		targets,
-		count,
-		can_cancel,
-		SelectionMode.TARGET,
-		filter
-	)
-
-	if result.success and not result.cancelled:
-		return result.selected
-
-	return []
-
-
-func await_look_and_reorder(cards: Array) -> Array:
-	"""Interfaz simplificada para mirar y reordenar cartas
-
-	DAR Sección 8 - Mirar: El jugador ve las cartas y puede reordenarlas.
-
-	Args:
-		cards: Cartas a mirar (ej: tope del Castillo)
-
-	Returns: Array con las cartas en el nuevo orden (índice 0 = tope)
-	"""
-	var result = await open_selection(
-		cards,
-		cards.size(),
-		false,
-		SelectionMode.LOOK
-	)
-
-	if result.success and not result.new_order.is_empty():
-		return result.new_order
-
-	return cards  # Retornar orden original si no se reordenó
 
 
 func await_show_to_opponent(cards: Array, reveal_context: String = "") -> void:

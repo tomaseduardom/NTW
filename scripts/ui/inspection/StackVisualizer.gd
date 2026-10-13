@@ -718,26 +718,6 @@ func clear_all_highlights() -> void:
 	_target_highlight.clear_all_highlights()
 
 
-func get_all_item_ids() -> Array[int]:
-	"""Retorna todos los IDs de items actualmente en el visualizador"""
-	var ids: Array[int] = []
-	for id in _stack_items.keys():
-		ids.append(id)
-	return ids
-
-
-func is_in_target_selection_mode() -> bool:
-	"""Retorna si está en modo de selección de objetivo"""
-	return _target_highlight.is_target_selection_mode
-
-
-func toggle_visibility() -> void:
-	"""Alterna visibilidad del visualizador"""
-	visible = not visible
-	_is_expanded = visible
-	emit_signal("visualizer_toggled", visible)
-
-
 func refresh() -> void:
 	"""Refresca la visualización desde el pipeline"""
 	_clear_all_items()
@@ -750,8 +730,3 @@ func refresh() -> void:
 		_add_stack_item(obj)
 
 	_update_empty_state()
-
-
-func get_item_count() -> int:
-	"""Retorna cantidad de items visualizados"""
-	return _stack_items.size()

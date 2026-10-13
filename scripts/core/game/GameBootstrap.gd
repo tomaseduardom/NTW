@@ -227,11 +227,6 @@ func _prepare_game() -> void:
 	CardDatabase.preload_deck_images(_main.player_deck + _main.opponent_deck)
 
 
-func _start_test_game() -> void:
-	_prepare_game()
-	await _main._mulligan_ctrl.start_mulligan_phase()
-
-
 func _setup_oro_inicial() -> void:
 	"""Extrae el Oro Inicial de ambos mazos y lo coloca en Reserva antes del mulligan.
 
@@ -332,32 +327,6 @@ func _sync_decks_from_loader() -> void:
 	DeckLoader.clear_deck_data(0)
 	DeckLoader.clear_deck_data(1)
 	print("[Bootstrap] Mazos sincronizados: Jugador=%d, Oponente=%d" % [_main.player_deck.size(), _main.opponent_deck.size()])
-
-
-func _build_decks() -> void:
-	_main.player_deck.clear()
-	_main.opponent_deck.clear()
-	if CardDatabase.is_loaded and CardDatabase.cards.size() > 0:
-		_build_decks_from_database()
-	else:
-		_build_test_decks()
-
-
-func _build_decks_from_database() -> void:
-	var oros = CardDatabase.get_cards_by_type(Constants.CardType.ORO)
-	var aliados = CardDatabase.get_cards_by_type(Constants.CardType.ALIADO)
-	var armas = CardDatabase.get_cards_by_type(Constants.CardType.ARMA)
-	var talismanes = CardDatabase.get_cards_by_type(Constants.CardType.TALISMAN)
-	var oro_count = mini(20, oros.size())
-	for i in range(oro_count):
-		_main.player_deck.append(oros[i % oros.size()])
-	var cards_needed = 50 - oro_count
-	var other_cards = aliados + armas + talismanes
-	for i in range(cards_needed):
-		if other_cards.size() > 0:
-			_main.player_deck.append(other_cards[i % other_cards.size()])
-	_main.opponent_deck = _main.player_deck.duplicate()
-	print("[Bootstrap] Mazos construidos: %d cartas" % _main.player_deck.size())
 
 
 func _build_test_decks() -> void:

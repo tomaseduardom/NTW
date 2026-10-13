@@ -456,36 +456,6 @@ func _get_card_name(card: Node) -> String:
 # =============================================================================
 # CONSULTAS
 # =============================================================================
-func get_last_combat_result() -> Dictionary:
-	"""Retorna el resultado del último combate"""
-	return last_combat_result
-
-
-func is_combat_active() -> bool:
-	"""Verifica si hay combate en curso"""
-	return combat_in_progress
-
-
-func get_potential_damage(attackers: Array, blockers: Dictionary) -> int:
-	"""Calcula el daño potencial sin aplicarlo (para preview)"""
-	var total = 0
-
-	for attacker in attackers:
-		var atk_str = _get_strength(attacker)
-
-		if blockers.has(attacker):
-			var blocker = blockers[attacker]
-			var blk_str = _get_strength(blocker)
-
-			if atk_str > blk_str:
-				total += atk_str - blk_str
-			# Si empatan o bloqueador gana, 0 daño pasa
-		else:
-			total += atk_str
-
-	return total
-
-
 # NOTA (2026-09-08): Se eliminó un segundo sistema de "modificadores de
 # combate" (combat_strength_modifiers/add_combat_modifier()/get_modified_
 # strength()/clear_combat_modifiers()) que vivía aquí, paralelo y desconectado

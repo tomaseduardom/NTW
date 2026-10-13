@@ -530,44 +530,6 @@ func _apply_damage_reduction(player_id: int, damage: int, type: int, context: Di
 # =============================================================================
 # API DE MODIFICADORES
 # =============================================================================
-func add_damage_modifier(source: Node, modifier: int, modifier_type: String = "add", damage_type: int = -1, duration: int = -1) -> int:
-	"""Agrega un modificador de daño
-
-	Args:
-		source: Carta/efecto que otorga el modificador
-		modifier: Valor del modificador
-		modifier_type: "add", "multiply", "set"
-		damage_type: Tipo de daño afectado (-1 = todos)
-		duration: Turnos de duración (-1 = permanente)
-
-	Returns: ID del modificador
-	"""
-	var mod = {
-		"id": _damage_modifiers.size(),
-		"source": source,
-		"modifier": modifier,
-		"modifier_type": modifier_type,
-		"type": damage_type,
-		"duration": duration,
-		"turns_remaining": duration
-	}
-
-	_damage_modifiers.append(mod)
-
-	print("[DamageManager] Modificador añadido: %+d (%s)" % [modifier, modifier_type])
-
-	return mod.id
-
-
-func remove_damage_modifier(mod_id: int) -> bool:
-	"""Remueve un modificador por ID"""
-	for i in range(_damage_modifiers.size()):
-		if _damage_modifiers[i].get("id") == mod_id:
-			_damage_modifiers.remove_at(i)
-			return true
-	return false
-
-
 func add_damage_prevention(player_id: int, amount: int, damage_type: int = -1, one_shot: bool = false, source: Node = null) -> void:
 	"""Agrega prevención de daño
 
@@ -589,19 +551,6 @@ func add_damage_prevention(player_id: int, amount: int, damage_type: int = -1, o
 	print("[DamageManager] Prevención añadida: %d para J%d" % [
 		amount if amount >= 0 else -1, player_id + 1 if player_id >= 0 else 0
 	])
-
-
-func add_damage_shield(player_id: int, amount: int) -> void:
-	"""Agrega escudo de daño a un jugador"""
-	_damage_shields[player_id] = _damage_shields.get(player_id, 0) + amount
-	print("[DamageManager] Escudo +%d para J%d (total: %d)" % [
-		amount, player_id + 1, _damage_shields[player_id]
-	])
-
-
-func get_damage_shield(player_id: int) -> int:
-	"""Obtiene el escudo de daño actual"""
-	return _damage_shields.get(player_id, 0)
 
 
 # =============================================================================
@@ -628,46 +577,6 @@ func apply_combat_damage(attacker: Node, defender_id: int, context: Dictionary =
 	var result = await apply_damage(defender_id, force, DamageType.COMBAT, ctx)
 
 	emit_signal("combat_damage_applied", attacker, defender_id, result.actual_damage)
-
-	return result
-
-
-func apply_combat_damage_to_card(attacker: Node, defender: Node, context: Dictionary = {}) -> Dictionary:
-	"""Aplica daño de combate entre dos cartas"""
-	var force = _get_card_force(attacker)
-
-	var ctx = context.duplicate()
-	ctx["attacker"] = attacker
-	ctx["source"] = attacker
-
-	return await apply_damage(defender, force, DamageType.COMBAT, ctx)
-
-
-# =============================================================================
-# DAÑO CON X VARIABLE
-# =============================================================================
-func apply_x_damage(target_id: int, instance_x: int, type: int = DamageType.ABILITY, context: Dictionary = {}) -> Dictionary:
-	"""Aplica daño donde la cantidad es X
-
-	Args:
-		target_id: ID del jugador objetivo
-		instance_x: Valor de X elegido
-		type: Tipo de daño
-		context: Contexto adicional
-
-	Returns: Resultado del daño
-	"""
-	var ctx = context.duplicate()
-	ctx["instance_x"] = instance_x
-	ctx["is_x_damage"] = true
-
-	print("[DamageManager] Daño X=%d a Jugador %d" % [instance_x, target_id + 1])
-
-	var result = await apply_damage(target_id, instance_x, type, ctx)
-
-	# Log especial para daño X
-	var target_name = "Jugador %d" % (target_id + 1)
-	CombatLog.log_x_effect_result("damage", instance_x, result.actual_damage, target_name, result.success)
 
 	return result
 
@@ -774,27 +683,12 @@ func _on_turn_ended(player_id: int) -> void:
 # =============================================================================
 # API PÚBLICA DE CONSULTA
 # =============================================================================
-func get_damage_this_turn(player_id: int) -> int:
-	"""Obtiene el daño total recibido este turno"""
-	return _damage_this_turn.get(player_id, 0)
-
-
-func get_combat_damage_this_turn(player_id: int) -> int:
-	"""Obtiene el daño de combate recibido este turno"""
-	return _combat_damage_this_turn.get(player_id, 0)
-
-
 func get_deck_size(player_id: int) -> int:
 	"""Obtiene el tamaño actual del mazo de un jugador. Antes usaba
 	_get_board() (siempre null — dependía del GameBoard.gd huérfano) y
 	devolvía 0 SIEMPRE, lo que hacía que check_defeat_condition() pudiera
 	declarar derrota con el mazo lleno. CardManager lleva la cuenta real."""
 	return CardManager.get_deck_count(player_id)
-
-
-func is_player_alive(player_id: int) -> bool:
-	"""Verifica si un jugador sigue en el juego (tiene cartas en mazo)"""
-	return get_deck_size(player_id) > 0
 
 
 func check_defeat_condition(player_id: int) -> bool:

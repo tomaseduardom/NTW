@@ -99,33 +99,12 @@ func sync_from_main() -> void:
 	])
 
 
-func sync_to_main() -> void:
-	"""Sincroniza los datos de vuelta a Main.gd"""
-	var main = _get_main()
-	if not main:
-		return
-
-	if main.get("player_deck") != null:
-		main.player_deck = _zones[0].deck
-	if main.get("opponent_deck") != null:
-		main.opponent_deck = _zones[1].deck
-	if main.get("player_cemetery") != null:
-		main.player_cemetery = _zones[0].cemetery
-	if main.get("opponent_cemetery") != null:
-		main.opponent_cemetery = _zones[1].cemetery
-
-
 # =============================================================================
 # ACCESO A ZONAS
 # =============================================================================
 func get_deck(player_id: int) -> Array:
 	"""Obtiene el mazo de un jugador"""
 	return _zones[player_id].deck
-
-
-func get_hand(player_id: int) -> Array:
-	"""Obtiene la mano de un jugador (instancias)"""
-	return _zones[player_id].hand
 
 
 func get_cemetery(player_id: int) -> Array:
@@ -138,19 +117,9 @@ func get_exile(player_id: int) -> Array:
 	return _zones[player_id].exile
 
 
-func get_field(player_id: int) -> Array:
-	"""Obtiene los aliados en campo de un jugador"""
-	return _zones[player_id].field
-
-
 func get_deck_count(player_id: int) -> int:
 	"""Obtiene el número de cartas en el mazo"""
 	return _zones[player_id].deck.size()
-
-
-func get_hand_count(player_id: int) -> int:
-	"""Obtiene el número de cartas en mano"""
-	return _zones[player_id].hand.size()
 
 
 func get_cemetery_count(player_id: int) -> int:
@@ -161,7 +130,6 @@ func get_cemetery_count(player_id: int) -> int:
 func get_exile_count(player_id: int) -> int:
 	"""Obtiene el número de cartas en destierro"""
 	return _zones[player_id].exile.size()
-
 
 
 # =============================================================================
@@ -246,12 +214,6 @@ func add_to_exile(player_id: int, card_data: Dictionary) -> void:
 # =============================================================================
 # MOVIMIENTO DE CARTAS - MANO
 # =============================================================================
-func add_to_hand(player_id: int, card: Node) -> void:
-	"""Añade una instancia de carta a la mano"""
-	_zones[player_id].hand.append(card)
-	emit_signal("zone_changed", card, -1, Constants.Zone.MANO, player_id)
-
-
 func remove_from_hand(player_id: int, card: Node) -> bool:
 	"""Remueve una carta de la mano
 
@@ -264,27 +226,6 @@ func remove_from_hand(player_id: int, card: Node) -> bool:
 		hand.remove_at(idx)
 		return true
 	return false
-
-
-func discard_from_hand(player_id: int, card: Node) -> void:
-	"""Descarta una carta de la mano al cementerio"""
-	if remove_from_hand(player_id, card):
-		# Guardar datos antes de destruir el nodo
-		var card_data = card.card_data.duplicate() if card.get("card_data") else {}
-		card_data["esta_oculta"] = false
-		_append_to_cemetery(player_id, card_data)
-
-		emit_signal("card_discarded", player_id, card_data)
-		emit_signal("zone_changed", card, Constants.Zone.MANO, Constants.Zone.CEMENTERIO, player_id)
-
-		_update_cemetery_visual(player_id)
-
-		var main_node = Engine.get_main_loop().root.get_node_or_null("Main") if Engine.get_main_loop() else null
-		if main_node and main_node.get("_zone_manager") != null and is_instance_valid(card) and card.is_inside_tree() and card.visible:
-			await main_node._zone_manager.animate_card_to_cemetery(card, player_id)
-
-		_disconnect_card_interaction_signals(card)
-		card.queue_free()
 
 
 # =============================================================================
@@ -604,17 +545,6 @@ func exile_card(player_id: int, card: Node) -> void:
 		main_node._zone_manager.call_deferred("compact_all_fields", true)
 
 
-
-func exile_from_cemetery(player_id: int, index: int = -1) -> Dictionary:
-	"""Destierra una carta del cementerio"""
-	var card_data = remove_from_cemetery(player_id, index)
-	if not card_data.is_empty():
-		card_data["esta_oculta"] = false
-		_zones[player_id].exile.append(card_data)
-		_emit_exile_changed(player_id)
-	return card_data
-
-
 func exhume_card(player_id: int, index: int = -1) -> Dictionary:
 	"""Exhuma una carta del cementerio (DAR - Exhumar)
 
@@ -725,12 +655,6 @@ func _emit_deck_changed(player_id: int) -> void:
 	emit_signal("deck_count_changed", player_id, count)
 
 
-func _emit_hand_changed(player_id: int) -> void:
-	"""Emite señal de cambio en la mano"""
-	var count = _zones[player_id].hand.size()
-	emit_signal("hand_count_changed", player_id, count)
-
-
 func _emit_cemetery_changed(player_id: int) -> void:
 	"""Emite señal de cambio en el cementerio"""
 	var count = _zones[player_id].cemetery.size()
@@ -743,12 +667,6 @@ func _emit_exile_changed(player_id: int) -> void:
 	emit_signal("exile_count_changed", player_id, count)
 
 
-func _emit_field_changed(player_id: int) -> void:
-	"""Emite señal de cambio en el campo"""
-	var count = _zones[player_id].field.size()
-	emit_signal("field_count_changed", player_id, count)
-
-
 # Aliases para compatibilidad
 func _update_deck_visual(player_id: int) -> void:
 	_emit_deck_changed(player_id)
@@ -756,44 +674,3 @@ func _update_deck_visual(player_id: int) -> void:
 
 func _update_cemetery_visual(player_id: int) -> void:
 	_emit_cemetery_changed(player_id)
-
-
-func update_all_visuals() -> void:
-	"""Emite señales para todos los contadores"""
-	for player_id in [0, 1]:
-		_emit_deck_changed(player_id)
-		_emit_hand_changed(player_id)
-		_emit_cemetery_changed(player_id)
-		_emit_exile_changed(player_id)
-		_emit_field_changed(player_id)
-
-
-# =============================================================================
-# UTILIDADES
-# =============================================================================
-func find_card_in_cemetery(player_id: int, card_name: String) -> int:
-	"""Busca una carta por nombre en el cementerio
-
-	Returns: Índice de la carta o -1 si no se encuentra
-	"""
-	var cemetery = _zones[player_id].cemetery
-	for i in range(cemetery.size()):
-		if cemetery[i].get("nombre", "") == card_name:
-			return i
-	return -1
-
-
-func get_cemetery_cards_by_type(player_id: int, card_type: int) -> Array:
-	"""Obtiene cartas del cementerio filtradas por tipo"""
-	var cemetery = _zones[player_id].cemetery
-	return cemetery.filter(func(c): return c.get("tipo", -1) == card_type)
-
-
-func can_draw(player_id: int) -> bool:
-	"""Verifica si el jugador puede robar"""
-	return not _zones[player_id].deck.is_empty()
-
-
-func is_defeated(player_id: int) -> bool:
-	"""Verifica si el jugador está derrotado (mazo vacío)"""
-	return _zones[player_id].deck.is_empty()

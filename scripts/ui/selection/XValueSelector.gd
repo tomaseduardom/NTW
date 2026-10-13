@@ -267,15 +267,3 @@ func _animate_value_change() -> void:
 	var tween = create_tween()
 	tween.tween_property(x_value_label, "scale", Vector2(1.2, 1.2), 0.05)
 	tween.tween_property(x_value_label, "scale", Vector2(1.0, 1.0), 0.1)
-
-
-# =============================================================================
-# UTILIDADES
-# =============================================================================
-func get_card_data_with_x() -> Dictionary:
-	"""Retorna card_data con instance_x inyectado"""
-	var data = _card_data.duplicate(true)
-	data["instance_x"] = _x_value
-	data["x_value"] = _x_value
-	data["x_total_cost"] = get_total_cost()
-	return data

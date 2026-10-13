@@ -416,10 +416,6 @@ func _build_mana_curve_row(costs: Array) -> Control:
 	return row
 
 
-func _get_archetype_icon(_arquetipo: String) -> String:
-	return ""
-
-
 func _load_cover_image(container: Control, url: String) -> void:
 	"""Carga la imagen de portada del mazo"""
 	var texture_rect = TextureRect.new()

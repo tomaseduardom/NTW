@@ -63,13 +63,6 @@ func _on_game_board_ready(board: Node) -> void:
 # =============================================================================
 # VALIDACIÓN "EN MEDIDA DE LO POSIBLE"
 # =============================================================================
-func _get_available_amount(requested: int, available: int) -> int:
-	"""Retorna la cantidad que se puede procesar según 'En medida de lo posible'
-	Si se piden 3 pero hay 2, procesa 2 sin error
-	"""
-	return mini(requested, available)
-
-
 func _validate_board() -> bool:
 	"""Verifica que el GameBoard esté disponible. Siempre devuelve false —
 	game_board nunca se asigna (era el GameBoard.gd huérfano, eliminado) —
@@ -1152,5 +1145,3 @@ func consume_scheduled_final_phase_effects(player_id: int) -> void:
 	for effect: Callable in effects:
 		if effect.is_valid():
 			await effect.call()
-
-

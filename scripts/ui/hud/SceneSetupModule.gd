@@ -143,18 +143,6 @@ func _on_pause_continue() -> void:
 	pass
 
 
-func _on_pause_main_menu() -> void:
-	if pause_menu and pause_menu.has_method("_execute_main_menu"):
-		pause_menu._execute_main_menu()
-	else:
-		get_tree().paused = false
-		get_tree().change_scene_to_file("res://scenes/menu/MainMenu.tscn")
-
-
-func _on_pause_exit() -> void:
-	get_tree().quit()
-
-
 # =============================================================================
 # ABANICO DEL OPONENTE Y ZONAS DE DROP
 # =============================================================================

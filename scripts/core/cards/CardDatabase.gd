@@ -433,24 +433,6 @@ func get_all_cards() -> Array:
 	return cards.values()
 
 
-func get_cards_by_type(tipo: Constants.CardType) -> Array:
-	"""Obtiene todas las cartas de un tipo específico"""
-	var result: Array = []
-	for card in cards.values():
-		if card.tipo == tipo:
-			result.append(card)
-	return result
-
-
-func get_cards_by_raza(raza: String) -> Array:
-	"""Obtiene todas las cartas de una raza específica"""
-	var result: Array = []
-	for card in cards.values():
-		if card.raza == raza:
-			result.append(card)
-	return result
-
-
 # =============================================================================
 # IMÁGENES LOCALES
 # Carpetas disponibles en res://cartas_descargadas/ (ediciones vigentes).
@@ -611,32 +593,6 @@ func get_card_image(card_id: String) -> Texture2D:
 	if is_direct_external or not OFFLINE_MODE:
 		_download_card_image(card_id)
 	return null
-
-
-func check_deck_images(deck: Array) -> void:
-	"""Diagnóstico: imprime qué cartas del mazo tienen imagen local y cuáles no."""
-	var ok := 0
-	var fallback := 0
-	var missing := 0
-	print("[CardDatabase] === CHECK IMÁGENES DEL MAZO (%d cartas) ===" % deck.size())
-	for card_data in deck:
-		var card_id: String = str(card_data.get("id", ""))
-		var nombre: String = card_data.get("nombre", "Sin nombre")
-		var imagen: String = card_data.get("imagen", "")
-		var local_path := _imagen_to_local_path(imagen)
-		if local_path != "" and ResourceLoader.exists(local_path):
-			ok += 1
-		else:
-			# ¿Hay versión más nueva disponible?
-			var newest: Dictionary = _newest_by_name.get(nombre, {})
-			var newest_path := _imagen_to_local_path(newest.get("imagen", ""))
-			if newest_path != "" and ResourceLoader.exists(newest_path) and newest.get("id","") != card_id:
-				fallback += 1
-				print("  [FALLBACK] %s → %s" % [nombre, newest_path])
-			else:
-				missing += 1
-				print("  [FALTA]    %s (imagen: %s)" % [nombre, imagen])
-	print("[CardDatabase] Resultado: %d OK, %d con fallback, %d sin imagen" % [ok, fallback, missing])
 
 
 func preload_deck_images(deck: Array) -> void:

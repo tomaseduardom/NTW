@@ -98,18 +98,6 @@ func reset_oro(player_id: int) -> void:
 	_emit_oro_signals(player_id)
 
 
-func set_oro_reserva(player_id: int, cantidad: int) -> void:
-	"""Establece directamente el oro en reserva (para sincronización con UI)"""
-	oro_reserva[player_id] = cantidad
-	_emit_oro_signals(player_id)
-
-
-func set_oro_pagado(player_id: int, cantidad: int) -> void:
-	"""Establece directamente el oro pagado (para sincronización con UI)"""
-	oro_pagado[player_id] = cantidad
-	_emit_oro_signals(player_id)
-
-
 # =============================================================================
 # SEÑALES INTERNAS
 # =============================================================================
@@ -118,13 +106,3 @@ func _emit_oro_signals(player_id: int) -> void:
 	emit_signal("oro_reserva_changed", player_id, oro_reserva.get(player_id, 0))
 	emit_signal("oro_pagado_changed", player_id, oro_pagado.get(player_id, 0))
 	emit_signal("oro_total_changed", player_id, oro_reserva.get(player_id, 0), oro_pagado.get(player_id, 0))
-
-
-# =============================================================================
-# SINCRONIZACIÓN CON UI (Main.gd)
-# =============================================================================
-func sync_from_ui(player_id: int, reserva_count: int, pagado_count: int) -> void:
-	"""Sincroniza el estado desde contadores de UI"""
-	oro_reserva[player_id] = reserva_count
-	oro_pagado[player_id] = pagado_count
-	# No emitir señales para evitar loops

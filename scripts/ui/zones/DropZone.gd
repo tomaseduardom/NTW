@@ -210,11 +210,6 @@ func show_highlight_for_card(card: Node) -> void:
 		_start_runic_glow_animation()
 
 
-func show_highlight() -> void:
-	"""Muestra el highlight básico (sin verificar carta)"""
-	show_highlight_for_card(null)
-
-
 func _start_runic_glow_animation() -> void:
 	"""Anima el brillo rúnico pulsante"""
 	if _glow_tween and _glow_tween.is_valid():
@@ -372,8 +367,3 @@ func set_accepts_types(types: Array) -> void:
 	accepts_card_types.clear()
 	for t in types:
 		accepts_card_types.append(t)
-
-
-func set_player(pid: int) -> void:
-	"""Configura el jugador dueño de la zona"""
-	player_id = pid

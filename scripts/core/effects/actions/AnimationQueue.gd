@@ -270,132 +270,6 @@ func add_command(type: CommandType, data: Dictionary = {}) -> void:
 	command_queue.append(command)
 
 
-func add_callable(callable: Callable, description: String = "") -> void:
-	"""Añade un Callable personalizado a la cola"""
-	add_command(CommandType.CUSTOM, {
-		"callable": callable,
-		"description": description
-	})
-
-
-func add_delay(seconds: float) -> void:
-	"""Añade una pausa a la cola"""
-	add_command(CommandType.DELAY, {"duration": seconds})
-
-
-# =============================================================================
-# FUNCIONES DE LOTE (BATCH) - DAR Sección 8
-# =============================================================================
-func queue_draw_cards(player_id: int, amount: int, source: String = "") -> String:
-	"""Encola múltiples robos de carta, uno a uno
-	DAR Sección 8: Robar se hace carta por carta
-
-	Returns: batch_id para tracking
-	"""
-	var batch_id = "draw_%d_%d" % [player_id, Time.get_ticks_msec()]
-
-	for i in range(amount):
-		add_command(CommandType.DRAW_CARD, {
-			"player_id": player_id,
-			"index": i,
-			"total": amount,
-			"batch_id": batch_id,
-			"source": source
-		})
-
-	print("[AnimationQueue] Encoladas %d animaciones de robo (batch: %s)" % [amount, batch_id])
-	return batch_id
-
-
-func queue_mill_cards(player_id: int, amount: int, destination: int = -1, source: String = "") -> String:
-	"""Encola múltiples 'botar' de carta, uno a uno
-	DAR Sección 8: Botar se hace carta por carta
-
-	Args:
-		player_id: Jugador afectado
-		amount: Cantidad de cartas a botar
-		destination: Zona destino (CEMENTERIO o DESTIERRO), -1 para Cementerio
-		source: Nombre del efecto que causa el botar
-
-	Returns: batch_id para tracking
-	"""
-	var batch_id = "mill_%d_%d" % [player_id, Time.get_ticks_msec()]
-
-	if destination < 0:
-		destination = Constants.Zone.CEMENTERIO
-
-	for i in range(amount):
-		add_command(CommandType.MILL_CARD, {
-			"player_id": player_id,
-			"destination": destination,
-			"index": i,
-			"total": amount,
-			"batch_id": batch_id,
-			"source": source
-		})
-
-	print("[AnimationQueue] Encoladas %d animaciones de botar (batch: %s)" % [amount, batch_id])
-	return batch_id
-
-
-func queue_discard_cards(player_id: int, cards: Array, source: String = "") -> String:
-	"""Encola descarte de múltiples cartas, una a una"""
-	var batch_id = "discard_%d_%d" % [player_id, Time.get_ticks_msec()]
-
-	for i in range(cards.size()):
-		add_command(CommandType.DISCARD_CARD, {
-			"player_id": player_id,
-			"card": cards[i],
-			"index": i,
-			"total": cards.size(),
-			"batch_id": batch_id,
-			"source": source
-		})
-
-	return batch_id
-
-
-func queue_damage(targets: Array, damage_per_target: int, source: Node = null) -> String:
-	"""Encola daño a múltiples objetivos, uno a uno"""
-	var batch_id = "damage_%d" % Time.get_ticks_msec()
-
-	for i in range(targets.size()):
-		add_command(CommandType.DAMAGE, {
-			"target": targets[i],
-			"damage": damage_per_target,
-			"source": source,
-			"index": i,
-			"total": targets.size(),
-			"batch_id": batch_id
-		})
-
-	return batch_id
-
-
-func queue_move_cards(cards: Array, destination_zone: int, player_id: int) -> String:
-	"""Encola movimiento de múltiples cartas"""
-	var batch_id = "move_%d" % Time.get_ticks_msec()
-
-	for i in range(cards.size()):
-		add_command(CommandType.MOVE_CARD, {
-			"card": cards[i],
-			"destination": destination_zone,
-			"player_id": player_id,
-			"index": i,
-			"total": cards.size(),
-			"batch_id": batch_id
-		})
-
-	return batch_id
-
-
-func queue_parallel(commands: Array[Callable]) -> void:
-	"""Encola múltiples comandos para ejecutar en paralelo"""
-	add_command(CommandType.PARALLEL, {
-		"callables": commands
-	})
-
-
 # =============================================================================
 # EJECUCIÓN DE LA COLA
 # =============================================================================
@@ -417,40 +291,6 @@ func start() -> void:
 	await _process_queue()
 
 
-func start_and_wait() -> Array:
-	"""Inicia la cola y espera hasta que termine
-	Returns: Array con resultados de cada comando
-	"""
-	var results: Array = []
-
-	if command_queue.is_empty():
-		return results
-
-	start()
-
-	# Esperar hasta que termine
-	while is_running:
-		await get_tree().process_frame
-
-	return current_batch_results
-
-
-func pause() -> void:
-	"""Pausa la ejecución"""
-	if is_running and not is_paused:
-		is_paused = true
-		emit_signal("queue_paused")
-		print("[AnimationQueue] Pausado")
-
-
-func resume() -> void:
-	"""Reanuda la ejecución"""
-	if is_running and is_paused:
-		is_paused = false
-		emit_signal("queue_resumed")
-		print("[AnimationQueue] Reanudado")
-
-
 func stop() -> void:
 	"""Detiene y limpia la cola"""
 	is_running = false
@@ -458,18 +298,6 @@ func stop() -> void:
 	command_queue.clear()
 	current_command = {}
 	print("[AnimationQueue] Detenido y limpiado")
-
-
-func skip_current() -> void:
-	"""Salta la animación actual"""
-	skip_animations = true
-
-
-func skip_all() -> void:
-	"""Salta todas las animaciones restantes (ejecuta instantáneamente)"""
-	animation_speed = 100.0  # Muy rápido
-	delay_between_cards = 0.01
-	delay_between_batches = 0.01
 
 
 func _process_queue() -> void:
@@ -866,33 +694,6 @@ func _get_game_board() -> Node:
 func _generate_command_id() -> String:
 	"""Genera ID único para comando"""
 	return "%d_%d" % [Time.get_ticks_msec(), randi() % 1000]
-
-
-func get_queue_size() -> int:
-	"""Retorna cantidad de comandos pendientes"""
-	return command_queue.size()
-
-
-func is_queue_empty() -> bool:
-	"""Verifica si la cola está vacía"""
-	return command_queue.is_empty()
-
-
-func clear_queue() -> void:
-	"""Limpia la cola sin ejecutar"""
-	command_queue.clear()
-	print("[AnimationQueue] Cola limpiada")
-
-
-func set_speed(speed: float) -> void:
-	"""Establece velocidad de animación"""
-	animation_speed = clampf(speed, 0.1, 10.0)
-
-
-func set_delays(between_cards: float, between_batches: float) -> void:
-	"""Configura los delays entre animaciones"""
-	delay_between_cards = between_cards
-	delay_between_batches = between_batches
 
 
 # =============================================================================

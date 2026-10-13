@@ -467,32 +467,7 @@ func _kill_tween(card: Node) -> void:
 		_tweens.erase(card)
 
 
-func get_card_at_index(index: int) -> Node:
-	"""Obtiene la carta en un índice específico"""
-	if index >= 0 and index < cards.size():
-		return cards[index]
-	return null
-
-
-func find_card(card: Node) -> int:
-	"""Encuentra el índice de una carta"""
-	return cards.find(card)
-
-
 func set_cards_interactive(interactive: bool) -> void:
 	"""Activa/desactiva la interacción de todas las cartas"""
 	for card in cards:
 		card.can_interact = interactive
-
-
-func update_arc_settings(radius: float = -1, max_angle: float = -1, height: float = -1) -> void:
-	"""Actualiza la configuración del arco dinámicamente"""
-	if radius > 0:
-		arc_radius = radius
-	if max_angle > 0:
-		max_rotation_angle = max_angle
-	if height > 0:
-		arc_height = height
-
-	_calculate_arc_positions()
-	_arrange_cards(true)

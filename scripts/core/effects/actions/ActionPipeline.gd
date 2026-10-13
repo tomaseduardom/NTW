@@ -107,10 +107,6 @@ var _current_priority_player: int = -1
 var _ability_usage: Dictionary = {}
 
 # =============================================================================
-# REFERENCIAS
-# =============================================================================
-
-# =============================================================================
 # CONFIGURACIÓN
 # =============================================================================
 const PRIORITY_TIMEOUT: float = 30.0
@@ -851,14 +847,6 @@ func cancel_stack_object(stack_id: int) -> bool:
 	return false
 
 
-func cancel_top_object() -> bool:
-	"""Cancela el objeto en el tope de la pila"""
-	var top = _get_stack_top()
-	if top.is_empty():
-		return false
-	return cancel_stack_object(top.id)
-
-
 func _get_stack_top() -> Dictionary:
 	"""Obtiene el objeto en el tope de la pila (sin remover)"""
 	if _stack.is_empty():
@@ -911,9 +899,6 @@ func _handle_annulled_object(stack_obj: Dictionary) -> void:
 
 
 # =============================================================================
-# UTILIDADES
-# =============================================================================
-# =============================================================================
 # LOGGING Y UTILIDADES
 # =============================================================================
 func _log_action(action_type: String, message: String, data: Dictionary = {}) -> void:
@@ -951,29 +936,14 @@ func get_stack() -> Array[Dictionary]:
 	return _stack.duplicate()
 
 
-func get_stack_size() -> int:
-	"""Retorna tamaño de la pila"""
-	return _stack.size()
-
-
 func is_stack_empty() -> bool:
 	"""Retorna si la pila está vacía"""
 	return _stack.is_empty()
 
 
-func get_stack_top_object() -> Dictionary:
-	"""Retorna el objeto en el tope (sin remover)"""
-	return _get_stack_top()
-
-
 func is_stack_processing() -> bool:
 	"""Retorna si se está procesando la pila"""
 	return _is_resolving
-
-
-func is_waiting_for_priority() -> bool:
-	"""Retorna si hay una ventana de prioridad abierta"""
-	return _is_waiting_priority
 
 
 func get_object_by_id(stack_id: int) -> Dictionary:
@@ -1028,22 +998,3 @@ func has_x_cost(stack_id: int) -> bool:
 		return false
 
 	return obj.get("has_x_cost", false)
-
-
-func get_stack_object_x_info(stack_id: int) -> Dictionary:
-	"""Obtiene toda la información de X de un objeto
-
-	Returns: {has_x_cost, instance_x, x_total_cost, cost_paid}
-	"""
-	var obj = get_object_by_id(stack_id)
-	if obj.is_empty():
-		return {"has_x_cost": false, "instance_x": -1, "x_value": -1, "x_total_cost": -1, "cost_paid": 0}
-
-	var instance_x = obj.get("instance_x", obj.get("x_value", -1))
-	return {
-		"has_x_cost": obj.get("has_x_cost", false),
-		"instance_x": instance_x,
-		"x_value": instance_x,  # Alias
-		"x_total_cost": obj.get("x_total_cost", -1),
-		"cost_paid": obj.get("cost_paid", 0)
-	}

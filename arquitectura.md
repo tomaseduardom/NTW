@@ -6001,3 +6001,32 @@ también; todos los cambios siempre tienen que ser para el Remoto igual"
     clic del doble clic la activaría).
 
 **Sin verificar en partida real todavía.**
+
+## 61. Limpieza de código muerto: 209 funciones y ActionExecutor (2026-10-13)
+
+**A pedido del usuario** ("revisa si algún código puede reducir la cantidad
+de líneas" → "empieza con el punto 1", con la condición "sin borrar nada que
+no hayas chequeado bien"). Rama `limpieza-codigo-muerto`.
+
+- **Criterio:** una función se borra solo si su nombre no aparece en NINGÚN
+  otro lugar del repo — `.gd`, `.tscn`, `.tres`, `.cfg`, incluidos `tools/`
+  y las escenas de prueba (fuera `archive/`, `.godot/`, `build/`). Así
+  cuentan también las conexiones de señales por nombre en escenas y los
+  `call("nombre")`/`has_method("nombre")`. Se excluyen los métodos virtuales
+  de Godot. Se revisó que ninguna llamada arme el nombre de un método en
+  tiempo de ejecución (todas las llamadas dinámicas del proyecto son
+  Callables/lambdas). En pasadas hasta punto fijo: borrar una función puede
+  dejar sin llamador a otra.
+- **Resultado:** 209 funciones, −3.533 líneas en 48 archivos. Lista
+  completa: `docs/plans/2026-10-13-funciones-borradas.md`.
+- **ActionExecutor (autoload) eliminado:** versión vieja de la Pila
+  reemplazada por ActionPipeline. Lo único que lo tocaba: CombatLog se
+  conectaba a ~20 señales que ya nadie emitía (se quitó
+  `_connect_executor_signals()`) y ExhumarSystem le preguntaba por un
+  método inexistente (`set_exhumar_flag`, siempre `false`).
+- **No se tocaron** los archivos en los que estaba trabajando Antigravity
+  (MainMenu, OnlineConnect, ShadowForgeLogin, DynamicHand, MulliganHand),
+  excluidos por nombre.
+- **Verificado:** los 157 scripts compilan con autoloads; 25/25 tests del
+  compilador; el auditor da los mismos números; el menú y la escena de
+  partida cargan headless sin errores.

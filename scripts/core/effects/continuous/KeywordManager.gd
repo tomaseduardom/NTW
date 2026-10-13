@@ -262,13 +262,6 @@ func _set_card_flag(card: Node, flag_name: String, value: bool) -> void:
 		card.set_meta(flag_name, value)
 
 
-func rescan_card(card: Node) -> Array:
-	"""Fuerza un re-escaneo de keywords (útil si el texto cambió)"""
-	var card_id = card.get_instance_id()
-	_parsed_cache.erase(card_id)
-	return scan_and_apply_keywords(card)
-
-
 func get_cached_keywords(card: Node) -> Array:
 	"""Obtiene keywords cacheados sin re-escanear"""
 	var card_id = card.get_instance_id()
@@ -809,11 +802,6 @@ func is_instance_locked(card: Node) -> bool:
 	return any_active
 
 
-func can_be_exiled(card: Node) -> bool:
-	"""DAR Sección 8: Verifica si una carta puede ser desterrada"""
-	return not has_keyword(card, Keyword.INDESTERRABLE)
-
-
 func is_errante(card: Node) -> bool:
 	"""Verifica Errante (solo 1 copia de esta carta en juego a la vez)"""
 	return has_keyword(card, Keyword.ERRANTE)
@@ -964,27 +952,6 @@ func clear_all_for_card(card: Node) -> void:
 # =============================================================================
 # UTILIDADES
 # =============================================================================
-func get_keyword_name(keyword: int) -> String:
-	"""Obtiene el nombre legible de un keyword"""
-	return Constants.Keyword.keys()[keyword] if keyword in Constants.Keyword.values() else "UNKNOWN"
-
-
-func get_keyword_description(keyword: int) -> String:
-	"""Obtiene la descripción de un keyword"""
-	return Constants.KEYWORD_DESCRIPTIONS.get(keyword, "Sin descripción")
-
-
-func get_all_keywords(card: Node) -> Array:
-	"""Obtiene todos los keywords activos de una carta"""
-	var result: Array = []
-
-	for keyword in Constants.Keyword.values():
-		if has_keyword(card, keyword):
-			result.append(keyword)
-
-	return result
-
-
 func _get_card_name(card) -> String:
 	"""Helper para obtener nombre de carta"""
 	if card == null:

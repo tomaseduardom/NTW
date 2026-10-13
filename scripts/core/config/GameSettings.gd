@@ -184,10 +184,3 @@ func get_card_back_texture(player_id: int = 0) -> Texture2D:
 		if not _opponent_back_texture:
 			_load_back_textures()
 		return _opponent_back_texture
-
-
-func get_card_back_path(player_id: int = 0) -> String:
-	"""Retorna el path del dorso para un jugador"""
-	var back_id = player_card_back if player_id == 0 else opponent_card_back
-	var file_name = BACK_FILES.get(back_id, "dorso_1.png")
-	return BACKS_PATH + file_name

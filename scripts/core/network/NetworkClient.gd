@@ -97,10 +97,6 @@ func send_message(data: Dictionary) -> void:
 	_socket.send_text(JSON.stringify(data))
 
 
-func is_connected_to_peer() -> bool:
-	return peer_present
-
-
 func disconnect_from_relay() -> void:
 	if is_instance_valid(_socket):
 		_socket.close()

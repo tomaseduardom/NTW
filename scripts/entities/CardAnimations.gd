@@ -62,14 +62,6 @@ func play_ability_activation_effect() -> void:
 	tween.tween_callback(flash.queue_free)
 
 
-func play_destroy_animation() -> void:
-	"""Animación cuando la carta es destruida"""
-	var tween = _card.create_tween()
-	tween.tween_property(_card, "modulate:a", 0, 0.3)
-	tween.parallel().tween_property(_card, "scale", Vector2.ONE * 0.5, 0.3)
-	tween.tween_callback(_card.queue_free)
-
-
 func play_enter_animation() -> void:
 	"""Animación cuando la carta entra en juego"""
 	_card.scale = Vector2.ZERO

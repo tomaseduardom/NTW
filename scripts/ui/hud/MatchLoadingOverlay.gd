@@ -117,15 +117,6 @@ func show_loading(parent: Node, title_text: String = "CARGANDO PARTIDA", initial
 	_tween_fade.tween_property(_overlay, "modulate:a", 1.0, 0.35).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_QUAD)
 
 
-func set_progress(val: float, message: String = "") -> void:
-	"""Actualiza la barra de progreso y mensaje."""
-	if _progress_bar:
-		var tw = _progress_bar.create_tween()
-		tw.tween_property(_progress_bar, "value", clampf(val, 0.0, 1.0), 0.2)
-	if not message.is_empty() and _subtitle_label:
-		_subtitle_label.text = message
-
-
 func hide_loading(on_finish: Callable = Callable()) -> void:
 	"""Oculta la pantalla de carga con fade-out suave."""
 	if not _overlay or not is_instance_valid(_overlay):
@@ -153,4 +144,3 @@ func _build_mystic_spinner() -> Control:
 	drawer.set_script(SpinnerDrawerScript)
 	root.add_child(drawer)
 	return root
-

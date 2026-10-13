@@ -408,21 +408,6 @@ func play_battle_end_effect() -> void:
 	set_background_speed(base_shader_speed, 0.8)
 
 
-func play_victory_effect() -> void:
-	"""Efecto visual de victoria"""
-	# Dorado brillante
-	set_background_accent_color(Color(0.8, 0.6, 0.2, 1.0), 0.5)
-	dramatic_background(2.0)
-
-
-func play_defeat_effect() -> void:
-	"""Efecto visual de derrota"""
-	# Oscuro y apagado
-	set_background_accent_color(Color(0.2, 0.1, 0.1, 1.0), 0.5)
-	set_background_intensity(0.1, 1.0)
-	set_background_speed(0.3, 1.0)
-
-
 # =============================================================================
 # CALLBACKS DE SEÑALES
 # =============================================================================
@@ -461,24 +446,3 @@ func _kill_tween(tween_name: String) -> void:
 		if tween and tween.is_valid():
 			tween.kill()
 		_active_tweens.erase(tween_name)
-
-
-func reset_all_effects() -> void:
-	"""Resetea todos los efectos a valores base"""
-	# Matar todos los tweens activos
-	for tween_name in _active_tweens.keys():
-		_kill_tween(tween_name)
-
-	# Restaurar valores base del shader
-	if background:
-		_set_shader_param("intensity", base_shader_intensity)
-		_set_shader_param("speed", base_shader_speed)
-		_set_shader_param("color_accent", Color(0.15, 0.25, 0.4, 1.0))
-
-	_is_shaking = false
-
-	# Restaurar posición de cámara/nodo
-	if game_camera:
-		game_camera.offset = _original_camera_offset
-	elif main_node:
-		main_node.position = Vector2.ZERO

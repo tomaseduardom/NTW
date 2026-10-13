@@ -318,33 +318,10 @@ func can_act(player_id: int) -> bool:
 	return has_priority(player_id)
 
 
-func get_valid_actions() -> Array[String]:
-	"""Retorna las acciones válidas en el contexto actual"""
-	return valid_actions.duplicate()
-
-
-func is_action_valid(action_type: String) -> bool:
-	"""Verifica si una acción es válida en el contexto actual"""
-	return action_type in valid_actions
-
-
 # =============================================================================
 # UTILIDADES PARA GUERRA DE TALISMANES
 # =============================================================================
-func start_guerra_talismanes() -> void:
-	"""Inicia la Guerra de Talismanes (atajo)"""
-	start_priority_window(PriorityContext.GUERRA_TALISMANES)
-
-
-func start_response_window(triggering_player: int) -> void:
-	"""Inicia una ventana de respuesta (el oponente puede responder)"""
-	var responding_player = 1 - triggering_player
-	start_priority_window(PriorityContext.RESPONSE_WINDOW, responding_player)
-
-
 func force_close() -> void:
 	"""Fuerza el cierre de la ventana de prioridad"""
 	if priority_window_active:
 		_close_priority_window(false)
-
-

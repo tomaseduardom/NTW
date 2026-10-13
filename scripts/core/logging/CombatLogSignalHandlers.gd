@@ -19,7 +19,7 @@ func setup(main: Node) -> void:
 # =============================================================================
 func connect_signals() -> void:
 	"""Conecta a todas las señales relevantes del sistema
-	(2026-08-28, "módulos gordos" punto 1): ActionExecutor/ActionModule/
+	(2026-08-28, "módulos gordos" punto 1): ActionModule/
 	GameManager/TurnManager/UniversalCardParser son autoloads garantizados —
 	se saca el cacheo redundante vía get_node_or_null(). _safe_connect() ya
 	valida has_signal() por su cuenta, así que esto no cambia el
@@ -27,49 +27,12 @@ func connect_signals() -> void:
 	seguían (y siguen) sin conectar nada real — ActionModule.gd no tiene
 	señales 'card_drawn/discarded/destroyed/banished/milled' y TurnManager.gd
 	no emite ninguna señal propia hoy."""
-	_connect_executor_signals()
 	_connect_module_signals()
 	_connect_game_signals()
 	_connect_turn_manager_signals()
 	_connect_parser_signals()
 
 	print("[CombatLog] Señales conectadas")
-
-
-func _connect_executor_signals() -> void:
-	"""Conecta señales del ActionExecutor"""
-	# Habilidades
-	_safe_connect(ActionExecutor, "ability_execution_started", _on_ability_started)
-	_safe_connect(ActionExecutor, "ability_execution_completed", _on_ability_completed)
-
-	# Acciones
-	_safe_connect(ActionExecutor, "action_executed", _on_action_executed)
-	_safe_connect(ActionExecutor, "action_draw_completed", _on_draw)
-	_safe_connect(ActionExecutor, "action_discard_completed", _on_discard)
-	_safe_connect(ActionExecutor, "action_destroy_completed", _on_destroy)
-	_safe_connect(ActionExecutor, "action_banish_completed", _on_banish)
-	_safe_connect(ActionExecutor, "action_mill_completed", _on_mill)
-	_safe_connect(ActionExecutor, "action_search_completed", _on_search)
-	_safe_connect(ActionExecutor, "action_damage_completed", _on_damage)
-	_safe_connect(ActionExecutor, "action_buff_completed", _on_buff)
-	_safe_connect(ActionExecutor, "action_heal_completed", _on_heal)
-
-	# Costes
-	_safe_connect(ActionExecutor, "cost_paid", _on_cost_paid)
-	_safe_connect(ActionExecutor, "execution_failed", _on_execution_failed)
-
-	# Respuesta
-	_safe_connect(ActionExecutor, "waiting_for_opponent_response", _on_response_window)
-	_safe_connect(ActionExecutor, "opponent_passed", _on_opponent_passed)
-	_safe_connect(ActionExecutor, "opponent_responded", _on_opponent_responded)
-
-	# Anulación
-	_safe_connect(ActionExecutor, "spell_annulled", _on_spell_annulled)
-
-	# Resolución
-	_safe_connect(ActionExecutor, "resolution_started", _on_resolution_started)
-	_safe_connect(ActionExecutor, "resolution_completed", _on_resolution_completed)
-	_safe_connect(ActionExecutor, "post_resolution_condition", _on_post_resolution)
 
 
 func _connect_module_signals() -> void:

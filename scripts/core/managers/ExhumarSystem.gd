@@ -221,10 +221,6 @@ func pay_for_exhumar(cost: int) -> bool:
 
 		print("[PaymentManager] 💀 Pago Exhumar completado - Destino forzado: DESTIERRO")
 
-		# Notificar al ActionExecutor si existe
-		if ActionExecutor.has_method("set_exhumar_flag"):
-			ActionExecutor.set_exhumar_flag(true)
-
 	return paid
 
 
@@ -387,12 +383,6 @@ func _on_card_moved_to_zone(_card: Node, from_zone: int, to_zone: int, _player_i
 	"""Callback cuando una carta cambia de zona"""
 	# Invalidar si involucra el cementerio
 	if from_zone == Constants.Zone.CEMENTERIO or to_zone == Constants.Zone.CEMENTERIO:
-		invalidate_cache()
-
-
-func _on_zone_changed(zone: int, player_id: int) -> void:
-	"""Callback cuando una zona cambia"""
-	if zone == Constants.Zone.CEMENTERIO:
 		invalidate_cache()
 
 

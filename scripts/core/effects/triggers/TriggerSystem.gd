@@ -803,14 +803,6 @@ func check_continuous_prevention(action_type: String, target: Node = null) -> Di
 # =============================================================================
 # UTILIDADES PARA CALLABLE EN CARTAS
 # =============================================================================
-func create_trigger_handler(card: Node) -> Callable:
-	"""Crea un handler de triggers para una carta
-	Usado cuando la carta entra al juego para conectar dinámicamente
-	"""
-	return func(trigger_type: String, event_data: Dictionary) -> Dictionary:
-		return await card._on_trigger_event(trigger_type, event_data)
-
-
 func bind_card_to_triggers(card: Node) -> void:
 	"""Vincula una carta al sistema de triggers cuando entra al juego
 	Llama a _on_trigger_event de la carta con Callable
