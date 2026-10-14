@@ -217,16 +217,19 @@ func _choose_wielder_remote(weapon: Node) -> Node:
 	return null
 
 
-func _play_weapon_remote(card: Node) -> void:
+func _play_weapon_remote(card: Node) -> bool:
+	"""true si el Arma quedó equipada (false: sin portador o cancelado)."""
 	if not is_instance_valid(card):
-		return
+		return false
 	if not _main._gold_manager or not _main._gold_manager._player_has_ally_in_play():
 		NetworkClient.send_message({"op": "prompt", "kind": "error", "message": "Sin Aliados en juego para portar el Arma"})
-		return
+		return false
 	var coste: int = PaymentManager.calcular_coste_real(card)
 	var wielder := await _choose_wielder_remote(card)
 	if not wielder or not is_instance_valid(wielder):
-		return
+		return false
+	# En la Guerra de Talismanes (Lobo Sagrado): turno alternado, §64.
+	PriorityManager.begin_guerra_action(1)
 
 	_main._opponent_fan.remove_card(card, false)
 	card.esta_oculta = false
@@ -237,6 +240,8 @@ func _play_weapon_remote(card: Node) -> void:
 
 	if _main._gold_manager.has_method("_equip_weapon"):
 		await _main._gold_manager._equip_weapon(card, wielder)
+	PriorityManager.end_guerra_action()
+	return true
 
 
 func _play_talisman_remote(card: Node) -> void:
@@ -514,6 +519,11 @@ func on_priority_received() -> void:
 			button_text = "Daño [P]"
 			ability_candidates = _collect_activatable_abilities()
 			talisman_cards = _playable_talismans_now(false)
+			# Armas con "Puedes jugar Armas en Guerra de Talismanes" (Lobo
+			# Sagrado) en el lado del Remoto — igual que el Anfitrión (§65).
+			var gm = _main._gold_manager
+			if gm and gm.has_phase_exception(Constants.CardType.ARMA, 1) and gm._player_has_ally_in_play():
+				talisman_cards.append_array(_affordable_cards_in_hand([Constants.CardType.ARMA]))
 		PriorityManager.PriorityContext.BLOCK_DECLARATION:
 			button_text = "Confirmar bloqueos [P]"
 			for a in GameManager.attackers:
@@ -556,8 +566,15 @@ func on_priority_received() -> void:
 		"play":
 			var card := _find_card_by_id(str(intent.get("card_id", "")))
 			if card and card in talisman_cards:
-				await _play_talisman_remote(card)
-				return
+				if card.get("card_type") != Constants.CardType.ARMA:
+					await _play_talisman_remote(card)
+					return
+				if await _play_weapon_remote(card):
+					return
+				# Canceló el portador: sigue siendo su prioridad en la Guerra.
+				if _is_current_window(window_id):
+					on_priority_received()
+					return
 		"blocks":
 			_apply_remote_blocks(intent.get("pairs", []))
 	_pass_if_still_current(window_id)

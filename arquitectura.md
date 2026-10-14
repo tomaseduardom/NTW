@@ -6126,3 +6126,14 @@ su Ventana de Respuesta, sin ventanas duplicadas).
 Probado con un script aislado de `PriorityManager`: Guerra abre con el
 defensor → juega → Ventana de Respuesta → mientras resuelve no se reabre →
 sigue el atacante con pases en cero → ambos pasan → termina.
+
+## 65. Remoto: Armas en la Guerra de Talismanes con Lobo Sagrado (2026-10-13)
+
+**Paridad, a pedido del usuario.** El Anfitrión ya podía jugar Armas en la
+Guerra con 'Puedes jugar Armas en Guerra de Talismanes' en su lado; al Remoto
+su prompt de prioridad solo le ofrecía Talismanes y habilidades. Ahora
+`RemotePlayerController.on_priority_received()` suma las Armas pagables si
+`GoldManager.has_phase_exception(ARMA, 1)` y hay Aliados en juego.
+`_play_weapon_remote()` devuelve si equipó (si cancela el portador, se le
+vuelve a dar su prioridad) y marca la acción de la Guerra (§64) para que el
+turno pase al Anfitrión.
