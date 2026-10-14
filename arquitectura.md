@@ -6265,3 +6265,25 @@ LookRevealPatternsB.
   cantidad) y búsqueda por nombre.
 - Prueba: `test_either.gd` (clics simulados: bloqueo del Castillo, sin giro, filtro, 2
   cartas al Cementerio rival).
+
+## 71. Un bloque de disparador no sigue en el renglón de abajo (2026-10-14)
+
+**Bug real reportado por el usuario**: Signo Amarillo "resolvió pero no hizo nada" y alto
+prime no disparaba.
+
+- `TriggerResolution._isolate_all_trigger_clauses()` juntaba oraciones hasta encontrar
+  otro disparador o una activada "una vez por turno". El renglón siguiente de la carta
+  (otra habilidad: "Puedes convertir este Oro...") quedaba pegado al "Cuando entra en
+  juego, mira...", y CastleLook/EffectCompiler, que solo se encargan si entienden TODO
+  el bloque, lo rechazaban; la cadena vieja tampoco lo tomaba. Ahora cada renglón es una
+  habilidad aparte: el bloque se corta al cambiar de renglón (salvo que el renglón nuevo
+  empiece en minúscula, texto cortado a mitad de oración). Comparación sobre el
+  catálogo: cambian 322 bloques, 62 cartas pasan a entenderse (Signo Amarillo, Drácula,
+  Trono del Cielo, Kappa, Libro de Revelaciones, Wendy, Lobo Malvado...), 0 dejan de
+  entenderse. La cobertura de §69 contaba bloques sueltos, no el bloque que de verdad
+  llega en juego: varias de esas cartas fallaban igual que Signo Amarillo.
+- "Cuando entra o sale del juego" (alto prime): solo existía la frase "o salga" en
+  `Card.TRIGGER_KEYWORDS`/`CardFactory.TRIGGER_PATTERNS`, así que la carta entraba con 0
+  disparadores. Agregada a entrar y salir.
+- alto prime "busca en cada Castillo": elige quien controla la carta también en el
+  Castillo rival (`chooser_id`, mismo error que §70).

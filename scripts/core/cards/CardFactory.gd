@@ -17,8 +17,9 @@ const TRIGGER_PATTERNS: Dictionary = {
 	# frase completa a los dos, pero OJO: esto solo la CLASIFICA en el
 	# primer tipo que la detecte, no dispara ambos triggers a la vez (eso
 	# necesitaría lógica aparte, no implementada todavía).
-	"on_enter_play": ["cuando entre al juego", "al entrar al juego", "cuando entra al juego", "al ser jugado", "cuando entra o salga del juego"],
-	"on_leave_play": ["al salir del juego", "cuando salga del juego", "cuando sale del juego", "cuando entra o salga del juego"],
+	"on_enter_play": ["cuando entre al juego", "al entrar al juego", "cuando entra al juego", "al ser jugado", "cuando entra o salga del juego", "cuando entra o sale del juego"],
+	"on_leave_play": ["al salir del juego", "cuando salga del juego", "cuando sale del juego", "cuando entra o salga del juego",
+		"cuando entra o sale del juego"],
 	# "cuando muera"/"al morir" no existen como concepto real en el juego —
 	# se eliminaron (2026-08-28, a pedido del usuario).
 	"on_destroyed": ["cuando sea destruido", "al ser destruido"],

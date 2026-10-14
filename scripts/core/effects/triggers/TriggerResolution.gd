@@ -649,7 +649,8 @@ func _execute_trigger_effect(card: Node, trigger_type: String, event_data: Dicti
 			if card.get("card_data") != null:
 				full_ability_text = card.card_data.get("habilidad", "")
 			var ability_text := _isolate_trigger_clause(full_ability_text, [
-				"al salir del juego", "cuando salga del juego", "cuando sale del juego", "cuando entra o salga del juego"
+				"al salir del juego", "cuando salga del juego", "cuando sale del juego", "cuando entra o salga del juego",
+				"cuando entra o sale del juego"
 			])
 			if ability_text.is_empty():
 				ability_text = full_ability_text
@@ -981,11 +982,28 @@ func _isolate_all_trigger_clauses(ability_text: String, trigger_phrases: Array) 
 			if phrase not in trigger_phrases:
 				other_trigger_phrases.append(phrase)
 
-	for raw_sentence in ability_text.split("."):
-		var sentence: String = raw_sentence.strip_edges()
-		if sentence.is_empty():
-			continue
+	# Cada renglón del texto es una habilidad aparte (2026-10-14, bug real
+	# reportado por el usuario: Signo Amarillo "resolvió pero no hizo nada" —
+	# su "Cuando entra en juego, mira..." se llevaba pegado el renglón
+	# siguiente, "Puedes convertir este Oro...", y CastleLook/EffectCompiler
+	# ya no lo entendían). Un bloque no sigue en el renglón de abajo, salvo
+	# que éste empiece en minúscula (texto cortado a mitad de oración).
+	var sentences: Array = []  # [oración, empieza_renglón]
+	for line in ability_text.split("\n"):
+		var first_in_line := true
+		for raw_sentence in line.split("."):
+			var s: String = raw_sentence.strip_edges()
+			if s.is_empty():
+				continue
+			sentences.append([s, first_in_line])
+			first_in_line = false
+
+	for entry in sentences:
+		var sentence: String = entry[0]
 		var lower_s := sentence.to_lower()
+		if entry[1] and not current.is_empty() and sentence.left(1) != sentence.left(1).to_lower():
+			blocks.append(". ".join(current))
+			current = []
 
 		var starts_new_block := false
 		for phrase in trigger_phrases:

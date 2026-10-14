@@ -434,7 +434,9 @@ func try_execute_search_each_castillo_two_to_cemetery_pattern(ability_text: Stri
 	if await TriggerSystem.open_response_window(card, str(card.card_name), controller_id):
 		return true
 	for player_id in [0, 1]:
-		await ActionModule.search(player_id, Constants.Zone.CASTILLO, {}, 2, true, false, false, card, Constants.Zone.CEMENTERIO)
+		# Elige quien controla la carta, también en el Castillo rival (2026-10-14).
+		await ActionModule.search(player_id, Constants.Zone.CASTILLO, {}, 2, true, false, false, card, Constants.Zone.CEMENTERIO,
+			false, controller_id)
 	return true
 
 
