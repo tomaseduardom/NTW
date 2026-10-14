@@ -103,6 +103,14 @@ func _activate_quimera_voragh_mill_and_revive(source_card: Node, ability: Dictio
 	await _jv._activate_quimera_voragh_mill_and_revive(source_card, ability)
 
 
+func _activate_patria_vieja_look_six(source_card: Node, ability: Dictionary) -> void:
+	await _jv._activate_patria_vieja_look_six(source_card, ability)
+
+
+func _activate_cemetery_granted_draw(source_card: Node, ability: Dictionary) -> void:
+	await _jv._activate_cemetery_granted_draw(source_card, ability)
+
+
 func _activate_tenshi_z_shuffle_hand_to_annul(source_card: Node, ability: Dictionary) -> void:
 	await _jv._activate_tenshi_z_shuffle_hand_to_annul(source_card, ability)
 

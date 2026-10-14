@@ -69,6 +69,28 @@ func try_build(ability_lower: String, btn: Button, panel: Control, card_for_glow
 		panel.add_child(btn)
 		return true
 
+	# Patria Vieja (2026-10-13): "En tu Vigilia, si no has puesto Oros en
+	# juego este turno, puedes mirar las primeras seis cartas de tu
+	# Castillo y poner un Oro de ahí en tu Reserva".
+	if "mirar las primeras seis cartas de tu castillo y poner un oro de ahí en tu reserva" in ability_lower:
+		btn.pressed.connect(func():
+			_inspector.close_card_inspection()
+			await _inspector._search_handler._activate_patria_vieja_look_six(card_for_glow, captured)
+		)
+		panel.add_child(btn)
+		return true
+
+	# Duelo Espacial en el Cementerio (2026-10-13): gana "En tu Vigilia,
+	# puedes Robar una carta" (una vez por turno).
+	if "en tu cementerio" in ability_lower and "gana la habilidad" in ability_lower \
+			and "puedes robar una carta" in ability_lower:
+		btn.pressed.connect(func():
+			_inspector.close_card_inspection()
+			await _inspector._search_handler._activate_cemetery_granted_draw(card_for_glow, captured)
+		)
+		panel.add_child(btn)
+		return true
+
 	# Patrón especial de quimera voragh (2026-09-06): "cada jugador Bota
 	# tres cartas. Si se Botaron Aliados u Oros, pon en juego una carta
 	# de un Cementerio como un Aliado de Fuerza 2 con Furia" — botado

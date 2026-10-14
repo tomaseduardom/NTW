@@ -6168,3 +6168,30 @@ rival, Cementerio rival; Anfitrión, Remoto por red o bot), ventana de respuesta
 después de elegir (§59), se saca de su zona (Castillo: se baraja) y va a TU Oro
 Pagado como Oro sin habilidad (tipo Oro, habilidad vacía — antes conservaba su
 tipo y texto). Se puede confirmar sin elegir (buscar puede fallar).
+
+## 68. Patria Vieja (Vigilia), Duelo Espacial (Cementerio) y fichas en su casilla (2026-10-13)
+
+**Bugs reales reportados por el usuario.**
+
+- **Patria Vieja no tenía botón:** "En tu Vigilia, si no has puesto Oros en juego
+  este turno, puedes mirar..." no tiene coste ni trigger, `parse_abilities()` la
+  descartaba. Ahora es ACTIVATED (una vez por turno; solo la variante "puedes
+  mirar las primeras" — las otras 9 cartas con esa condición son "ponerlo desde
+  tu mano o Cementerio", otra mecánica). Handler
+  `SearchAbilityHandler_JV._activate_patria_vieja_look_six()`: mira las 6 del
+  tope, elige un Oro (`await_single_pick` con chooser, también Remoto), va a la
+  Reserva; sin ventana de respuesta ("no puede ser cancelada"); la versión IMP
+  lo pone sin habilidad. Condición: `GoldManager.oros_en_juego_turno` (nuevo,
+  cuenta el Oro de la mano Y los puestos por efectos).
+- **Duelo Espacial en el Cementerio** ("gana la habilidad 'En tu Vigilia, puedes
+  Robar una carta'") tampoco tenía botón: ACTIVATED, usable desde el Cementerio
+  (`_ability_is_cementerio_usable`), una vez por turno POR NOMBRE (el texto dice
+  'esta habilidad de Duelo Espacial'; además los Nodos del Cementerio son
+  temporales). El Remoto ahora ve las habilidades de su Cementerio
+  (`RemotePlayerController._cemetery_proxies()`: Nodos temporales, antes nunca se
+  le ofrecían — Espada del Juicio, Visión Heroica, Drácula incluidas).
+- **La carta que pone en juego quimera voragh quedaba debajo de ella: los
+  efectos que hacen `add_child()` directo a la Línea no pasaban por
+  `pin_card_to_field_slot()`. `ZoneManager._on_field_child_entered()` compacta la
+  línea si a los 0.15s la carta sigue sin casilla (cubre los 11 sitios así, y
+  el espejo del Remoto).

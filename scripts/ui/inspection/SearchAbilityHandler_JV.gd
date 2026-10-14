@@ -396,6 +396,72 @@ func _activate_padre_patria_gold(source_card: Node, ability: Dictionary) -> void
 	UniversalCardParser.turn_registry.register_ability_use(source_card, ability)
 
 
+func _activate_patria_vieja_look_six(source_card: Node, ability: Dictionary) -> void:
+	"""'En tu Vigilia, si no has puesto Oros en juego este turno, puedes mirar
+	las primeras seis cartas de tu Castillo y poner un Oro de ahí en tu
+	Reserva. Esta habilidad no puede ser cancelada' (Patria Vieja,
+	2026-10-13). Sin ventana de respuesta (no puede ser cancelada). Las
+	cartas que no se eligen quedan en el tope en el mismo orden. La versión
+	IMP agrega 'como un Oro sin habilidad'."""
+	if not is_instance_valid(source_card):
+		return
+	var owner_id: int = source_card.controller_id if source_card.get("controller_id") != null else 0
+	var main := _inspector._main
+	if main._gold_manager.oros_en_juego_turno.get(owner_id, 0) > 0:
+		main._update_debug("Patria Vieja: ya pusiste Oros en juego este turno")
+		return
+	var deck: Array = CardManager.get_deck(owner_id)
+	var top: Array = deck.slice(0, 6)
+	if top.is_empty():
+		main._update_debug("Patria Vieja: tu Castillo está vacío")
+		return
+	UniversalCardParser.turn_registry.register_ability_use(source_card, ability)
+	var is_gold := func(d: Dictionary) -> bool: return int(d.get("tipo", -1)) == Constants.CardType.ORO
+	var picked: Dictionary = await SelectionManager.await_single_pick(top,
+		"Patria Vieja: elige un Oro para poner en tu Reserva", true, 0, is_gold, owner_id)
+	if picked.is_empty() or not is_gold.call(picked):
+		return
+	# Por red llega una copia: se ubica por contenido entre las 6 miradas.
+	var idx := -1
+	for i in range(mini(6, deck.size())):
+		if deck[i] == picked:
+			idx = i
+			break
+	if idx < 0:
+		return
+	var gold_data: Dictionary = deck[idx].duplicate()
+	deck.remove_at(idx)
+	CardManager._emit_deck_changed(owner_id)
+	if main.get("_zone_manager"):
+		main._zone_manager._update_castillo_counts()
+	if "como un oro sin habilidad" in str(source_card.get("card_ability")).to_lower():
+		gold_data["habilidad"] = ""
+	await main._gold_manager.put_gold_directly_in_reserva(owner_id, gold_data)
+
+
+func _activate_cemetery_granted_draw(source_card: Node, ability: Dictionary) -> void:
+	"""Duelo Espacial en el Cementerio (2026-10-13): 'gana la habilidad "En
+	tu Vigilia, puedes Robar una carta. Sólo puedes utilizar esta habilidad
+	de Duelo Espacial una vez por turno"'."""
+	if not is_instance_valid(source_card):
+		return
+	# Datos capturados antes de cualquier await: en el Cementerio la carta es
+	# un Nodo temporal que puede liberarse mientras se resuelve.
+	var owner_id: int = source_card.owner_id if source_card.get("owner_id") != null else 0
+	var card_name: String = str(source_card.get("card_name"))
+	# "esta habilidad de Duelo Espacial una vez por turno" = una vez por turno
+	# por NOMBRE (todas las copias), no por copia — y los Nodos temporales del
+	# Cementerio cambian de instance_id cada vez que se abre.
+	var key: String = "cemetery_granted:%s:%d" % [card_name.to_lower(), owner_id]
+	if UniversalCardParser.turn_registry.was_used(key, 0, GameManager.current_turn):
+		_inspector._main._update_debug("%s: ya usaste esta habilidad este turno" % card_name)
+		return
+	UniversalCardParser.turn_registry.register(key, 0, GameManager.current_turn)
+	if await TriggerSystem.open_response_window(source_card, card_name, owner_id):
+		return
+	await ActionModule.draw(owner_id, 1, card_name, true)
+
+
 func _activate_quimera_voragh_mill_and_revive(source_card: Node, ability: Dictionary) -> void:
 	"""'Una vez en tu turno, cada jugador Bota tres cartas. Si se Botaron
 	Aliados u Oros, pon en juego una carta de un Cementerio como un Aliado

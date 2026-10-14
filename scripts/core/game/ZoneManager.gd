@@ -19,6 +19,23 @@ func setup(main: Node) -> void:
 	if EffectController and EffectController.has_signal("on_card_left_play"):
 		if not EffectController.on_card_left_play.is_connected(_on_card_left_play):
 			EffectController.on_card_left_play.connect(_on_card_left_play)
+	for prop in ["player_field", "player_linea_apoyo", "opponent_field", "opponent_linea_apoyo"]:
+		var container: Node = main.get(prop)
+		if container:
+			container.child_entered_tree.connect(_on_field_child_entered.bind(container))
+
+
+func _on_field_child_entered(node: Node, container: Control) -> void:
+	"""Carta que entra a la Línea de Defensa/Apoyo SIN pasar por
+	pin_card_to_field_slot() (2026-10-13, bug real reportado por el usuario:
+	la carta que pone en juego quimera voragh quedaba debajo de la propia
+	quimera). Jugar normal la acomoda en su casilla al frame siguiente; si
+	al rato sigue sin casilla, se compacta la línea."""
+	if node.get("card_data") == null:
+		return
+	await get_tree().create_timer(0.15).timeout
+	if is_instance_valid(node) and node.get_parent() == container and not node.has_meta("field_slot_x"):
+		compact_field_slots(container, true)
 
 
 func _on_card_left_play(_player_id: int, _card: Node, from_zone: int) -> void:

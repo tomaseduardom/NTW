@@ -33,6 +33,10 @@ const EffectContextScript = preload("res://scripts/core/effects/EffectContext.gd
 
 const PlayerSideScript = preload("res://scripts/core/game/PlayerSide.gd")
 var oro_colocado_conteo: Dictionary = {0: 0, 1: 0}
+## Oros puestos en juego este turno por CUALQUIER vía (colocar el de la mano
+## o por efectos) — "si no has puesto Oros en juego este turno" (Patria
+## Vieja, 2026-10-13). oro_colocado_conteo solo cuenta la acción de la mano.
+var oros_en_juego_turno: Dictionary = {0: 0, 1: 0}
 
 ## 'Los jugadores no pueden poner Oros en juego por efectos si ya
 ## pusieron Oros en juego por efectos durante esta partida' (2026-09-04,
@@ -104,6 +108,7 @@ func _on_turn_started_clear_virtual_gold(_player_id: int, _turn: int) -> void:
 	limpiar_oros_virtuales()
 	limpiar_oro_restringido()
 	oro_colocado_conteo = {0: 0, 1: 0}
+	oros_en_juego_turno = {0: 0, 1: 0}
 	_no_more_cards_this_turn = {0: false, 1: false}
 
 
@@ -178,6 +183,7 @@ func _register_gold_placed(player_id: int) -> void:
 	Dispara el chequeo reactivo de 'cuando tu oponente ponga su segundo
 	Oro' contra el OTRO jugador."""
 	oro_colocado_conteo[player_id] = oro_colocado_conteo.get(player_id, 0) + 1
+	oros_en_juego_turno[player_id] = oros_en_juego_turno.get(player_id, 0) + 1
 	gold_placed.emit(player_id, oro_colocado_conteo[player_id])
 	_check_reactive_second_gold_triggers(player_id)
 
@@ -271,6 +277,7 @@ func put_gold_directly_in_pagado(player_id: int, card_data: Dictionary) -> Node:
 	generalizado a cualquier player_id en vez de asumir siempre 0."""
 	if await EffectContextScript.ensure_window():  # ventana única por efecto (§59)
 		return null
+	oros_en_juego_turno[player_id] = oros_en_juego_turno.get(player_id, 0) + 1
 	var data: Dictionary = card_data.duplicate()
 	data["esta_oculta"] = false
 	var card_node = _main._create_card(data)
@@ -513,6 +520,7 @@ func put_gold_directly_in_reserva(player_id: int, card_data: Dictionary) -> Node
 		_main._update_debug("Ya pusiste un Oro en juego por efectos esta partida (Armería del Guerrero)")
 		return null
 	_oro_por_efecto_used_game[player_id] = true
+	oros_en_juego_turno[player_id] = oros_en_juego_turno.get(player_id, 0) + 1
 
 	var card_node = _main._create_card(card_data, false)  # Oro es información pública (DAR), boca arriba siempre
 	card_node.owner_id = player_id

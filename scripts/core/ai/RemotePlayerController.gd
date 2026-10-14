@@ -432,6 +432,7 @@ func _collect_activatable_abilities() -> Array:
 				cards.append(card)
 	if _main._opponent_fan:
 		cards.append_array(_main._opponent_fan.get_cards())
+	cards.append_array(_cemetery_proxies())
 	for card in cards:
 		# usable_abilities_for() ya descarta las que no controla el jugador 1
 		# (controller_id), así que las del lado del Anfitrión solo entran si
@@ -439,6 +440,31 @@ func _collect_activatable_abilities() -> Array:
 		for entry in _main._card_inspector.usable_abilities_for(card, 1):
 			candidates.append({"card": card, "ability": entry.ability})
 	return candidates
+
+
+## Cartas del Cementerio del Remoto con habilidad usable desde ahí
+## (2026-10-13, Duelo Espacial; también Espada del Juicio, Visión Heroica,
+## Drácula): el Cementerio no tiene Nodos, así que se crean Nodos temporales
+## (fuera del árbol, igual que el visor del Cementerio del Anfitrión). Viven
+## hasta la próxima consulta para que el intent pueda ubicarlos por card_id.
+var _cemetery_proxy_nodes: Array = []
+
+func _cemetery_proxies() -> Array:
+	for n in _cemetery_proxy_nodes:
+		if is_instance_valid(n) and not n.is_inside_tree():
+			n.queue_free()
+	_cemetery_proxy_nodes.clear()
+	if not _main._card_inspector:
+		return []
+	for data in CardManager.get_cemetery(1):
+		if not _main._card_inspector._ability_is_cementerio_usable(str(data.get("habilidad", ""))):
+			continue
+		var node = _main._create_card(data, false)
+		node.owner_id = 1
+		node.controller_id = 1
+		node.set_zone(Constants.Zone.CEMENTERIO)
+		_cemetery_proxy_nodes.append(node)
+	return _cemetery_proxy_nodes.duplicate()
 
 
 func _abilities_payload(candidates: Array) -> Array:

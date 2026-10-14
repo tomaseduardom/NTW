@@ -577,11 +577,23 @@ func parse_abilities(text: String, card_id: String = "") -> Array[Dictionary]:
 		# como Oro): aquí se paga Oro GENÉRICO de la Reserva como costo de un
 		# efecto, la carta de texto no es un Oro. El formato con ':' ya cubre
 		# esto cuando la carta lo imprime así; esta es la variante en prosa.
+		# Habilidad de Vigilia sin coste con condición (2026-10-13, Patria
+		# Vieja: "En tu Vigilia, si no has puesto Oros en juego este turno,
+		# puedes mirar...") y habilidad que la carta GANA en el Cementerio
+		# (Duelo Espacial: "En tu Cementerio... gana la habilidad 'En tu
+		# Vigilia, puedes Robar una carta'"). Sin esto ninguna llegaba a
+		# ACTIVATED y no tenían botón.
+		# Solo la variante "puedes mirar..." (Patria Vieja): las otras cartas con
+		# esta condición (Fuente de Ladurum, Karesansui, Corazón de Dragón...)
+		# son "ponerlo desde tu mano o Cementerio en tu Reserva", otra mecánica.
+		var vigilia_no_gold_yet: bool = "si no has puesto oros en juego este turno" in lower_s \
+			and "puedes mirar las primeras" in lower_s
+		var cemetery_granted: bool = "en tu cementerio" in lower_s and "gana la habilidad" in lower_s and "puedes" in lower_s
 		var pay_gold_rx := RegEx.new()
 		pay_gold_rx.compile("puedes pagar (\\w+) oros? para")
 		var m_pay_gold := pay_gold_rx.search(lower_s)
 
-		if once_per_turn:
+		if once_per_turn or vigilia_no_gold_yet or cemetery_granted:
 			cost_type = CostType.ONCE_PER_TURN
 		elif pays_self_as_gold:
 			cost_type = CostType.SELF_AS_GOLD
@@ -691,7 +703,7 @@ func parse_abilities(text: String, card_id: String = "") -> Array[Dictionary]:
 		# (pays_self_to_deck_bottom detecta la habilidad por texto, sin
 		# depender de edición) en vez de solo confiar en que la oración de
 		# cierre esté impresa en esa copia puntual.
-		var effective_once_per_turn: bool = once_per_turn or pays_self_to_deck_bottom
+		var effective_once_per_turn: bool = once_per_turn or pays_self_to_deck_bottom or vigilia_no_gold_yet
 		result.append({
 			"raw_text":      sentence,
 			"ability_type":  ability_type,

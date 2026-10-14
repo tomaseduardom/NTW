@@ -402,6 +402,8 @@ func _ability_is_cementerio_usable(full_text: String) -> bool:
 		return true  # vision heroica
 	if "desterrarlo de tu mano o cementerio" in lower:
 		return true  # Drácula
+	if "en tu cementerio" in lower and "gana la habilidad" in lower:
+		return true  # Duelo Espacial (habilidad que gana en el Cementerio)
 	return false
 
 
