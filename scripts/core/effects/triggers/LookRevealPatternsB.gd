@@ -167,9 +167,8 @@ func try_execute_peek_hand_banish_search_castillo_cemetery_draw_pattern(ability_
 		Constants.Zone.DESTIERRO)
 	banished_count += result1.get("selected", []).size()
 
-	var zone_owner2: int = await _main._targeted_executor._choose_search_zone_owner(controller_id, Constants.Zone.CEMENTERIO)
-	var result2: Dictionary = await ActionModule.search(zone_owner2, Constants.Zone.CEMENTERIO, {}, 2, true, false, false, card, Constants.Zone.DESTIERRO,
-		false, controller_id)
+	var result2: Dictionary = await ActionModule.search_either_owner(controller_id, [Constants.Zone.CEMENTERIO], {}, 2, true, card,
+		Constants.Zone.DESTIERRO, false, true)
 	banished_count += result2.get("selected", []).size()
 
 	if banished_count <= 2:

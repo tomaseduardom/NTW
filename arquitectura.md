@@ -6367,3 +6367,21 @@ prime no disparaba.
   más grandes (0,85) y con `base_scale` (se corrían sobre las flechas). Verificado con
   captura de pantalla real (Godot con ventana, no headless).
 - Prueba: `test_akari.gd`.
+
+## 75. Las últimas búsquedas con popup pasan al selector del tablero (2026-10-14)
+
+**A pedido del usuario** ("no el popout, sino la elección a gusto si quiero en el
+Cementerio o Castillo").
+
+- "Tu Castillo o tu Cementerio" (Kuchiku El Cazador, la búsqueda Ignis/Titán de
+  BanishOpponentPatterns): `search_zones()` con las dos zonas, en vez del popup "¿Dónde
+  buscar?".
+- "Dos cartas de UN Cementerio" (shoki, LookRevealPatternsB): `search_either_owner(...,
+  one_zone=true)` — los dos Cementerios en el selector, todas de la misma zona (pools
+  `exclusive`, revalidado en el Anfitrión), en vez del popup "¿En qué Cementerio?".
+- Jinete de la Peste y la búsqueda genérica "un Castillo/un Cementerio"
+  (WeaponSearchShuffleExecutor): `search_either_owner()`. Solo si además dice "puedes
+  jugarla" sigue eligiendo primero de quién (search_either_owner no ofrece jugarla).
+- Quedan con clic en el Castillo del tablero (no es búsqueda, no hay nada que ver):
+  Asmodeus, Belcebú, Cetro Demoniaco, Aho, Espada del Juicio, Infernum Vox y los
+  "convierte del tope de un Castillo".

@@ -164,11 +164,12 @@ func search_zones(player_id: int, zones: Array, filter: Dictionary, amount: int 
 ## los dos jugadores, atado al primer Castillo que se mira (2026-10-14, ver
 ## ActionSearch.search_either_owner()).
 func search_either_owner(chooser: int, zones: Array, filter: Dictionary, amount: int, can_fail: bool = true,
-		source_card: Node = null, destination: int = Constants.Zone.MANO, distinct_names: bool = false) -> Dictionary:
+		source_card: Node = null, destination: int = Constants.Zone.MANO, distinct_names: bool = false,
+		one_zone: bool = false) -> Dictionary:
 	if await EffectContextScript.ensure_window():  # ventana única por efecto (§59)
 		return {"success": false, "cancelled": true, "selected": []}
 	return await _action_search.search_either_owner(chooser, zones, filter, amount, can_fail, source_card,
-		destination, distinct_names)
+		destination, distinct_names, one_zone)
 
 
 ## Selector de zonas (+ cartas de la mano) para quien elige: Anfitrión,

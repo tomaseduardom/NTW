@@ -49,16 +49,16 @@ func try_execute_banish_opponent_ally_search_ignis_titan_discount_pattern(abilit
 	if target and is_instance_valid(target):
 		await ActionModule.banish([target], card, true)
 
-	var search_castillo: bool = await SelectionManager.await_two_choice(
-		main, "¿Dónde buscar una carta Ignis o Titán?", "Tu Castillo", "Tu Cementerio", controller_id)
-	var zone := Constants.Zone.CASTILLO if search_castillo else Constants.Zone.CEMENTERIO
+	# 2026-10-14, a pedido del usuario: el selector del tablero con tu
+	# Castillo y tu Cementerio a la vez, en vez del popup "¿Dónde buscar?".
 	# El Destierro de arriba ya consultó Prevención por su cuenta (banish()) —
 	# esta ventana es para la búsqueda+juego con descuento, sin cobertura propia.
 	if await TriggerSystem.open_response_window(card, str(card.card_name), controller_id):
 		return true
 	var hand_before: Array = hand_container.cards.duplicate()
-	var result: Dictionary = await ActionModule.search(
-		controller_id, zone, {"raza": ["Ignis", "Titán", "Titan"]}, 1, true, false, false, card, Constants.Zone.MANO)
+	var result: Dictionary = await ActionModule.search_zones(controller_id,
+		[Constants.Zone.CASTILLO, Constants.Zone.CEMENTERIO], {"raza": ["Ignis", "Titán", "Titan"]}, 1, true, false, false,
+		card, Constants.Zone.MANO)
 	if result.get("selected", []).is_empty():
 		return true
 
@@ -94,14 +94,15 @@ func try_execute_banish_two_from_one_cemetery_then_draw_pattern(ability_text: St
 	var main := _main.get_node_or_null("/root/Main")
 	if not main:
 		return true
-	var zone_owner: int = await _main._targeted_executor._choose_search_zone_owner(controller_id, Constants.Zone.CEMENTERIO)
 	# Pila de Respuesta Universal (2026-09-09, piloto de migración — ver
 	# docs/plans/2026-09-09-pila-respuesta-universal-design.md): ya se
 	# declaró todo lo que hacía falta (de qué Cementerio), solo aquí se abre
 	# la ventana real para el rival antes de ejecutar el efecto.
 	if await TriggerSystem.open_response_window(card, str(card.card_name), controller_id):
 		return true  # anulado/cancelado durante la ventana — no se ejecuta nada
-	await ActionModule.search(zone_owner, Constants.Zone.CEMENTERIO, {}, 2, true, false, false, card, Constants.Zone.DESTIERRO, false, controller_id)
+	# Selector con los dos Cementerios, las dos de UNO solo (2026-10-14).
+	await ActionModule.search_either_owner(controller_id, [Constants.Zone.CEMENTERIO], {}, 2, true, card,
+		Constants.Zone.DESTIERRO, false, true)
 	await ActionModule.draw(controller_id, 1, "etb_trigger", true)
 	return true
 

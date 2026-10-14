@@ -229,14 +229,17 @@ func _deliver(main: Node, player_id: int, card_data: Dictionary, from_zone: int,
 
 
 func search_either_owner(chooser: int, zones: Array, filter: Dictionary, amount: int, can_fail: bool = true,
-		source_card: Node = null, destination: int = Constants.Zone.MANO, distinct_names: bool = false) -> Dictionary:
+		source_card: Node = null, destination: int = Constants.Zone.MANO, distinct_names: bool = false,
+		one_zone: bool = false) -> Dictionary:
 	"""'Busca en UN Castillo / un Cementerio' sin posesivo (2026-10-14, a
 	pedido del usuario — voragh el devorador: elegía el rival y el bot se
 	quedaba con las 2 primeras sin mostrarte nada). El selector del tablero
 	con las zonas de LOS DOS jugadores: quien elige mira lo que quiera, pero
 	al abrir un Castillo queda atado a ese (los Cementerios son públicos y se
 	pueden seguir mirando). Cada carta va al destino de SU dueño (DAR) y todo
-	Castillo mirado se baraja."""
+	Castillo mirado se baraja.
+	'one_zone' (2026-10-14, "dos cartas de UN Cementerio", p.ej. shoki):
+	todas las elegidas de la misma zona (pools 'exclusive')."""
 	var result := {"success": true, "selected": [], "matching": []}
 	var pools: Array = []
 	var src: Array = []  # [{owner, zone, data}] en el mismo orden que pools
@@ -249,7 +252,7 @@ func search_either_owner(chooser: int, zones: Array, filter: Dictionary, amount:
 			var cards: Array = []
 			for d in zone_data:
 				cards.append({"data": d, "eligible": matching.has(d)})
-			pools.append({"is_own": zone_owner == chooser, "zone": zone, "cards": cards})
+			pools.append({"is_own": zone_owner == chooser, "zone": zone, "cards": cards, "exclusive": one_zone})
 			src.append({"owner": zone_owner, "zone": zone, "data": zone_data})
 			result.matching.append_array(matching)
 	if result.matching.is_empty():
@@ -267,6 +270,8 @@ func search_either_owner(chooser: int, zones: Array, filter: Dictionary, amount:
 	var picks: Array = []
 	var locked := -1
 	for p in _validated_picks(raw_picks, pools, src, amount, distinct_names):
+		if one_zone and not picks.is_empty() and p.pool != picks[0].pool:
+			continue
 		if p.zone == Constants.Zone.CASTILLO:
 			if locked < 0:
 				locked = p.pool

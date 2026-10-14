@@ -34,8 +34,8 @@ func _activate_jinete_peste_search_banish_two(source_card: Node, ability: Dictio
 	if await TriggerSystem.open_response_window(source_card, "Jinete de la Peste", owner_id):
 		return
 	UniversalCardParser.turn_registry.register_ability_use(source_card, ability)
-	var zone_owner: int = await TriggerSystem._targeted_executor._choose_search_zone_owner(owner_id, Constants.Zone.CASTILLO)
-	await ActionModule.search(zone_owner, Constants.Zone.CASTILLO, {}, 2, true, false, false, source_card, Constants.Zone.DESTIERRO, true)
+	await ActionModule.search_either_owner(owner_id, [Constants.Zone.CASTILLO], {}, 2, true, source_card,
+		Constants.Zone.DESTIERRO, true)
 
 	var main := _inspector._main
 	var controls_other_jinete := false
@@ -131,13 +131,11 @@ func _activate_kuchiku_cazador_search_and_play_discount(source_card: Node, abili
 	if not hand_container_kuchiku:
 		return
 
-	var search_castillo: bool = await SelectionManager.await_two_choice(
-		_inspector._main, "¿Dónde buscar un Aliado?", "Tu Castillo", "Tu Cementerio")
-	var zone := Constants.Zone.CASTILLO if search_castillo else Constants.Zone.CEMENTERIO
-
+	# 2026-10-14, a pedido del usuario: tu Castillo y tu Cementerio en el
+	# selector del tablero, en vez del popup "¿Dónde buscar?".
 	var hand_before: Array = hand_container_kuchiku.cards.duplicate()
-	var result: Dictionary = await ActionModule.search(
-		owner_id, zone, {"type": Constants.CardType.ALIADO}, 1, true, false, false, source_card, Constants.Zone.MANO)
+	var result: Dictionary = await ActionModule.search_zones(owner_id, [Constants.Zone.CASTILLO, Constants.Zone.CEMENTERIO],
+		{"type": Constants.CardType.ALIADO}, 1, true, false, false, source_card, Constants.Zone.MANO)
 	if result.get("selected", []).is_empty():
 		_inspector._main._update_debug("No se encontró ningún Aliado ahí")
 		return

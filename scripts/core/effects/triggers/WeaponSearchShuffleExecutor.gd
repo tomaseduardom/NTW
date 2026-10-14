@@ -57,10 +57,10 @@ func _execute_targeted_search(card: Node, controller_id: int, source_text: Strin
 	elif "un castillo" in ability_lower or "un cementerio" in ability_lower:
 		owner_is_ambiguous = true
 
-	if owner_is_ambiguous and controller_id == 0:
+	if owner_is_ambiguous and controller_id == 0 and _wants_play(ability_lower):
 		zone_owner = await _main._targeted_executor._choose_search_zone_owner(controller_id, zone)
 	elif owner_is_ambiguous:
-		zone_owner = controller_id  # el bot no elige de verdad todavía — busca lo propio
+		zone_owner = controller_id  # sin "jugarla": va por search_either_owner() más abajo
 
 	# Tipos mencionados (no 'elif' — 2026-08-22): "busca un Arma o un Oro"
 	# (p.ej. Tyet) menciona DOS tipos válidos a la vez, un elif que corta en
@@ -137,9 +137,21 @@ func _execute_targeted_search(card: Node, controller_id: int, source_text: Strin
 	# del proyecto) — sí le corresponde la ventana genérica aquí.
 	if await TriggerSystem.open_response_window(card, str(card.card_name), controller_id):
 		return
+	# "un Castillo/un Cementerio" (2026-10-14, a pedido del usuario): el
+	# selector del tablero con las zonas de los dos jugadores, en vez de
+	# elegir primero de quién (popup en el caso del Cementerio).
+	if owner_is_ambiguous and not may_play:
+		await ActionModule.search_either_owner(controller_id, [zone], filter, amount, true, card, destination,
+			distinct_names)
+		return
 	# Elige siempre quien controla la habilidad, también en zonas rivales.
 	await ActionModule.search(zone_owner, zone, filter, amount, true, false, may_play, card, destination, distinct_names,
 		controller_id)
+
+
+static func _wants_play(ability_lower: String) -> bool:
+	return "puedes jugarla" in ability_lower or "puedes ponerla en juego" in ability_lower \
+		or "juégala" in ability_lower or "pagando su coste" in ability_lower
 
 
 func _count_allies_in_play(player_id: int) -> int:
