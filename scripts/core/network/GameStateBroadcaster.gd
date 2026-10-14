@@ -27,6 +27,9 @@ class_name GameStateBroadcaster
 
 var _active: bool = false
 var _main: Node = null
+## Último envío de "disabled_cards" y si ya hay uno agendado este frame (§63).
+var _last_disabled_ids: Array = []
+var _disabled_sync_queued: bool = false
 
 
 func setup(main: Node) -> void:
@@ -42,6 +45,7 @@ func setup(main: Node) -> void:
 	# señal, que estaba declarada pero nunca se emitía hasta hoy (ver el fix
 	# en ActionReturnDiscard.gd).
 	EffectController.on_card_returned_to_deck.connect(_on_card_returned_to_deck)
+	KeywordManager.abilities_changed.connect(_queue_disabled_sync)
 	# Recién tras game_started, no en setup() — _opponent_fan.add_card()/
 	# remove_card() YA se llaman durante el mulligan (RemotePlayerController.
 	# run_mulligan() dibuja ahí mismo mientras el jugador decide mantener/
@@ -151,6 +155,7 @@ func _on_hand_card_added(card: Node) -> void:
 	var data: Dictionary = card.card_data.duplicate(true) if card.get("card_data") != null else {}
 	data["card_id"] = str(card.get_instance_id())
 	NetworkClient.send_message({"op": "hand_card_added", "data": data})
+	_queue_disabled_sync()
 
 
 func _on_hand_card_removed(card: Node) -> void:
@@ -174,12 +179,16 @@ func _on_card_entered_play(player_id: int, card: Node, zone: int) -> void:
 		"zone": zone,
 		"data": card_data,
 	})
+	_queue_disabled_sync()
 
 
 func _on_card_left_play(_player_id: int, card: Node, from_zone: int) -> void:
 	if from_zone not in Constants.ZONES_IN_PLAY:
 		return
 	_send_remove_card(card)
+	# Si salió la fuente de un bloqueo (p.ej. Alicia), las cartas que
+	# bloqueaba recuperan su habilidad.
+	_queue_disabled_sync()
 
 
 func _on_card_returned_to_deck(_player_id: int, card: Node, _to_top: bool) -> void:
@@ -191,3 +200,38 @@ func _send_remove_card(card: Node) -> void:
 	if card_id.is_empty():
 		return
 	NetworkClient.send_message({"op": "remove_card", "card_id": card_id})
+
+
+## Cartas sin habilidad (silenciadas, con el nombre bloqueado o convertidas)
+## — 2026-10-13 (§63, Alicia en Wonderland): el Remoto no tiene esos
+## bloqueos (viven en el KeywordManager del Anfitrión), así que nunca veía
+## el gris de "sin habilidad". Se manda la lista completa (mesa + la mano
+## del Remoto; nunca la del Anfitrión) solo cuando cambia.
+func _queue_disabled_sync() -> void:
+	if _disabled_sync_queued:
+		return
+	_disabled_sync_queued = true
+	_send_disabled_cards.call_deferred()
+
+
+func _send_disabled_cards() -> void:
+	_disabled_sync_queued = false
+	if not _main:
+		return
+	var cards: Array = []
+	for prop in WATCHED_CONTAINERS:
+		var container: Node = _main.get(prop)
+		if container:
+			cards.append_array(container.get_children())
+	if _main.get("_opponent_fan") and _main._opponent_fan:
+		cards.append_array(_main._opponent_fan.cards)
+	var ids: Array = []
+	for c in cards:
+		if is_instance_valid(c) and c.get("card_data") != null \
+				and (c.get("is_converted") == true or KeywordManager.is_silenced(c)):
+			ids.append(str(c.get_instance_id()))
+	ids.sort()
+	if ids == _last_disabled_ids:
+		return
+	_last_disabled_ids = ids
+	NetworkClient.send_message({"op": "disabled_cards", "card_ids": ids})

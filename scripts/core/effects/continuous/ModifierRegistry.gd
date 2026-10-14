@@ -69,6 +69,11 @@ func register_modifier(params: Dictionary) -> String:
 		"protection_type": params.get("protection_type", "ALL"),
 		"restriction_type": params.get("restriction_type", ""),
 		"description": params.get("description", ""),
+		# Habilidad estática de la carta fuente (aura "Tus Aliados ganan...",
+		# bono de un Arma): se apaga mientras la fuente esté sin habilidad.
+		# Un efecto ya resuelto (p.ej. "+2 de Fuerza" de un Talismán) no la
+		# lleva y se mantiene aunque silencien a quien lo causó.
+		"static_ability": params.get("static_ability", false),
 		"registered_at": Time.get_unix_time_from_system(),
 		"is_active": true
 	}
@@ -605,6 +610,11 @@ func _is_modifier_active(modifier: Dictionary) -> bool:
 			if source and not is_instance_valid(source):
 				return false
 			if source and not _main._is_card_in_play(source):
+				return false
+			# 2026-10-13 (§63, Alicia en Wonderland nombrando Patria Vieja):
+			# una fuente silenciada o con su nombre bloqueado pierde también
+			# sus habilidades estáticas, no solo los botones y los triggers.
+			if modifier.get("static_ability", false) and source and KeywordManager.is_silenced(source):
 				return false
 
 		_main.ModifierDuration.TIMED:

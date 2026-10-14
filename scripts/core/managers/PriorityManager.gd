@@ -50,6 +50,19 @@ enum PriorityContext {
 
 var current_priority_context: int = PriorityContext.NONE
 
+## Guerra de Talismanes por turnos (2026-10-13, §64, opción B elegida por el
+## usuario). Cada Talismán/habilidad abre su propia Ventana de Respuesta
+## (Paso D) sobre esta misma instancia, que pisa la ventana de la Guerra.
+## Antes nadie la volvía a abrir: quedaba sin ventana hasta que alguien
+## apretaba "Daño" (que la recuperaba siempre con el defensor) y, peor, el
+## "ambos pasaron" de la ventana de respuesta podía terminar la Guerra. Ahora,
+## cuando la acción termina de resolverse, la Guerra sigue con el OTRO
+## jugador (el que no actuó) y los pases vuelven a cero.
+var _guerra_last_actor: int = -1
+var _guerra_actions_running: int = 0
+var _guerra_resume_scheduled: bool = false
+var _guerra_resume_after_action: bool = false
+
 ## Contador que sube en CADA start_priority_window() (2026-09-15, bug real
 ## reportado por el usuario: "se traba en Guerra de Talismanes" — con log
 ## en vivo confirmando visible=true dos veces seguidas y luego, sin ningún
@@ -257,6 +270,13 @@ func _switch_priority() -> void:
 
 func _close_priority_window(both_passed: bool) -> void:
 	"""Cierra la ventana de prioridad actual"""
+	# La Ventana de Respuesta de una acción hecha en la Guerra (§64): quien
+	# controlaba el objeto de la pila es quien actuó.
+	if current_priority_context == PriorityContext.RESPONSE_WINDOW \
+			and GameManager.current_phase == Constants.Phase.GUERRA_TALISMANES:
+		if current_stack_controller >= 0:
+			_guerra_last_actor = current_stack_controller
+		_schedule_guerra_resume(false)
 	priority_window_active = false
 	current_priority_context = PriorityContext.NONE
 	current_context = ""
@@ -276,6 +296,8 @@ func _on_phase_changed(new_phase: int) -> void:
 	# Cerrar cualquier ventana de prioridad activa al cambiar de fase
 	if priority_window_active:
 		_close_priority_window(false)
+	_guerra_last_actor = -1
+	_guerra_actions_running = 0
 
 	# Iniciar ventana de prioridad según la fase
 	match new_phase:
@@ -325,3 +347,56 @@ func force_close() -> void:
 	"""Fuerza el cierre de la ventana de prioridad"""
 	if priority_window_active:
 		_close_priority_window(false)
+
+
+func is_guerra_window() -> bool:
+	return priority_window_active and current_priority_context == PriorityContext.GUERRA_TALISMANES
+
+
+func begin_guerra_action(player_id: int) -> void:
+	"""Un jugador juega una carta en la Guerra de Talismanes (§64). Mientras
+	se resuelve, la Guerra no se reabre aunque se cierren ventanas anidadas."""
+	if GameManager.current_phase != Constants.Phase.GUERRA_TALISMANES:
+		return
+	_guerra_actions_running += 1
+	_guerra_last_actor = player_id
+
+
+func end_guerra_action() -> void:
+	if _guerra_actions_running <= 0:
+		return
+	_guerra_actions_running -= 1
+	_schedule_guerra_resume(true)
+
+
+func _schedule_guerra_resume(after_action: bool) -> void:
+	_guerra_resume_after_action = _guerra_resume_after_action or after_action
+	if _guerra_resume_scheduled:
+		return
+	_guerra_resume_scheduled = true
+	_resume_guerra.call_deferred()
+
+
+func _resume_guerra() -> void:
+	"""Reabre la ventana de la Guerra cuando ya no queda nada resolviéndose,
+	con la prioridad para el jugador que no hizo la última acción. Si la
+	acción no abrió ninguna ventana anidada (la de la Guerra sigue abierta),
+	igual pasa la prioridad al otro y reinicia los pases."""
+	for _i in 600:  # hasta 60s: un efecto puede esperar elecciones del jugador
+		if not GameManager.is_game_active or GameManager.current_phase != Constants.Phase.GUERRA_TALISMANES:
+			break
+		var idle: bool = _guerra_actions_running == 0 and not ActionPipeline.is_stack_processing() \
+			and not TriggerSystem.awaiting_response
+		if idle and (not priority_window_active or (current_priority_context == PriorityContext.GUERRA_TALISMANES
+				and _guerra_resume_after_action)):
+			var next_player: int = 1 - _guerra_last_actor if _guerra_last_actor >= 0 else -1
+			if Constants.VERBOSE_DIAG_LOGS:
+				print("[PriorityManager] Guerra de Talismanes continúa — prioridad: Jugador %d" % (
+					(next_player if next_player >= 0 else _get_starting_priority_player(PriorityContext.GUERRA_TALISMANES)) + 1))
+			start_priority_window(PriorityContext.GUERRA_TALISMANES, next_player)
+			break
+		if idle and current_priority_context == PriorityContext.GUERRA_TALISMANES:
+			break  # ya está abierta y no hubo acción nueva
+		await get_tree().create_timer(0.1).timeout
+	_guerra_resume_scheduled = false
+	_guerra_resume_after_action = false

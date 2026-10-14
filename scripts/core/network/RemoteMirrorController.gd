@@ -31,6 +31,8 @@ var _active: bool = false
 var _current_overlay: Control = null
 var _card_nodes: Dictionary = {}  # card_id (String) -> Node local (ghost)
 var _hand_card_nodes: Dictionary = {}  # card_id (String) -> Node local en player_hand (§45)
+## card_ids sin habilidad según el Anfitrión (op "disabled_cards", §63).
+var _disabled_ids: Dictionary = {}
 ## Botón de paso del Remoto (2026-10-11): qué hace el botón del HUD (y el
 ## atajo P) según el prompt activo, y el window_id de la ventana de
 ## prioridad que se está respondiendo (-1 si no hay ninguna).
@@ -146,6 +148,15 @@ func _on_message(data: Dictionary) -> void:
 				waiting.hide_loading()
 		"dice_roll":
 			_show_dice_roll_mirror(data)
+		"disabled_cards":
+			_disabled_ids.clear()
+			for id in data.get("card_ids", []):
+				_disabled_ids[str(id)] = true
+			for nodes in [_card_nodes, _hand_card_nodes]:
+				for card_id in nodes:
+					var node: Node = nodes[card_id]
+					if is_instance_valid(node):
+						node.remote_ability_disabled = _disabled_ids.has(card_id)
 
 
 # =============================================================================
@@ -230,6 +241,7 @@ func _apply_move_card(data: Dictionary) -> void:
 	container.add_child(node)
 	node.top_level = false
 	node.set_zone(zone)
+	node.remote_ability_disabled = _disabled_ids.has(card_id)
 
 	var card_type: int = int(card_data.get("tipo", -1))
 	var target_scale: Vector2 = Vector2.ONE
@@ -278,6 +290,7 @@ func _apply_hand_card_added(data: Dictionary) -> void:
 	_main._connect_card_signals(node)
 	_main.player_hand.add_card(node)
 	_hand_card_nodes[card_id] = node
+	node.remote_ability_disabled = _disabled_ids.has(card_id)
 
 
 func _apply_hand_card_removed(data: Dictionary) -> void:

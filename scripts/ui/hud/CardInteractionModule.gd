@@ -853,7 +853,10 @@ func _on_card_double_clicked(card: Node) -> void:
 	# ese comentario) — este gateo de UI corre ANTES de llegar ahí, así que
 	# sin esta excepción un Talismán de respuesta instantánea quedaba
 	# bloqueado igual antes de siquiera intentarlo.
-	if GameManager.active_player_id != 0 and not is_instant_response_talisman:
+	# En la Guerra de Talismanes decide la prioridad, no el turno (§64) —
+	# GoldManager.play_card() lo valida.
+	if GameManager.active_player_id != 0 and not is_instant_response_talisman \
+			and GameManager.current_phase != Constants.Phase.GUERRA_TALISMANES:
 		_main._update_debug("No es tu turno")
 		return
 	if card.get_parent() != _main.player_hand:

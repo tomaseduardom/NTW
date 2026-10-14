@@ -79,6 +79,7 @@ func try_execute_arco_del_triunfo_pattern(ability_text: String, card: Node, cont
 			"operation": "add",
 			"value": 1,
 			"duration": ContinuousEffectManager.ModifierDuration.PERMANENT,
+			"static_ability": true,
 			"description": "arco del triunfo: +1 Fuerza a tus Aliados"
 		})
 		# "Su daño de combate es enviado al Destierro" — infraestructura

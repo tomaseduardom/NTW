@@ -370,6 +370,12 @@ func _on_priority_both_passed_main() -> void:
 		return
 
 	var phase = GameManager.current_phase
+	# §64: en la Guerra, ambos pasando la Ventana de Respuesta de un Talismán
+	# o una habilidad solo deja resolver esa acción — la Guerra termina
+	# cuando ambos pasan en la ventana de la propia Guerra.
+	if phase == Constants.Phase.GUERRA_TALISMANES \
+			and PriorityManager.current_priority_context != PriorityManager.PriorityContext.GUERRA_TALISMANES:
+		return
 	match phase:
 		Constants.Phase.ATAQUE:
 			_main._game_hud.stop_paso_glow()

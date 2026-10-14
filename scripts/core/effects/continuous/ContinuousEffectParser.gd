@@ -64,7 +64,7 @@ func _parse_and_register_continuous_effects(card: Node, ability_text: String) ->
 
 	if ally_match:
 		var buff_value = int(ally_match.get_string(2))
-		_main.register_modifier({
+		_register_static({
 			"source": card,
 			"target": "ALLIES",
 			"type": _main.ModifierType.STRENGTH,
@@ -96,7 +96,7 @@ func _parse_and_register_continuous_effects(card: Node, ability_text: String) ->
 	if race_qualified_match:
 		var race_word := race_qualified_match.get_string(1).to_lower().replace("titan", "titán")
 		var race_value := int(race_qualified_match.get_string(2))
-		_main.register_modifier({
+		_register_static({
 			"source": card,
 			"target": "ALLIES",
 			"type": _main.ModifierType.STRENGTH,
@@ -146,7 +146,7 @@ func _parse_and_register_continuous_effects(card: Node, ability_text: String) ->
 					and _main._controls_n_allies_of_same_race(race_controller_id, race_threshold)
 			buff_duration = _main.ModifierDuration.CONDITIONAL
 
-		_main.register_modifier({
+		_register_static({
 			"source": card,
 			"target": "ALLIES",
 			"type": _main.ModifierType.STRENGTH,
@@ -173,7 +173,7 @@ func _parse_and_register_continuous_effects(card: Node, ability_text: String) ->
 		# (TargetedEffectExecutor._select_ally_target(), igual que la
 		# inmunidad a Talismanes de Kotaix más abajo).
 		if race_cond_match and "no pueden ser afectados por habilidades de cartas fuera del juego" in text:
-			_main.register_modifier({
+			_register_static({
 				"source": card,
 				"target": "ALLIES",
 				"type": _main.ModifierType.PROTECTION,
@@ -193,7 +193,7 @@ func _parse_and_register_continuous_effects(card: Node, ability_text: String) ->
 		# perder un combate bloqueando (BattleManager la consulta con
 		# protection_type "BLOCK_DESTROY"), no protección general.
 		if "no son destruid" in text and "bloquean" in text:
-			_main.register_modifier({
+			_register_static({
 				"source": card,
 				"target": "ALLIES",
 				"type": _main.ModifierType.PROTECTION,
@@ -225,7 +225,7 @@ func _parse_and_register_continuous_effects(card: Node, ability_text: String) ->
 		# keyword_regex más abajo (que exige 'tienen', no matchea 'ganan...
 		# Furia' en lista separada por comas).
 		if "furia" in text:
-			_main.register_modifier({
+			_register_static({
 				"source": card,
 				"target": "ALLIES",
 				"type": _main.ModifierType.KEYWORDS,
@@ -247,7 +247,7 @@ func _parse_and_register_continuous_effects(card: Node, ability_text: String) ->
 		# "TALISMAN") es la consulta; TargetedEffectExecutor._select_ally_target()
 		# la respeta cuando source_card es un Talismán.
 		if "no pueden ser afectados por talismanes" in text or "no puede ser afectado por talismanes" in text:
-			_main.register_modifier({
+			_register_static({
 				"source": card,
 				"target": "ALLIES",
 				"type": _main.ModifierType.PROTECTION,
@@ -272,7 +272,7 @@ func _parse_and_register_continuous_effects(card: Node, ability_text: String) ->
 		var turn_scoped_condition: Callable = func() -> bool:
 			return is_instance_valid(card) and _main._is_card_in_play(card) \
 				and GameManager.active_player_id == turn_scoped_owner
-		_main.register_modifier({
+		_register_static({
 			"source": card,
 			"target": "ALLIES",
 			"type": _main.ModifierType.PROTECTION,
@@ -345,7 +345,7 @@ func _parse_and_register_continuous_effects(card: Node, ability_text: String) ->
 			for r in race_m.get_string(1).split(" o "):
 				races.append(r.strip_edges().capitalize())
 		var race_filter: Dictionary = {"raza": races} if not races.is_empty() else {}
-		_main.register_modifier({
+		_register_static({
 			"source": card,
 			"target": "ALLIES",
 			"type": _main.ModifierType.STRENGTH,
@@ -359,7 +359,7 @@ func _parse_and_register_continuous_effects(card: Node, ability_text: String) ->
 			"description": "Fuerza +coste (shedo titan)"
 		})
 		if "furia" in text:
-			_main.register_modifier({
+			_register_static({
 				"source": card,
 				"target": "ALLIES",
 				"type": _main.ModifierType.KEYWORDS,
@@ -380,7 +380,7 @@ func _parse_and_register_continuous_effects(card: Node, ability_text: String) ->
 
 	if enemy_match:
 		var debuff_value = int(enemy_match.get_string(2))
-		_main.register_modifier({
+		_register_static({
 			"source": card,
 			"target": "ENEMIES",
 			"type": _main.ModifierType.STRENGTH,
@@ -400,7 +400,7 @@ func _parse_and_register_continuous_effects(card: Node, ability_text: String) ->
 	var ally_lose_match = ally_lose_strength_regex.search(text)
 	if ally_lose_match:
 		var lose_value := int(ally_lose_match.get_string(1))
-		_main.register_modifier({
+		_register_static({
 			"source": card,
 			"target": "ENEMIES",
 			"type": _main.ModifierType.STRENGTH,
@@ -437,7 +437,7 @@ func _parse_and_register_continuous_effects(card: Node, ability_text: String) ->
 		var tax_filter: Dictionary = {}
 		if tax_scope == "aliados":
 			tax_filter["type"] = Constants.CardType.ALIADO
-		_main.register_modifier({
+		_register_static({
 			"source": card,
 			"target": "ALLIES",
 			"type": _main.ModifierType.STRENGTH,
@@ -455,7 +455,7 @@ func _parse_and_register_continuous_effects(card: Node, ability_text: String) ->
 	var cost_debuff_match = cost_debuff_regex.search(text)
 	if cost_debuff_match:
 		var cost_debuff_value := UniversalCardParser._parse_amount(cost_debuff_match.get_string(1))
-		_main.register_modifier({
+		_register_static({
 			"source": card,
 			"target": "ENEMIES",
 			"type": _main.ModifierType.STRENGTH,
@@ -477,7 +477,7 @@ func _parse_and_register_continuous_effects(card: Node, ability_text: String) ->
 		var keyword_enum = _main._string_to_keyword(keyword_name)
 
 		if keyword_enum != -1:
-			_main.register_modifier({
+			_register_static({
 				"source": card,
 				"target": "ALLIES",
 				"type": _main.ModifierType.KEYWORDS,
@@ -512,7 +512,7 @@ func _parse_and_register_continuous_effects(card: Node, ability_text: String) ->
 				if w is Array:
 					weapon_count += w.size()
 			return per_unit_value * weapon_count
-		_main.register_modifier({
+		_register_static({
 			"source": card,
 			"target": "SELF",
 			"type": _main.ModifierType.STRENGTH,
@@ -544,7 +544,7 @@ func _parse_and_register_continuous_effects(card: Node, ability_text: String) ->
 				if other.get("card_type") == Constants.CardType.ALIADO:
 					ally_count += 1
 			return per_unit_value2 * ally_count
-		_main.register_modifier({
+		_register_static({
 			"source": card,
 			"target": "SELF",
 			"type": _main.ModifierType.STRENGTH,
@@ -561,3 +561,10 @@ func _parse_and_register_continuous_effects(card: Node, ability_text: String) ->
 	# consultada directo desde ahí (choke point único).
 	if "aliados que porten arma" in text and "no pueden perder su habilidad" in text:
 		KeywordManager.register_weapon_wielder_silence_immunity(card)
+
+
+func _register_static(params: Dictionary) -> String:
+	"""Todo lo que registra este parser sale del texto de la carta en juego:
+	habilidad estática, se apaga si la carta pierde su habilidad (§63)."""
+	params["static_ability"] = true
+	return _main.register_modifier(params)

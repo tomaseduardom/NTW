@@ -56,6 +56,9 @@ func _init_keyword_patterns() -> void:
 signal keyword_granted(card: Node, keyword: int, source: Node)
 signal keyword_removed(card: Node, keyword: int, source: Node)
 signal keyword_check_performed(card: Node, keyword: int, result: bool)
+## Alguna carta ganó o perdió su habilidad (silencio, bloqueo por nombre o
+## por instancia). GameStateBroadcaster lo usa para avisarle al Remoto (§63).
+signal abilities_changed()
 
 # =============================================================================
 # ESTADO
@@ -620,6 +623,16 @@ func silence_card(card: Node, source: Node = null, duration: String = "permanent
 	])
 	if card.has_method("_refresh_disabled_rotation"):
 		card._refresh_disabled_rotation()
+	_notify_abilities_changed()
+
+
+func _notify_abilities_changed() -> void:
+	"""Las auras de una carta sin habilidad dejan de aplicar (ModifierRegistry.
+	_is_modifier_active, §63): hay que recalcular Fuerza/protecciones ya."""
+	ContinuousEffectManager._invalidate_cache()
+	if ContinuousEffectManager._visual_sync:
+		ContinuousEffectManager._visual_sync.call_deferred("update_all_card_visuals")
+	abilities_changed.emit()
 
 
 ## 'Los Oros oponentes pierden su habilidad' (2026-09-06, p.ej. Daikaiju
@@ -633,6 +646,7 @@ func register_opponent_type_silence(source: Node, card_type: int) -> void:
 	if not is_instance_valid(source):
 		return
 	_opponent_type_silence_sources.append({"source": source, "card_type": card_type})
+	_notify_abilities_changed()
 
 
 func _is_silenced_by_opponent_type_source(card: Node) -> bool:
@@ -727,6 +741,7 @@ func lock_ability_by_name(card_name: String, source: Node) -> void:
 	print("[KeywordManager] '%s' pierde su habilidad en todas las Zonas (fuente: %s)" % [
 		card_name, _get_card_name(source)
 	])
+	_notify_abilities_changed()
 
 
 func is_name_locked(card_name: String) -> bool:
@@ -772,6 +787,7 @@ func lock_ability_by_instance(card: Node, source: Node) -> void:
 	print("[KeywordManager] %s pierde su habilidad (fuente: %s, mientras esté en juego)" % [
 		_get_card_name(card), _get_card_name(source)
 	])
+	_notify_abilities_changed()
 
 
 func is_instance_locked(card: Node) -> bool:

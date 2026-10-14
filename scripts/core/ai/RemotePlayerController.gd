@@ -248,16 +248,12 @@ func _play_talisman_remote(card: Node) -> void:
 	_main._opponent_fan.remove_card(card, false)
 	card.esta_oculta = false
 	_pay_oro_for_bot(coste)
-	TurnManager.on_card_played(card)
-	UniversalCardParser.turn_registry.register("talisman_played:1", 0, GameManager.current_turn)
-
-	card.can_interact = false
-	_main.opponent_linea_apoyo.add_child(card)
-	card.top_level = false
-	card.set_zone(Constants.Zone.LINEA_APOYO)
-	await get_tree().create_timer(0.3).timeout
-
-	await TriggerSystem.resolve_talisman(card)
+	# GoldManager._play_talisman() (2026-10-13, §64): el mismo camino que el
+	# Anfitrión — antes este resolvía el efecto pero el Talismán se quedaba
+	# en la Línea de Apoyo (nunca iba al Cementerio/Destierro/Castillo).
+	PriorityManager.begin_guerra_action(1)
+	await _main._gold_manager._play_talisman(card)
+	PriorityManager.end_guerra_action()
 
 
 # =============================================================================

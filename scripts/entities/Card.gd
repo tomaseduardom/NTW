@@ -222,6 +222,16 @@ var is_converted: bool = false:
 ## vez de moverlo a Oro Pagado normalmente.
 var revert_to_data: Dictionary = {}
 
+## Solo en el cliente Remoto: el Anfitrión avisa qué cartas están sin
+## habilidad (op "disabled_cards", §63) — aquí KeywordManager no tiene los
+## silencios/bloqueos, que viven en el Anfitrión.
+var remote_ability_disabled: bool = false:
+	set(value):
+		if remote_ability_disabled == value:
+			return
+		remote_ability_disabled = value
+		_refresh_disabled_rotation()
+
 
 func _refresh_disabled_rotation() -> void:
 	"""Gira la carta 180° desde su centro si es del oponente en juego (Mano, Oro, Aliado, Arma, Tótem),
@@ -249,7 +259,7 @@ func _refresh_disabled_rotation() -> void:
 		]
 	)
 
-	var is_disabled_ability: bool = is_converted
+	var is_disabled_ability: bool = is_converted or remote_ability_disabled
 	if not is_disabled_ability and is_inside_tree():
 		var km = get_node_or_null("/root/KeywordManager")
 		if km and km.has_method("is_silenced"):

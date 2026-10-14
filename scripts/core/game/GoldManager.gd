@@ -596,7 +596,16 @@ func play_card(card: Node) -> bool:
 	# respuesta (Red de Plata, Sacrificio Solar) nunca se podía jugar durante
 	# el turno del rival, exactamente el caso de uso real que existe para
 	# tenerlos en la mano.
-	if GameManager.active_player_id != player_id and not is_instant_response:
+	# Guerra de Talismanes (2026-10-13, §64): no importa de quién sea el
+	# turno — juega quien tiene la prioridad de la Guerra, también el
+	# defensor (que la tiene primero, DAR 5.C3). Antes el defensor solo podía
+	# jugar Talismanes de Anular/Cancelar ("No es tu turno").
+	var in_guerra: bool = GameManager.current_phase == Constants.Phase.GUERRA_TALISMANES
+	if in_guerra and PriorityManager.is_guerra_window() and not PriorityManager.can_act(player_id):
+		_main._update_debug("Espera tu turno en la Guerra de Talismanes")
+		await _return_card_rejected(card)
+		return false
+	if not in_guerra and GameManager.active_player_id != player_id and not is_instant_response:
 		_main._update_debug("No es tu turno")
 		await _return_card_rejected(card)
 		return false
@@ -728,12 +737,14 @@ func play_card(card: Node) -> bool:
 		await pagar_coste(coste_real, card.card_type, card.get("card_raza") if card.get("card_raza") != null else "", card.card_cost, player_id)
 		PaymentManager.registrar_pago(coste_real)
 	_register_play_limit(card)
+	PriorityManager.begin_guerra_action(player_id)
 	if card.card_type == Constants.CardType.TALISMAN:
 		await _play_talisman(card)
 	elif card.card_type == Constants.CardType.ARMA:
 		await _equip_weapon(card, chosen_wielder)
 	else:
 		await _play_card_to_field(card)
+	PriorityManager.end_guerra_action()
 	return true
 
 
@@ -1190,6 +1201,7 @@ func _register_weapon_strength_bonus(weapon: Node, ally: Node) -> void:
 				return GameState.get_oro_total(wielder_controller) * per_oro,
 			"operation": "add",
 			"duration": ContinuousEffectManager.ModifierDuration.PERMANENT,
+			"static_ability": true,
 			"layer": ContinuousEffectManager.ModifierLayer.LAYER_7B_CHAR_MODIFY,
 			"description": "%s porta %s (+Fuerza por Oro)" % [ally.card_name, weapon.card_name],
 		})
@@ -1201,6 +1213,7 @@ func _register_weapon_strength_bonus(weapon: Node, ally: Node) -> void:
 			"value": 0,
 			"operation": "add",
 			"duration": ContinuousEffectManager.ModifierDuration.PERMANENT,
+			"static_ability": true,
 			"layer": ContinuousEffectManager.ModifierLayer.LAYER_6_ABILITIES,
 			"keywords_add": [Constants.Keyword.FURIA],
 			"description": "%s porta %s (Furia)" % [ally.card_name, weapon.card_name],
@@ -1244,6 +1257,7 @@ func _register_weapon_strength_bonus(weapon: Node, ally: Node) -> void:
 				return count_azusa.call() * per_azusa,
 			"operation": "add",
 			"duration": ContinuousEffectManager.ModifierDuration.PERMANENT,
+			"static_ability": true,
 			"layer": ContinuousEffectManager.ModifierLayer.LAYER_7B_CHAR_MODIFY,
 			"description": "%s porta %s (+Fuerza por Azusa Yumi)" % [ally.card_name, weapon.card_name],
 		})
@@ -1303,6 +1317,7 @@ func _register_weapon_strength_bonus(weapon: Node, ally: Node) -> void:
 			"value": bonus,
 			"operation": "add",
 			"duration": ContinuousEffectManager.ModifierDuration.PERMANENT,
+			"static_ability": true,
 			"layer": ContinuousEffectManager.ModifierLayer.LAYER_7B_CHAR_MODIFY,
 			"description": "%s porta %s (+%d Fuerza)" % [ally.card_name, weapon.card_name, bonus],
 		})
@@ -1325,6 +1340,7 @@ func _register_weapon_strength_bonus(weapon: Node, ally: Node) -> void:
 			"value": 0,
 			"operation": "add",
 			"duration": ContinuousEffectManager.ModifierDuration.PERMANENT,
+			"static_ability": true,
 			"layer": ContinuousEffectManager.ModifierLayer.LAYER_6_ABILITIES,
 			"keywords_add": [keyword_map[extra_word]],
 			"description": "%s porta %s (%s)" % [ally.card_name, weapon.card_name, extra_word.capitalize()],
@@ -1729,6 +1745,7 @@ func _check_llave_del_abismo_enter_aura(card: Node, controller_id: int) -> void:
 		"type": ContinuousEffectManager.ModifierType.STRENGTH, "stat": "strength",
 		"value": 1, "operation": "add",
 		"duration": ContinuousEffectManager.ModifierDuration.PERMANENT,
+		"static_ability": true,
 		"description": "Llave del Abismo: +1 Fuerza a tus Aliados"
 	})
 	ContinuousEffectManager.register_modifier({
@@ -1737,6 +1754,7 @@ func _check_llave_del_abismo_enter_aura(card: Node, controller_id: int) -> void:
 		"type": ContinuousEffectManager.ModifierType.KEYWORDS, "stat": "",
 		"value": 0, "operation": "add",
 		"duration": ContinuousEffectManager.ModifierDuration.PERMANENT,
+		"static_ability": true,
 		"layer": ContinuousEffectManager.ModifierLayer.LAYER_6_ABILITIES,
 		"keywords_add": [Constants.Keyword.INDESTRUCTIBLE],
 		"description": "Llave del Abismo: Indestructible a tus Aliados"

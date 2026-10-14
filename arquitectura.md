@@ -6059,3 +6059,70 @@ Total: −439 líneas netas (−552 / +113, más el archivo nuevo). Verificado: 
 158 scripts compilan, 25/25 tests, el auditor da los mismos números, el menú
 y la escena de partida cargan sin errores. Sin tocar los archivos de
 Antigravity.
+
+
+## 63. Alicia en Wonderland: las auras también se pierden, y el Remoto lo ve (2026-10-13)
+
+**Bug real reportado por el usuario:** Alicia nombró Patria Vieja; "la mía
+perdió la habilidad pero la de mi oponente no".
+
+- **Causa 1:** perder la habilidad (silencio, bloqueo por nombre o por
+  instancia) solo cortaba los triggers y los botones de habilidad activada.
+  Las habilidades estáticas registradas como modificador (+1 de Fuerza y "no
+  son Destruidos cuando bloquean" de Patria Vieja, bonos de Armas, Llave del
+  Abismo, Arco del Triunfo) seguían aplicando en las dos copias.
+  **Arreglo:** campo nuevo `static_ability` en el modificador.
+  `ModifierRegistry._is_modifier_active()` lo apaga mientras
+  `KeywordManager.is_silenced(fuente)`. Lo marcan todo
+  `ContinuousEffectParser` (`_register_static()`), los bonos por texto de Arma
+  en `GoldManager`, Llave del Abismo y Arco del Triunfo. Un efecto ya resuelto
+  (p.ej. "+2 de Fuerza" de un Talismán, `TargetedEffectExecutor`) no lo lleva
+  y se mantiene aunque silencien a quien lo causó. `KeywordManager.
+  _notify_abilities_changed()` invalida el cache de Fuerza y refresca la mesa
+  al silenciar/bloquear; al salir Alicia de juego el cache ya se invalidaba.
+- **Causa 2:** los bloqueos viven en el `KeywordManager` del Anfitrión; el
+  Remoto nunca veía el gris de "sin habilidad". **Arreglo:** señal
+  `KeywordManager.abilities_changed` + `GameStateBroadcaster.
+  _send_disabled_cards()` (op `disabled_cards`, lista completa de la mesa y la
+  mano del Remoto, solo cuando cambia; nunca la mano del Anfitrión) →
+  `RemoteMirrorController` → `Card.remote_ability_disabled`.
+
+Probado con un script aislado: antes 3/3, con Patria Vieja bloqueada 2/2 (las
+dos copias), el efecto ya resuelto sigue (+2), al irse Alicia vuelve a 3/3.
+
+## 64. Guerra de Talismanes por turnos, con Ventana de Respuesta (2026-10-13)
+
+**A pedido del usuario** (opción B: después de cada Talismán el rival tiene
+su Ventana de Respuesta, sin ventanas duplicadas).
+
+- **El defensor no podía jugar Talismanes normales** ("No es tu turno": solo
+  los de Anular/Cancelar), pese a tener la prioridad primero (DAR 5.C3).
+  Ahora en la Guerra decide la prioridad, no el turno: `GoldManager.
+  play_card()` exige `PriorityManager.can_act()` mientras la ventana de la
+  Guerra está abierta (antes no se exigía: se podía jugar sin tener la
+  prioridad), y `CardInteractionModule` ya no corta por turno en esta fase.
+- **La ventana de la Guerra se perdía** después de cada Talismán/habilidad:
+  su Ventana de Respuesta (Paso D) la pisa en la misma instancia de
+  `PriorityManager`, y nadie la reabría hasta que alguien apretaba "Daño"
+  (`_try_recover_stuck_phase_priority_window()`, siempre con el defensor).
+  Ahora `begin_guerra_action()/end_guerra_action()` (alrededor de jugar la
+  carta, Anfitrión y Remoto) y el cierre de cada Ventana de Respuesta en la
+  Guerra agendan `_resume_guerra()`: cuando ya no queda nada resolviéndose
+  (ni acción, ni pila, ni trigger), la Guerra sigue con el jugador que NO
+  hizo la última acción y los pases vuelven a cero.
+- **El "ambos pasaron" de la Ventana de Respuesta podía terminar la Guerra**
+  (`PhaseFlowController._on_priority_both_passed_main()` solo miraba la
+  fase). Ahora en la Guerra solo cuenta el de la ventana de la propia Guerra.
+- **Remoto:** `_play_talisman_remote()` usa `GoldManager._play_talisman()`
+  (antes resolvía el efecto pero el Talismán se quedaba en la Línea de Apoyo,
+  nunca iba al Cementerio/Destierro/Castillo).
+- Sin ventanas duplicadas: cada Talismán sigue teniendo UNA ventana
+  (`resolve_talisman()`, contexto de efecto §59); el rival la ve y después
+  recibe su turno en la Guerra. Para Talismanes la ventana sigue abriéndose
+  antes de elegir objetivos: si se moviera a "después de objetivos" como los
+  triggers, los Talismanes cuyo efecto no pasa por un punto vigilado (p.ej.
+  un "+2 de Fuerza") se quedarían sin ventana y no se podrían Anular.
+
+Probado con un script aislado de `PriorityManager`: Guerra abre con el
+defensor → juega → Ventana de Respuesta → mientras resuelve no se reabre →
+sigue el atacante con pases en cero → ambos pasan → termina.
