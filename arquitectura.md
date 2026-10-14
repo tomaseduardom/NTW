@@ -6157,3 +6157,14 @@ turno pase al Anfitrión.
   `_human_pass_after()`, si no hay objeto en la pila (`current_stack_controller`
   = -1), espera a que termine la elección y pasa igual. Con un objeto real en la
   pila sigue sin pasar por abajo (Signo Amarillo). Aplica igual online.
+
+## 67. Duelo Espacial: selector del tablero con las 4 zonas (2026-10-13)
+
+**A pedido del usuario** ("en vez de un popup, dejarme escoger entre el Cementerio y
+el Castillo"; además no lo dejaba buscar en el Castillo rival). Antes: popup
+"¿Castillo o Cementerio?" + "¿de quién?" + búsqueda a la mano y reubicación. Ahora
+`ActionModule.pick_in_zones()` con 4 pools (tu Castillo, tu Cementerio, Castillo
+rival, Cementerio rival; Anfitrión, Remoto por red o bot), ventana de respuesta
+después de elegir (§59), se saca de su zona (Castillo: se baraja) y va a TU Oro
+Pagado como Oro sin habilidad (tipo Oro, habilidad vacía — antes conservaba su
+tipo y texto). Se puede confirmar sin elegir (buscar puede fallar).

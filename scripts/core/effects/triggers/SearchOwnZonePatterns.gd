@@ -361,34 +361,52 @@ func try_execute_search_castillo_or_cemetery_to_pagado_pattern(ability_text: Str
 	var main := _main.get_node_or_null("/root/Main")
 	if not main or not main._gold_manager:
 		return true
-	var search_castillo: bool = await SelectionManager.await_two_choice(
-		main, str(card.get("card_name")), "Buscar en un Castillo", "Buscar en un Cementerio", controller_id)
-	var zone := Constants.Zone.CASTILLO if search_castillo else Constants.Zone.CEMENTERIO
-	var zone_owner: int = await _main._targeted_executor._choose_search_zone_owner(controller_id, zone)
+	# 2026-10-13, a pedido del usuario: en vez de dos popups ("¿Castillo o
+	# Cementerio?" y "¿de quién?" — que además no dejaba elegir bien el
+	# Castillo rival), el selector del tablero con las 4 zonas a la vez
+	# (ActionModule.pick_in_zones(): Anfitrión, Remoto por red o bot).
+	var pools: Array = []
+	var pool_src: Array = []  # [{owner, zone}] en el mismo orden que pools
+	for zone_owner in [controller_id, 1 - controller_id]:
+		for zone in [Constants.Zone.CASTILLO, Constants.Zone.CEMENTERIO]:
+			var zone_cards: Array = CardManager.get_deck(zone_owner) if zone == Constants.Zone.CASTILLO \
+				else CardManager.get_cemetery(zone_owner)
+			var entries: Array = []
+			for d in zone_cards:
+				entries.append({"data": d, "eligible": true})
+			pools.append({"is_own": zone_owner == controller_id, "zone": zone, "cards": entries})
+			pool_src.append({"owner": zone_owner, "zone": zone})
+	var picks: Array = await ActionModule.pick_in_zones(controller_id,
+		"%s: busca una carta en un Castillo o Cementerio" % str(card.get("card_name")), pools, 0, 1)
+	if picks.is_empty() or not (picks[0] is Array) or picks[0].size() != 2:
+		return true
+	var pi: int = int(picks[0][0])
+	var ci: int = int(picks[0][1])
+	# Revalidación (por red puede llegar cualquier cosa).
+	if pi < 0 or pi >= pools.size() or ci < 0 or ci >= pools[pi].cards.size():
+		return true
 	if await TriggerSystem.open_response_window(card, str(card.card_name), controller_id):
 		return true
-
-	# Destino SIEMPRE es "tu Oro Pagado" (el controlador de esta habilidad),
-	# sin importar de qué Castillo/Cementerio salió la carta — a diferencia
-	# de DESTIERRO/CEMENTERIO en ActionModule.search(), que van al dueño DE
-	# LA ZONA buscada. Por eso se busca a la mano primero y se reubica aquí.
-	var hand_container_duelo = main.player_hand if controller_id == 0 else main._opponent_fan
-	if not hand_container_duelo:
+	var found_data: Dictionary = pools[pi].cards[ci].data
+	var src: Dictionary = pool_src[pi]
+	if src.zone == Constants.Zone.CASTILLO:
+		var deck: Array = CardManager.get_deck(src.owner)
+		var idx: int = deck.find(found_data)
+		if idx < 0:
+			return true
+		deck.remove_at(idx)
+		CardManager.shuffle_deck(src.owner)
+		AnimationQueue.queue_shuffle(src.owner, "Barajar mazo (%s)" % str(card.get("card_name")))
+		if main.get("_zone_manager"):
+			main._zone_manager._update_castillo_counts()
+	elif not CardManager.take_from_cemetery(src.owner, found_data):
 		return true
-	var hand_before: Array = hand_container_duelo.cards.duplicate()
-	var result: Dictionary = await ActionModule.search(zone_owner, zone, {}, 1, true, false, false, card, Constants.Zone.MANO)
-	if result.get("selected", []).is_empty():
-		return true
-	var found_node: Node = null
-	for c in hand_container_duelo.cards:
-		if c not in hand_before:
-			found_node = c
-			break
-	if not is_instance_valid(found_node):
-		return true
-	var found_data: Dictionary = found_node.card_data.duplicate()
-	hand_container_duelo.remove_card(found_node, true)
-	await main._gold_manager.put_gold_directly_in_pagado(controller_id, found_data)
+	# Destino SIEMPRE "tu Oro Pagado" (el controlador), sin importar de qué
+	# zona salió — "como un Oro sin habilidad".
+	var gold_data: Dictionary = found_data.duplicate()
+	gold_data["tipo"] = Constants.CardType.ORO
+	gold_data["habilidad"] = ""
+	await main._gold_manager.put_gold_directly_in_pagado(controller_id, gold_data)
 	return true
 
 
