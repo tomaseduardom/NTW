@@ -17,7 +17,19 @@ class_name ZoneBrowsePicker
 ## esa pantalla.
 
 const CardScene = preload("res://scenes/cards/Card.tscn")
-const VIEWER_CARD_SCALE := Vector2(0.62, 0.62)
+## Escala de las cartas del visor: se calcula con el alto de la pantalla
+## (2026-10-14, a pedido del usuario: "te muestra casi todo el mazo con las
+## cartas muy pequeñas"), entre estos dos topes.
+const VIEWER_SCALE_MIN := 0.7
+const VIEWER_SCALE_MAX := 1.05
+const TYPE_FILTERS := [
+	["Todas", -1],
+	["Aliados", Constants.CardType.ALIADO],
+	["Talismanes", Constants.CardType.TALISMAN],
+	["Armas", Constants.CardType.ARMA],
+	["Tótems", Constants.CardType.TOTEM],
+	["Oros", Constants.CardType.ORO],
+]
 const ZONE_PANEL_NAMES := {
 	Constants.Zone.CASTILLO: "Castillo",
 	Constants.Zone.CEMENTERIO: "Cementerio",
@@ -43,6 +55,17 @@ var _viewer_confirm_btn: Button = null
 ## una carta de tu mano o de un Cementerio"). Brillan en la mano y un clic
 ## en una la elige de inmediato (devuelve [-1, índice]).
 var _hand_nodes: Array = []
+## Un solo Castillo (2026-10-14, a pedido del usuario — Duelo Espacial /
+## voragh el devorador: "en caso de escoger un castillo ya no puedo cambiar
+## el castillo... pero sí puedo volver a ver los cementerios"): con más de un
+## Castillo en juego, el primero que se abre es el único que se puede mirar.
+var _locked_castle: int = -1
+var _opened_castles: Array = []  # pools de Castillo abiertos (quien llama los baraja)
+var _panel_pulses: Dictionary = {}  # pool_idx -> {panel, tween}
+## Filtro del visor (tipo + nombre); se recuerda al cambiar de zona.
+var _filter_type: int = -1
+var _filter_text: String = ""
+var _viewer_wrappers: Array = []  # [{node, data}]
 
 
 func setup(main: Node) -> void:
@@ -51,6 +74,11 @@ func setup(main: Node) -> void:
 
 func is_active() -> bool:
 	return _active
+
+
+func last_opened_castles() -> Array:
+	"""Índices de los pools de Castillo que se miraron en la última selección."""
+	return _opened_castles.duplicate()
 
 
 static func zone_label(is_own: bool, zone: int) -> String:
@@ -79,6 +107,11 @@ func pick(title: String, pools: Array, min_count: int, max_count: int, distinct_
 	_max = max_count if max_count > 0 else 999
 	_distinct_names = distinct_names
 	_title = title
+	_locked_castle = -1
+	_opened_castles = []
+	_panel_pulses = {}
+	_filter_type = -1
+	_filter_text = ""
 
 	var labels: Array = []
 	for i in range(_pools.size()):
@@ -88,7 +121,11 @@ func pick(title: String, pools: Array, min_count: int, max_count: int, distinct_
 		title, " / ".join(labels)])
 	_refresh_paso()
 	_hand_nodes = hand_nodes.duplicate()
-	if _hand_nodes.is_empty():
+	if _castle_pool_count() > 1:
+		# Con varios Castillos no se abre ninguno solo: abrir uno ya es
+		# elegirlo (ver _locked_castle).
+		pass
+	elif _hand_nodes.is_empty():
 		_open_viewer(_first_pool_with_eligible())
 	else:
 		# Con candidatas en la mano no se abre el visor solo (taparía la
@@ -151,6 +188,26 @@ func _try_confirm() -> void:
 	_done = true
 
 
+func _castle_pool_count() -> int:
+	var n := 0
+	for pool in _pools:
+		if pool.zone == Constants.Zone.CASTILLO:
+			n += 1
+	return n
+
+
+func _lock_castle(pool_idx: int) -> void:
+	"""Ata la selección a este Castillo: los demás dejan de brillar."""
+	_locked_castle = pool_idx
+	for i in _panel_pulses:
+		if i == pool_idx or _pools[i].zone != Constants.Zone.CASTILLO:
+			continue
+		var entry: Dictionary = _panel_pulses[i]
+		entry.tween.kill()
+		entry.panel.modulate = Color(0.55, 0.55, 0.55, 1.0)
+		entry.panel.mouse_default_cursor_shape = Control.CURSOR_FORBIDDEN
+
+
 func _first_pool_with_eligible() -> int:
 	for i in range(_pools.size()):
 		for c in _pools[i].cards:
@@ -179,6 +236,7 @@ func _arm_panel(pool_idx: int) -> void:
 	var pulse := panel.create_tween().set_loops()
 	pulse.tween_property(panel, "modulate", Color(1.35, 1.25, 0.95, 1.0), 0.6).set_trans(Tween.TRANS_SINE)
 	pulse.tween_property(panel, "modulate", Color.WHITE, 0.6).set_trans(Tween.TRANS_SINE)
+	_panel_pulses[pool_idx] = {"panel": panel, "tween": pulse}
 	var on_input := func(ev: InputEvent) -> void:
 		if ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_LEFT:
 			_open_viewer(pool_idx)
@@ -196,11 +254,20 @@ func _arm_panel(pool_idx: int) -> void:
 # VISOR DE UNA ZONA
 # =============================================================================
 func _open_viewer(pool_idx: int) -> void:
-	_close_viewer()
 	if pool_idx < 0 or pool_idx >= _pools.size():
 		return
-	_viewer_pool = pool_idx
 	var pool: Dictionary = _pools[pool_idx]
+	if pool.zone == Constants.Zone.CASTILLO:
+		if _locked_castle >= 0 and _locked_castle != pool_idx:
+			_main._update_debug("Ya miraste %s: solo puedes buscar en ese Castillo (los Cementerios sí se pueden ver)" \
+				% zone_label(_pools[_locked_castle].is_own, Constants.Zone.CASTILLO))
+			return
+		if _locked_castle < 0 and _castle_pool_count() > 1:
+			_lock_castle(pool_idx)
+		if not _opened_castles.has(pool_idx):
+			_opened_castles.append(pool_idx)
+	_close_viewer()
+	_viewer_pool = pool_idx
 
 	_viewer = CanvasLayer.new()
 	_viewer.layer = 60
@@ -217,10 +284,10 @@ func _open_viewer(pool_idx: int) -> void:
 	_viewer.add_child(bg)
 
 	var frame := PanelContainer.new()
-	frame.anchor_left = 0.1
-	frame.anchor_right = 0.9
-	frame.anchor_top = 0.1
-	frame.anchor_bottom = 0.9
+	frame.anchor_left = 0.03
+	frame.anchor_right = 0.97
+	frame.anchor_top = 0.04
+	frame.anchor_bottom = 0.96
 	var style := StyleBoxFlat.new()
 	style.bg_color = Color(0.04, 0.04, 0.06, 0.97)
 	style.border_color = Color(0.78, 0.65, 0.35, 0.9)
@@ -245,25 +312,40 @@ func _open_viewer(pool_idx: int) -> void:
 	vbox.add_child(title_lbl)
 
 	var hint := Label.new()
-	hint.text = "Clic en las cartas brillantes para elegirlas · clic afuera para cerrar y ver otra zona"
+	hint.text = "Clic en las cartas brillantes para elegirlas · clic derecho para ampliar · clic afuera para cerrar y ver otra zona"
 	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	hint.add_theme_font_size_override("font_size", 12)
 	hint.add_theme_color_override("font_color", Color(0.8, 0.75, 0.65, 0.85))
 	vbox.add_child(hint)
 
+	if pool.cards.size() > 8:
+		vbox.add_child(_build_filter_bar(pool))
+
+	# Tamaño de carta según la pantalla, y tantas columnas como entren.
+	var vp: Vector2 = _viewer.get_viewport().get_visible_rect().size
+	var card_scale: float = clampf(vp.y * 0.00095, VIEWER_SCALE_MIN, VIEWER_SCALE_MAX)
+	var cell_w: float = 150.0 * card_scale
+	var avail_w: float = vp.x * 0.94 - 36.0 - 16.0
 	var scroll := ScrollContainer.new()
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	vbox.add_child(scroll)
+	var center := CenterContainer.new()
+	center.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.add_child(center)
 	var grid := GridContainer.new()
-	grid.columns = 8
-	grid.add_theme_constant_override("h_separation", 10)
-	grid.add_theme_constant_override("v_separation", 10)
-	scroll.add_child(grid)
+	grid.columns = maxi(3, int((avail_w + 12.0) / (cell_w + 12.0)))
+	grid.add_theme_constant_override("h_separation", 12)
+	grid.add_theme_constant_override("v_separation", 12)
+	center.add_child(grid)
 
 	_viewer_markers = {}
+	_viewer_wrappers = []
 	for card_idx in _display_order(pool):
-		grid.add_child(_build_viewer_card(pool_idx, card_idx))
+		var wrapper := _build_viewer_card(pool_idx, card_idx, card_scale)
+		grid.add_child(wrapper)
+		_viewer_wrappers.append({"node": wrapper, "data": pool.cards[card_idx].data})
+	_apply_filter()
 	if pool.cards.is_empty():
 		var empty := Label.new()
 		empty.text = "No hay cartas en esta zona."
@@ -306,21 +388,74 @@ func _display_order(pool: Dictionary) -> Array:
 	return order
 
 
-func _build_viewer_card(pool_idx: int, card_idx: int) -> Control:
+func _build_filter_bar(pool: Dictionary) -> Control:
+	"""Botones por tipo (con cuántas hay de cada uno) y búsqueda por nombre."""
+	var bar := HBoxContainer.new()
+	bar.alignment = BoxContainer.ALIGNMENT_CENTER
+	bar.add_theme_constant_override("separation", 6)
+	var counts: Dictionary = {}
+	for c in pool.cards:
+		var t := int(c.data.get("tipo", -1))
+		counts[t] = int(counts.get(t, 0)) + 1
+	var group := ButtonGroup.new()
+	for f in TYPE_FILTERS:
+		var n: int = pool.cards.size() if f[1] == -1 else int(counts.get(f[1], 0))
+		if n == 0 and f[1] != -1:
+			continue
+		var b := Button.new()
+		b.text = "%s (%d)" % [f[0], n]
+		b.toggle_mode = true
+		b.button_group = group
+		b.button_pressed = f[1] == _filter_type
+		var t: int = f[1]
+		b.pressed.connect(func() -> void:
+			_filter_type = t
+			_apply_filter())
+		bar.add_child(b)
+	var search := LineEdit.new()
+	search.placeholder_text = "Buscar por nombre"
+	search.custom_minimum_size = Vector2(220, 0)
+	search.text = _filter_text
+	search.clear_button_enabled = true
+	search.text_changed.connect(func(txt: String) -> void:
+		_filter_text = txt
+		_apply_filter())
+	bar.add_child(search)
+	return bar
+
+
+func _apply_filter() -> void:
+	var needle := _filter_text.strip_edges().to_lower()
+	for w in _viewer_wrappers:
+		if not is_instance_valid(w.node):
+			continue
+		var ok_type: bool = _filter_type == -1 or int(w.data.get("tipo", -1)) == _filter_type
+		var ok_name: bool = needle == "" or needle in str(w.data.get("nombre", "")).to_lower()
+		w.node.visible = ok_type and ok_name
+
+
+func _build_viewer_card(pool_idx: int, card_idx: int, card_scale: float) -> Control:
 	var pool: Dictionary = _pools[pool_idx]
 	var entry: Dictionary = pool.cards[card_idx]
 	var wrapper := Control.new()
-	wrapper.custom_minimum_size = Vector2(150.0, 210.0) * VIEWER_CARD_SCALE
+	var scale_v := Vector2(card_scale, card_scale)
+	wrapper.custom_minimum_size = Vector2(150.0, 210.0) * scale_v
 
 	var card = CardScene.instantiate()
-	card.load_from_data(entry.data)
+	var shown: Dictionary = entry.data.duplicate()
+	shown["esta_oculta"] = false
+	card.load_from_data(shown)
+	# Zona real ANTES del dueño (2026-10-14, bug real: las cartas del
+	# Castillo rival salían giradas 180° — current_zone arranca en MANO y
+	# Card gira toda carta rival "en la mano o en juego").
+	card.current_zone = pool.zone
 	card.owner_id = 0 if pool.is_own else 1
 	card.can_interact = false
 	card.drag_enabled = false
 	card.custom_minimum_size = Vector2(150.0, 210.0)
 	card.size = Vector2(150.0, 210.0)
-	card.scale = VIEWER_CARD_SCALE
-	card.base_scale = VIEWER_CARD_SCALE
+	card.scale = scale_v
+	card.base_scale = scale_v
 	wrapper.add_child(card)
 
 	card.gui_input.connect(func(ev: InputEvent) -> void:
@@ -364,6 +499,7 @@ func _close_viewer() -> void:
 	_viewer_markers = {}
 	_viewer_count_label = null
 	_viewer_confirm_btn = null
+	_viewer_wrappers = []
 
 
 # =============================================================================

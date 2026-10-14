@@ -6236,3 +6236,32 @@ primero se ordenan las 5 del tope, después Drácula roba).
   Locura de Renfield, Valefor, Torii.
 - Pendiente aparte: Lanza Argenta ("cuando sea puesta en tu Cementerio...") no tiene
   trigger implementado en ningún camino.
+
+## 70. "Un Castillo": elige quien activa, un solo Castillo, visor más claro (2026-10-14)
+
+**Bug real reportado por el usuario** (voragh el devorador: "le pega 2 al cementerio,
+la idea es yo buscarle 2 cartas en el castillo"). `_choose_search_zone_owner()` +
+`ActionModule.search(zone_owner, ...)` sin `chooser_id`: al elegir el Castillo rival,
+QUIEN ELEGÍA era el rival (el bot local tomaba las 2 primeras sin mostrar nada). Mismo
+error en necro-titan, akuma el terrible, Rey de Amarillo y las dos búsquedas de
+LookRevealPatternsB.
+
+- `ActionModule.search_either_owner(chooser, zones, filter, amount, ...)`: el selector
+  del tablero con las zonas de LOS DOS jugadores; elige siempre quien activa (Anfitrión,
+  Remoto por red, bot). Cada carta va al destino de SU dueño (DAR) y todo Castillo
+  mirado se baraja. La entrega por destino quedó en `ActionSearch._deliver()` (la usan
+  `search_zones()` y esta).
+- Regla (a pedido del usuario, Duelo Espacial): con más de un Castillo en el selector,
+  abrir uno ya es elegirlo — `ZoneBrowsePicker._locked_castle`: los otros Castillos dejan
+  de brillar y no se abren; los Cementerios (públicos) se pueden seguir mirando. Con
+  varios Castillos no se abre ningún visor solo. `last_opened_castles()` /
+  `pick_in_zones(..., out_info)` informan qué Castillos se miraron (por red viaja en
+  `zone_pick_choice.opened_castles`) y Duelo Espacial los baraja aunque la carta salga
+  de un Cementerio.
+- Visor (a pedido del usuario: "cartas muy pequeñas y las del mazo oponente se ven dadas
+  vuelta"): las cartas rivales salían giradas 180° porque `Card.current_zone` arranca en
+  MANO — ahora se fija la zona real antes del dueño. Tamaño según el alto de la pantalla
+  (0,7–1,05) y tantas columnas como entren; con más de 8 cartas, botones por tipo (con
+  cantidad) y búsqueda por nombre.
+- Prueba: `test_either.gd` (clics simulados: bloqueo del Castillo, sin giro, filtro, 2
+  cartas al Cementerio rival).

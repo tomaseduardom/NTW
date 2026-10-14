@@ -649,8 +649,11 @@ func _activate_voragh_devorador_search_to_cemetery(source_card: Node, ability: D
 	if await TriggerSystem.open_response_window(source_card, "voragh el devorador", owner_id):
 		return
 	UniversalCardParser.turn_registry.register_ability_use(source_card, ability)
-	var zone_owner: int = await TriggerSystem._targeted_executor._choose_search_zone_owner(owner_id, Constants.Zone.CASTILLO)
-	await ActionModule.search(zone_owner, Constants.Zone.CASTILLO, {}, 2, true, false, false, source_card, Constants.Zone.CEMENTERIO)
+	# 2026-10-14, bug real reportado por el usuario: al elegir el Castillo
+	# rival, el que elegía era el rival (el bot tomaba las 2 primeras). Ahora
+	# elige siempre quien activa, en el selector con los dos Castillos.
+	await ActionModule.search_either_owner(owner_id, [Constants.Zone.CASTILLO], {}, 2, true, source_card,
+		Constants.Zone.CEMENTERIO)
 
 
 func _activate_voragh_devorador_destroy_own_for_gold(source_card: Node, ability: Dictionary) -> void:

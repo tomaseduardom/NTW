@@ -1375,4 +1375,5 @@ func _show_zone_pick_prompt(data: Dictionary) -> void:
 	for p in picks:
 		if int(p[0]) == -1 and int(p[1]) < hand_index_map.size():
 			p[1] = hand_index_map[int(p[1])]
-	NetworkClient.send_message({"op": "intent", "kind": "zone_pick_choice", "picks": picks})
+	NetworkClient.send_message({"op": "intent", "kind": "zone_pick_choice", "picks": picks,
+		"opened_castles": _main._zone_browse_picker.last_opened_castles()})

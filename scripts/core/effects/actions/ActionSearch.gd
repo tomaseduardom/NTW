@@ -152,52 +152,7 @@ func search_zones(player_id: int, zones: Array, filter: Dictionary, amount: int 
 		# player_cemetery — ver _get_searchable_zone_data).
 		p.zone_data.erase(card_data)
 		card_data["esta_oculta"] = false
-
-		if destination == Constants.Zone.DESTIERRO:
-			# Va directo al Destierro, sin pasar por la mano ni crear un
-			# nodo Card (2026-08-25, p.ej. Rey de Amarillo).
-			CardManager.add_to_exile(player_id, card_data)
-			_main._notify_trigger("on_search_found", {
-				"player_id": player_id, "card": card_data, "from_zone": from_zone
-			})
-		elif destination == Constants.Zone.RESERVA_ORO and main and main._gold_manager:
-			# Va directo a la Reserva de Oro, sin pasar por la mano ni pagar
-			# coste (2026-08-29, p.ej. Don de Amma: 'busca un Oro en tu
-			# Castillo y ponlo en tu Reserva').
-			var card_node = await main._gold_manager.put_gold_directly_in_reserva(player_id, card_data)
-			_main._notify_trigger("on_search_found", {
-				"player_id": player_id, "card": card_node, "from_zone": from_zone
-			})
-		elif destination == Constants.Zone.CEMENTERIO:
-			# Va directo al Cementerio, sin pasar por la mano ni crear un
-			# nodo Card (2026-09-04, p.ej. kitsune - sp: 'busca en tu
-			# Castillo un Aliado y ponlo en tu mano o Cementerio') — mismo
-			# patrón que DESTIERRO de arriba.
-			CardManager.add_to_cemetery(player_id, card_data)
-			_main._notify_trigger("on_search_found", {
-				"player_id": player_id, "card": card_data, "from_zone": from_zone
-			})
-		elif destination == Constants.Zone.CASTILLO:
-			# "Baraja N cartas de tu Cementerio en tu Castillo" (2026-10-12,
-			# EffectInterpreter, p.ej. Cathach) — vuelve al mazo oculta y se
-			# baraja abajo, mismo selector de zonas que el resto de búsquedas.
-			card_data["esta_oculta"] = true
-			CardManager.get_deck(player_id).append(card_data)
-			result.must_shuffle = true
-		elif destination == Constants.Zone.ORO_PAGADO and main and main._gold_manager:
-			# Va directo al Oro Pagado (ya-gastado), sin pasar por la mano
-			# (2026-09-04, p.ej. Aurora de Chile: 'pon uno en tu Oro Pagado y
-			# otro en tu mano') — mismo patrón que RESERVA_ORO de arriba, pero
-			# usando put_gold_directly_in_pagado() en vez de _in_reserva().
-			var card_node = await main._gold_manager.put_gold_directly_in_pagado(player_id, card_data)
-			_main._notify_trigger("on_search_found", {
-				"player_id": player_id, "card": card_node, "from_zone": from_zone
-			})
-		elif main:
-			var card_node = await _put_found_card_into_play(main, player_id, card_data, may_play, cost_reduction)
-			_main._notify_trigger("on_search_found", {
-				"player_id": player_id, "card": card_node, "from_zone": from_zone
-			})
+		await _deliver(main, player_id, card_data, from_zone, destination, may_play, cost_reduction, result)
 
 	# Barajar si buscó en el Castillo (DAR: siempre se baraja tras buscar en el
 	# mazo, aunque al final la carta elegida haya salido de otra zona).
@@ -220,6 +175,128 @@ func search_zones(player_id: int, zones: Array, filter: Dictionary, amount: int 
 
 	await _main._end_trigger_collection_and_resolve()
 
+	return result
+
+
+func _deliver(main: Node, player_id: int, card_data: Dictionary, from_zone: int, destination: int,
+		may_play: bool, cost_reduction: int, result: Dictionary) -> void:
+	"""Lleva una carta encontrada a su destino (del dueño 'player_id')."""
+	if destination == Constants.Zone.DESTIERRO:
+		# Va directo al Destierro, sin pasar por la mano ni crear un
+		# nodo Card (2026-08-25, p.ej. Rey de Amarillo).
+		CardManager.add_to_exile(player_id, card_data)
+		_main._notify_trigger("on_search_found", {
+			"player_id": player_id, "card": card_data, "from_zone": from_zone
+		})
+	elif destination == Constants.Zone.RESERVA_ORO and main and main._gold_manager:
+		# Va directo a la Reserva de Oro, sin pasar por la mano ni pagar
+		# coste (2026-08-29, p.ej. Don de Amma: 'busca un Oro en tu
+		# Castillo y ponlo en tu Reserva').
+		var card_node = await main._gold_manager.put_gold_directly_in_reserva(player_id, card_data)
+		_main._notify_trigger("on_search_found", {
+			"player_id": player_id, "card": card_node, "from_zone": from_zone
+		})
+	elif destination == Constants.Zone.CEMENTERIO:
+		# Va directo al Cementerio, sin pasar por la mano ni crear un
+		# nodo Card (2026-09-04, p.ej. kitsune - sp: 'busca en tu
+		# Castillo un Aliado y ponlo en tu mano o Cementerio') — mismo
+		# patrón que DESTIERRO de arriba.
+		CardManager.add_to_cemetery(player_id, card_data)
+		_main._notify_trigger("on_search_found", {
+			"player_id": player_id, "card": card_data, "from_zone": from_zone
+		})
+	elif destination == Constants.Zone.CASTILLO:
+		# "Baraja N cartas de tu Cementerio en tu Castillo" (2026-10-12,
+		# EffectInterpreter, p.ej. Cathach) — vuelve al mazo oculta y se
+		# baraja abajo, mismo selector de zonas que el resto de búsquedas.
+		card_data["esta_oculta"] = true
+		CardManager.get_deck(player_id).append(card_data)
+		result.must_shuffle = true
+	elif destination == Constants.Zone.ORO_PAGADO and main and main._gold_manager:
+		# Va directo al Oro Pagado (ya-gastado), sin pasar por la mano
+		# (2026-09-04, p.ej. Aurora de Chile: 'pon uno en tu Oro Pagado y
+		# otro en tu mano') — mismo patrón que RESERVA_ORO de arriba, pero
+		# usando put_gold_directly_in_pagado() en vez de _in_reserva().
+		var card_node = await main._gold_manager.put_gold_directly_in_pagado(player_id, card_data)
+		_main._notify_trigger("on_search_found", {
+			"player_id": player_id, "card": card_node, "from_zone": from_zone
+		})
+	elif main:
+		var card_node = await _put_found_card_into_play(main, player_id, card_data, may_play, cost_reduction)
+		_main._notify_trigger("on_search_found", {
+			"player_id": player_id, "card": card_node, "from_zone": from_zone
+		})
+
+
+func search_either_owner(chooser: int, zones: Array, filter: Dictionary, amount: int, can_fail: bool = true,
+		source_card: Node = null, destination: int = Constants.Zone.MANO, distinct_names: bool = false) -> Dictionary:
+	"""'Busca en UN Castillo / un Cementerio' sin posesivo (2026-10-14, a
+	pedido del usuario — voragh el devorador: elegía el rival y el bot se
+	quedaba con las 2 primeras sin mostrarte nada). El selector del tablero
+	con las zonas de LOS DOS jugadores: quien elige mira lo que quiera, pero
+	al abrir un Castillo queda atado a ese (los Cementerios son públicos y se
+	pueden seguir mirando). Cada carta va al destino de SU dueño (DAR) y todo
+	Castillo mirado se baraja."""
+	var result := {"success": true, "selected": [], "matching": []}
+	var pools: Array = []
+	var src: Array = []  # [{owner, zone, data}] en el mismo orden que pools
+	for zone_owner in [chooser, 1 - chooser]:
+		for zone in zones:
+			var zone_data = _get_searchable_zone_data(zone_owner, zone)
+			if zone_data == null:
+				continue
+			var matching: Array = _main._apply_card_filter(zone_data, filter)
+			var cards: Array = []
+			for d in zone_data:
+				cards.append({"data": d, "eligible": matching.has(d)})
+			pools.append({"is_own": zone_owner == chooser, "zone": zone, "cards": cards})
+			src.append({"owner": zone_owner, "zone": zone, "data": zone_data})
+			result.matching.append_array(matching)
+	if result.matching.is_empty():
+		result.success = can_fail
+		return result
+
+	EffectContextScript.check_chooser(chooser, "buscar")
+	var title: String = "Buscar"
+	if source_card and source_card.get("card_name") != null:
+		title = "%s: elige hasta %d carta(s)" % [str(source_card.card_name), amount]
+	var info: Dictionary = {}
+	var raw_picks: Array = await pick_in_zones(chooser, title, pools, 0, amount, distinct_names, [], info)
+
+	# Revalidación + un solo Castillo (por red puede llegar cualquier cosa).
+	var picks: Array = []
+	var locked := -1
+	for p in _validated_picks(raw_picks, pools, src, amount, distinct_names):
+		if p.zone == Constants.Zone.CASTILLO:
+			if locked < 0:
+				locked = p.pool
+			elif p.pool != locked:
+				continue
+		picks.append(p)
+
+	var main := _main.get_node_or_null("/root/Main")
+	_main._begin_trigger_collection()
+	var to_shuffle: Dictionary = {}
+	for pi in info.get("opened_castles", []):
+		var i := int(pi)
+		if i >= 0 and i < pools.size() and pools[i].zone == Constants.Zone.CASTILLO:
+			to_shuffle[src[i].owner] = true
+	for p in picks:
+		var zone_owner: int = src[p.pool].owner
+		var card_data: Dictionary = p.data
+		p.zone_data.erase(card_data)
+		card_data["esta_oculta"] = false
+		result.selected.append(card_data)
+		if p.zone == Constants.Zone.CASTILLO:
+			to_shuffle[zone_owner] = true
+		await _deliver(main, zone_owner, card_data, p.zone, destination, false, 0, result)
+	for zone_owner in to_shuffle:
+		CardManager.get_deck(zone_owner).shuffle()
+		AnimationQueue.queue_shuffle(zone_owner, "Barajar mazo")
+	if not to_shuffle.is_empty() and main and main.get("_zone_manager"):
+		main._zone_manager._update_castillo_counts()
+	_main.emit_signal("action_search_selected", chooser, result.selected)
+	await _main._end_trigger_collection_and_resolve()
 	return result
 
 
@@ -249,7 +326,7 @@ func _pick_from_zones(player_id: int, zone_infos: Array, to_select: int, min_cou
 
 
 func pick_in_zones(chooser: int, title: String, pools: Array, min_count: int, max_count: int,
-		distinct_names: bool = false, hand_nodes: Array = []) -> Array:
+		distinct_names: bool = false, hand_nodes: Array = [], out_info: Dictionary = {}) -> Array:
 	"""Selector de zonas para QUIEN elige (2026-10-12, a pedido del usuario:
 	"todos los cambios siempre tienen que ser para el Remoto igual"): en la
 	pantalla del Anfitrión, por red en la del Remoto (corre el mismo
@@ -257,11 +334,13 @@ func pick_in_zones(chooser: int, title: String, pools: Array, min_count: int, ma
 	el bot local. 'pools' con is_own relativo a 'chooser'; 'hand_nodes'
 	(opcional) = cartas de la mano de 'chooser' también elegibles. Devuelve
 	[[pool_idx, card_idx]], con pool_idx -1 para una carta de hand_nodes.
-	El llamador revalida (por red puede llegar cualquier cosa)."""
+	El llamador revalida (por red puede llegar cualquier cosa).
+	'out_info' (2026-10-14): se llena con "opened_castles" = índices de los
+	pools de Castillo que quien elige llegó a mirar (hay que barajarlos)."""
 	var main := _main.get_node_or_null("/root/Main")
 	var raw_picks: Array = []
 	if chooser == 1 and NetworkClient.room_code != "" and NetworkClient.is_host:
-		raw_picks = await _delegate_zone_pick_to_remote(title, pools, min_count, max_count, distinct_names, hand_nodes)
+		raw_picks = await _delegate_zone_pick_to_remote(title, pools, min_count, max_count, distinct_names, hand_nodes, out_info)
 	elif chooser == 1 or not main or not main.get("_zone_browse_picker") or not main._zone_browse_picker:
 		# Bot local (o sin selector disponible): las primeras elegibles.
 		for pi in range(pools.size()):
@@ -270,8 +349,14 @@ func pick_in_zones(chooser: int, title: String, pools: Array, min_count: int, ma
 					raw_picks.append([pi, ci])
 		if raw_picks.is_empty() and not hand_nodes.is_empty() and min_count > 0:
 			raw_picks.append([-1, 0])
+		var opened: Array = []
+		for rp in raw_picks:
+			if rp[0] >= 0 and pools[rp[0]].zone == Constants.Zone.CASTILLO and not opened.has(rp[0]):
+				opened.append(rp[0])
+		out_info["opened_castles"] = opened
 	else:
 		raw_picks = await main._zone_browse_picker.pick(title, pools, min_count, max_count, distinct_names, hand_nodes)
+		out_info["opened_castles"] = main._zone_browse_picker.last_opened_castles()
 	return raw_picks
 
 
@@ -297,12 +382,12 @@ func _validated_picks(raw_picks: Array, pools: Array, zone_infos: Array, to_sele
 			continue
 		seen[key] = true
 		names[card_name] = true
-		picks.append({"zone": zone_infos[pi].zone, "zone_data": zone_infos[pi].data, "data": data})
+		picks.append({"zone": zone_infos[pi].zone, "zone_data": zone_infos[pi].data, "data": data, "pool": pi})
 	return picks
 
 
 func _delegate_zone_pick_to_remote(title: String, pools: Array, min_count: int, max_count: int,
-		distinct_names: bool, hand_nodes: Array = []) -> Array:
+		distinct_names: bool, hand_nodes: Array = [], out_info: Dictionary = {}) -> Array:
 	"""Contraparte en red del selector: el Remoto lo corre en su pantalla
 	(RemoteMirrorController._show_zone_pick_prompt()). 'is_own' ya viene
 	relativo al Remoto (chooser == 1). Las cartas de la mano viajan por id
@@ -322,6 +407,7 @@ func _delegate_zone_pick_to_remote(title: String, pools: Array, min_count: int, 
 		"hand_card_ids": hand_ids,
 	})
 	var intent: Dictionary = await NetworkClient.await_intent(["zone_pick_choice"])
+	out_info["opened_castles"] = intent.get("opened_castles", [])
 	return intent.get("picks", [])
 
 

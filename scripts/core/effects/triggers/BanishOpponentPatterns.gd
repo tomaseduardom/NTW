@@ -627,13 +627,12 @@ func try_execute_search_two_distinct_names_banish_or_cemetery_pattern(ability_te
 	var main := _main.get_node_or_null("/root/Main")
 	if not main:
 		return true
-	var zone_owner: int = await _main._targeted_executor._choose_search_zone_owner(controller_id, Constants.Zone.CASTILLO)
 	var to_banish: bool = await SelectionManager.await_two_choice(
 		main, "necro-titan", "Ponerlas en el Destierro", "Ponerlas en el Cementerio", controller_id)
 	var destination: int = Constants.Zone.DESTIERRO if to_banish else Constants.Zone.CEMENTERIO
 	if await TriggerSystem.open_response_window(card, str(card.card_name), controller_id):
 		return true
-	await ActionModule.search(zone_owner, Constants.Zone.CASTILLO, {}, 2, true, false, false, card, destination, true)
+	await ActionModule.search_either_owner(controller_id, [Constants.Zone.CASTILLO], {}, 2, true, card, destination, true)
 	return true
 
 
@@ -658,9 +657,9 @@ func try_execute_banish_cost_or_search_two_banish_pattern(ability_text: String, 
 		if target and is_instance_valid(target):
 			await ActionModule.banish([target], card, true)
 	else:
-		var zone_owner: int = await _main._targeted_executor._choose_search_zone_owner(controller_id, Constants.Zone.CASTILLO)
 		if not await TriggerSystem.open_response_window(card, str(card.card_name), controller_id):
-			await ActionModule.search(zone_owner, Constants.Zone.CASTILLO, {}, 2, true, false, false, card, Constants.Zone.DESTIERRO)
+			await ActionModule.search_either_owner(controller_id, [Constants.Zone.CASTILLO], {}, 2, true, card,
+				Constants.Zone.DESTIERRO)
 	return true
 
 

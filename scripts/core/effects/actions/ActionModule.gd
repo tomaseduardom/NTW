@@ -160,11 +160,22 @@ func search_zones(player_id: int, zones: Array, filter: Dictionary, amount: int 
 		source_card, destination, distinct_names, chooser_id, cost_reduction)
 
 
+## 'Busca en UN Castillo/Cementerio' (sin posesivo): selector con las zonas de
+## los dos jugadores, atado al primer Castillo que se mira (2026-10-14, ver
+## ActionSearch.search_either_owner()).
+func search_either_owner(chooser: int, zones: Array, filter: Dictionary, amount: int, can_fail: bool = true,
+		source_card: Node = null, destination: int = Constants.Zone.MANO, distinct_names: bool = false) -> Dictionary:
+	if await EffectContextScript.ensure_window():  # ventana única por efecto (§59)
+		return {"success": false, "cancelled": true, "selected": []}
+	return await _action_search.search_either_owner(chooser, zones, filter, amount, can_fail, source_card,
+		destination, distinct_names)
+
+
 ## Selector de zonas (+ cartas de la mano) para quien elige: Anfitrión,
 ## Remoto o bot (2026-10-12, ver ActionSearch.pick_in_zones()).
 func pick_in_zones(chooser: int, title: String, pools: Array, min_count: int, max_count: int,
-		distinct_names: bool = false, hand_nodes: Array = []) -> Array:
-	return await _action_search.pick_in_zones(chooser, title, pools, min_count, max_count, distinct_names, hand_nodes)
+		distinct_names: bool = false, hand_nodes: Array = [], out_info: Dictionary = {}) -> Array:
+	return await _action_search.pick_in_zones(chooser, title, pools, min_count, max_count, distinct_names, hand_nodes, out_info)
 
 
 ## BanishOpponentPatterns ya llamaba a esto vía ActionModule, pero la fachada

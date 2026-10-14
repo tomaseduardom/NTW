@@ -252,8 +252,7 @@ func try_execute_raise_same_type_gold_and_search_banish_pattern(ability_text: St
 			return card_type == chosen_type
 		main._gold_manager.generar_oro_virtual_restringido(1, predicate, "cartas del mismo tipo", controller_id)
 
-	var zone_owner: int = await _main._targeted_executor._choose_search_zone_owner(controller_id, Constants.Zone.CASTILLO)
-	await ActionModule.search(zone_owner, Constants.Zone.CASTILLO, {}, 1, true, false, false, card, Constants.Zone.DESTIERRO)
+	await ActionModule.search_either_owner(controller_id, [Constants.Zone.CASTILLO], {}, 1, true, card, Constants.Zone.DESTIERRO)
 	return true
 
 
@@ -376,8 +375,21 @@ func try_execute_search_castillo_or_cemetery_to_pagado_pattern(ability_text: Str
 				entries.append({"data": d, "eligible": true})
 			pools.append({"is_own": zone_owner == controller_id, "zone": zone, "cards": entries})
 			pool_src.append({"owner": zone_owner, "zone": zone})
+	# Abrir un Castillo ata la búsqueda a ese (ZoneBrowsePicker._locked_castle,
+	# 2026-10-14) y todo Castillo mirado se baraja, se tome o no la carta de ahí.
+	var info: Dictionary = {}
 	var picks: Array = await ActionModule.pick_in_zones(controller_id,
-		"%s: busca una carta en un Castillo o Cementerio" % str(card.get("card_name")), pools, 0, 1)
+		"%s: busca una carta en un Castillo o Cementerio" % str(card.get("card_name")), pools, 0, 1, false, [], info)
+	var looked: Dictionary = {}
+	for i in info.get("opened_castles", []):
+		if int(i) >= 0 and int(i) < pools.size() and pool_src[int(i)].zone == Constants.Zone.CASTILLO:
+			looked[pool_src[int(i)].owner] = true
+	if not picks.is_empty() and picks[0] is Array and picks[0].size() == 2 and int(picks[0][0]) >= 0 \
+			and int(picks[0][0]) < pools.size() and pool_src[int(picks[0][0])].zone == Constants.Zone.CASTILLO:
+		looked[pool_src[int(picks[0][0])].owner] = true
+	for zone_owner in looked:
+		CardManager.shuffle_deck(zone_owner)
+		AnimationQueue.queue_shuffle(zone_owner, "Barajar mazo (%s)" % str(card.get("card_name")))
 	if picks.is_empty() or not (picks[0] is Array) or picks[0].size() != 2:
 		return true
 	var pi: int = int(picks[0][0])
@@ -395,8 +407,6 @@ func try_execute_search_castillo_or_cemetery_to_pagado_pattern(ability_text: Str
 		if idx < 0:
 			return true
 		deck.remove_at(idx)
-		CardManager.shuffle_deck(src.owner)
-		AnimationQueue.queue_shuffle(src.owner, "Barajar mazo (%s)" % str(card.get("card_name")))
 		if main.get("_zone_manager"):
 			main._zone_manager._update_castillo_counts()
 	elif not CardManager.take_from_cemetery(src.owner, found_data):
