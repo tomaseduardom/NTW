@@ -125,6 +125,7 @@ func _ready() -> void:
 	_card_name_search.setup(self)
 	_cemetery_triggers = CemeteryTriggersScript.new()
 	CardManager.card_put_in_cemetery.connect(_cemetery_triggers.on_card_put_in_cemetery)
+	CardManager.card_put_in_exile.connect(_cemetery_triggers.on_card_put_in_exile)
 
 	# Conectar a señales de EffectController para recolectar triggers.
 	# on_card_entered_play y on_card_attacks NO se conectan aquí — esos dos

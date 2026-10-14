@@ -272,7 +272,7 @@ func _mill_cards_fallback(player_id: int, amount: int, destination: int) -> Dict
 				break
 			var card_data: Dictionary = deck.pop_back()
 			card_data["esta_oculta"] = false
-			exile.append(card_data)
+			CardManager.append_to_exile(player_id, card_data)
 			result.milled_cards.append(card_data)
 			result.actual += 1
 		CardManager._emit_exile_changed(player_id)
@@ -770,7 +770,7 @@ func _pay_akari_shuffle_cost(source_card: Node) -> bool:
 ## RIVAL de quien jugó controla un Akari disponible y la carta jugada cuesta
 ## 2 o menos; si el jugador confirma, paga el mismo costo compartido
 ## (_pay_akari_shuffle_cost) y Anula (destruye) la carta recién jugada.
-func offer_counter_annul(played_card: Node) -> void:
+func offer_counter_annul(played_card) -> void:  # sin tipo: puede llegar ya liberada (2026-10-14)
 	if not is_instance_valid(played_card):
 		return
 	var played_owner: int = played_card.controller_id if played_card.get("controller_id") != null else 0
@@ -828,7 +828,7 @@ func offer_counter_annul(played_card: Node) -> void:
 ## marcado como código muerto, no es lo que usan las cartas reales). Llamar
 ## desde el mismo choke point que offer_counter_annul() (después de que
 ## played_card termina de entrar en juego), del lado de quien la jugó.
-func offer_flechar_xoon_annul(played_card: Node) -> void:
+func offer_flechar_xoon_annul(played_card) -> void:  # sin tipo: puede llegar ya liberada (2026-10-14)
 	if not is_instance_valid(played_card):
 		return
 	var played_type = played_card.get("card_type")

@@ -20,6 +20,8 @@ signal cemetery_count_changed(player_id: int, new_count: int)
 ## Cualquier carta que entra a un Cementerio (2026-10-14, disparadores
 ## "Cuando sea puesta en tu Cementerio", ver CemeteryTriggers.gd).
 signal card_put_in_cemetery(player_id: int, card_data: Dictionary)
+## Igual para el Destierro (fudo-myo: "un Talismán puesto en tu Cementerio o Destierro").
+signal card_put_in_exile(player_id: int, card_data: Dictionary)
 signal exile_count_changed(player_id: int, new_count: int)
 signal field_count_changed(player_id: int, new_count: int)
 
@@ -210,8 +212,15 @@ func add_to_exile(player_id: int, card_data: Dictionary) -> void:
 	Amarillo: busca en un Castillo y Destiérralas directo, sin llevárselas a
 	la mano primero)."""
 	card_data["esta_oculta"] = false
-	_zones[player_id].exile.append(card_data)
+	append_to_exile(player_id, card_data)
 	_emit_exile_changed(player_id)
+
+
+func append_to_exile(player_id: int, card_data: Dictionary) -> void:
+	"""Punto único para agregar una entrada a un Destierro (2026-10-14, ver
+	card_put_in_exile)."""
+	_zones[player_id].exile.append(card_data)
+	card_put_in_exile.emit(player_id, card_data)
 
 
 # =============================================================================
@@ -465,7 +474,7 @@ func destroy_card(player_id: int, card: Node) -> void:
 	card_data["esta_oculta"] = false
 	var is_exhumed = card.get("is_exhumed") == true
 	if is_exhumed:
-		_zones[player_id].exile.append(card_data)
+		append_to_exile(player_id, card_data)
 		emit_signal("card_exiled", player_id, card)
 		_emit_exile_changed(player_id)
 		print("[CardManager] Carta exhumada '%s' desterrada (no vuelve al cementerio)" % card_data.get("nombre", "?"))
@@ -540,7 +549,7 @@ func exile_card(player_id: int, card: Node) -> void:
 
 	var card_data = card.card_data.duplicate() if card.get("card_data") else {}
 	card_data["esta_oculta"] = false
-	_zones[player_id].exile.append(card_data)
+	append_to_exile(player_id, card_data)
 
 	emit_signal("card_exiled", player_id, card)
 	_emit_exile_changed(player_id)

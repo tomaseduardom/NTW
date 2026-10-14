@@ -6313,3 +6313,37 @@ prime no disparaba.
   (liberado) rompía `_get_strength` ("previously freed"). Ahora se saltea; si el que
   falta es el bloqueador, el atacante sigue bloqueado y no hace daño.
 - Prueba: `test_lanza.gd`.
+
+## 73. Las demás cartas de "puesta en tu Cementerio", selector sin Confirmar, Akari (2026-10-14)
+
+**A pedido del usuario.**
+
+- `CemeteryTriggers.gd` (§72) cubre ahora, además de Lanza Argenta:
+  - la propia carta que entra: kultrung (por efecto o daño oponente → puedes subirla a
+    tu mano), piedra del chaman (por efecto oponente → a tu Oro Pagado), haka pei (por
+    efecto oponente → se juega gratis y va al Destierro: `play_card_for_free(...,
+    exile_after)` la marca `is_exhumed`), daiksuke (en el turno oponente → se juega por
+    un Oro menos, obligatorio si alcanza el Oro), serpiente verde (si no controlas Aliados
+    de coste 1 o menos → puedes barajar hasta 4 de los Cementerios), manzana envenenada
+    (en el turno oponente → puedes desterrarla para desterrar 2 del tope del Castillo
+    rival);
+  - cartas en juego que miran tu Cementerio, una vez por turno cada copia: manu tara
+    ("puedes barajarla en tu Castillo") y fudo-myo (un Talismán a tu Cementerio o
+    Destierro → puedes barajar hasta 3 de los Cementerios).
+- "Por un efecto/daño oponente" se decide al entrar la carta: controlador del
+  EffectContext en curso; si no hay, combate en curso = daño del jugador activo; si no,
+  el controlador del objeto de la Pila que se resuelve; si no, el jugador activo.
+- `CardManager.append_to_exile()` + señal `card_put_in_exile`: punto único para el
+  Destierro (los 7 lugares que hacían `exile.append()` a mano pasan por ahí).
+- El bot local acepta los "puedes" sin abrir el popup en la pantalla del Anfitrión
+  (`await_choice` para el jugador 1 sin red lo mostraba al Anfitrión).
+- Una sola ventana por efecto: haka pei y piedra del chaman no abren la suya (jugar el
+  Talismán / poner el Oro en juego ya se la da al rival).
+- ZoneBrowsePicker: al elegir la última carta posible (el máximo, o todas las elegibles)
+  se cierra y confirma solo (a pedido del usuario: "si me piden 2 cartas, al hacerle clic
+  a la segunda que se cierre la ventana").
+- `EffectController.offer_counter_annul()` / `offer_flechar_xoon_annul()`: parámetro sin
+  tipo — si la carta jugada salía del juego en sus propios disparadores de entrada, el
+  tipo `Node` rompía antes del `is_instance_valid()` ("previously freed").
+- Prueba: `test_cemtrig.gd` (kultrung, piedra del chaman, manzana envenenada, serpiente
+  verde con el bot de dueño).

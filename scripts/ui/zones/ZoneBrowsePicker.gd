@@ -540,6 +540,20 @@ func _toggle(pool_idx: int, card_idx: int, card: Node) -> void:
 	if is_instance_valid(card):
 		card.set_activatable(not is_selected, CardBadges.GLOW_COLOR_CELESTE, &"zone_pick")
 	_refresh_paso()
+	# Con la última carta que se puede elegir se cierra solo, sin Confirmar
+	# (2026-10-14, a pedido del usuario: "si me piden 2 cartas, al hacerle
+	# clic a la segunda que se cierre la ventana").
+	if is_selected and _selected.size() >= mini(_max, _eligible_total()):
+		_try_confirm()
+
+
+func _eligible_total() -> int:
+	var n := 0
+	for pool in _pools:
+		for c in pool.cards:
+			if c.eligible:
+				n += 1
+	return n
 
 
 func _refresh_paso() -> void:

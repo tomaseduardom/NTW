@@ -959,7 +959,7 @@ func play_card_from_cemetery(card_data: Dictionary, owner_id: int = 0) -> bool:
 	return true
 
 
-func play_card_for_free(card_data: Dictionary, owner_id: int = 0) -> bool:
+func play_card_for_free(card_data: Dictionary, owner_id: int = 0, exile_after: bool = false) -> bool:
 	"""Juega una carta SIN pagar su coste ni pasar por la mano (2026-08-25,
 	p.ej. Tangata Manu: 'juega una carta de coste 2 o menos... sin pagar su
 	coste'). El llamador ya sacó card_data de su zona de origen — aquí solo
@@ -986,6 +986,10 @@ func play_card_for_free(card_data: Dictionary, owner_id: int = 0) -> bool:
 		return false
 	var card = _main._create_card(card_data, false)
 	card.owner_id = owner_id
+	# "juégalo ... y Destiérralo" (2026-10-14, haka pei): al salir del juego
+	# va al Destierro, igual que una carta exhumada.
+	if exile_after:
+		card.is_exhumed = true
 	_main._connect_card_signals(card)
 
 	if card_type == Constants.CardType.ARMA and not _player_has_ally_in_play():

@@ -524,7 +524,7 @@ func move_card(from_zone: Constants.Zone, to_zone: Constants.Zone, amount: int =
 					_main._update_debug("Castillo vacío"); return
 				var data = _main.player_deck.pop_front()
 				data["esta_oculta"] = false
-				CardManager.get_exile(0).append(data)
+				CardManager.append_to_exile(0, data)
 				CardManager._emit_exile_changed(0)
 				_update_castillo_counts()
 

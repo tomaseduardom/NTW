@@ -78,7 +78,7 @@ func _activate_asmodeus_gold_and_banish_bottom(source_card: Node, ability: Dicti
 			break
 		var card_data: Dictionary = deck.pop_back()
 		card_data["esta_oculta"] = false
-		exile.append(card_data)
+		CardManager.append_to_exile(zone_owner, card_data)
 	CardManager._emit_exile_changed(zone_owner)
 	CardManager._emit_deck_changed(zone_owner)
 
@@ -107,7 +107,7 @@ func _activate_belcebu_banish_bottom_and_steal(source_card: Node, ability: Dicti
 			break
 		var card_data: Dictionary = deck.pop_back()
 		card_data["esta_oculta"] = false
-		exile.append(card_data)
+		CardManager.append_to_exile(zone_owner, card_data)
 	CardManager._emit_exile_changed(zone_owner)
 	CardManager._emit_deck_changed(zone_owner)
 

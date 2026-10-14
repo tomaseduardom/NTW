@@ -233,7 +233,7 @@ func try_execute_pay_x_banish_opponent_castillo_draw_per_talisman_totem_pattern(
 			break
 		var card_data: Dictionary = deck.pop_front()
 		card_data["esta_oculta"] = false
-		exile.append(card_data)
+		CardManager.append_to_exile(opponent_id, card_data)
 		var tipo: int = card_data.get("tipo", -1)
 		if tipo == Constants.CardType.TALISMAN or tipo == Constants.CardType.TOTEM:
 			banished_talisman_totem_count += 1
