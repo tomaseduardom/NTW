@@ -260,6 +260,32 @@ func _pulse_zone_panel(panel: Control, color: Color) -> void:
 	tw.tween_property(panel, "scale", Vector2.ONE, 0.20)
 
 
+func _detach_for_flight(card: Node) -> void:
+	"""Saca la carta de la mano/abanico/campo y la deja colgando del tablero
+	para animar su vuelo. 2026-10-13, bug real reportado por el usuario (se
+	quedaba pegado en la Fase Final al descartar por límite de mano): sacarla
+	de la mano la dejaba FUERA del árbol, y un tween de un nodo fuera del árbol
+	nunca termina (probado) — el 'await tw.finished' colgaba para siempre.
+	Antes eran 3 copias del mismo bloque (Cementerio, Destierro, Castillo)."""
+	var gpos: Vector2 = card.global_position
+	var from_field := true
+	if _main.player_hand and _main.player_hand.cards.has(card):
+		_main.player_hand.remove_card(card, false)
+		from_field = false
+	elif _main.get("_opponent_fan") and _main._opponent_fan and _main._opponent_fan.has_method("get_cards") and _main._opponent_fan.get_cards().has(card):
+		_main._opponent_fan.remove_card(card, false)
+		from_field = false
+	var gb = _main.game_board if _main.get("game_board") else _main.get_node_or_null("GameBoard")
+	if not gb or card.get_parent() == gb:
+		return
+	if card.get_parent():
+		card.get_parent().remove_child(card)
+	gb.add_child(card)
+	card.global_position = gpos
+	if from_field:
+		compact_all_fields(true)
+
+
 func animate_card_return_to_deck(card: Node, player_id: int = 0) -> void:
 	"""Trayectoria parabólica 3D de vuelta al Castillo con giro sobre su eje (ocultando cara)."""
 	if not is_instance_valid(card) or not card.is_inside_tree() or not card.visible:
@@ -272,20 +298,7 @@ func animate_card_return_to_deck(card: Node, player_id: int = 0) -> void:
 		card.can_interact = false
 	card.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
-	# Desacoplar de la mano o campo para reorganizar la formación de inmediato
-	if _main.player_hand and _main.player_hand.cards.has(card):
-		_main.player_hand.remove_card(card, false)
-	elif _main.get("_opponent_fan") and _main._opponent_fan and _main._opponent_fan.has_method("get_cards") and _main._opponent_fan.get_cards().has(card):
-		_main._opponent_fan.remove_card(card, false)
-	else:
-		var gb = _main.game_board if _main.get("game_board") else _main.get_node_or_null("GameBoard")
-		var old_parent = card.get_parent()
-		if gb and old_parent and old_parent != gb:
-			var cur_gpos = card.global_position
-			old_parent.remove_child(card)
-			gb.add_child(card)
-			card.global_position = cur_gpos
-			compact_all_fields(true)
+	_detach_for_flight(card)
 
 	var target_panel = get_zone_panel("Castillo", player_id)
 	var end_scale = Vector2(0.66, 0.66)
@@ -357,19 +370,7 @@ func animate_card_exile(card: Node, player_id: int = 0) -> void:
 		card.can_interact = false
 	card.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
-	if _main.player_hand and _main.player_hand.cards.has(card):
-		_main.player_hand.remove_card(card, false)
-	elif _main.get("_opponent_fan") and _main._opponent_fan and _main._opponent_fan.has_method("get_cards") and _main._opponent_fan.get_cards().has(card):
-		_main._opponent_fan.remove_card(card, false)
-	else:
-		var gb = _main.game_board if _main.get("game_board") else _main.get_node_or_null("GameBoard")
-		var old_parent = card.get_parent()
-		if gb and old_parent and old_parent != gb:
-			var cur_gpos = card.global_position
-			old_parent.remove_child(card)
-			gb.add_child(card)
-			card.global_position = cur_gpos
-			compact_all_fields(true)
+	_detach_for_flight(card)
 
 	var target_panel = get_zone_panel("Destierro", player_id)
 	var end_scale = Vector2(0.35, 0.35)
@@ -430,19 +431,7 @@ func animate_card_to_cemetery(card: Node, player_id: int = 0) -> void:
 		card.can_interact = false
 	card.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
-	if _main.player_hand and _main.player_hand.cards.has(card):
-		_main.player_hand.remove_card(card, false)
-	elif _main.get("_opponent_fan") and _main._opponent_fan and _main._opponent_fan.has_method("get_cards") and _main._opponent_fan.get_cards().has(card):
-		_main._opponent_fan.remove_card(card, false)
-	else:
-		var gb = _main.game_board if _main.get("game_board") else _main.get_node_or_null("GameBoard")
-		var old_parent = card.get_parent()
-		if gb and old_parent and old_parent != gb:
-			var cur_gpos = card.global_position
-			old_parent.remove_child(card)
-			gb.add_child(card)
-			card.global_position = cur_gpos
-			compact_all_fields(true)
+	_detach_for_flight(card)
 
 	var target_panel = get_zone_panel("Cementerio", player_id)
 	var end_scale = Vector2(0.66, 0.66)

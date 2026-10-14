@@ -6137,3 +6137,23 @@ su prompt de prioridad solo le ofrecía Talismanes y habilidades. Ahora
 `_play_weapon_remote()` devuelve si equipó (si cancela el portador, se le
 vuelve a dar su prioridad) y marca la acción de la Guerra (§64) para que el
 turno pase al Anfitrión.
+
+## 66. Fase Final pegada al descartar; ventana de respuesta vacía que no se pasaba (2026-10-13)
+
+**Bugs reales reportados por el usuario.**
+
+- **Se quedaba pegado en la Fase Final** al descartar por límite de mano (no
+  pasaba al turno del bot). `ZoneManager.animate_card_to_cemetery()` (y las de
+  Destierro y Castillo) sacaban la carta de la mano con `remove_card(card,
+  false)`, que la deja FUERA del árbol; un tween de un nodo fuera del árbol
+  nunca termina (probado con un script aislado), así que `await tw.finished`
+  colgaba para siempre. Las 3 copias del bloque pasan a `_detach_for_flight()`,
+  que siempre deja la carta colgando del tablero durante el vuelo.
+- **Ventana de respuesta sin nada a qué responder** (quimera voragh): al vaciarse
+  la pila, `_on_stack_resolved()` abre una ventana vacía que el humano pasa
+  solo a los 0.2s, pero si en ese momento estaba eligiendo la carta del
+  Cementerio (`suppress_human_autopass`) el auto-pase se cancelaba y la ventana
+  quedaba abierta ("Resuelve la respuesta pendiente"). Ahora
+  `_human_pass_after()`, si no hay objeto en la pila (`current_stack_controller`
+  = -1), espera a que termine la elección y pasa igual. Con un objeto real en la
+  pila sigue sin pasar por abajo (Signo Amarillo). Aplica igual online.

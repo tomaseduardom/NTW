@@ -473,7 +473,21 @@ func _human_has_instant_response_talisman_in_hand() -> bool:
 func _human_pass_after(delay: float, scheduled_for_generation: int) -> void:
 	await get_tree().create_timer(delay).timeout
 	if PriorityManager.suppress_human_autopass:
-		return  # hay un diálogo reactivo real esperando decisión (Signo Amarillo)
+		# Hay una decisión real en curso (Signo Amarillo, elegir un objetivo).
+		# Con un objeto en la pila al que responder, no se pasa por abajo.
+		if PriorityManager.current_stack_controller >= 0:
+			return
+		# 2026-10-13, bug real reportado por el usuario (quimera voragh: "un
+		# paso de respuesta medio raro, no entiendo a qué responder"): la
+		# ventana vacía de "pila recién resuelta" (_on_stack_resolved()) se
+		# abría mientras elegía la carta del Cementerio — el auto-pase se
+		# cancelaba y la ventana quedaba abierta bloqueando la siguiente
+		# carta. Sin nada a qué responder, se espera a que termine la
+		# elección y se pasa igual.
+		while PriorityManager.suppress_human_autopass:
+			if PriorityManager._window_generation != scheduled_for_generation or not PriorityManager.priority_window_active:
+				return
+			await get_tree().create_timer(0.1).timeout
 	# 2026-09-15, bug real reportado por el usuario ("se traba en Guerra de
 	# Talismanes", confirmado con diagnóstico en vivo: la ventana abría bien
 	# pero se cerraba sola sin ningún click): si la ventana de RESPONSE_
