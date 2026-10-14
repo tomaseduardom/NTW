@@ -7,6 +7,7 @@ class_name TriggerResolution
 ## Extraído de TriggerSystem.gd (Fase 4 de reestructuración).
 
 const EffectContextScript = preload("res://scripts/core/effects/EffectContext.gd")  # detector de paridad (§56)
+const CastleLookScript = preload("res://scripts/core/effects/CastleLook.gd")  # "mira N cartas" (§69)
 
 var _main: Node
 
@@ -266,6 +267,11 @@ func _resolve_look_and_play_patterns(card: Node, full_ability_text: String, isol
 	# sobre el texto COMPLETO y gana la primera coincidencia, que puede
 	# quedarse con una parte del efecto y saltarse el resto.
 	if await _main._effect_interpreter.try_execute(card, isolated_ability_text, controller_id):
+		return true
+	# "Mira N cartas del tope/fondo de un Castillo" (2026-10-13, §69): una sola
+	# ventana para repartir y ordenar (CastleLook.gd). Solo si entiende todo el
+	# bloque; si no, sigue la cadena de siempre.
+	if await CastleLookScript.try_execute_text(card, isolated_ability_text, controller_id):
 		return true
 	# Habilidades ACTIVADAS de Tótems (2026-09-20, arquitectura.md "539
 	# cartas sin cobertura") — llegan aquí también vía TriggerSystem.

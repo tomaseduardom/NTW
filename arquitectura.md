@@ -6195,3 +6195,44 @@ tipo y texto). Se puede confirmar sin elegir (buscar puede fallar).
   `pin_card_to_field_slot()`. `ZoneManager._on_field_child_entered()` compacta la
   línea si a los 0.15s la carta sigue sin casilla (cubre los 11 sitios así, y
   el espejo del Remoto).
+
+## 69. Mirar el Castillo: una sola ventana para repartir y ordenar (2026-10-13)
+
+**A pedido del usuario.** Regla (DAR, confirmada por el usuario): mirar cartas de un
+Castillo siempre deja ORDENAR las que vuelven, aunque el texto no lo diga; vuelven al
+mismo lado del que se miraron (tope → tope, fondo → fondo) salvo que el efecto diga
+otra cosa (Infernum Vox / Libro de Revelaciones: "tope y/o fondo"). "Muestra" NO
+entra (es público). Y la secuencia: el efecto termina COMPLETO (orden incluido) antes
+de que se dispare nada de lo que provocó (Patria Vieja pone Drácula en la Reserva →
+primero se ordenan las 5 del tope, después Drácula roba).
+
+- `scripts/ui/zones/CastleLookWindow.gd`: una ventana con una fila por zona (mano,
+  Cementerio, Destierro, Reserva, fondo, "vuelven al tope"). Clic en una carta y
+  después en el nombre de la zona; ◀ ▶ ordenan (izquierda = más arriba). Confirmar se
+  habilita con los mínimos cumplidos. Corre igual en el Remoto (prompt `castle_look`
+  → intent `castle_look_choice`, el Anfitrión revalida con `validate()`); el bot
+  local usa `auto_pick()`.
+- `scripts/core/effects/CastleLook.gd`: `look()` saca las N cartas recién al
+  confirmar (y después de la ventana de respuesta del rival, §59 opción B: si la
+  cancela, nada se movió) y aplica los destinos en orden Castillo → mano/Cementerio/
+  Destierro → Oros al final (los que pueden disparar "cuando entra en juego").
+  `try_execute_text()` lee el texto ("mira N / las primeras N / tantas ... como X
+  cartas del tope/fondo de tu/un Castillo", "pon N (de ahí) en tu mano", "otra en tu
+  Cementerio/Destierro/el fondo", "ordena/baraja/regresa el resto", "el resto en tu
+  Cementerio/mano", "pon un Oro de ahí en tu Reserva [como un Oro sin habilidad]",
+  "hasta N Oros y/o Aliados", "Roba N cartas" al final) y solo se encarga si entiende
+  TODO el bloque; si no, sigue la cadena de patrones de siempre. Va justo después de
+  EffectCompiler en `TriggerResolution._resolve_look_and_play_patterns()` (cubre
+  triggers, Talismanes y activadas), y Patria Vieja lo usa desde su botón.
+- Cobertura (script de prueba sobre las cartas reales): 22 cartas, entre ellas Signo
+  Amarillo, Tesoro de los Césares, Trono del Cielo, Trono del Rey Eterno, Sarcófago
+  Impío (fondo), Kappa, Ianthe, Murciélagos del Caos, Conde Drácula, Cueva del Horror,
+  Karakórum, Honjo Masamune, Cena Navideña, Black Ursa, El Mago, Pachamama, Piedra de
+  la Iglesia, Libro de Revelaciones/Infernum Vox, Ciudad Subterránea, Patria Vieja.
+  Quedan con su código anterior (texto con algo más que el lector no entiende):
+  Polvo de Hadas y Relicario ("X o Y"), Báculo de los Eternos, Camilo Henríquez,
+  Carro Szgany, Uchiwa, Envenenar (coste antes de mirar), Tadg, Nombre de Horus, Negar
+  la Luz, Shami Choro, Vlad Tepes, nu-galahad, Regresa la Razón, Ritual de la Bestia,
+  Locura de Renfield, Valefor, Torii.
+- Pendiente aparte: Lanza Argenta ("cuando sea puesta en tu Cementerio...") no tiene
+  trigger implementado en ningún camino.

@@ -29,6 +29,8 @@ class_name RemoteMirrorController
 var _main: Node = null
 var _active: bool = false
 var _current_overlay: Control = null
+const CastleLookWindowScript = preload("res://scripts/ui/zones/CastleLookWindow.gd")
+
 var _card_nodes: Dictionary = {}  # card_id (String) -> Node local (ghost)
 var _hand_card_nodes: Dictionary = {}  # card_id (String) -> Node local en player_hand (§45)
 ## card_ids sin habilidad según el Anfitrión (op "disabled_cards", §63).
@@ -122,6 +124,12 @@ func _on_message(data: Dictionary) -> void:
 					_show_priority_prompt(data)
 				"zone_pick":
 					_show_zone_pick_prompt(data)
+				"castle_look":
+					# Misma ventana que el Anfitrión (CastleLook.gd, §69):
+					# repartir las cartas miradas y ordenar el resto.
+					var look_window = CastleLookWindowScript.new()
+					var result: Dictionary = await look_window.open(_main, data.get("config", {}))
+					NetworkClient.send_message({"op": "intent", "kind": "castle_look_choice", "result": result})
 		"move_card":
 			_apply_move_card(data)
 		"remove_card":

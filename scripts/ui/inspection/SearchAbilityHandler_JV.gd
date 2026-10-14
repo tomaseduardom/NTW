@@ -9,6 +9,7 @@
 ## sobre el Main del juego via _inspector._main).
 
 const PlayerSideScript = preload("res://scripts/core/game/PlayerSide.gd")
+const CastleLookScript = preload("res://scripts/core/effects/CastleLook.gd")  # "mira N cartas" (§69)
 
 var _inspector: CardInspectionLayer
 
@@ -400,9 +401,10 @@ func _activate_patria_vieja_look_six(source_card: Node, ability: Dictionary) -> 
 	"""'En tu Vigilia, si no has puesto Oros en juego este turno, puedes mirar
 	las primeras seis cartas de tu Castillo y poner un Oro de ahí en tu
 	Reserva. Esta habilidad no puede ser cancelada' (Patria Vieja,
-	2026-10-13). Sin ventana de respuesta (no puede ser cancelada). Las
-	cartas que no se eligen quedan en el tope en el mismo orden. La versión
-	IMP agrega 'como un Oro sin habilidad'."""
+	2026-10-13). Sin ventana de respuesta (no puede ser cancelada). La
+	ventana de mirar es la misma de todas las cartas que miran el Castillo
+	(CastleLook, §69): el Oro a la Reserva y las demás se ordenan en el tope.
+	La versión IMP agrega 'como un Oro sin habilidad'."""
 	if not is_instance_valid(source_card):
 		return
 	var owner_id: int = source_card.controller_id if source_card.get("controller_id") != null else 0
@@ -410,33 +412,12 @@ func _activate_patria_vieja_look_six(source_card: Node, ability: Dictionary) -> 
 	if main._gold_manager.oros_en_juego_turno.get(owner_id, 0) > 0:
 		main._update_debug("Patria Vieja: ya pusiste Oros en juego este turno")
 		return
-	var deck: Array = CardManager.get_deck(owner_id)
-	var top: Array = deck.slice(0, 6)
-	if top.is_empty():
+	if CardManager.get_deck(owner_id).is_empty():
 		main._update_debug("Patria Vieja: tu Castillo está vacío")
 		return
 	UniversalCardParser.turn_registry.register_ability_use(source_card, ability)
-	var is_gold := func(d: Dictionary) -> bool: return int(d.get("tipo", -1)) == Constants.CardType.ORO
-	var picked: Dictionary = await SelectionManager.await_single_pick(top,
-		"Patria Vieja: elige un Oro para poner en tu Reserva", true, 0, is_gold, owner_id)
-	if picked.is_empty() or not is_gold.call(picked):
-		return
-	# Por red llega una copia: se ubica por contenido entre las 6 miradas.
-	var idx := -1
-	for i in range(mini(6, deck.size())):
-		if deck[i] == picked:
-			idx = i
-			break
-	if idx < 0:
-		return
-	var gold_data: Dictionary = deck[idx].duplicate()
-	deck.remove_at(idx)
-	CardManager._emit_deck_changed(owner_id)
-	if main.get("_zone_manager"):
-		main._zone_manager._update_castillo_counts()
-	if "como un oro sin habilidad" in str(source_card.get("card_ability")).to_lower():
-		gold_data["habilidad"] = ""
-	await main._gold_manager.put_gold_directly_in_reserva(owner_id, gold_data)
+	if not await CastleLookScript.try_execute_text(source_card, str(ability.get("raw_text", "")), owner_id):
+		push_warning("[Patria Vieja] CastleLook no entendió: %s" % str(ability.get("raw_text", "")))
 
 
 func _activate_cemetery_granted_draw(source_card: Node, ability: Dictionary) -> void:
