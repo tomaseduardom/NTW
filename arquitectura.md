@@ -6287,3 +6287,29 @@ prime no disparaba.
   disparadores. Agregada a entrar y salir.
 - alto prime "busca en cada Castillo": elige quien controla la carta también en el
   Castillo rival (`chooser_id`, mismo error que §70).
+
+## 72. "Cuando sea puesta en tu Cementerio" (Lanza Argenta) y combate con cartas que ya no están (2026-10-14)
+
+**A pedido del usuario.**
+
+- `CardManager.card_put_in_cemetery(player_id, card_data)`: se emite desde
+  `_append_to_cemetery()`, el único punto por donde entra cualquier carta a un
+  Cementerio (descarte, destrucción, daño al Castillo, mirar/buscar, etc.).
+- `scripts/core/effects/triggers/CemeteryTriggers.gd` (lo crea TriggerSystem): anota la
+  carta y la resuelve recién cuando NO queda nada resolviéndose — EffectContext vacío,
+  ActionPipeline quieto, sin triggers en cola ni ventana de respuesta, sin selector/
+  elección abierta, sin combate en curso — durante 0,3 s seguidos. Así se cumple la
+  regla del usuario: "Signo Amarillo descarta Lanza Argenta → Signo termina primero,
+  después dispara la Lanza". La carta está en el Cementerio (solo datos), así que para
+  la ventana del rival se arma un Node temporal. No dispara si está silenciada en el
+  Cementerio (Sable de Napoleón) o su nombre está bloqueado (Alicia).
+- Lanza Argenta: selector con los dos Cementerios (la propia Lanza no es elegible),
+  hasta 2 cartas de UN mismo Cementerio (pool `exclusive` nuevo en ZoneBrowsePicker:
+  no deja mezclar zonas; viaja por red al Remoto), ventana del rival después de elegir
+  (§59 opción B), y cada carta vuelve al Castillo de SU dueño, que se baraja.
+- Pendientes con el mismo disparador (no implementados): kultrung, piedra del chaman,
+  haka pei, daiksuke, serpiente verde, manzana envenenada, manu tara, fudo-myo.
+- `BattleManager`: un atacante o bloqueador que salió del juego durante el combate
+  (liberado) rompía `_get_strength` ("previously freed"). Ahora se saltea; si el que
+  falta es el bloqueador, el atacante sigue bloqueado y no hace daño.
+- Prueba: `test_lanza.gd`.

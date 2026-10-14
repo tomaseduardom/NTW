@@ -1354,7 +1354,8 @@ func _show_zone_pick_prompt(data: Dictionary) -> void:
 		for c in p.get("cards", []):
 			cards.append({"data": c.get("data", {}), "eligible": bool(c.get("eligible", false))})
 		# JSON trae los números como float — la zona se usa como clave de Dictionary.
-		pools.append({"is_own": bool(p.get("is_own", true)), "zone": int(p.get("zone", 0)), "cards": cards})
+		pools.append({"is_own": bool(p.get("is_own", true)), "zone": int(p.get("zone", 0)), "cards": cards,
+			"exclusive": bool(p.get("exclusive", false))})
 	if not _main._zone_browse_picker:
 		NetworkClient.send_message({"op": "intent", "kind": "zone_pick_choice", "picks": []})
 		return

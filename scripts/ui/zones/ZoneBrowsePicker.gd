@@ -526,6 +526,12 @@ func _toggle(pool_idx: int, card_idx: int, card: Node) -> void:
 				if str(_pools[s[0]].cards[s[1]].data.get("nombre", "")) == card_name:
 					_main._update_debug("Ya elegiste una carta con ese nombre")
 					return
+		if not _selected.is_empty() and _selected[0][0] != pool_idx \
+				and (_pools[pool_idx].get("exclusive", false) or _pools[_selected[0][0]].get("exclusive", false)):
+			# "de un Cementerio" (2026-10-14, Lanza Argenta): todas de la misma zona.
+			_main._update_debug("Todas tienen que ser de %s" % zone_label(_pools[_selected[0][0]].is_own,
+				_pools[_selected[0][0]].zone))
+			return
 		_selected.append([pool_idx, card_idx])
 	var is_selected := pos < 0
 	var marker: Panel = _viewer_markers.get(card_idx, null)

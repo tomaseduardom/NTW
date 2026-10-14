@@ -17,6 +17,9 @@ signal zone_changed(card: Node, from_zone: int, to_zone: int, player_id: int)
 signal deck_count_changed(player_id: int, new_count: int)
 signal hand_count_changed(player_id: int, new_count: int)
 signal cemetery_count_changed(player_id: int, new_count: int)
+## Cualquier carta que entra a un Cementerio (2026-10-14, disparadores
+## "Cuando sea puesta en tu Cementerio", ver CemeteryTriggers.gd).
+signal card_put_in_cemetery(player_id: int, card_data: Dictionary)
 signal exile_count_changed(player_id: int, new_count: int)
 signal field_count_changed(player_id: int, new_count: int)
 
@@ -240,6 +243,7 @@ func _append_to_cemetery(player_id: int, card_data: Dictionary) -> void:
 	if _cemetery_silence_capture_active:
 		card_data["_silenced_by_cemetery_effect"] = true
 	_zones[player_id].cemetery.append(card_data)
+	card_put_in_cemetery.emit(player_id, card_data)
 
 
 func is_cemetery_card_silenced(card_data: Dictionary) -> bool:

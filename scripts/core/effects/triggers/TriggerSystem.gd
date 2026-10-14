@@ -93,6 +93,9 @@ var _oro_patterns: RefCounted
 ## 2026-10-12, arquitectura.md §54) — se prueba ANTES de la cadena de
 ## patrones en TriggerResolution._resolve_look_and_play_patterns().
 var _effect_interpreter: RefCounted
+## "Cuando sea puesta en tu Cementerio" (2026-10-14, Lanza Argenta).
+const CemeteryTriggersScript = preload("res://scripts/core/effects/triggers/CemeteryTriggers.gd")
+var _cemetery_triggers: RefCounted
 
 
 func _ready() -> void:
@@ -120,6 +123,8 @@ func _ready() -> void:
 	_look_and_play.setup(self)
 	_card_name_search = CardNameSearchDialogScript.new()
 	_card_name_search.setup(self)
+	_cemetery_triggers = CemeteryTriggersScript.new()
+	CardManager.card_put_in_cemetery.connect(_cemetery_triggers.on_card_put_in_cemetery)
 
 	# Conectar a señales de EffectController para recolectar triggers.
 	# on_card_entered_play y on_card_attacks NO se conectan aquí — esos dos

@@ -88,12 +88,23 @@ func calculate_combat_damage() -> Dictionary:
 
 	# Procesar cada atacante
 	for attacker in attackers:
+		# Una carta que salió del juego durante el combate (destruida o
+		# desterrada por un efecto en la ventana de respuesta) ya no está:
+		# no hace ni recibe daño (2026-10-14, bug real reportado por el
+		# usuario: "_get_strength ... previously freed").
+		if not is_instance_valid(attacker):
+			continue
 		var attacker_strength = _get_strength(attacker)
 		var attacker_name = _get_card_name(attacker)
 
 		# Verificar si tiene bloqueador asignado
 		if blockers.has(attacker):
 			var blocker = blockers[attacker]
+			if not is_instance_valid(blocker):
+				# El bloqueador salió del juego: el atacante sigue bloqueado
+				# y no hace daño.
+				print("[BattleManager] %s: su bloqueador ya no está en juego, no hace daño" % attacker_name)
+				continue
 			var blocker_strength = _get_strength(blocker)
 			var blocker_name = _get_card_name(blocker)
 
