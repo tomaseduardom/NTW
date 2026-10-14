@@ -741,6 +741,18 @@ const DRAW_REGEX: String = "(?:Roba|Robas)\\s+(?:hasta\\s+)?(una|dos|tres|cuatro
 
 
 func extract_action(text: String) -> Dictionary:
+	"""Ver _extract_action_impl(). Agrega "source_text": el texto que se
+	analizó (2026-10-14, bug real reportado por el usuario: Akari Musashi —
+	la búsqueda genérica releía el texto COMPLETO de la carta, encontraba
+	"oponente" en otra habilidad y buscaba en el Castillo rival, eligiendo
+	el bot)."""
+	var action := _extract_action_impl(text)
+	if action.get("matched", false):
+		action["source_text"] = text
+	return action
+
+
+func _extract_action_impl(text: String) -> Dictionary:
 	"""Extrae la primera acción reconocida del texto de una habilidad.
 
 	Prioridad:

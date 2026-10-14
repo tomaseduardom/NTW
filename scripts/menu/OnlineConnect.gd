@@ -1,20 +1,30 @@
 extends Control
 ## OnlineConnect — Pantalla de conexión multijugador en línea (Fase A).
 ## Permite crear una sala privada (Anfitrión) o unirse con código (Invitado)
-## a través del relay de WebSockets antes de entrar al duelo.
+## usando cartas medievales ilustradas con ranuras interactivas para el código.
 
 const DEFAULT_RELAY_URL := "wss://mitos-relay-server-production.up.railway.app"
+const TEX_HOST := preload("res://assets/ui/menu/online/card_host.png")
+const TEX_HOST_HOVER := preload("res://assets/ui/menu/online/card_host_hover.png")
+const TEX_HOST_CREATED := preload("res://assets/ui/menu/online/card_host_created.png")
+const TEX_HOST_CREATED_HOVER := preload("res://assets/ui/menu/online/card_host_created_hover.png")
+const TEX_JOIN := preload("res://assets/ui/menu/online/card_join.png")
+const TEX_JOIN_HOVER := preload("res://assets/ui/menu/online/card_join_hover.png")
 
 var _pending_action: String = ""
 var _current_room_code: String = ""
 var _pulse_tween: Tween = null
 var _copy_timer: SceneTreeTimer = null
 
+@onready var host_card: Control = %HostCard
+@onready var host_card_art: TextureRect = %HostCardArt
 @onready var create_room_button: Button = %CreateRoomButton
 @onready var code_display_box: PanelContainer = %CodeDisplayBox
 @onready var room_code_label: Label = %RoomCodeLabel
 @onready var copy_code_button: Button = %CopyCodeButton
 @onready var waiting_peer_label: Label = %WaitingPeerLabel
+@onready var join_card: Control = %JoinCard
+@onready var join_card_art: TextureRect = %JoinCardArt
 @onready var code_edit: LineEdit = %CodeEdit
 @onready var join_room_button: Button = %JoinRoomButton
 @onready var status_label: Label = %StatusLabel
@@ -27,12 +37,12 @@ var _copy_timer: SceneTreeTimer = null
 func _ready() -> void:
 	relay_url_edit.text = DEFAULT_RELAY_URL
 	relay_box.visible = false
-	code_display_box.visible = false
+	code_display_box.visible = true
+	copy_code_button.visible = false
 	status_label.text = ""
 
-	_setup_button_hover(create_room_button)
-	_setup_button_hover(join_room_button)
-	_setup_button_hover(copy_code_button)
+	_setup_host_card_hover()
+	_setup_join_card_hover()
 	_setup_texture_button_hover(back_button)
 
 	create_room_button.pressed.connect(_on_create_room_pressed)
@@ -52,29 +62,46 @@ func _ready() -> void:
 	NetworkClient.peer_disconnected.connect(_on_peer_disconnected)
 	NetworkClient.relay_error.connect(_on_relay_error)
 
-	# Foco inicial en crear sala
-	create_room_button.grab_focus()
-
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo:
 		if event.keycode == KEY_ESCAPE:
+			var vp := get_viewport()
+			if vp:
+				vp.set_input_as_handled()
 			_on_back_pressed()
-			get_viewport().set_input_as_handled()
 
 
-func _setup_button_hover(btn: Button) -> void:
-	if not btn:
-		return
-	btn.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
-	btn.mouse_entered.connect(func():
-		var tw = btn.create_tween()
-		tw.tween_property(btn, "modulate", Color(1.15, 1.15, 1.15, 1.0), 0.12)
-	)
-	btn.mouse_exited.connect(func():
-		var tw = btn.create_tween()
-		tw.tween_property(btn, "modulate", Color(1.0, 1.0, 1.0, 1.0), 0.12)
-	)
+func _setup_host_card_hover() -> void:
+	host_card.pivot_offset = host_card.custom_minimum_size / 2.0
+	for btn in [create_room_button, copy_code_button]:
+		btn.mouse_entered.connect(_on_host_hover.bind(true))
+		btn.mouse_exited.connect(_on_host_hover.bind(false))
+
+
+func _on_host_hover(hovered: bool) -> void:
+	var has_room := not _current_room_code.is_empty()
+	if has_room:
+		host_card_art.texture = TEX_HOST_CREATED_HOVER if hovered else TEX_HOST_CREATED
+	else:
+		host_card_art.texture = TEX_HOST_HOVER if hovered else TEX_HOST
+	var target_scale := Vector2(1.025, 1.025) if hovered else Vector2.ONE
+	var tw = host_card.create_tween()
+	tw.tween_property(host_card, "scale", target_scale, 0.14).set_ease(Tween.EASE_OUT)
+
+
+func _setup_join_card_hover() -> void:
+	join_card.pivot_offset = join_card.custom_minimum_size / 2.0
+	for ctrl in [join_room_button, code_edit]:
+		ctrl.mouse_entered.connect(_on_join_hover.bind(true))
+		ctrl.mouse_exited.connect(_on_join_hover.bind(false))
+
+
+func _on_join_hover(hovered: bool) -> void:
+	join_card_art.texture = TEX_JOIN_HOVER if hovered else TEX_JOIN
+	var target_scale := Vector2(1.025, 1.025) if hovered else Vector2.ONE
+	var tw = join_card.create_tween()
+	tw.tween_property(join_card, "scale", target_scale, 0.14).set_ease(Tween.EASE_OUT)
 
 
 func _setup_texture_button_hover(btn: TextureButton) -> void:
@@ -110,7 +137,8 @@ func _on_relay_toggle_pressed() -> void:
 
 
 func _on_create_room_pressed() -> void:
-	_set_busy("Conectando al servidor del reino...")
+	waiting_peer_label.text = "CREANDO SALA..."
+	_set_busy("Conectando al servidor...")
 	_pending_action = "create"
 	NetworkClient.connect_to_relay(relay_url_edit.text.strip_edges())
 
@@ -118,31 +146,31 @@ func _on_create_room_pressed() -> void:
 func _on_join_room_pressed() -> void:
 	var code = code_edit.text.strip_edges().to_upper()
 	if code.is_empty():
-		status_label.text = "Por favor ingresa el código de sala."
+		status_label.text = "Ingresa el código de 4 letras en la carta de Invitado."
 		code_edit.grab_focus()
 		return
-	_set_busy("Conectando al servidor del reino...")
+	_set_busy("Conectando a la sala %s..." % code)
 	_pending_action = "join"
 	NetworkClient.connect_to_relay(relay_url_edit.text.strip_edges())
 
 
 func _on_connected_to_relay() -> void:
 	if _pending_action == "create":
-		status_label.text = "Conectado. Generando sala de batalla..."
+		status_label.text = "Generando código de sala..."
 		NetworkClient.create_room()
 	elif _pending_action == "join":
-		status_label.text = "Conectado. Accediendo a la sala..."
+		status_label.text = "Entrando a la sala..."
 		NetworkClient.join_room(code_edit.text.strip_edges().to_upper())
 
 
 func _on_connection_failed(reason: String) -> void:
+	waiting_peer_label.text = ""
 	status_label.text = "No se pudo conectar al servidor: %s" % reason
 	_set_busy_done()
 
 
 func _on_room_created(code: String) -> void:
 	_current_room_code = code
-	# Formatear el código con espacios entre letras para máximo impacto visual
 	var formatted_code = ""
 	for i in range(code.length()):
 		formatted_code += code[i]
@@ -150,17 +178,25 @@ func _on_room_created(code: String) -> void:
 			formatted_code += "  "
 
 	room_code_label.text = formatted_code
+	room_code_label.add_theme_color_override("font_color", Color(0.35, 0.92, 1.0, 1.0))
+
+	var box_style := StyleBoxFlat.new()
+	box_style.bg_color = Color(0.04, 0.08, 0.14, 0.96)
+	box_style.border_color = Color(0.35, 0.88, 1.0, 0.95)
+	box_style.set_border_width_all(2)
+	box_style.set_corner_radius_all(10)
+	box_style.shadow_color = Color(0.2, 0.75, 1.0, 0.35)
+	box_style.shadow_size = 10
+	code_display_box.add_theme_stylebox_override("panel", box_style)
+
 	create_room_button.visible = false
-	code_display_box.visible = true
-	code_display_box.modulate.a = 0.0
+	copy_code_button.visible = true
+	host_card_art.texture = TEX_HOST_CREATED
+	waiting_peer_label.text = "ESPERANDO RIVAL..."
 
-	var tw = code_display_box.create_tween()
-	tw.tween_property(code_display_box, "modulate:a", 1.0, 0.25)
-
-	# Iniciar suave pulso de espera
 	_start_waiting_pulse()
 
-	status_label.text = "¡Sala creada con éxito! Comparte el código con tu rival."
+	status_label.text = "¡Sala creada! Comparte el código con tu rival."
 	_set_busy_done()
 
 
@@ -168,23 +204,24 @@ func _start_waiting_pulse() -> void:
 	if _pulse_tween:
 		_pulse_tween.kill()
 	_pulse_tween = create_tween().set_loops()
-	_pulse_tween.tween_property(waiting_peer_label, "modulate:a", 0.45, 0.9).set_trans(Tween.TRANS_SINE)
-	_pulse_tween.tween_property(waiting_peer_label, "modulate:a", 1.0, 0.9).set_trans(Tween.TRANS_SINE)
+	_pulse_tween.tween_property(waiting_peer_label, "modulate:a", 0.45, 0.85).set_trans(Tween.TRANS_SINE)
+	_pulse_tween.tween_property(waiting_peer_label, "modulate:a", 1.0, 0.85).set_trans(Tween.TRANS_SINE)
 
 
 func _on_copy_code_pressed() -> void:
 	if _current_room_code.is_empty():
 		return
 	DisplayServer.clipboard_set(_current_room_code)
-	copy_code_button.text = "¡CÓDIGO COPIADO!"
-	var tw = copy_code_button.create_tween()
-	tw.tween_property(copy_code_button, "modulate", Color(1.3, 1.3, 1.3, 1.0), 0.1)
-	tw.tween_property(copy_code_button, "modulate", Color(1.0, 1.0, 1.0, 1.0), 0.2)
+	waiting_peer_label.text = "¡CÓDIGO COPIADO!"
+	status_label.text = "Código %s copiado al portapapeles." % _current_room_code
+	var tw = host_card.create_tween()
+	tw.tween_property(host_card, "modulate", Color(1.18, 1.18, 1.18, 1.0), 0.1)
+	tw.tween_property(host_card, "modulate", Color(1.0, 1.0, 1.0, 1.0), 0.2)
 
 	_copy_timer = get_tree().create_timer(1.8)
 	_copy_timer.timeout.connect(func():
-		if is_instance_valid(copy_code_button):
-			copy_code_button.text = "COPIAR CÓDIGO"
+		if is_instance_valid(waiting_peer_label):
+			waiting_peer_label.text = "ESPERANDO RIVAL..."
 	)
 
 
@@ -229,3 +266,4 @@ func _set_busy_done() -> void:
 	create_room_button.disabled = false
 	join_room_button.disabled = false
 	code_edit.editable = true
+

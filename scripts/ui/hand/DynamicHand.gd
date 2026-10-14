@@ -277,10 +277,6 @@ func _on_card_hovered(card: Node) -> void:
 	if _is_hidden or card.get("is_dragging") == true:
 		return
 
-	if _tweens.has(card) and is_instance_valid(_tweens[card]):
-		_tweens[card].kill()
-		_tweens.erase(card)
-
 	card.z_index = 100
 	if card.has_method("set_click_clip_right"):
 		card.set_click_clip_right(-1.0)
@@ -292,10 +288,6 @@ func _on_card_unhovered(card: Node) -> void:
 		return
 	if card.get("is_dragging") == true:
 		return
-
-	if _tweens.has(card) and is_instance_valid(_tweens[card]):
-		_tweens[card].kill()
-		_tweens.erase(card)
 
 	var base_z: int = card.get_meta("hand_base_z_index", cards.find(card))
 	card.z_index = base_z

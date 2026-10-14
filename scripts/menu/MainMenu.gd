@@ -50,13 +50,15 @@ func _unhandled_input(event: InputEvent) -> void:
 		if event.keycode == KEY_ESCAPE:
 			var overlay = get_node_or_null("PlayModeSelection")
 			if overlay:
+				var vp := get_viewport()
+				if vp:
+					vp.set_input_as_handled()
 				if overlay.has_meta("close_action"):
 					var close_cb: Callable = overlay.get_meta("close_action")
 					close_cb.call()
 				else:
 					overlay.queue_free()
 					play_button.grab_focus()
-				get_viewport().set_input_as_handled()
 
 
 func _setup_button_hover(btn: Button) -> void:
@@ -78,15 +80,14 @@ func _open_play_mode_popup() -> void:
 	if has_node("PlayModeSelection"):
 		return
 
-	var tex_header = load("res://assets/ui/menu/play_mode/header_title.png")
-	var tex_card_bot = load("res://assets/ui/menu/play_mode/card_bot.png")
-	var tex_card_online = load("res://assets/ui/menu/play_mode/card_online.png")
-	var tex_btn_bot = load("res://assets/ui/menu/play_mode/btn_bot_plaque.png")
-	var tex_btn_bot_hover = load("res://assets/ui/menu/play_mode/btn_bot_plaque_hover.png")
-	var tex_btn_online = load("res://assets/ui/menu/play_mode/btn_online_plaque.png")
-	var tex_btn_online_hover = load("res://assets/ui/menu/play_mode/btn_online_plaque_hover.png")
-	var tex_btn_back = load("res://assets/ui/menu/play_mode/btn_back.png")
-	var tex_btn_back_hover = load("res://assets/ui/menu/play_mode/btn_back_hover.png")
+	var font_title: Font = load("res://assets/fonts/Cinzel-Bold.ttf")
+	var font_sub: Font = load("res://assets/fonts/Marcellus-Regular.ttf")
+	var tex_card_bot: Texture2D = load("res://assets/ui/menu/play_mode/card_bot.png")
+	var tex_card_bot_hover: Texture2D = load("res://assets/ui/menu/play_mode/card_bot_hover.png")
+	var tex_card_online: Texture2D = load("res://assets/ui/menu/play_mode/card_online.png")
+	var tex_card_online_hover: Texture2D = load("res://assets/ui/menu/play_mode/card_online_hover.png")
+	var tex_btn_back: Texture2D = load("res://assets/ui/menu/play_mode/btn_back.png")
+	var tex_btn_back_hover: Texture2D = load("res://assets/ui/menu/play_mode/btn_back_hover.png")
 
 	var overlay := Control.new()
 	overlay.name = "PlayModeSelection"
@@ -146,22 +147,41 @@ func _open_play_mode_popup() -> void:
 	center_box.add_theme_constant_override("separation", 24)
 	overlay.add_child(center_box)
 
-	# 1. Encabezado "MODO DE JUEGO"
-	var header_rect := TextureRect.new()
-	header_rect.texture = tex_header
-	header_rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	header_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	header_rect.custom_minimum_size = Vector2(480, 117)
-	header_rect.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	center_box.add_child(header_rect)
+	# 1. Encabezado limpio sin recuadro de fondo ("MODO DE JUEGO")
+	var header_box := VBoxContainer.new()
+	header_box.add_theme_constant_override("separation", 4)
+	header_box.alignment = BoxContainer.ALIGNMENT_CENTER
+	center_box.add_child(header_box)
+
+	var header_title := Label.new()
+	header_title.text = "MODO DE JUEGO"
+	header_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	header_title.add_theme_font_override("font", font_title)
+	header_title.add_theme_font_size_override("font_size", 44)
+	header_title.add_theme_color_override("font_color", Color(1.0, 0.9, 0.6, 1.0))
+	header_title.add_theme_color_override("font_shadow_color", Color(0.0, 0.0, 0.0, 0.95))
+	header_title.add_theme_constant_override("shadow_offset_x", 3)
+	header_title.add_theme_constant_override("shadow_offset_y", 3)
+	header_box.add_child(header_title)
+
+	var header_sub := Label.new()
+	header_sub.text = "— SELECCIONA TU MODALIDAD DE BATALLA —"
+	header_sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	header_sub.add_theme_font_override("font", font_sub)
+	header_sub.add_theme_font_size_override("font_size", 20)
+	header_sub.add_theme_color_override("font_color", Color(0.88, 0.78, 0.52, 1.0))
+	header_sub.add_theme_color_override("font_shadow_color", Color(0.0, 0.0, 0.0, 0.9))
+	header_sub.add_theme_constant_override("shadow_offset_x", 2)
+	header_sub.add_theme_constant_override("shadow_offset_y", 2)
+	header_box.add_child(header_sub)
 
 	# 2. Fila con las dos tarjetas heroicas
 	var cards_row := HBoxContainer.new()
-	cards_row.add_theme_constant_override("separation", 36)
+	cards_row.add_theme_constant_override("separation", 40)
 	cards_row.alignment = BoxContainer.ALIGNMENT_CENTER
 	center_box.add_child(cards_row)
 
-	var card_size := Vector2(336, 492)
+	var card_size := Vector2(360, 486)
 
 	# --- Tarjeta CONTRA EL BOT ---
 	var bot_action = func():
@@ -171,8 +191,7 @@ func _open_play_mode_popup() -> void:
 
 	var card_bot_node := _build_interactive_mode_card(
 		tex_card_bot,
-		tex_btn_bot,
-		tex_btn_bot_hover,
+		tex_card_bot_hover,
 		card_size,
 		bot_action
 	)
@@ -186,8 +205,7 @@ func _open_play_mode_popup() -> void:
 
 	var card_online_node := _build_interactive_mode_card(
 		tex_card_online,
-		tex_btn_online,
-		tex_btn_online_hover,
+		tex_card_online_hover,
 		card_size,
 		online_action
 	)
@@ -204,8 +222,8 @@ func _open_play_mode_popup() -> void:
 	back_btn.texture_focused = tex_btn_back_hover
 	back_btn.ignore_texture_size = true
 	back_btn.stretch_mode = TextureButton.STRETCH_KEEP_ASPECT_CENTERED
-	back_btn.custom_minimum_size = Vector2(260, 64)
-	back_btn.pivot_offset = Vector2(130, 32)
+	back_btn.custom_minimum_size = Vector2(280, 54)
+	back_btn.pivot_offset = Vector2(140, 27)
 	back_btn.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 
 	back_btn.mouse_entered.connect(func():
@@ -227,8 +245,7 @@ func _open_play_mode_popup() -> void:
 
 func _build_interactive_mode_card(
 	card_tex: Texture2D,
-	btn_tex: Texture2D,
-	btn_hover_tex: Texture2D,
+	card_hover_tex: Texture2D,
 	target_size: Vector2,
 	on_select: Callable
 ) -> Control:
@@ -237,46 +254,32 @@ func _build_interactive_mode_card(
 	container.pivot_offset = target_size / 2.0
 	container.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 
-	# Imagen de la carta base (marco + arte + textos en su diseño auténtico)
+	# Imagen de la carta íntegra con recorte poligonal limpio (sin parches superpuestos)
 	var card_rect := TextureRect.new()
 	card_rect.texture = card_tex
 	card_rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	card_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+	card_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	card_rect.set_anchors_preset(Control.PRESET_FULL_RECT)
 	card_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	container.add_child(card_rect)
 
-	# Botón interactivo sobre la placa inferior (proporción 28..440 en X, 532..648 en Y de 468x686)
-	var btn_x := target_size.x * (28.0 / 468.0)
-	var btn_y := target_size.y * (532.0 / 686.0)
-	var btn_w := target_size.x * (412.0 / 468.0)
-	var btn_h := target_size.y * (116.0 / 686.0)
-
-	var action_btn := TextureButton.new()
+	# Área de botón interactiva transparente para foco de teclado y clic directo
+	var action_btn := Button.new()
 	action_btn.name = "Btn"
-	action_btn.texture_normal = btn_tex
-	action_btn.texture_hover = btn_hover_tex
-	action_btn.texture_focused = btn_hover_tex
-	action_btn.ignore_texture_size = true
-	action_btn.stretch_mode = TextureButton.STRETCH_KEEP_ASPECT_CENTERED
-	action_btn.position = Vector2(btn_x, btn_y)
-	action_btn.size = Vector2(btn_w, btn_h)
-	action_btn.pivot_offset = Vector2(btn_w / 2.0, btn_h / 2.0)
+	action_btn.flat = true
+	action_btn.set_anchors_preset(Control.PRESET_FULL_RECT)
 	action_btn.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	action_btn.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
 	container.add_child(action_btn)
 
-	# Glow pulsante / feedback visual sincronizado entre la tarjeta completa y el botón
 	var set_highlight = func(active: bool):
 		var tw := container.create_tween()
-		tw.set_parallel(true)
 		if active:
 			tw.tween_property(container, "scale", Vector2(1.028, 1.028), 0.14).set_ease(Tween.EASE_OUT)
-			tw.tween_property(action_btn, "scale", Vector2(1.035, 1.035), 0.14).set_ease(Tween.EASE_OUT)
-			action_btn.texture_normal = btn_hover_tex
+			card_rect.texture = card_hover_tex
 		else:
 			tw.tween_property(container, "scale", Vector2.ONE, 0.14).set_ease(Tween.EASE_OUT)
-			tw.tween_property(action_btn, "scale", Vector2.ONE, 0.14).set_ease(Tween.EASE_OUT)
-			action_btn.texture_normal = btn_tex
+			card_rect.texture = card_tex
 
 	container.mouse_entered.connect(func(): set_highlight.call(true))
 	container.mouse_exited.connect(func(): set_highlight.call(false))

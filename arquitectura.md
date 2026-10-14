@@ -6347,3 +6347,23 @@ prime no disparaba.
   tipo `Node` rompía antes del `is_instance_valid()` ("previously freed").
 - Prueba: `test_cemtrig.gd` (kultrung, piedra del chaman, manzana envenenada, serpiente
   verde con el bot de dueño).
+
+## 74. Akari Musashi buscaba en el Castillo rival; ventana de mirar invisible (2026-10-14)
+
+**Bugs reales reportados por el usuario.**
+
+- Akari Musashi ("Una vez por turno, busca en tu Castillo un Aliado Héroe"): la búsqueda
+  genérica (`WeaponSearchShuffleExecutor._execute_targeted_search()`, vía
+  `extract_action()` → SEARCH) releía el texto COMPLETO de la carta: "Destierra una carta
+  oponente" de otra habilidad la mandaba al Castillo rival (y como el dueño de la zona
+  era el rival, elegía el bot). Ahora `extract_action()` devuelve `source_text` (el texto
+  que analizó) y la búsqueda lee solo ese; además filtra por raza ("Aliado Héroe" → raza
+  Héroe) y elige siempre quien controla la habilidad.
+- Log: activar una habilidad decía "Jugador X juega akari musashi — COSTE: 0 ORO" (el
+  coste de la habilidad). Ahora "activa una habilidad de ..." sin línea de coste.
+- CastleLookWindow (§69) nunca se había visto en pantalla: el `_hint` con autowrap dentro
+  del VBox pedía un alto gigante y el panel quedaba casi entero fuera de la pantalla (el
+  usuario: "un recuadro enorme sin nada" con Tesoro de los Césares). Sin autowrap, cartas
+  más grandes (0,85) y con `base_scale` (se corrían sobre las flechas). Verificado con
+  captura de pantalla real (Godot con ventana, no headless).
+- Prueba: `test_akari.gd`.

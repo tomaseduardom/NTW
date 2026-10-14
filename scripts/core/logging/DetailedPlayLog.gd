@@ -115,6 +115,12 @@ func log_detailed_play(card_instance: Dictionary, player_id: int = 0) -> int:
 			"source": "cemetery",
 			"destination": "exile"
 		})
+	elif card_instance.get("_log_is_ability", false):
+		_main.add_entry("block_start", "║ %s activa una habilidad de %s" % [player_str, card_str], {
+			"block_id": block_id,
+			"card": block.card_name,
+			"player": player_id
+		})
 	else:
 		_main.add_entry("block_start", "║ %s juega %s" % [player_str, card_str], {
 			"block_id": block_id,
@@ -122,8 +128,9 @@ func log_detailed_play(card_instance: Dictionary, player_id: int = 0) -> int:
 			"player": player_id
 		})
 
-	# Mostrar cálculo de coste TRANSPARENTE
-	_log_cost_breakdown(block)
+	# Mostrar cálculo de coste TRANSPARENTE (solo al jugar una carta).
+	if not card_instance.get("_log_is_ability", false):
+		_log_cost_breakdown(block)
 
 	_main.add_entry("block_start", "╠══════════════════════════════════════════════╣", {
 		"block_id": block_id

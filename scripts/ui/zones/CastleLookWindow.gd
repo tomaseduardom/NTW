@@ -23,7 +23,7 @@ extends RefCounted
 ## Se usa con preload (sin class_name global), ver §54.
 
 const CardScene := preload("res://scenes/cards/Card.tscn")
-const CARD_SCALE := 0.62
+const CARD_SCALE := 0.85
 const CARD_W := 150.0 * CARD_SCALE
 const CARD_H := 210.0 * CARD_SCALE
 
@@ -154,7 +154,10 @@ func _build() -> void:
 
 	_hint = Label.new()
 	_hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	# Sin autowrap (2026-10-14, bug real: Tesoro de los Césares mostraba "un
+	# recuadro enorme sin nada" — un Label con autowrap dentro del VBox pedía
+	# un alto gigante y el panel quedaba casi todo fuera de la pantalla).
+	_hint.clip_text = true
 	_hint.add_theme_font_size_override("font_size", 13)
 	vbox.add_child(_hint)
 
@@ -225,10 +228,15 @@ func _card_widget(i: int, box: Dictionary, pos: int, count: int) -> Control:
 	btn.pressed.connect(_on_card_pressed.bind(i))
 	var card = CardScene.instantiate()
 	card.load_from_data(_cfg.cards[i])
-	card.position = Vector2(3, 3)
-	card.scale = Vector2(CARD_SCALE, CARD_SCALE)
 	card.custom_minimum_size = Vector2(150, 210)
 	card.size = Vector2(150, 210)
+	card.position = Vector2(3, 3)
+	# base_scale también (como ZoneBrowsePicker): Card vuelve a su base_scale
+	# y la carta quedaba corrida sobre las flechas.
+	card.scale = Vector2(CARD_SCALE, CARD_SCALE)
+	card.base_scale = Vector2(CARD_SCALE, CARD_SCALE)
+	card.can_interact = false
+	card.drag_enabled = false
 	_ignore_mouse(card)
 	btn.add_child(card)
 	col.add_child(btn)

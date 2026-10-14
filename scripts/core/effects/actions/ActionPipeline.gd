@@ -247,6 +247,10 @@ func _add_to_stack(stack_obj: Dictionary) -> void:
 		card_data["x_value"] = stack_obj.instance_x
 		card_data["x_total_cost"] = stack_obj.x_total_cost
 
+	# Una habilidad (activada o disparada) no es "jugar" la carta: el log no
+	# debe decir "juega X — COSTE: 0" (2026-10-14, a pedido del usuario).
+	if stack_obj.type in [StackObjectType.ACTIVATED_ABILITY, StackObjectType.TRIGGERED_ABILITY]:
+		card_data["_log_is_ability"] = true
 	# Crear bloque de acción detallado en CombatLog
 	var block_id = CombatLog.log_detailed_play(card_data, player_id)
 	stack_obj["log_block_id"] = block_id

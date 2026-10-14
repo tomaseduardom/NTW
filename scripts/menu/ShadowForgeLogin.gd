@@ -51,8 +51,10 @@ func _process(delta: float) -> void:
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo:
 		if event.keycode == KEY_ESCAPE:
+			var vp := get_viewport()
+			if vp:
+				vp.set_input_as_handled()
 			_on_back_pressed()
-			get_viewport().set_input_as_handled()
 
 
 func _setup_button_hover(btn: Button) -> void:

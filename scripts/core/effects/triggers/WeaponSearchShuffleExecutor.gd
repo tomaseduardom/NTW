@@ -25,13 +25,18 @@ func setup(main: Node) -> void:
 	_main = main
 
 
-func _execute_targeted_search(card: Node, controller_id: int) -> void:
+func _execute_targeted_search(card: Node, controller_id: int, source_text: String = "") -> void:
 	"""Busca en el Castillo o Cementerio (DAR Sección 8): relee el texto
 	completo de la carta (no solo el fragmento que capturó ABILITY_PATTERNS)
 	para extraer zona, dueño de esa zona, tipo de carta buscado, cantidad
 	(fija o 'por cada Aliado que controles'), destino (mano/Destierro) y si
 	la carta encontrada se juega directamente pagando su coste."""
 	var ability_text: String = card.get("card_ability") if card.get("card_ability") != null else ""
+	# Solo la habilidad que se está resolviendo, si se conoce (2026-10-14,
+	# Akari Musashi: "Destierra una carta oponente" de OTRA habilidad hacía
+	# buscar en el Castillo rival).
+	if not source_text.strip_edges().is_empty():
+		ability_text = source_text
 	var ability_lower := ability_text.to_lower()
 
 	var zone := Constants.Zone.CASTILLO
@@ -78,6 +83,13 @@ func _execute_targeted_search(card: Node, controller_id: int) -> void:
 		filter["type"] = wanted_types[0]
 	elif wanted_types.size() > 1:
 		filter["type"] = wanted_types
+	# Raza (2026-10-14, Akari Musashi: "un Aliado Héroe" buscaba cualquier
+	# Aliado): la palabra con mayúscula justo después de "Aliado(s)".
+	var race_rx := RegEx.new()
+	race_rx.compile("[Aa]liados?\\s+([A-ZÁÉÍÓÚÑ][a-záéíóúñ]+)")
+	var race_m := race_rx.search(ability_text)
+	if race_m:
+		filter["raza"] = race_m.get_string(1)
 
 	# Cantidad: fija ("busca 2 cartas") o dinámica "una carta por cada
 	# Aliado que controles (más N)" (2026-08-25, p.ej. Rey de Amarillo:
@@ -125,7 +137,9 @@ func _execute_targeted_search(card: Node, controller_id: int) -> void:
 	# del proyecto) — sí le corresponde la ventana genérica aquí.
 	if await TriggerSystem.open_response_window(card, str(card.card_name), controller_id):
 		return
-	await ActionModule.search(zone_owner, zone, filter, amount, true, false, may_play, card, destination, distinct_names)
+	# Elige siempre quien controla la habilidad, también en zonas rivales.
+	await ActionModule.search(zone_owner, zone, filter, amount, true, false, may_play, card, destination, distinct_names,
+		controller_id)
 
 
 func _count_allies_in_play(player_id: int) -> int:

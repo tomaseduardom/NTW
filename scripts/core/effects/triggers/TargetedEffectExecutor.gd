@@ -93,7 +93,7 @@ func execute_parsed_action(action: Dictionary, card: Node, _event_data: Dictiona
 			await ActionModule.mill(controller_id, amount, to_exile_mill, "etb_trigger", true)
 
 		"SEARCH":
-			await _weapon_search._execute_targeted_search(card, controller_id)
+			await _weapon_search._execute_targeted_search(card, controller_id, str(action.get("source_text", "")))
 
 		"RETURN_DECK":
 			await _execute_targeted_return_to_deck(card, controller_id)

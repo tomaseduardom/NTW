@@ -29,6 +29,7 @@ var cards: Array[Node] = []
 var hovered_card: Node = null
 var _card_targets: Dictionary = {}  # card -> {pos, rot, scale}
 var _tweens: Dictionary = {}
+var _entering_cards: Dictionary = {}  # card -> true mientras corre la animación de entrada
 var _deck_position: Vector2 = Vector2.ZERO  # Posición del mazo para animación
 
 # =============================================================================
@@ -63,24 +64,22 @@ func add_card(card: Node, animate: bool = true) -> void:
 	if card.has_signal("card_right_clicked"):
 		card.card_right_clicked.connect(_on_card_right_clicked)
 
-	# Habilitar interacción para hover, pero no drag (el mulligan no usa drag)
-	card.can_interact = true
+	# Deshabilitar interacción hasta que termine su animación de entrada
+	card.can_interact = not animate
 	card.drag_enabled = false
 
 	# Calcular posiciones del abanico
 	_calculate_fan_positions()
 
 	if animate:
+		_entering_cards[card] = true
 		var idx = cards.size() - 1
 		if card.get("_image_ready") == true:
 			_animate_card_entry(card, idx)
 		else:
-			if _card_targets.has(card):
-				var t = _card_targets[card]
-				card.position = t.position
-				card.rotation_degrees = t.rotation
-				card.scale = t.scale
-				card.z_index = t.z_index
+			card.position = _deck_position
+			card.rotation_degrees = 15.0
+			card.scale = Vector2(0.5, 0.5)
 			card.modulate.a = 0.0
 			if card.has_signal("image_ready"):
 				card.image_ready.connect(_on_card_image_ready.bind(card, idx), CONNECT_ONE_SHOT)
@@ -124,8 +123,10 @@ func add_cards_with_animation(card_list: Array, create_card_func: Callable) -> v
 		if card.has_signal("card_right_clicked"):
 			card.card_right_clicked.connect(_on_card_right_clicked)
 
-		card.can_interact = true
+		# No permitir hover mientras la carta vuela desde el mazo hacia su sitio
+		card.can_interact = false
 		card.drag_enabled = false
+		_entering_cards[card] = true
 
 	# Calcular posiciones finales (pasando el tamaño calculado)
 	_calculate_fan_positions(container_size)
@@ -136,12 +137,9 @@ func add_cards_with_animation(card_list: Array, create_card_func: Callable) -> v
 		if card.get("_image_ready") == true:
 			_animate_card_entry(card, i)
 		else:
-			if _card_targets.has(card):
-				var t = _card_targets[card]
-				card.position = t.position
-				card.rotation_degrees = t.rotation
-				card.scale = t.scale
-				card.z_index = t.z_index
+			card.position = _deck_position
+			card.rotation_degrees = 15.0
+			card.scale = Vector2(0.5, 0.5)
 			card.modulate.a = 0.0
 			if card.has_signal("image_ready"):
 				card.image_ready.connect(_on_card_image_ready.bind(card, i), CONNECT_ONE_SHOT)
@@ -149,6 +147,9 @@ func add_cards_with_animation(card_list: Array, create_card_func: Callable) -> v
 
 func remove_card(card: Node) -> void:
 	"""Remueve una carta del abanico"""
+	_entering_cards.erase(card)
+	if hovered_card == card:
+		hovered_card = null
 	var idx = cards.find(card)
 	if idx >= 0:
 		cards.remove_at(idx)
@@ -167,16 +168,24 @@ func remove_card(card: Node) -> void:
 
 func clear_cards() -> void:
 	"""Limpia todas las cartas con animación de salida"""
+	hovered_card = null
+	_entering_cards.clear()
 	for card in cards:
-		_animate_card_exit(card)
+		if is_instance_valid(card):
+			card.can_interact = false
+			_animate_card_exit(card)
 	cards.clear()
 	_card_targets.clear()
 
 
 func clear_cards_instant() -> void:
 	"""Limpia todas las cartas inmediatamente"""
+	hovered_card = null
+	_entering_cards.clear()
 	for card in cards:
-		card.queue_free()
+		if is_instance_valid(card):
+			_kill_tween(card)
+			card.queue_free()
 	cards.clear()
 	_card_targets.clear()
 
@@ -235,30 +244,33 @@ func _calculate_fan_positions(override_size: Vector2 = Vector2.ZERO) -> void:
 
 func _apply_card_position(card: Node, animated: bool = true) -> void:
 	"""Aplica la posición calculada a una carta"""
-	if not _card_targets.has(card):
+	if not is_instance_valid(card) or not _card_targets.has(card):
 		return
 
 	var target = _card_targets[card]
 	card.z_index = target.z_index
+	card.set("original_z_index", target.z_index)
 
 	if animated:
 		_kill_tween(card)
 		var tween = create_tween()
 		tween.set_parallel(true)
-		tween.tween_property(card, "position", target.position, hover_duration)
-		tween.tween_property(card, "rotation_degrees", target.rotation, hover_duration)
-		tween.tween_property(card, "scale", target.scale, hover_duration)
+		tween.tween_property(card, "position", target.position, hover_duration).set_ease(Tween.EASE_OUT)
+		tween.tween_property(card, "rotation_degrees", target.rotation, hover_duration).set_ease(Tween.EASE_OUT)
+		tween.tween_property(card, "scale", target.scale, hover_duration).set_ease(Tween.EASE_OUT)
+		tween.tween_property(card, "modulate:a", 1.0, hover_duration)
 		_tweens[card] = tween
 	else:
 		card.position = target.position
 		card.rotation_degrees = target.rotation
 		card.scale = target.scale
+		card.modulate.a = 1.0
 
 
 func _arrange_cards(animated: bool = true) -> void:
 	"""Reorganiza todas las cartas en el abanico"""
 	for card in cards:
-		if card != hovered_card:
+		if card != hovered_card and not _entering_cards.has(card):
 			_apply_card_position(card, animated)
 
 
@@ -267,10 +279,13 @@ func _arrange_cards(animated: bool = true) -> void:
 # =============================================================================
 func _animate_card_entry(card: Node, index: int) -> void:
 	"""Anima la entrada de una carta desde el mazo"""
-	if not _card_targets.has(card):
+	if not is_instance_valid(card) or not _card_targets.has(card):
 		return
 
 	var target = _card_targets[card]
+	_entering_cards[card] = true
+	card.can_interact = false
+	card.set("original_z_index", target.z_index)
 
 	# Posición inicial (desde el mazo)
 	card.position = _deck_position
@@ -291,22 +306,36 @@ func _animate_card_entry(card: Node, index: int) -> void:
 
 	# Animación de entrada
 	tween.tween_property(card, "modulate:a", 1.0, entry_duration * 0.3)
-	tween.parallel().tween_property(card, "position", target.position, entry_duration).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_BACK)
+	var pos_tw = tween.parallel().tween_property(card, "position", target.position, entry_duration)
+	pos_tw.set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_BACK)
 	tween.parallel().tween_property(card, "rotation_degrees", target.rotation, entry_duration).set_ease(Tween.EASE_OUT)
 	tween.parallel().tween_property(card, "scale", target.scale, entry_duration).set_ease(Tween.EASE_OUT)
 
-	# Restaurar z_index al final
-	tween.tween_callback(func(): card.z_index = target.z_index)
+	# Al finalizar la entrada: fijar transform exacto y habilitar interacción
+	tween.tween_callback(func():
+		_entering_cards.erase(card)
+		if not is_instance_valid(card):
+			return
+		card.position = target.position
+		card.rotation_degrees = target.rotation
+		card.scale = target.scale
+		card.modulate.a = 1.0
+		card.z_index = target.z_index
+		card.set("original_z_index", target.z_index)
+		card.can_interact = true
+	)
 
 	_tweens[card] = tween
 
 
 func _animate_card_exit(card: Node) -> void:
 	"""Anima la salida de una carta hacia el mazo"""
+	_entering_cards.erase(card)
 	_kill_tween(card)
 	var tween = create_tween()
 	tween.set_parallel(true)
-	tween.tween_property(card, "position", _deck_position, entry_duration * 0.8).set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_BACK)
+	var exit_pos = tween.tween_property(card, "position", _deck_position, entry_duration * 0.8)
+	exit_pos.set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_BACK)
 	tween.tween_property(card, "rotation_degrees", -15.0, entry_duration * 0.8)
 	tween.tween_property(card, "scale", Vector2(0.3, 0.3), entry_duration * 0.8)
 	tween.tween_property(card, "modulate:a", 0.0, entry_duration * 0.5)
@@ -318,28 +347,34 @@ func _animate_card_exit(card: Node) -> void:
 # =============================================================================
 func _on_card_hovered(card: Node) -> void:
 	"""Cuando se hace hover sobre una carta"""
-	hovered_card = card
+	if not is_instance_valid(card) or _entering_cards.has(card):
+		return
 	var idx = cards.find(card)
-	if idx < 0:
+	if idx < 0 or not _card_targets.has(card):
 		return
 
-	# Elevar z-index
+	# Si había otra carta en hover antes, restaurarla a su lugar exacto
+	if hovered_card != null and hovered_card != card and is_instance_valid(hovered_card):
+		var prev = hovered_card
+		hovered_card = null
+		_apply_card_position(prev, true)
+
+	hovered_card = card
 	card.z_index = 100
 
-	# Obtener posición base
-	if not _card_targets.has(card):
-		return
-
 	var target = _card_targets[card]
+	var hover_pos := Vector2(target.position.x, target.position.y - 5.0)
 
-	# Sin desplazamiento de posición al hacer hover (2026-08-28, a pedido
-	# del usuario) — la carta crece/rota en su propio lugar, ya no "salta"
-	# hacia arriba.
+	# Animar todos los ejes (posición X/Y, rotación, escala y alpha) hacia el
+	# estado de hover exacto para que ninguna carta quede jamás inclinada o
+	# desfasada a medio camino.
 	_kill_tween(card)
 	var tween = create_tween()
 	tween.set_parallel(true)
+	tween.tween_property(card, "position", hover_pos, hover_duration).set_ease(Tween.EASE_OUT)
+	tween.tween_property(card, "rotation_degrees", target.rotation, hover_duration).set_ease(Tween.EASE_OUT)
 	tween.tween_property(card, "scale", target.scale * hover_scale, hover_duration).set_ease(Tween.EASE_OUT)
-	tween.tween_property(card, "position:y", target.position.y - 5.0, hover_duration).set_ease(Tween.EASE_OUT)
+	tween.tween_property(card, "modulate:a", 1.0, hover_duration)
 	_tweens[card] = tween
 
 	emit_signal("card_hovered", card)
@@ -347,9 +382,11 @@ func _on_card_hovered(card: Node) -> void:
 
 func _on_card_unhovered(card: Node) -> void:
 	"""Cuando se deja de hacer hover"""
+	if not is_instance_valid(card) or _entering_cards.has(card):
+		return
 	if hovered_card == card:
 		hovered_card = null
-		_apply_card_position(card, true)
+	_apply_card_position(card, true)
 
 	emit_signal("card_unhovered", card)
 
@@ -385,4 +422,5 @@ func _kill_tween(card: Node) -> void:
 func set_cards_interactive(interactive: bool) -> void:
 	"""Activa/desactiva la interacción de todas las cartas"""
 	for card in cards:
-		card.can_interact = interactive
+		if is_instance_valid(card) and not _entering_cards.has(card):
+			card.can_interact = interactive
