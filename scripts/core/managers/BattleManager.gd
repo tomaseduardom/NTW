@@ -165,6 +165,14 @@ func calculate_combat_damage() -> Dictionary:
 			])
 			emit_signal("unblocked_damage", attacker, attacker_strength)
 
+	# Prevenir el daño al Castillo con un Oro (Alicanto, Escritura Sagrada,
+	# 2026-10-14) — antes de aplicarlo.
+	if result.total_damage_to_castle + result.total_damage_to_exile > 0 \
+			and await EffectController.offer_castle_damage_prevention(defender_id,
+				result.total_damage_to_castle + result.total_damage_to_exile):
+		result.total_damage_to_castle = 0
+		result.total_damage_to_exile = 0
+
 	# Fisión Nuclear (2026-10-14): el "doble daño al Destierro" es una
 	# habilidad del rival — contra un jugador protegido es daño normal.
 	if EffectController.is_fision_shielded(defender_id) and result.total_damage_to_exile > 0:

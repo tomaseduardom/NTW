@@ -2018,6 +2018,49 @@ func _discard_oro_from_reserva(oro_card: Node, controller_id: int) -> void:
 		_update_gold_display()
 
 
+func _take_gold_out_of_play(oro_card: Node) -> Dictionary:
+	"""Saca un Oro de la Reserva u Oro Pagado (contadores incluidos) y
+	devuelve sus datos; el llamador decide el destino (2026-10-14)."""
+	var pid: int = oro_card.controller_id if oro_card.get("controller_id") != null else 0
+	var parent = oro_card.get_parent()
+	if parent == (_main.player_gold if pid == 0 else _main.opponent_gold):
+		GameState.agregar_oro_reserva(pid, -1)
+	elif parent == (_main.player_oro_pagado if pid == 0 else _main.opponent_oro_pagado):
+		GameState.agregar_oro_pagado(pid, -1)
+	if pid == 0:
+		_main.gold_cards.erase(oro_card)
+	var data: Dictionary = oro_card.card_data.duplicate() if oro_card.get("card_data") else {}
+	CardManager._disconnect_card_interaction_signals(oro_card)
+	if parent:
+		parent.remove_child(oro_card)
+	oro_card.queue_free()
+	update_gold_containers_spacing()
+	_update_gold_display()
+	return data
+
+
+func exile_gold_from_play(oro_card: Node) -> void:
+	if not is_instance_valid(oro_card):
+		return
+	var owner_id: int = oro_card.owner_id if oro_card.get("owner_id") != null else 0
+	var data: Dictionary = _take_gold_out_of_play(oro_card)
+	data["esta_oculta"] = false
+	CardManager.append_to_exile(owner_id, data)
+
+
+func return_gold_to_hand(oro_card: Node) -> void:
+	if not is_instance_valid(oro_card):
+		return
+	var owner_id: int = oro_card.owner_id if oro_card.get("owner_id") != null else 0
+	var data: Dictionary = _take_gold_out_of_play(oro_card)
+	var node = _main._create_card(data, owner_id != 0)
+	if owner_id == 0:
+		_main.player_hand.add_card(node)
+	else:
+		_main._opponent_fan.add_card(node)
+	_main._connect_card_signals(node)
+
+
 func _trigger_enter_play(card: Node, zone: int = Constants.Zone.LINEA_DEFENSA) -> bool:
 	"""Dispara la entrada al juego (DAR 7.4) para habilidades 'Al entrar' de
 	Aliados/Armas/Oro/Tótems. Para Talismanes es distinto (2026-08-27): no

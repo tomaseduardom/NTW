@@ -1231,6 +1231,86 @@ func _fision_toll_prevents(affected_card, owner_id: int, effect_source) -> bool:
 	return false
 
 
+## Prevenir daño al Castillo con un Oro (2026-10-14, mazo 170):
+##  - Alicanto: "En respuesta a que fueras a recibir daño, puedes Desterrar
+##    este Oro para prevenirlo. Luego, puedes convertir una carta de tu mano
+##    en un Oro sin habilidad y ponerla en tu Oro Pagado."
+##  - Escritura Sagrada: "Puedes subirlo a tu mano o convertirlo en un Oro sin
+##    habilidad para prevenir recibir daño."
+## Se ofrece en BattleManager antes de aplicar el daño de combate. Previene
+## todo ese daño.
+func offer_castle_damage_prevention(defender_id: int, damage: int) -> bool:
+	var main := get_node_or_null("/root/Main")
+	if not main or damage <= 0:
+		return false
+	var candidates: Array = []
+	for zone in [PlayerSideScript.gold_reserva(main, defender_id), PlayerSideScript.oro_pagado(main, defender_id)]:
+		if not zone:
+			continue
+		for c in zone.get_children():
+			if not is_instance_valid(c) or c.get("card_ability") == null or KeywordManager.is_silenced(c) \
+					or c.get("is_converted") == true:
+				continue
+			var t: String = str(c.card_ability).to_lower()
+			if "en respuesta a que fueras a recibir daño, puedes desterrar este oro para prevenirlo" in t:
+				candidates.append({"card": c, "kind": "alicanto"})
+			elif "puedes subirlo a tu mano o convertirlo en un oro sin habilidad para prevenir recibir daño" in t:
+				candidates.append({"card": c, "kind": "escritura"})
+	if candidates.is_empty():
+		return false
+	var chosen: Dictionary = {}
+	if PlayerSideScript.is_bot(defender_id):
+		if damage >= 2:
+			chosen = candidates[0]
+	else:
+		for cand in candidates:
+			if await SelectionManager.await_two_choice(main,
+					"Vas a recibir %d de daño" % damage, "Usar %s para prevenirlo" % str(cand.card.card_name), "No",
+					defender_id):
+				chosen = cand
+				break
+	if chosen.is_empty() or not is_instance_valid(chosen.card):
+		return false
+	var oro: Node = chosen.card
+	var oro_name: String = str(oro.card_name)
+	if chosen.kind == "alicanto":
+		main._gold_manager.exile_gold_from_play(oro)
+		main._update_debug("%s: se previene el daño" % oro_name)
+		await _alicanto_convert_hand_card(main, defender_id)
+	else:
+		var to_hand: bool = true
+		if not PlayerSideScript.is_bot(defender_id):
+			to_hand = await SelectionManager.await_two_choice(main, oro_name, "Subirlo a tu mano",
+				"Convertirlo en un Oro sin habilidad", defender_id)
+		if to_hand:
+			main._gold_manager.return_gold_to_hand(oro)
+		else:
+			oro.is_converted = true
+		main._update_debug("%s: se previene el daño" % oro_name)
+	return true
+
+
+func _alicanto_convert_hand_card(main: Node, pid: int) -> void:
+	var hand: Array = PlayerSideScript.hand_cards(main, pid).filter(func(c): return is_instance_valid(c))
+	if hand.is_empty() or PlayerSideScript.is_bot(pid) or not main._card_interaction:
+		return
+	var picked: Node = await main._card_interaction.await_target(
+		"Alicanto: puedes convertir una carta de tu mano en un Oro sin habilidad en tu Oro Pagado (ESC: no)",
+		func(c: Node) -> bool: return c in hand, true, pid)
+	if not picked or not is_instance_valid(picked):
+		return
+	var data: Dictionary = picked.card_data.duplicate()
+	PlayerSideScript.remove_from_hand(main, pid, picked)
+	if is_instance_valid(picked):
+		CardManager._disconnect_card_interaction_signals(picked)
+		picked.queue_free()
+	data["esta_oculta"] = false
+	var gold_node: Node = await main._gold_manager.put_gold_directly_in_pagado(pid, data)
+	if is_instance_valid(gold_node):
+		gold_node.card_type = Constants.CardType.ORO
+		gold_node.is_converted = true
+
+
 ## Efectos suspendidos que resuelven en la PRÓXIMA Fase Final de un jugador
 ## puntual, de una sola vez (2026-09-06, a pedido del usuario — p.ej. Fisión
 ## Nuclear: 'En la próxima Fase Final oponente, Baraja una carta de coste 2
