@@ -2179,6 +2179,10 @@ func _trigger_enter_play(card: Node, zone: int = Constants.Zone.LINEA_DEFENSA) -
 	# (mismo destino por defecto que cualquier Anular, igual que el Talismán
 	# de arriba).
 	var controller_id: int = card.get("owner_id") if card.get("owner_id") != null else 0
+	if _alicanto_paid_pending.get(controller_id, false):
+		_alicanto_paid_pending.erase(controller_id)
+		if card.get("card_type") == Constants.CardType.ALIADO:
+			card.set_meta("protected_from_annul_this_turn", true)  # Alicanto
 	if await TriggerSystem.open_response_window(card, str(card.card_name) if card.get("card_name") else "", controller_id):
 		if card.get_meta("annul_to_exile", false):  # p.ej. Red de Plata, Culto a la Muerte
 			await EffectController.exile_card(card.owner_id if card.get("owner_id") != null else controller_id, card, true)
@@ -2578,6 +2582,9 @@ func _choose_physical_gold_to_spend(oros_reserva: Array, restante: int, player_i
 	return chosen
 
 
+var _alicanto_paid_pending: Dictionary = {}
+
+
 func _resolve_gold_paid_reaction(oro_card: Node, card_type: int, card_race: String, card_cost: int, player_id: int = 0) -> void:
 	"""Detecta 'Este Oro genera un Oro adicional cuando sea usado para
 	pagar X [de coste N o más]' en el texto del Oro que EFECTIVAMENTE pagó
@@ -2590,6 +2597,12 @@ func _resolve_gold_paid_reaction(oro_card: Node, card_type: int, card_race: Stri
 	if ability_text.is_empty():
 		return
 	var lower := _fix_mojibake(ability_text).to_lower()
+	# Alicanto (2026-10-14): "Los Aliados de coste 2 o más pagados con este
+	# Oro no pueden ser Anulados" — se marca y lo toma el próximo Aliado que
+	# entra (_trigger_enter_play), antes de su ventana de respuesta.
+	if "aliados de coste 2 o más pagados con este oro no pueden ser anulados" in lower \
+			and card_type == Constants.CardType.ALIADO and card_cost >= 2 and not KeywordManager.is_silenced(oro_card):
+		_alicanto_paid_pending[player_id] = true
 	if not ("este oro genera un oro adicional cuando sea usado para pagar" in lower):
 		return
 
