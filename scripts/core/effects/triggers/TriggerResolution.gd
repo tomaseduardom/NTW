@@ -705,6 +705,8 @@ func _execute_trigger_effect(card: Node, trigger_type: String, event_data: Dicti
 				var controller_id: int = card.get("owner_id") if card.get("owner_id") != null else 0
 				if await _main._totem_patterns.try_execute_metropolitan_attack_pattern(clause, card, controller_id):
 					result["no_handler"] = false
+				elif await _main._look_and_play.try_execute_look_hand_name_play_lock_pattern(ability_text, card, controller_id):
+					result["no_handler"] = false
 				elif await _main._convert_misc_resolver.try_execute_mill_convert_to_ally_pattern(clause, card, controller_id):
 					result["no_handler"] = false
 				elif await _main._look_and_play.try_execute_wielder_attack_gold_or_draw_pattern(clause, card, controller_id):
@@ -786,9 +788,12 @@ func _execute_trigger_effect(card: Node, trigger_type: String, event_data: Dicti
 					result["no_handler"] = false
 				if await _main._oro_patterns.try_execute_torii_final_pattern(clause, card, controller_id):
 					result["no_handler"] = false
-				var resolved := await _resolve_look_and_play_patterns(card, ability_text, clause, controller_id, event_data)
-				if resolved:
+				if await _main._oro_patterns.try_execute_carro_szgany_final_pattern(clause, card, controller_id):
 					result["no_handler"] = false
+				else:
+					var resolved := await _resolve_look_and_play_patterns(card, ability_text, clause, controller_id, event_data)
+					if resolved:
+						result["no_handler"] = false
 		elif trigger_type == "on_opponent_turn_end":
 			# 'En la Fase Final oponente' (2026-09-04, p.ej. Biblioteca de
 			# Caballería) — mismo aislamiento que on_turn_end, pero disparado

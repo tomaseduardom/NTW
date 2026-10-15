@@ -334,7 +334,13 @@ func _execute_play_weapon_discount_draw(action: Dictionary, controller_id: int, 
 	var picked_data: Dictionary = picked_node.card_data
 
 	# Portador ANTES de tocar el origen del Arma (mismo orden que GoldManager.play_card)
-	var ally = await main._gold_manager._select_weapon_wielder(controller_id)
+	var wielder_filter := Callable()
+	if params.get("wielder", "") == "self_or_opponent":
+		# "sobre este Aliado o uno oponente" (Zadquiel).
+		wielder_filter = func(c: Node) -> bool:
+			var c_ctrl: int = c.controller_id if c.get("controller_id") != null else 0
+			return c == card or c_ctrl != controller_id
+	var ally = await main._gold_manager._select_weapon_wielder(controller_id, wielder_filter)
 	if not ally or not is_instance_valid(ally):
 		return
 

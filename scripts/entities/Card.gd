@@ -346,7 +346,9 @@ const TRIGGER_KEYWORDS: Dictionary = {
 	# bloque del ETB y esta oración se ejecutaba AL EQUIPARSE en vez de al
 	# atacar (mismo síntoma que el bug ya documentado de 2026-08-30, pero
 	# esta frase puntual seguía sin cubrir).
-	"on_attack": ["cuando ataque", "al atacar", "cuando entra en juego o ataque", "cuando entra en juego o ataca", "cuando el portador ataque"],
+	# "cuando ataca" (2026-10-14, a pedido del usuario con Zadquiel): 41
+	# cartas lo usan y nunca se registraba el disparador.
+	"on_attack": ["cuando ataque", "cuando ataca", "al atacar", "cuando entra en juego o ataque", "cuando entra en juego o ataca", "cuando el portador ataque"],
 	"on_block": ["cuando bloquee", "al bloquear"],
 	# "cuando hace daño" (2026-10-12, p.ej. Sir Galahad).
 	"on_damage_dealt": ["cuando haga daño de combate", "cuando haga daño", "si hizo daño", "cuando hace daño"],

@@ -1,4 +1,4 @@
-﻿extends RefCounted
+extends RefCounted
 ## MiscUniquePatterns — 7 de 7 mitades de LookAndPlayResolver.gd, dividido por
 ## tamaño el 2026-09-06 ("módulos gordos"). Cuatro patrones únicos que no
 ## encajaban limpio en ninguna de las otras 6 categorías: Fisión Nuclear
@@ -7,6 +7,8 @@
 ## control + renombrado), Malleus Maleficarum (candado de nombre). Llamada
 ## solo desde LookAndPlayResolver.gd (facade) — ver ese archivo para la lista
 ## completa de las 7 mitades hermanas.
+
+const PlayerSideScript = preload("res://scripts/core/game/PlayerSide.gd")
 
 var _main: Node
 
@@ -206,5 +208,37 @@ func try_execute_malleus_name_lock_pattern(ability_text: String, card: Node, con
 	return true
 
 
-
-
+func try_execute_look_hand_name_play_lock_pattern(ability_text: String, card: Node, controller_id: int) -> bool:
+	"""'Cuando ataca, mira la mano de tu oponente y nombra una carta. Esa
+	carta no puede ser jugada hasta tu próximo turno' (Zadquiel, 2026-10-14).
+	Candado por NOMBRE (GoldManager.lock_name_from_playing): cubre toda copia
+	del rival, también las que robe después. El bot nombra al azar una carta
+	que no sea Oro de la mano rival."""
+	var lower := ability_text.to_lower()
+	if not ("mira la mano de tu oponente y nombra una carta" in lower
+			and "no puede ser jugada hasta tu próximo turno" in lower):
+		return false
+	var main := _main.get_node_or_null("/root/Main")
+	if not main or not main._gold_manager:
+		return true
+	var opponent_id: int = 1 - controller_id
+	var opp_hand: Array = PlayerSideScript.hand_cards(main, opponent_id).filter(func(c): return is_instance_valid(c))
+	var picked_name: String = ""
+	if PlayerSideScript.is_bot(controller_id):
+		var non_gold: Array = opp_hand.filter(func(c): return c.get("card_type") != Constants.CardType.ORO)
+		if non_gold.is_empty():
+			return true
+		picked_name = str(non_gold.pick_random().get("card_name"))
+	else:
+		if not opp_hand.is_empty():
+			SelectionManager.open_reveal(opp_hand.map(func(c): return c.card_data), "Mano de tu oponente", controller_id)
+		var picked: Dictionary = await _main._card_name_search.open_and_wait(
+			"Nombra una carta: tu oponente no puede jugarla hasta tu próximo turno", controller_id)
+		picked_name = str(picked.get("nombre", ""))
+	if picked_name.is_empty():
+		return true
+	if await TriggerSystem.open_response_window(card, str(card.get("card_name")) if card else "Zadquiel", controller_id):
+		return true
+	main._gold_manager.lock_name_from_playing(picked_name, opponent_id, controller_id)
+	main._update_debug("'%s' no puede jugarse hasta tu próximo turno" % picked_name)
+	return true

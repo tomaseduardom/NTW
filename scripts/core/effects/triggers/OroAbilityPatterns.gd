@@ -13,6 +13,8 @@ extends RefCounted
 ## de una sola cláusula en el despachador compartido _resolve_look_and_
 ## play_patterns(), que recorre con el texto COMPLETO sin aislar).
 
+const CastleLookScript = preload("res://scripts/core/effects/CastleLook.gd")
+
 var _main: Node
 
 ## torii (2026-09-20): "Si lo haces, no Robas al finalizar tu turno" —
@@ -312,6 +314,23 @@ func try_execute_torii_agrupacion_pattern(ability_text: String, card: Node, cont
 		main._zone_manager._update_castillo_counts()
 
 	register_torii_skip_final_draw(controller_id)
+	return true
+
+
+func try_execute_carro_szgany_final_pattern(ability_text: String, card: Node, controller_id: int) -> bool:
+	"""'En tu Fase Final, Destierra hasta dos cartas de un Cementerio, mira
+	tantas cartas del tope de tu Castillo como Aliados controles y
+	ordénalas' (Carro Szgany, 2026-10-14). EffectCompiler no entiende la
+	frase entera y la cadena vieja hacía solo una parte. Destierro: selector
+	del tablero con los dos Cementerios, todas de UNO (one_zone). Mirar:
+	CastleLook con la segunda mitad del texto."""
+	var lower := ability_text.to_lower()
+	var look_at: int = lower.find("mira tantas cartas del tope de tu castillo como aliados controles")
+	if not ("destierra hasta dos cartas de un cementerio" in lower) or look_at < 0:
+		return false
+	await ActionModule.search_either_owner(controller_id, [Constants.Zone.CEMENTERIO], {}, 2, true, card,
+		Constants.Zone.DESTIERRO, false, true)
+	await CastleLookScript.try_execute_text(card, ability_text.substr(look_at), controller_id)
 	return true
 
 

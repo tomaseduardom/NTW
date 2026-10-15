@@ -171,7 +171,39 @@ func lock_card_from_playing(card: Node, locking_player_id: int) -> void:
 
 
 func _card_play_locked(card: Node) -> bool:
-	return _play_locked_cards.get(card.get_instance_id(), false)
+	if _play_locked_cards.get(card.get_instance_id(), false):
+		return true
+	var pid: int = card.owner_id if card.get("owner_id") != null else 0
+	return is_name_play_locked(pid, str(card.get("card_name")), int(card.get("card_type")))
+
+
+## Candado por NOMBRE (2026-10-14, Zadquiel: "nombra una carta. Esa carta no
+## puede ser jugada hasta tu próximo turno") — cubre toda copia con ese nombre
+## del jugador afectado, en la mano o en cualquier otra zona desde la que se
+## juegue. Los Oros no se juegan (se ponen en juego), así que no les aplica.
+## Clave "jugador|nombre en minúsculas"; se limpia al empezar el próximo turno
+## de quien lo puso.
+var _play_locked_names: Dictionary = {}
+
+
+func lock_name_from_playing(card_name: String, target_player_id: int, locking_player_id: int) -> void:
+	var key := "%d|%s" % [target_player_id, card_name.strip_edges().to_lower()]
+	_play_locked_names[key] = true
+	print("[GoldManager] '%s' no puede jugarse (J%d) hasta el próximo turno de J%d" % [card_name, target_player_id + 1, locking_player_id + 1])
+	var clear_it: Callable
+	clear_it = func(started_player_id: int, _turn: int) -> void:
+		if started_player_id != locking_player_id:
+			return
+		_play_locked_names.erase(key)
+		if GameManager.turn_started.is_connected(clear_it):
+			GameManager.turn_started.disconnect(clear_it)
+	GameManager.turn_started.connect(clear_it)
+
+
+func is_name_play_locked(player_id: int, card_name: String, card_type: int = -1) -> bool:
+	if card_type == Constants.CardType.ORO or _play_locked_names.is_empty():
+		return false
+	return _play_locked_names.has("%d|%s" % [player_id, card_name.strip_edges().to_lower()])
 
 
 func _register_gold_placed(player_id: int) -> void:
@@ -888,6 +920,9 @@ func play_card_from_cemetery(card_data: Dictionary, owner_id: int = 0) -> bool:
 		return false
 
 	var card_type: int = card_data.get("tipo", -1)
+	if is_name_play_locked(owner_id, str(card_data.get("nombre", "")), card_type):
+		_main._update_debug("%s no puede jugarse todavía" % str(card_data.get("nombre", "")))
+		return false
 	# Nota: _card_play_locked() opera sobre el Node (candado por instance_id,
 	# ver lock_card_from_playing()) — play_card_from_cemetery() todavía no
 	# tiene el Node aquí (se crea más abajo), así que el candado de Chakram no
@@ -1019,7 +1054,7 @@ func play_card_for_free(card_data: Dictionary, owner_id: int = 0, exile_after: b
 	return true
 
 
-func _select_weapon_wielder(chooser_id: int = 0) -> Node:
+func _select_weapon_wielder(chooser_id: int = 0, extra_filter: Callable = Callable()) -> Node:
 	"""Abre selección de objetivo para elegir qué Aliado porta el Arma que
 	se está jugando — propio O rival (2026-09-03, corregido a pedido del
 	usuario: DAR no restringe el portador a Aliados que controlas). Un
@@ -1041,12 +1076,18 @@ func _select_weapon_wielder(chooser_id: int = 0) -> Node:
 	# "Objetivo no válido" sin resolver nunca 'done', y el jugador quedaba
 	# sin poder jugar más cartas hasta reiniciar. Cortar aquí es la última
 	# red de seguridad, sin importar qué otro chequeo haya fallado antes.
-	if _get_eligible_weapon_wielders().is_empty():
+	# 'extra_filter' (2026-10-14, Zadquiel: "sobre este Aliado o uno
+	# oponente"): restringe además quién puede portarla.
+	var eligible: Array = _get_eligible_weapon_wielders()
+	if extra_filter.is_valid():
+		eligible = eligible.filter(func(c): return extra_filter.call(c))
+	if eligible.is_empty():
 		_main._update_debug("No hay ningún Aliado libre en juego para portar el Arma")
 		return null
 	var filter := func(c: Node) -> bool:
-		return c in _get_eligible_weapon_wielders()
-	return await _main._card_interaction.await_target("Elige qué Aliado porta el Arma (propio o rival)", filter, true, chooser_id)
+		return c in eligible
+	var prompt: String = "Elige qué Aliado porta el Arma" if extra_filter.is_valid() 		else "Elige qué Aliado porta el Arma (propio o rival)"
+	return await _main._card_interaction.await_target(prompt, filter, true, chooser_id)
 
 
 func _equip_weapon(weapon: Node, ally: Node, fire_enter_play: bool = true) -> void:

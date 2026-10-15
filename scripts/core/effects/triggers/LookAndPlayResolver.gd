@@ -407,5 +407,9 @@ func try_execute_gain_control_ally_rename_titan_pattern(ability_text: String, ca
 	return await _misc_unique.try_execute_gain_control_ally_rename_titan_pattern(ability_text, card, controller_id)
 
 
+func try_execute_look_hand_name_play_lock_pattern(ability_text: String, card: Node, controller_id: int) -> bool:
+	return await _misc_unique.try_execute_look_hand_name_play_lock_pattern(ability_text, card, controller_id)
+
+
 func try_execute_malleus_name_lock_pattern(ability_text: String, card: Node, controller_id: int) -> bool:
 	return await _misc_unique.try_execute_malleus_name_lock_pattern(ability_text, card, controller_id)

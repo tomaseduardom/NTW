@@ -25,7 +25,7 @@ const TRIGGER_PATTERNS: Dictionary = {
 	"on_destroyed": ["cuando sea destruido", "al ser destruido"],
 	"on_discard": ["cuando descartes", "al descartar", "cuando sea descartado"],
 	"on_draw": ["cuando robes", "al robar", "cada vez que robes"],
-	"on_attack": ["cuando ataque", "al atacar", "cada vez que ataque"],
+	"on_attack": ["cuando ataque", "cuando ataca", "al atacar", "cada vez que ataque"],
 	"on_block": ["cuando bloquee", "al bloquear"],
 	# "infligir"/"inflija"/"inflige" no es terminología real (2026-08-28) —
 	# se reemplazó por "cuando haga daño de combate", la forma más común en

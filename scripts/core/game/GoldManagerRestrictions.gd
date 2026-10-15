@@ -155,7 +155,6 @@ func _get_eligible_weapon_wielders() -> Array:
 	pueden portar un Arma adicional' en juego — ver _max_weapons_per_ally(),
 	2026-08-31, Levisterio)."""
 	var eligible: Array = []
-	var max_weapons: int = _max_weapons_per_ally()
 	for field in [_main.player_field, _main.player_linea_ataque, _main.opponent_field, _main.opponent_linea_ataque]:
 		if not field:
 			continue
@@ -164,10 +163,74 @@ func _get_eligible_weapon_wielders() -> Array:
 				continue
 			if card.get("card_type") != Constants.CardType.ALIADO:
 				continue
-			if _ally_weapon_count(card) >= max_weapons:
+			if _ally_weapon_count(card) >= _max_weapons_for(card):
 				continue
 			eligible.append(card)
 	return eligible
+
+
+func _max_weapons_for(ally: Node) -> int:
+	"""Cuántas Armas puede portar ESTE Aliado (2026-10-14, a pedido del
+	usuario con Carro Szgany). Antes era un número global que solo miraba
+	los Aliados del Anfitrión ("Tus Aliados pueden portar un Arma
+	adicional") y lo aplicaba a todos, rivales incluidos; los Oros
+	(Levisterio, Carro Szgany) no se miraban nunca. Ahora:
+	  - 1 por defecto;
+	  - +1 si el propio Aliado dice "puede portar un Arma adicional" (Vinci y
+	    Yang, Húsar Cazador);
+	  - +1 por cada carta en juego de SU controlador (Aliados, Armas, Tótems
+	    y Oros) con "Aliados pueden portar un Arma adicional" (Levisterio,
+	    Patrulla Nocturna);
+	  - +1 por Carro Szgany del controlador si controla Caballeros,
+	    Guerreros o Héroes y este es su Aliado de mayor coste (empates: todos).
+	Las cartas sin habilidad (silenciadas/convertidas) no cuentan."""
+	var ctrl: int = ally.controller_id if ally.get("controller_id") != null else 0
+	var total := 1
+	var own_text: String = _ability_lower(ally)
+	if "puede portar un arma adicional" in own_text and not ("aliados pueden portar un arma adicional" in own_text):
+		total += 1
+	var allies: Array = []
+	var sources: Array = []
+	var containers: Array = [_main.player_field, _main.player_linea_ataque, _main.player_linea_apoyo,
+		_main.player_gold, _main.player_oro_pagado] if ctrl == 0 else [_main.opponent_field,
+		_main.opponent_linea_ataque, _main.opponent_linea_apoyo, _main.opponent_gold, _main.opponent_oro_pagado]
+	for container in containers:
+		if not container:
+			continue
+		for c in container.get_children():
+			if not is_instance_valid(c):
+				continue
+			sources.append(c)
+			if c.get("card_type") == Constants.CardType.ALIADO:
+				allies.append(c)
+			var weapons = c.get("equipped_weapons")
+			if weapons is Array:
+				for w in weapons:
+					if is_instance_valid(w):
+						sources.append(w)
+	var has_kgh := false
+	var top_cost := -999
+	for a in allies:
+		var raza: String = _main._gold_manager._fix_mojibake(str(a.get("card_raza") if a.get("card_raza") != null else "")).to_lower()
+		if "caballero" in raza or "guerrero" in raza or "héroe" in raza or "heroe" in raza:
+			has_kgh = true
+		top_cost = maxi(top_cost, int(ContinuousEffectManager.get_modified_cost(a)))
+	for s in sources:
+		var text: String = _ability_lower(s)
+		if text.is_empty():
+			continue
+		if "aliados pueden portar un arma adicional" in text:
+			total += 1
+		if "tu aliado de mayor coste puede portar un arma adicional" in text and has_kgh 				and int(ContinuousEffectManager.get_modified_cost(ally)) >= top_cost:
+			total += 1
+	return total
+
+
+func _ability_lower(card: Node) -> String:
+	if not is_instance_valid(card) or card.get("is_converted") == true or KeywordManager.is_silenced(card):
+		return ""
+	var text: String = card.get("card_ability") if card.get("card_ability") != null else ""
+	return _main._gold_manager._fix_mojibake(text).to_lower()
 
 
 func _ally_weapon_count(ally: Node) -> int:

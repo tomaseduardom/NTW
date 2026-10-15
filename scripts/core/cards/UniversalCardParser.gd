@@ -811,6 +811,26 @@ func _extract_action_impl(text: String) -> Dictionary:
 			"raw_text":     m_wd.get_string(0),
 		}
 
+	# Variante con portador restringido (2026-10-14, Zadquiel: "puedes jugar
+	# un Arma sobre este Aliado o uno oponente, reduciendo su coste en un
+	# Oro, hasta un mínimo de 1") — desde la mano, como Hanta.
+	var weapon_on_rx := RegEx.new()
+	weapon_on_rx.compile("(?i)puedes jugar un arma sobre este aliado o uno oponente,?\\s*reduciendo su coste en (\\w+) oros?,?\\s*hasta un m[ií]nimo de (\\w+)")
+	var m_wo := weapon_on_rx.search(text)
+	if m_wo:
+		var discount3: int = _parse_amount(m_wo.get_string(1))
+		var floor_val3: int = _parse_amount(m_wo.get_string(2))
+		print("[Parser] Acción detectada: PLAY_WEAPON_DISCOUNT (este Aliado u oponente) | Descuento: %d | Mínimo: %d" % [discount3, floor_val3])
+		return {
+			"matched":      true,
+			"type":         "PLAY_WEAPON_DISCOUNT",
+			"action_type":  ActionType.CUSTOM,
+			"value":        discount3,
+			"params":       {"discount": discount3, "floor": floor_val3, "hand_only": true, "draw_amount": 0,
+				"wielder": "self_or_opponent"},
+			"raw_text":     m_wo.get_string(0),
+		}
+
 	# Variante sin robo, solo desde la mano (p.ej. Hanta: "puedes jugar un
 	# Arma de tu mano reduciendo su coste en 1 Oro, hasta un mínimo de 0").
 	var weapon_hand_rx := RegEx.new()
