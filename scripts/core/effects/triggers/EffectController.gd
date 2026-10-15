@@ -1125,9 +1125,10 @@ func try_consume_legacy_targeted_prevention(card: Node) -> bool:
 ##  - el JUGADOR protegido: los efectos del rival que lo afectan a él
 ##    (Descartar de su mano, Botar de su Castillo) no ocurren — ver
 ##    fision_blocks_player_effect(), consultado en ActionModule.discard/mill;
-##  - sus Castillo/Cementerio: el rival no puede buscar, mirar ni elegir
-##    cartas ahí (fision_hides_zones_of(), en ActionSearch, CastleLook y el
-##    selector de Cementerios), ni hacerle daño por efecto (DamageManager);
+##  - su Castillo y su mano (el Cementerio NO, usuario 2026-10-14): el rival
+##    no puede buscar ni mirar cartas en su Castillo (fision_hides_zones_of(),
+##    en ActionSearch y CastleLook) ni en su mano, ni hacerle daño por
+##    efecto (DamageManager);
 ##    en combate, el daño "al Destierro" de habilidades rivales va como daño
 ##    normal (BattleManager);
 ##  - sus cartas EN JUEGO (también las que entren después): cada vez que un
@@ -1180,9 +1181,11 @@ func fision_blocks_player_effect(player_id: int) -> bool:
 	return true
 
 
-func fision_hides_zones_of(zone_owner: int, chooser_id: int) -> bool:
-	"""true si 'chooser_id' (el rival) no puede buscar/mirar/elegir en las
-	zonas de 'zone_owner' por Fisión Nuclear."""
+func fision_hides_zones_of(zone_owner: int, chooser_id: int, zone: int = Constants.Zone.CASTILLO) -> bool:
+	"""true si 'chooser_id' (el rival) no puede buscar/mirar en el Castillo
+	(o la mano) de 'zone_owner' por Fisión Nuclear. El Cementerio no cuenta."""
+	if zone not in [Constants.Zone.CASTILLO, Constants.Zone.MANO]:
+		return false
 	if chooser_id < 0 or chooser_id == zone_owner or not is_fision_shielded(zone_owner):
 		return false
 	var main := get_node_or_null("/root/Main")

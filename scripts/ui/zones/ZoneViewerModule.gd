@@ -644,11 +644,6 @@ func open_cemetery_target_picker(prompt: String, filter: Callable, max_count: in
 			own_data.append({"data": d, "zone_type": zone_type})
 		for d in raw_opp:
 			opp_data.append({"data": d, "zone_type": zone_type})
-	# Fisión Nuclear: el rival no elige en las zonas del jugador protegido.
-	if EffectController.fision_hides_zones_of(0, chooser_id):
-		own_data.clear()
-	if EffectController.fision_hides_zones_of(1, chooser_id):
-		opp_data.clear()
 	if own_data.is_empty() and opp_data.is_empty():
 		return []
 

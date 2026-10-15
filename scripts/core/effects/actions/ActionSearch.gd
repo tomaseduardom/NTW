@@ -66,7 +66,7 @@ func search(player_id: int, zone: int, filter: Dictionary, amount: int = 1, can_
 
 	Returns: {success, selected, matching, searched_zone, searched_zones}
 	"""
-	if EffectController.fision_hides_zones_of(player_id, chooser_id if chooser_id >= 0 else player_id):  # Fisión Nuclear
+	if EffectController.fision_hides_zones_of(player_id, chooser_id if chooser_id >= 0 else player_id, zone):  # Fisión Nuclear
 		return {"success": can_fail, "selected": [], "matching": []}
 	return await search_zones(player_id, [zone], filter, amount, can_fail, skip_validation, may_play, source_card,
 		destination, distinct_names, chooser_id)
@@ -246,9 +246,9 @@ func search_either_owner(chooser: int, zones: Array, filter: Dictionary, amount:
 	var pools: Array = []
 	var src: Array = []  # [{owner, zone, data}] en el mismo orden que pools
 	for zone_owner in [chooser, 1 - chooser]:
-		if EffectController.fision_hides_zones_of(zone_owner, chooser):  # Fisión Nuclear
-			continue
 		for zone in zones:
+			if EffectController.fision_hides_zones_of(zone_owner, chooser, zone):  # Fisión Nuclear
+				continue
 			var zone_data = _get_searchable_zone_data(zone_owner, zone)
 			if zone_data == null:
 				continue
