@@ -813,8 +813,9 @@ func _extract_action_impl(text: String) -> Dictionary:
 
 	# Variante con portador restringido (2026-10-14, Zadquiel: "puedes jugar
 	# un Arma sobre este Aliado o uno oponente, reduciendo su coste en un
-	# Oro, hasta un mínimo de 1"). No dice "de tu mano": también desde el
-	# Cementerio, con Exhumar (usuario, 2026-10-14).
+	# Oro, hasta un mínimo de 1"). No dice "de tu mano": también Armas del
+	# Cementerio que tengan Exhumar (usuario, 2026-10-14); no se destierran
+	# al salir del juego, eso es solo para Talismanes.
 	var weapon_on_rx := RegEx.new()
 	weapon_on_rx.compile("(?i)puedes jugar un arma sobre este aliado o uno oponente,?\\s*reduciendo su coste en (\\w+) oros?,?\\s*hasta un m[ií]nimo de (\\w+)")
 	var m_wo := weapon_on_rx.search(text)
@@ -828,7 +829,7 @@ func _extract_action_impl(text: String) -> Dictionary:
 			"action_type":  ActionType.CUSTOM,
 			"value":        discount3,
 			"params":       {"discount": discount3, "floor": floor_val3, "hand_only": false, "draw_amount": 0,
-				"wielder": "self_or_opponent", "exhume_from_cemetery": true},
+				"wielder": "self_or_opponent", "cemetery_needs_exhumar": true},
 			"raw_text":     m_wo.get_string(0),
 		}
 

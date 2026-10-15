@@ -254,9 +254,9 @@ func _create_card_from_api(data: Dictionary) -> Dictionary:
 ## [[texto a buscar, reemplazo], ...]. Se aplican al cargar (bundled, caché o
 ## API), así que sobreviven a reload_card.ps1.
 const TEXT_CORRECTIONS: Dictionary = {
-	# 2026-10-14, usuario: "la zadquiel no dispara cuando ataque, dice cuando
-	# haga daño".
-	"zadquiel": [["Cuando ataca, mira la mano de tu oponente", "Cuando haga daño, mira la mano de tu oponente"]],
+	# 2026-10-14, usuario: Zadquiel no dispara al atacar sino al hacer daño
+	# de combate (se distingue a propósito de "daño" a secas).
+	"zadquiel": [["Cuando ataca, mira la mano de tu oponente", "Cuando haga daño de combate, mira la mano de tu oponente"]],
 }
 
 

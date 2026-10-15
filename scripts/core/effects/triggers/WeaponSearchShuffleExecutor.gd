@@ -286,8 +286,12 @@ func _execute_play_weapon_discount_draw(action: Dictionary, controller_id: int, 
 	var cemetery_weapons: Array = []
 	if not hand_only:
 		for d in CardManager.get_cemetery(controller_id):
-			if d.get("tipo") == Constants.CardType.ARMA:
-				cemetery_weapons.append(d)
+			if d.get("tipo") != Constants.CardType.ARMA:
+				continue
+			# Zadquiel: del Cementerio solo Armas con Exhumar.
+			if params.get("cemetery_needs_exhumar", false) and not ("exhumar" in str(d.get("habilidad", "")).to_lower()):
+				continue
+			cemetery_weapons.append(d)
 	# 2026-09-25, bug real reportado por el usuario ("con lobo sagrado no me
 	# permite jugar armas del cementerio"): confirma qué encontró de verdad
 	# esta función antes de construir nada — si el Cementerio real tenía un
@@ -351,10 +355,6 @@ func _execute_play_weapon_discount_draw(action: Dictionary, controller_id: int, 
 		# reemplaza por uno real conectado a las señales del juego.
 		weapon_node = main._create_card(picked_data, false)
 		main._connect_card_signals(weapon_node)
-		# Jugada desde el Cementerio sin que el texto lo diga = Exhumar
-		# (Zadquiel): al salir del juego va al Destierro.
-		if params.get("exhume_from_cemetery", false):
-			weapon_node.is_exhumed = true
 	if controller_id != 0:
 		weapon_node.owner_id = controller_id
 		weapon_node.controller_id = controller_id

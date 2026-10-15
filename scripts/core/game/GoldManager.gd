@@ -930,7 +930,9 @@ func play_card_from_cemetery(card_data: Dictionary, owner_id: int = 0) -> bool:
 	# caso que esa carta describe: 'una carta de la mano rival').
 	var card = _main._create_card(card_data, false)
 	card.owner_id = owner_id
-	card.is_exhumed = true
+	# Exhumar no destierra al salir del juego salvo los Talismanes (usuario,
+	# 2026-10-14: "eso solo aplica para talismanes").
+	card.is_exhumed = card_type == Constants.CardType.TALISMAN
 	_main._connect_card_signals(card)
 
 	if card_type == Constants.CardType.ARMA and not _player_has_ally_in_play():
