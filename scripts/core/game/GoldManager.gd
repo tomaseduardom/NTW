@@ -104,6 +104,48 @@ func setup(main: Node) -> void:
 			GameManager.turn_started.connect(_on_turn_started_clear_virtual_gold)
 
 
+## Armas de más (2026-10-14, a pedido del usuario): si un Aliado porta más
+## Armas de las que hoy puede (p.ej. Levisterio pierde la habilidad o sale
+## del juego, o Carro Szgany deja de apuntarle), se destruyen las que entraron
+## primero y sobreviven las últimas en ser portadas. equipped_weapons está en
+## orden de entrada (con Arturo de Bretaña, la elegida primero entra primero).
+## Chequeo de estado cada 0.3 s, solo donde corre la lógica (no en el Remoto).
+var _weapon_check_accum := 0.0
+var _weapon_check_busy := false
+
+
+func _process(delta: float) -> void:
+	_weapon_check_accum += delta
+	if _weapon_check_accum < 0.3 or _weapon_check_busy or not _main or not GameManager.is_game_active:
+		return
+	_weapon_check_accum = 0.0
+	if NetworkClient.room_code != "" and not NetworkClient.is_host:
+		return
+	_enforce_weapon_capacity()
+
+
+func _enforce_weapon_capacity() -> void:
+	_weapon_check_busy = true
+	for field in [_main.player_field, _main.player_linea_ataque, _main.opponent_field, _main.opponent_linea_ataque]:
+		if not field:
+			continue
+		for ally in field.get_children():
+			if not is_instance_valid(ally) or ally.get("card_type") != Constants.CardType.ALIADO:
+				continue
+			var weapons = ally.get("equipped_weapons")
+			if not (weapons is Array):
+				continue
+			var live: Array = weapons.filter(func(w): return is_instance_valid(w))
+			var extra: int = live.size() - _restrictions._max_weapons_for(ally, false)
+			for i in range(maxi(extra, 0)):
+				var w: Node = live[i]
+				_main._update_debug("%s no puede portar tantas Armas: se destruye %s" % [
+					str(ally.get("card_name")), str(w.get("card_name"))])
+				var w_owner: int = w.owner_id if w.get("owner_id") != null else 0
+				await CardManager.destroy_card(w_owner, w)
+	_weapon_check_busy = false
+
+
 func _on_turn_started_clear_virtual_gold(_player_id: int, _turn: int) -> void:
 	limpiar_oros_virtuales()
 	limpiar_oro_restringido(_player_id)

@@ -169,7 +169,7 @@ func _get_eligible_weapon_wielders() -> Array:
 	return eligible
 
 
-func _max_weapons_for(ally: Node) -> int:
+func _max_weapons_for(ally: Node, for_new_weapon: bool = true) -> int:
 	"""Cuántas Armas puede portar ESTE Aliado (2026-10-14, a pedido del
 	usuario con Carro Szgany). Antes era un número global que solo miraba
 	los Aliados del Anfitrión ("Tus Aliados pueden portar un Arma
@@ -185,8 +185,10 @@ func _max_weapons_for(ally: Node) -> int:
 	    Guerreros o Héroes y este es su Aliado de mayor coste (empates: todos).
 	Las cartas sin habilidad (silenciadas/convertidas) no cuentan."""
 	var ctrl: int = ally.controller_id if ally.get("controller_id") != null else 0
-	# "Los Aliados oponentes no pueden portar Armas" (Sariel, 2026-10-14).
-	for container in ([_main.opponent_field, _main.opponent_linea_ataque, _main.opponent_linea_apoyo] if ctrl == 0
+	# "Los Aliados oponentes no pueden portar Armas" (Sariel, 2026-10-14):
+	# solo impide equipar Armas nuevas; las que ya portaba se quedan
+	# (usuario) — por eso no cuenta cuando for_new_weapon es false.
+	for container in [] if not for_new_weapon else ([_main.opponent_field, _main.opponent_linea_ataque, _main.opponent_linea_apoyo] if ctrl == 0
 			else [_main.player_field, _main.player_linea_ataque, _main.player_linea_apoyo]):
 		if not container:
 			continue
