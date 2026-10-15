@@ -196,6 +196,27 @@ func try_execute_shuffle_cost_max_two_draw_two_pattern(ability_text: String, con
 	var main := _main.get_node_or_null("/root/Main")
 	if not main or not main._card_interaction:
 		return true
+	# Rama A (2026-10-14, StackAnnul): en la pila, una carta oponente jugada
+	# sin pagar su coste o que no puede ser Anulada: entra sin habilidad por
+	# el turno; si es Talismán, se resuelve sin efecto.
+	var free_obj: Dictionary = StackAnnulScript.find_target(controller_id, true, false, func(obj: Dictionary) -> bool:
+		var node = StackAnnulScript.card_of(obj)
+		var free: bool = node != null and is_instance_valid(node) and node.get_meta("played_free", false)
+		return free or StackAnnulScript.protected_from_annul(obj))
+	if not free_obj.is_empty():
+		var obj_name: String = str(StackAnnulScript.data_of(free_obj).get("nombre", "esa carta"))
+		var use_a: bool = await SelectionManager.await_two_choice(main, "El Caleuche",
+			"%s entra sin habilidad por el turno" % obj_name, "Barajar una carta de coste 2 o menos y Robar dos",
+			controller_id)
+		if use_a:
+			var node_a = StackAnnulScript.card_of(free_obj)
+			if StackAnnulScript.type_of(free_obj) == Constants.CardType.TALISMAN:
+				free_obj["was_cancelled"] = true  # se resuelve sin efecto
+				free_obj["cancel_reason"] = "el_caleuche"
+			elif node_a != null and is_instance_valid(node_a):
+				await KeywordManager.silence_card(node_a, card, "turn")
+			main._update_debug("El Caleuche: %s queda sin habilidad" % obj_name)
+			return true
 	var filter := func(c: Node) -> bool:
 		# 2026-09-12: current_zone en vez de get_parent() (ver §10.5)
 		if c.get("current_zone") not in [Constants.Zone.LINEA_DEFENSA, Constants.Zone.LINEA_ATAQUE, Constants.Zone.LINEA_APOYO]:
