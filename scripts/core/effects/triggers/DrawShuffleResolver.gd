@@ -53,6 +53,10 @@ func try_execute_shuffle_hand_and_draw_plus_two_pattern(ability_text: String, co
 	return await _shuffle_draw.try_execute_shuffle_hand_and_draw_plus_two_pattern(ability_text, controller_id)
 
 
+func try_execute_shuffle_ally_or_search_castle_pattern(full_text: String, card: Node, controller_id: int) -> bool:
+	return await _discard_choice.try_execute_shuffle_ally_or_search_castle_pattern(full_text, card, controller_id)
+
+
 func try_execute_tempilcahue_choice_pattern(full_text: String, card: Node, controller_id: int) -> bool:
 	return await _discard_choice.try_execute_tempilcahue_choice_pattern(full_text, card, controller_id)
 

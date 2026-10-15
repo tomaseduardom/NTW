@@ -273,6 +273,9 @@ func _resolve_look_and_play_patterns(card: Node, full_ability_text: String, isol
 	# bloque; si no, sigue la cadena de siempre.
 	if await CastleLookScript.try_execute_text(card, isolated_ability_text, controller_id):
 		return true
+	# Sombrerero Loco (2026-10-14): elección en el tablero, sin popup.
+	if await _main._draw_shuffle_resolver.try_execute_shuffle_ally_or_search_castle_pattern(isolated_ability_text, card, controller_id):
+		return true
 	# Habilidades ACTIVADAS de Tótems (2026-09-20, arquitectura.md "539
 	# cartas sin cobertura") — llegan aquí también vía TriggerSystem.
 	# resolve_ability_effect() (mismo camino compartido que los triggers,
@@ -341,6 +344,8 @@ func _resolve_look_and_play_patterns(card: Node, full_ability_text: String, isol
 	if await _main._look_and_play.try_execute_reveal_gold_weapon_totem_split_pattern(full_ability_text, controller_id, card):
 		return true
 	if await _main._look_and_play.try_execute_play_cemetery_ally_discounted_min1_pattern(full_ability_text, card, controller_id):
+		return true
+	if await _main._look_and_play.try_execute_gold_for_allies_until_next_turn_pattern(full_ability_text, controller_id, card):
 		return true
 	if await _main._look_and_play.try_execute_gold_for_allies_or_weapons_pattern(full_ability_text, controller_id, card):
 		return true

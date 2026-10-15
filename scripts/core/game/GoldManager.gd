@@ -106,7 +106,7 @@ func setup(main: Node) -> void:
 
 func _on_turn_started_clear_virtual_gold(_player_id: int, _turn: int) -> void:
 	limpiar_oros_virtuales()
-	limpiar_oro_restringido()
+	limpiar_oro_restringido(_player_id)
 	oro_colocado_conteo = {0: 0, 1: 0}
 	oros_en_juego_turno = {0: 0, 1: 0}
 	_no_more_cards_this_turn = {0: false, 1: false}
@@ -168,6 +168,14 @@ func lock_card_from_playing(card: Node, locking_player_id: int) -> void:
 		if GameManager.turn_started.is_connected(clear_it):
 			GameManager.turn_started.disconnect(clear_it)
 	GameManager.turn_started.connect(clear_it)
+
+
+func _responding_to_opponent(player_id: int) -> bool:
+	"""¿Hay ahora una ventana de respuesta abierta sobre algo que jugó o
+	activó el rival de 'player_id'? (Talismanes de Anular/Cancelar.)"""
+	return PriorityManager.priority_window_active \
+		and PriorityManager.current_priority_context == PriorityManager.PriorityContext.RESPONSE_WINDOW \
+		and PriorityManager.current_stack_controller == 1 - player_id
 
 
 func _card_play_locked(card: Node) -> bool:
@@ -618,6 +626,13 @@ func play_card(card: Node) -> bool:
 	# quieras mientras sea tu turno", resolviendo sobre algo que YA está en
 	# juego (su objetivo), no sobre una acción a medio resolver.
 	var is_instant_response: bool = card.card_type == Constants.CardType.TALISMAN and _is_response_only_talisman(card)
+	# 2026-10-14, a pedido del usuario (Sacrificio Solar jugado en Vigilia
+	# sin nada que anular): un Talismán de Anular/Cancelar solo se juega en
+	# respuesta a una carta o habilidad del rival.
+	if is_instant_response and not _responding_to_opponent(player_id):
+		_main._update_debug("%s solo se puede jugar en respuesta a una carta o habilidad oponente" % card.card_name)
+		await _return_card_rejected(card)
+		return false
 
 	if GameManager.current_phase != Constants.Phase.VIGILIA and not phase_exception and not is_instant_response:
 		_main._update_debug(get_phase_rejection_reason(card.card_type))
@@ -905,6 +920,9 @@ func play_card_from_cemetery(card_data: Dictionary, owner_id: int = 0) -> bool:
 	var phase_exception: bool = has_phase_exception(card_data.get("tipo", -1), owner_id)
 	var is_instant_response: bool = card_data.get("tipo", -1) == Constants.CardType.TALISMAN \
 		and _is_response_only_talisman_data(card_data)
+	if is_instant_response and not _responding_to_opponent(owner_id):
+		_main._update_debug("%s solo se puede jugar en respuesta a una carta o habilidad oponente" % str(card_data.get("nombre", "")))
+		return false
 
 	if GameManager.current_phase != Constants.Phase.VIGILIA and not phase_exception and not is_instant_response:
 		_main._update_debug(get_phase_rejection_reason(card_data.get("tipo", -1)))
@@ -2415,7 +2433,8 @@ func limpiar_oros_virtuales() -> void:
 	_update_gold_display()
 
 
-func generar_oro_virtual_restringido(cantidad: int, predicate: Callable, label: String, player_id: int = 0) -> void:
+func generar_oro_virtual_restringido(cantidad: int, predicate: Callable, label: String, player_id: int = 0,
+		until_own_next_turn: bool = false) -> void:
 	"""Oro Virtual que SOLO paga cartas que cumplan 'predicate(card_type,
 	card_race) -> bool' (p.ej. Padre de la Patria: 'para jugar Armas o
 	Aliados Caballero'). A diferencia de generar_oros_virtuales(), queda
@@ -2426,19 +2445,32 @@ func generar_oro_virtual_restringido(cantidad: int, predicate: Callable, label: 
 	for i in range(cantidad):
 		_spawn_gold_token("Oro Virtual (%s)" % label, label, tokens, player_id)
 	var pools: Array = restricted_gold_pools.get(player_id, [])
-	pools.append({"amount": cantidad, "tokens": tokens, "predicate": predicate, "label": label})
+	# until_own_next_turn (2026-10-14, Sariel: "Puedes usar ese Oro hasta el
+	# comienzo de tu próximo turno"): sobrevive al comienzo del turno rival.
+	pools.append({"amount": cantidad, "tokens": tokens, "predicate": predicate, "label": label,
+		"until_player": player_id if until_own_next_turn else -1})
 	restricted_gold_pools[player_id] = pools
 	_main._update_debug("Generado %d Oro Virtual restringido (%s)" % [cantidad, label])
 	_update_gold_display()
 
 
-func limpiar_oro_restringido() -> void:
+func limpiar_oro_restringido(started_player_id: int = -1) -> void:
 	# Limpia AMBOS jugadores siempre — mismo motivo que limpiar_oros_virtuales().
+	# Excepción: los pools "hasta tu próximo turno" (until_player) solo
+	# expiran cuando empieza el turno de ese jugador.
 	for player_id in [0, 1]:
-		var pools_to_clear: Array = restricted_gold_pools.get(player_id, [])
+		var all_pools: Array = restricted_gold_pools.get(player_id, [])
+		var pools_to_clear: Array = []
+		var kept: Array = []
+		for pool in all_pools:
+			var until: int = int(pool.get("until_player", -1))
+			if until >= 0 and until != started_player_id:
+				kept.append(pool)
+			else:
+				pools_to_clear.append(pool)
 		if pools_to_clear.is_empty():
 			continue
-		restricted_gold_pools[player_id] = []
+		restricted_gold_pools[player_id] = kept
 		var reserva_container: HBoxContainer = _main.player_gold if player_id == 0 else _main.opponent_gold
 		_main._update_debug("Oro Virtual restringido expirado (%d pool(s))" % pools_to_clear.size())
 		for pool in pools_to_clear:

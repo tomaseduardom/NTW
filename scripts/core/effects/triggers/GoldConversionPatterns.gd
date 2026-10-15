@@ -291,6 +291,25 @@ func try_execute_convert_gold_or_opponent_cost_max_draw_pattern(ability_text: St
 
 
 
+func try_execute_gold_for_allies_until_next_turn_pattern(ability_text: String, controller_id: int, card: Node = null) -> bool:
+	"""'Una vez por turno, genera un Oro para jugar Aliados. Puedes usar ese
+	Oro hasta el comienzo de tu próximo turno' (Sariel, 2026-10-14). Antes
+	caía en el GOLD genérico: Oro sin restricción, siempre del Anfitrión y
+	que vencía al empezar el turno rival."""
+	var lower := ability_text.to_lower()
+	if not ("genera un oro para jugar aliados" in lower and "hasta el comienzo de tu próximo turno" in lower):
+		return false
+	var main := _main.get_node_or_null("/root/Main")
+	if not main or not main._gold_manager:
+		return true
+	if await TriggerSystem.open_response_window(card, str(card.get("card_name")) if card else "Sariel", controller_id):
+		return true
+	var predicate := func(card_type: int, _card_race: String, _card_cost: int) -> bool:
+		return card_type == Constants.CardType.ALIADO
+	main._gold_manager.generar_oro_virtual_restringido(1, predicate, "Aliados, hasta tu próximo turno", controller_id, true)
+	return true
+
+
 func try_execute_gold_for_allies_or_weapons_pattern(ability_text: String, controller_id: int, card: Node = null) -> bool:
 	"""'Al comienzo del Ataque, genera un Oro por el turno para jugar
 	Aliados o Armas' (almirante akari, 2026-09-04)."""

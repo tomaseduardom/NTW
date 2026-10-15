@@ -52,8 +52,29 @@ func try_execute_tempilcahue_choice_pattern(full_text: String, card: Node, contr
 			label_search = line
 		elif line.to_lower().begins_with("paga dos oros"):
 			label_shuffle = line
-	var choose_search: bool = await SelectionManager.await_two_choice(
-		main, "Tempilcahue — elige un efecto", label_search, label_shuffle, controller_id)
+	var candidates: Array = []
+	for field in [main.player_field, main.player_linea_ataque, main.player_linea_apoyo,
+			main.opponent_field, main.opponent_linea_ataque, main.opponent_linea_apoyo]:
+		if not field:
+			continue
+		for c in field.get_children():
+			if is_instance_valid(c) and c != card and _cost_of(c) <= 4:
+				candidates.append(c)
+
+	# 2026-10-14, a pedido del usuario: sin popup. Si no puede pagar los dos
+	# Oros (o no hay nada que barajar), busca directo. Si puede, brillan su
+	# Castillo (buscar) y las cartas en juego que se pueden barajar; la
+	# primera carta elegida ya cuenta para la suma de 4.
+	var choose_search := true
+	var first_pick: Node = null
+	if main._gold_manager.puede_pagar(2, -1, "", -1, controller_id) and not candidates.is_empty() and main._card_interaction:
+		var in_play_filter := func(c: Node) -> bool: return c in candidates
+		var pick: Dictionary = await main._card_interaction.await_target_or_castillo_pick(
+			"Tempilcahue: tu Castillo para buscar, o una carta en juego para pagar 2 Oros y barajar",
+			in_play_filter, "Tempilcahue: buscar en tu Castillo", false, true, controller_id)
+		if pick.get("type", "") == "card" and is_instance_valid(pick.get("card")):
+			choose_search = false
+			first_pick = pick.card
 
 	if choose_search:
 		# Sin ventana genérica aquí (2026-09-09): Tempilcahue es un Talismán —
@@ -64,19 +85,7 @@ func try_execute_tempilcahue_choice_pattern(full_text: String, card: Node, contr
 		main._gold_manager.set_no_more_cards_this_turn(controller_id)
 		return true
 
-	if not main._gold_manager.puede_pagar(2, -1, "", -1, controller_id):
-		main._update_debug("No tienes 2 Oros disponibles para esta opción")
-		return true
 	await main._gold_manager.pagar_coste(2, -1, "", -1, controller_id)
-
-	var candidates: Array = []
-	for field in [main.player_field, main.player_linea_ataque, main.player_linea_apoyo,
-			main.opponent_field, main.opponent_linea_ataque, main.opponent_linea_apoyo]:
-		if not field:
-			continue
-		for c in field.get_children():
-			if is_instance_valid(c) and c != card:
-				candidates.append(c)
 
 	# 2026-09-13, a pedido del usuario: click directo sobre las cartas
 	# reales en juego (ya son Nodos visibles, sin necesidad de popup) en
@@ -85,14 +94,18 @@ func try_execute_tempilcahue_choice_pattern(full_text: String, card: Node, contr
 	# dynamic_filter apaga el brillo de cualquier carta que haría superar
 	# la suma de 4 con lo ya elegido, en vez de dejar elegir de más y
 	# rechazar solo al final.
+	var first_cost: int = _cost_of(first_pick)
 	var budget_filter := func(chosen_so_far: Array, c: Node) -> bool:
-		var sum_cost: int = 0
+		var sum_cost: int = first_cost
 		for x in chosen_so_far:
-			sum_cost += int(x.get("card_cost")) if x.get("card_cost") != null else 0
-		var c_cost: int = int(c.get("card_cost")) if c.get("card_cost") != null else 0
-		return sum_cost + c_cost <= 4
-	var chosen: Array = await main._card_interaction.await_multi_target(
-		"Baraja cartas en juego cuyos costes sumen hasta 4", candidates, -1, Callable(), budget_filter, true, null, controller_id)
+			sum_cost += _cost_of(x)
+		return sum_cost + _cost_of(c) <= 4
+	var rest: Array = candidates.filter(func(c): return c != first_pick and first_cost + _cost_of(c) <= 4)
+	var chosen: Array = [first_pick]
+	if not rest.is_empty():
+		chosen += await main._card_interaction.await_multi_target(
+			"Baraja más cartas en juego (suma de costes hasta 4) — ESC para terminar", rest, -1, Callable(),
+			budget_filter, true, null, controller_id)
 	# Sin ventana genérica aquí (2026-09-09): return_to_deck() (dentro del
 	# loop) ya consulta Prevención adentro por cada carta.
 	for c in chosen:
@@ -103,6 +116,52 @@ func try_execute_tempilcahue_choice_pattern(full_text: String, card: Node, contr
 		CardManager.shuffle_deck(owner_id)
 
 	await ActionModule.draw(controller_id, 2, "talisman_resolve", true)
+	return true
+
+
+func _cost_of(c) -> int:
+	if not is_instance_valid(c):
+		return 0
+	return int(c.get("card_cost")) if c.get("card_cost") != null else 0
+
+
+func try_execute_shuffle_ally_or_search_castle_pattern(full_text: String, card: Node, controller_id: int) -> bool:
+	"""'Puedes Barajar un Aliado de Fuerza N o menos o buscar una carta en tu
+	Castillo y ponerla en tu mano' (Sombrerero Loco, 2026-10-14). Sin popup:
+	brillan los Aliados que se pueden barajar (de los dos lados, sin zona =
+	en juego) y tu Castillo; al elegir uno, lo otro se apaga. ESC = no hacer
+	nada (es opcional)."""
+	var rx := RegEx.new()
+	rx.compile("puedes barajar un aliado de fuerza (\\w+) o menos o buscar una carta en tu castillo y ponerla en tu mano")
+	var m := rx.search(full_text.to_lower())
+	if not m:
+		return false
+	var main := _executor._main.get_node_or_null("/root/Main")
+	if not main or not main._card_interaction:
+		return true
+	var max_str: int = UniversalCardParser._parse_amount(m.get_string(1))
+	var allies: Array = []
+	for field in [main.player_field, main.player_linea_ataque, main.player_linea_apoyo,
+			main.opponent_field, main.opponent_linea_ataque, main.opponent_linea_apoyo]:
+		if not field:
+			continue
+		for c in field.get_children():
+			if is_instance_valid(c) and c.get("card_type") == Constants.CardType.ALIADO and ContinuousEffectManager.get_modified_strength(c) <= max_str:
+				allies.append(c)
+	var card_name: String = str(card.get("card_name")) if is_instance_valid(card) else "Barajar o buscar"
+	var pick: Dictionary = await main._card_interaction.await_target_or_castillo_pick(
+		"%s: baraja un Aliado de Fuerza %d o menos, o busca en tu Castillo (ESC: nada)" % [card_name, max_str],
+		func(c: Node) -> bool: return c in allies, "%s: buscar en tu Castillo" % card_name, true, true, controller_id)
+	match str(pick.get("type", "")):
+		"card":
+			var target: Node = pick.get("card")
+			if is_instance_valid(target):
+				var owner_id: int = target.owner_id if target.get("owner_id") != null else controller_id
+				if await ActionModule.return_to_deck(target, owner_id, true, card):
+					CardManager.shuffle_deck(owner_id)
+		"castillo":
+			await ActionModule.search(controller_id, Constants.Zone.CASTILLO, {}, 1, true, false, false, card,
+				Constants.Zone.MANO, false)
 	return true
 
 

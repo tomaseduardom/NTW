@@ -373,6 +373,10 @@ func try_execute_gold_for_allies_or_weapons_pattern(ability_text: String, contro
 	return await _gold_conversion.try_execute_gold_for_allies_or_weapons_pattern(ability_text, controller_id, card)
 
 
+func try_execute_gold_for_allies_until_next_turn_pattern(ability_text: String, controller_id: int, card: Node = null) -> bool:
+	return await _gold_conversion.try_execute_gold_for_allies_until_next_turn_pattern(ability_text, controller_id, card)
+
+
 func try_execute_espiritu_maquina_conditional_gold_pattern(ability_text: String, controller_id: int, card: Node = null) -> bool:
 	return await _gold_conversion.try_execute_espiritu_maquina_conditional_gold_pattern(ability_text, controller_id, card)
 
