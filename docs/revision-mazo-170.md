@@ -33,12 +33,13 @@ Signo Amarillo, Espada Vikinga.
 
 | Carta | Qué se hizo |
 |---|---|
-| Reina Nyssara | ✅ Una vez por turno: busca un Talismán en un Castillo (selector del tablero, solo los que puedes pagar), juégalo -1 Oro (mín 0), Roba dos. |
+| Reina Nyssara | ✅ Una vez por turno: busca un Talismán en un Castillo (selector del tablero, solo los que puedes pagar), juégalo -1 Oro (mín 0), Roba dos. ✅ Gana las habilidades de un Aliado oponente que sale del juego por un Talismán (una vez por turno). |
 | Nyssara Cautiva | ✅ Entra o sale: puedes buscar un Talismán en un Castillo, jugarlo pagando y Robar una. ✅ Vigilia: el oponente Bota una por cada Aliado tuyo. |
 | Rey de los Loñolicos | ✅ Próximo Talismán del turno -1 (mín 1) y no puede ser Anulado; Roba una; los jugadores Barajan una de su mano. |
 | Ursitoare | ✅ Barajar un Aliado tuyo y una carta oponente de igual o menor coste (opcional); Roba dos; Barajan una de la mano. |
 | Matriz V | ✅ Entra: Roba una y hasta dos cartas tuyas ganan Indesterrable. ✅ En Reserva: habilidades disparadas de cartas oponentes de coste 0-1 solo si Destierra una de su mano. |
-| Alicanto | ✅ Antes del daño de combate: Desterrarlo para prevenirlo; luego puedes convertir una carta de tu mano en Oro sin habilidad en tu Oro Pagado. |
+| Alicanto | ✅ Antes del daño de combate: Desterrarlo para prevenirlo; luego puedes convertir una carta de tu mano en Oro sin habilidad en tu Oro Pagado. ✅ Aliados de coste 2+ pagados con él no pueden ser Anulados. |
+| Escarapela Nacional | ✅ Al comienzo de la Vigilia oponente, si no controlas más Oros, puedes ponerla en juego desde la mano; en tu próximo turno no puedes poner Oros desde la mano. |
 | Escritura Sagrada | ✅ Prevenir el daño de combate subiéndola a la mano o convirtiéndola. |
 | Yomiel | ✅ Al ser Barajado desde tu mano (por los efectos de Barajar de la mano de este mazo): busca un Talismán de coste 1+ y juégalo pagando; Baraja una de tu mano. |
 | Visión de Enoc | ✅ Anular un Talismán de coste 2- en la pila o proteger un Aliado tuyo del próximo efecto oponente; se Baraja en tu Castillo al resolverse; al Botarla por daño, Barajar hasta cinco de los Cementerios. |
@@ -58,8 +59,12 @@ Signo Amarillo, Espada Vikinga.
 
 | Carta | Qué falta |
 |---|---|
-| Reina Nyssara | Ganar las habilidades de un Aliado oponente que sale del juego por un Talismán. |
-| Escarapela Nacional | Ponerla en juego al comienzo de la Vigilia oponente (y no poner Oros en tu próximo turno). |
-| Alicanto | "Los Aliados de coste 2 o más pagados con este Oro no pueden ser Anulados". |
 | Yomiel | Otros efectos que Barajan desde la mano (fuera de este mazo) todavía no avisan a Yomiel. |
 | Matriz V | El peaje solo aplica a habilidades disparadas, no a activadas. |
+
+## Nota: arreglo ajeno
+
+El commit `2edfb87` (hover en el buscador de Alicia, retorno a la mano) no
+compilaba y el juego no arrancaba: `get("hover_enabled", true)` (get() acepta
+un solo argumento) y `to_global()` en un Control. Se corrigió en `0199c3c`
+con el cambio mínimo.
