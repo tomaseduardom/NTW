@@ -28,7 +28,7 @@ func process(_delta: float) -> void:
 	mouse — dejando una carta con la que 'no se puede targetear ni hacer
 	zoom' aunque el mouse esté encima. Se corrige el estado cada frame
 	comparando contra la posición real del mouse."""
-	if _card.is_dragging or not _card.can_interact or not _card.get("hover_enabled", true):
+	if _card.is_dragging or not _card.can_interact or _card.get("hover_enabled") == false:
 		return
 	# get_global_rect() NO tiene en cuenta la escala del nodo (limitación
 	# conocida de Godot) — con pivot_offset != (0,0), escalar en hover corre
@@ -58,7 +58,7 @@ func process(_delta: float) -> void:
 
 
 func _on_mouse_entered() -> void:
-	if not _card.can_interact or _card.is_dragging or not _card.get("hover_enabled", true):
+	if not _card.can_interact or _card.is_dragging or _card.get("hover_enabled") == false:
 		return
 
 	_card.is_hovered = true
@@ -89,7 +89,7 @@ func _on_mouse_exited() -> void:
 		return
 
 	# Si no puede interactuar o tiene hover desactivado, no hacer nada
-	if not _card.can_interact or not _card.get("hover_enabled", true):
+	if not _card.can_interact or _card.get("hover_enabled") == false:
 		return
 
 	_card.is_hovered = false
