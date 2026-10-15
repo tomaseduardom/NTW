@@ -24,7 +24,66 @@ static func try_execute(card: Node, text: String, controller_id: int) -> bool:
 		return true
 	if await _try_gran_descenso(card, lower, controller_id):
 		return true
+	if await _try_signo_amarillo_cancel(card, lower, controller_id):
+		return true
+	if await _try_hand_banish_to_annul(card, lower, controller_id):
+		return true
 	return false
+
+
+# -----------------------------------------------------------------------------
+# Signo Amarillo: "Puedes convertir este Oro en un Oro sin habilidad para
+# cancelar la habilidad de una carta fuera del juego o un Oro." (activada)
+# -----------------------------------------------------------------------------
+static func _try_signo_amarillo_cancel(card: Node, lower: String, controller_id: int) -> bool:
+	if not ("convertir este oro en un oro sin habilidad para cancelar la habilidad de una carta fuera del juego o un oro" in lower):
+		return false
+	var main := _main_node()
+	var obj: Dictionary = StackAnnulScript.find_target(controller_id, false, true, func(o: Dictionary) -> bool:
+		if StackAnnulScript.type_of(o) == Constants.CardType.ORO:
+			return true
+		var node = StackAnnulScript.card_of(o)
+		return node == null or not is_instance_valid(node) or not (node.get("current_zone") in Constants.ZONES_IN_PLAY))
+	if obj.is_empty():
+		if main:
+			main._update_debug("Signo Amarillo: no hay habilidad de una carta fuera del juego o de un Oro que cancelar")
+		return true
+	if is_instance_valid(card):
+		card.is_converted = true  # el coste: Oro sin habilidad
+	StackAnnulScript.apply(obj, card)
+	return true
+
+
+# -----------------------------------------------------------------------------
+# Espada Vikinga: "Puedes pagar un Oro y Desterrar esta carta de tu mano para
+# Anular una carta de coste 1." (desde la mano)
+# -----------------------------------------------------------------------------
+static func _try_hand_banish_to_annul(card: Node, lower: String, controller_id: int) -> bool:
+	var m := RegEx.create_from_string("puedes pagar un oro y desterrar esta carta de tu mano para anular una carta de coste (\\w+)").search(lower)
+	if not m:
+		return false
+	var main := _main_node()
+	if not main or not main._gold_manager:
+		return true
+	var cost_n: int = UniversalCardParser._parse_amount(m.get_string(1))
+	var obj: Dictionary = StackAnnulScript.find_target(controller_id, true, false, func(o: Dictionary) -> bool:
+		return StackAnnulScript.cost_of(o) == cost_n)
+	if obj.is_empty():
+		main._update_debug("%s: no hay una carta de coste %d en la pila que Anular" % [_name(card, "Espada Vikinga"), cost_n])
+		return true
+	if not main._gold_manager.puede_pagar(1, -1, "", -1, controller_id):
+		main._update_debug("Oro insuficiente (necesitas 1)")
+		return true
+	await main._gold_manager.pagar_coste(1, -1, "", -1, controller_id)
+	if is_instance_valid(card) and card.get("current_zone") == Constants.Zone.MANO:
+		var data: Dictionary = card.card_data.duplicate()
+		PlayerSideScript.remove_from_hand(main, controller_id, card)
+		CardManager._disconnect_card_interaction_signals(card)
+		card.queue_free()
+		data["esta_oculta"] = false
+		CardManager.append_to_exile(controller_id, data)
+	StackAnnulScript.apply(obj, null)
+	return true
 
 
 # -----------------------------------------------------------------------------

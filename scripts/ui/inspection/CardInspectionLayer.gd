@@ -378,6 +378,8 @@ func _ability_is_hand_usable(full_text: String) -> bool:
 		return true  # Tyet
 	if "desterrarlo de tu mano o cementerio" in lower:
 		return true  # Drácula
+	if "desterrar esta carta de tu mano para anular" in lower:
+		return true  # Espada Vikinga (2026-10-14)
 	if "barajar esta carta desde tu mano" in lower:
 		return true  # Sacrificio Solar
 	if "ponerlo en el fondo de tu castillo para reducir a cero el próximo daño" in lower:
