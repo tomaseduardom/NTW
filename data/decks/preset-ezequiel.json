@@ -1,0 +1,128 @@
+{
+    "slug":  "preset-ezequiel",
+    "nombre":  "Mazo ezequiel (publico)",
+    "arquetipo":  "Caballero",
+    "formato":  "imp",
+    "entries":  [
+                    {
+                        "myl_id":  "20584",
+                        "quantity":  1
+                    },
+                    {
+                        "myl_id":  "20619",
+                        "quantity":  2
+                    },
+                    {
+                        "myl_id":  "20644",
+                        "quantity":  3
+                    },
+                    {
+                        "myl_id":  "20812",
+                        "quantity":  2
+                    },
+                    {
+                        "myl_id":  "20392",
+                        "quantity":  2
+                    },
+                    {
+                        "myl_id":  "20393",
+                        "quantity":  1
+                    },
+                    {
+                        "myl_id":  "20400",
+                        "quantity":  1
+                    },
+                    {
+                        "myl_id":  "20498",
+                        "quantity":  1
+                    },
+                    {
+                        "myl_id":  "20503",
+                        "quantity":  2
+                    },
+                    {
+                        "myl_id":  "20535",
+                        "quantity":  2
+                    },
+                    {
+                        "myl_id":  "20565",
+                        "quantity":  1
+                    },
+                    {
+                        "myl_id":  "20275",
+                        "quantity":  1
+                    },
+                    {
+                        "myl_id":  "custom_tk26_20",
+                        "quantity":  2
+                    },
+                    {
+                        "myl_id":  "custom_chi_02",
+                        "quantity":  2
+                    },
+                    {
+                        "myl_id":  "custom_mig_34",
+                        "quantity":  2
+                    },
+                    {
+                        "myl_id":  "custom_mig_37",
+                        "quantity":  2
+                    },
+                    {
+                        "myl_id":  "custom_mid_34",
+                        "quantity":  1
+                    },
+                    {
+                        "myl_id":  "custom_mid_35",
+                        "quantity":  1
+                    },
+                    {
+                        "myl_id":  "custom_mid_38",
+                        "quantity":  3
+                    },
+                    {
+                        "myl_id":  "custom_mid_41",
+                        "quantity":  1
+                    },
+                    {
+                        "myl_id":  "custom_mid_42",
+                        "quantity":  1
+                    },
+                    {
+                        "myl_id":  "custom_mie_bonus_01",
+                        "quantity":  2
+                    },
+                    {
+                        "myl_id":  "custom_aydv_xl006",
+                        "quantity":  1
+                    },
+                    {
+                        "myl_id":  "20964",
+                        "quantity":  3
+                    },
+                    {
+                        "myl_id":  "21135",
+                        "quantity":  2
+                    },
+                    {
+                        "myl_id":  "custom_drac_028",
+                        "quantity":  2
+                    },
+                    {
+                        "myl_id":  "custom_drac_069",
+                        "quantity":  1
+                    },
+                    {
+                        "myl_id":  "custom_inmdrac_018",
+                        "quantity":  1
+                    },
+                    {
+                        "myl_id":  "custom_drac_p033",
+                        "quantity":  2
+                    },
+                    {
+                        "myl_id":  "custom_drac_p055",
+                        "quantity":  2
+                    }
+                ]
+}
