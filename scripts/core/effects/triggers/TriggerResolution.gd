@@ -7,6 +7,8 @@ class_name TriggerResolution
 ## Extraído de TriggerSystem.gd (Fase 4 de reestructuración).
 
 const EffectContextScript = preload("res://scripts/core/effects/EffectContext.gd")  # detector de paridad (§56)
+const TalismanSearchScript = preload("res://scripts/core/effects/triggers/TalismanSearchPatterns.gd")
+const Deck170Script = preload("res://scripts/core/effects/triggers/Deck170Patterns.gd")
 const CastleLookScript = preload("res://scripts/core/effects/CastleLook.gd")  # "mira N cartas" (§69)
 
 var _main: Node
@@ -272,6 +274,13 @@ func _resolve_look_and_play_patterns(card: Node, full_ability_text: String, isol
 	# ventana para repartir y ordenar (CastleLook.gd). Solo si entiende todo el
 	# bloque; si no, sigue la cadena de siempre.
 	if await CastleLookScript.try_execute_text(card, isolated_ability_text, controller_id):
+		return true
+	# "Busca un Talismán en un Castillo y juégalo" (2026-10-14, Reina
+	# Nyssara, Nyssara Cautiva).
+	if await TalismanSearchScript.try_execute(card, isolated_ability_text, controller_id):
+		return true
+	# Mazo 170 (2026-10-14): Rey de los Loñolicos, Ursitoare, Nyssara Cautiva...
+	if await Deck170Script.try_execute(card, isolated_ability_text, controller_id):
 		return true
 	# Sombrerero Loco (2026-10-14): elección en el tablero, sin popup.
 	if await _main._draw_shuffle_resolver.try_execute_shuffle_ally_or_search_castle_pattern(isolated_ability_text, card, controller_id):

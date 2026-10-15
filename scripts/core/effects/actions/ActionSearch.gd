@@ -182,7 +182,15 @@ func search_zones(player_id: int, zones: Array, filter: Dictionary, amount: int 
 
 func _deliver(main: Node, player_id: int, card_data: Dictionary, from_zone: int, destination: int,
 		may_play: bool, cost_reduction: int, result: Dictionary) -> void:
-	"""Lleva una carta encontrada a su destino (del dueño 'player_id')."""
+	"""Lleva una carta encontrada a su destino (del dueño 'player_id').
+	destination < 0 (2026-10-14): no la lleva a ningún lado — el llamador la
+	usa (p.ej. jugar un Talismán encontrado en un Castillo); se anota de
+	quién era en result.selected_owners."""
+	if destination < 0:
+		var owners: Array = result.get("selected_owners", [])
+		owners.append(player_id)
+		result["selected_owners"] = owners
+		return
 	if destination == Constants.Zone.DESTIERRO:
 		# Va directo al Destierro, sin pasar por la mano ni crear un
 		# nodo Card (2026-08-25, p.ej. Rey de Amarillo).

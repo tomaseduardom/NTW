@@ -149,6 +149,8 @@ func _enforce_weapon_capacity() -> void:
 func _on_turn_started_clear_virtual_gold(_player_id: int, _turn: int) -> void:
 	limpiar_oros_virtuales()
 	limpiar_oro_restringido(_player_id)
+	for pid in [0, 1]:
+		_clear_next_talisman_buff(pid)  # Rey de los Loñolicos: "este turno"
 	oro_colocado_conteo = {0: 0, 1: 0}
 	oros_en_juego_turno = {0: 0, 1: 0}
 	_no_more_cards_this_turn = {0: false, 1: false}
@@ -938,6 +940,54 @@ func play_card_from_exile(card_data: Dictionary, discount: int = 0, owner_id: in
 		await _play_talisman(card)
 	elif card_type == Constants.CardType.ARMA:
 		await _equip_weapon(card, chosen_wielder)
+	else:
+		await _play_card_to_field(card)
+	return true
+
+
+func play_found_card(card_data: Dictionary, original_owner: int, controller_id: int, discount: int = 0,
+		allow_zero: bool = false) -> bool:
+	"""Juega, como parte de un efecto, una carta ya sacada de su zona (p.ej.
+	"busca un Talismán en un Castillo y juégalo", 2026-10-14): sin chequeos
+	de fase/turno (lo permite el efecto), pagando su coste con 'discount'.
+	La carta queda bajo 'controller_id' pero sigue siendo de 'original_owner'
+	(vuelve a SU Cementerio). Si no se puede pagar, vuelve al Castillo de su
+	dueño y se baraja."""
+	var card = _main._create_card(card_data, false)
+	card.owner_id = original_owner
+	card.controller_id = controller_id
+	_main._connect_card_signals(card)
+	if discount > 0:
+		PaymentManager.agregar_modificador_coste(card, -discount, func(c: Node) -> bool: return c == card, allow_zero)
+	var card_type: int = card_data.get("tipo", -1)
+	var coste_real: int = PaymentManager.calcular_coste_real(card)
+	var chosen_wielder: Node = null
+	var ok: bool = PaymentManager.puede_jugar_carta(card, controller_id)
+	if ok and card_type == Constants.CardType.ARMA:
+		chosen_wielder = await _select_weapon_wielder(controller_id)
+		ok = chosen_wielder != null and is_instance_valid(chosen_wielder)
+	if not ok:
+		_main._update_debug("No se pudo jugar %s: vuelve al Castillo" % str(card_data.get("nombre", "la carta")))
+		if discount > 0:
+			PaymentManager.remover_modificador_coste(card)
+		card.queue_free()
+		var back: Dictionary = card_data.duplicate()
+		back["esta_oculta"] = true
+		CardManager.get_deck(original_owner).append(back)
+		CardManager.shuffle_deck(original_owner)
+		return false
+	if coste_real > 0:
+		await pagar_coste(coste_real, card_type, card_data.get("raza", ""), card_data.get("coste", 0), controller_id)
+		PaymentManager.registrar_pago(coste_real)
+	if discount > 0:
+		PaymentManager.remover_modificador_coste(card)
+	_register_play_limit(card)
+	if card_type == Constants.CardType.TALISMAN:
+		await _play_talisman(card)
+	elif card_type == Constants.CardType.ARMA:
+		await _equip_weapon(card, chosen_wielder)
+	elif card_type == Constants.CardType.ORO:
+		await _place_card_as_gold(card)
 	else:
 		await _play_card_to_field(card)
 	return true
@@ -2094,6 +2144,51 @@ func _trigger_enter_play(card: Node, zone: int = Constants.Zone.LINEA_DEFENSA) -
 	return false
 
 
+## "El próximo Talismán que juegues este turno reduce su coste en un Oro,
+## hasta un mínimo de 1 y no puede ser Anulado" (Rey de los Loñolicos,
+## 2026-10-14). Por jugador: {token: Node (fuente del modificador de coste),
+## no_annul: bool, turn: int}. Se consume en _play_talisman() y vence al
+## cambiar de turno.
+var _next_talisman_buffs: Dictionary = {}
+
+
+func buff_next_talisman(player_id: int, discount: int, allow_zero: bool, no_annul: bool) -> void:
+	_clear_next_talisman_buff(player_id)
+	var token := Node.new()
+	add_child(token)
+	var turn: int = GameManager.current_turn
+	PaymentManager.agregar_modificador_coste(token, -discount, func(c: Node) -> bool:
+		return is_instance_valid(c) and c.get("card_type") == Constants.CardType.TALISMAN \
+			and c.get("controller_id") == player_id, allow_zero)
+	_next_talisman_buffs[player_id] = {"token": token, "no_annul": no_annul, "turn": turn,
+		"active_player": GameManager.active_player_id}
+
+
+func _clear_next_talisman_buff(player_id: int) -> void:
+	var buff: Dictionary = _next_talisman_buffs.get(player_id, {})
+	if buff.is_empty():
+		return
+	_next_talisman_buffs.erase(player_id)
+	PaymentManager.remover_modificador_coste(buff.token)
+	if is_instance_valid(buff.token):
+		buff.token.queue_free()
+
+
+func _consume_next_talisman_buff(card: Node) -> void:
+	var pid: int = card.controller_id
+	var buff: Dictionary = _next_talisman_buffs.get(pid, {})
+	if buff.is_empty():
+		return
+	if buff.turn != GameManager.current_turn or buff.active_player != GameManager.active_player_id:
+		_clear_next_talisman_buff(pid)  # "este turno": ya venció
+		return
+	if buff.no_annul:
+		card.set_meta("protected_from_annul_this_turn", true)
+		if card.get("card_data") is Dictionary:
+			card.card_data["_no_annul"] = true
+	_clear_next_talisman_buff(pid)
+
+
 func _play_talisman(card: Node) -> void:
 	"""Los Talismanes se resuelven al jugarse y no se quedan en el campo
 	como un Aliado ni como un Tótem (DAR Sección 8): disparan su habilidad y
@@ -2103,6 +2198,7 @@ func _play_talisman(card: Node) -> void:
 	importar lo que diga el propio texto (regla de Exhumar, DAR)."""
 	TurnManager.on_card_played(card)
 	_main._update_debug("Jugando talismán: %s" % card.card_name)
+	_consume_next_talisman_buff(card)
 
 	# Rastreo por jugador de 'ya jugó un Talismán este turno' (2026-09-04,
 	# p.ej. Fuente de la Juventud: 'les cuesta un Oro adicional jugar

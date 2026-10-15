@@ -181,7 +181,7 @@ func _execute_annul(target_stack_id: int, source_card: Dictionary) -> bool:
 		# Sello, ver abajo), así que un Talismán con esta protección impresa
 		# directamente en su propio texto no estaba protegido de verdad.
 		var pre_own_ability: String = String(pre_data.get("habilidad", "")).to_lower()
-		if "no puede ser anulad" in pre_own_ability:
+		if "no puede ser anulad" in pre_own_ability or pre_data.get("_no_annul", false):
 			return false
 		# 'Si está en tu Cementerio, tus Sello no pueden ser Anulados'
 		# (Segundo Sello, 2026-09-20) — mismo criterio que la protección
