@@ -396,7 +396,9 @@ func _parse_and_register_continuous_effects(card: Node, ability_text: String) ->
 	# desafiante) — misma idea que enemy_debuff_regex de arriba ("obtienen
 	# -N"), pero con la fórmula "pierden N de Fuerza" en vez de "obtienen -N".
 	var ally_lose_strength_regex = RegEx.new()
-	ally_lose_strength_regex.compile("aliados (?:oponentes?|del oponente|rivales?) pierden?\\s*(\\d+)\\s*de fuerza")
+	# "(?: [^.]*?,)?" (2026-10-14, Sariel: "Los Aliados oponentes no pueden
+	# portar Armas, pierden 1 de Fuerza").
+	ally_lose_strength_regex.compile("aliados (?:oponentes?|del oponente|rivales?)(?: [^.]*?,)? pierden?\\s*(\\d+)\\s*de fuerza")
 	var ally_lose_match = ally_lose_strength_regex.search(text)
 	if ally_lose_match:
 		var lose_value := int(ally_lose_match.get_string(1))

@@ -240,6 +240,8 @@ func _activate_lider_del_comite_discard_look_name_lock(source_card: Node, abilit
 	await ActionModule.discard(owner_id, [to_discard_node], "activated_ability", true)
 
 	var opponent_hand_container = _inspector._main._opponent_fan if owner_id == 0 else _inspector._main.player_hand
+	if EffectController.fision_hides_zones_of(1 - owner_id, owner_id, Constants.Zone.MANO):  # Fisión Nuclear
+		opponent_hand_container = null
 	var opponent_hand: Array = opponent_hand_container.cards if opponent_hand_container else []
 	var opponent_hand_data: Array = []
 	for c in opponent_hand:

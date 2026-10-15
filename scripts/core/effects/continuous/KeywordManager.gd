@@ -703,6 +703,40 @@ func _is_silenced_by_zero_strength_lock(card: Node) -> bool:
 	return ContinuousEffectManager.get_modified_strength(card) <= 0
 
 
+## 'Los Aliados oponentes ... si tienen Fuerza N o menos no pueden utilizar su
+## habilidad' (Sariel, 2026-10-14) — mientras la fuente siga en juego y con
+## habilidad. Se busca en las cartas en juego del rival del Aliado.
+var _low_strength_aura_busy := false
+
+
+func _is_silenced_by_low_strength_aura(card: Node) -> bool:
+	if _low_strength_aura_busy or card.get("card_type") != Constants.CardType.ALIADO or not _is_card_in_play_generic(card):
+		return false
+	var main := get_node_or_null("/root/Main")
+	if not main:
+		return false
+	var ctrl: int = card.controller_id if card.get("controller_id") != null else 0
+	var fields: Array = [main.opponent_field, main.opponent_linea_ataque, main.opponent_linea_apoyo] if ctrl == 0 \
+		else [main.player_field, main.player_linea_ataque, main.player_linea_apoyo]
+	var rx := RegEx.new()
+	rx.compile("aliados oponentes[^.]*si tienen fuerza (\\d+) o menos no pueden utilizar su habilidad")
+	_low_strength_aura_busy = true  # la fuente también puede estar sin habilidad
+	var result := false
+	for field in fields:
+		if not field or result:
+			continue
+		for src in field.get_children():
+			if not is_instance_valid(src) or src.get("card_ability") == null:
+				continue
+			var m := rx.search(str(src.card_ability).to_lower())
+			if m and not is_silenced(src) \
+					and ContinuousEffectManager.get_modified_strength(card) <= int(m.get_string(1)):
+				result = true
+				break
+	_low_strength_aura_busy = false
+	return result
+
+
 func is_silenced(card: Node) -> bool:
 	"""Verifica si una carta está silenciada (no debe disparar habilidades).
 	Incluye el silencio por instancia (_silenced_cards) Y el bloqueo por
@@ -719,6 +753,8 @@ func is_silenced(card: Node) -> bool:
 	if _is_silenced_by_opponent_type_source(card):
 		return true
 	if _is_silenced_by_zero_strength_lock(card):
+		return true
+	if _is_silenced_by_low_strength_aura(card):
 		return true
 	var card_name: String = str(card.get("card_name")) if card.get("card_name") != null else ""
 	if card_name.is_empty():

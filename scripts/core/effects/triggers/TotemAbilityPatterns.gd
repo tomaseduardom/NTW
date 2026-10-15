@@ -575,6 +575,8 @@ func try_execute_hangar_ciudadela_enter_pattern(ability_text: String, card: Node
 	# return_to_deck() (esa función asume una carta EN JUEGO, no en la mano).
 	var opponent_id: int = 1 - controller_id
 	var opponent_hand_hangar = main.player_hand if opponent_id == 0 else main._opponent_fan
+	if EffectController.fision_hides_zones_of(opponent_id, controller_id, Constants.Zone.MANO):  # Fisión Nuclear
+		opponent_hand_hangar = null
 	if opponent_hand_hangar:
 		var hand_nodes: Array[Node] = opponent_hand_hangar.get_cards()
 		if not hand_nodes.is_empty():

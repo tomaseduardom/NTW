@@ -185,6 +185,8 @@ func _activate_sandraudiga_banish_pair_and_peek(source_card: Node, ability: Dict
 
 	var opponent_id: int = 1 - owner_id
 	var opponent_hand_container = _inspector._main._opponent_fan if owner_id == 0 else _inspector._main.player_hand
+	if EffectController.fision_hides_zones_of(1 - owner_id, owner_id, Constants.Zone.MANO):  # Fisión Nuclear
+		opponent_hand_container = null
 	if not opponent_hand_container:
 		return
 	var opponent_hand: Array = opponent_hand_container.cards

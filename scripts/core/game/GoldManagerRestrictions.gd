@@ -185,6 +185,14 @@ func _max_weapons_for(ally: Node) -> int:
 	    Guerreros o Héroes y este es su Aliado de mayor coste (empates: todos).
 	Las cartas sin habilidad (silenciadas/convertidas) no cuentan."""
 	var ctrl: int = ally.controller_id if ally.get("controller_id") != null else 0
+	# "Los Aliados oponentes no pueden portar Armas" (Sariel, 2026-10-14).
+	for container in ([_main.opponent_field, _main.opponent_linea_ataque, _main.opponent_linea_apoyo] if ctrl == 0
+			else [_main.player_field, _main.player_linea_ataque, _main.player_linea_apoyo]):
+		if not container:
+			continue
+		for c in container.get_children():
+			if "aliados oponentes no pueden portar armas" in _ability_lower(c):
+				return 0
 	var total := 1
 	var own_text: String = _ability_lower(ally)
 	if "puede portar un arma adicional" in own_text and not ("aliados pueden portar un arma adicional" in own_text):
