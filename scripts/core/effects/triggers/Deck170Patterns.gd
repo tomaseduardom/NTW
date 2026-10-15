@@ -5,6 +5,7 @@ extends RefCounted
 
 const PlayerSideScript = preload("res://scripts/core/game/PlayerSide.gd")
 const StackAnnulScript = preload("res://scripts/core/effects/StackAnnul.gd")
+const TalismanSearchScript = preload("res://scripts/core/effects/triggers/TalismanSearchPatterns.gd")
 
 
 static func _main_node() -> Node:
@@ -21,7 +22,84 @@ static func try_execute(card: Node, text: String, controller_id: int) -> bool:
 		return true
 	if await _try_matriz_v_enter(card, lower, controller_id):
 		return true
+	if await _try_gran_descenso(card, lower, controller_id):
+		return true
 	return false
+
+
+# -----------------------------------------------------------------------------
+# El Gran Descenso: "Tu oponente Descarta tres cartas al azar de su mano. Por
+# cada carta Descartada de esta forma, tu oponente puede Desterrar cuatro
+# cartas del tope de su Castillo para subir esa carta del Cementerio a su
+# mano y tú Robas una carta."
+# -----------------------------------------------------------------------------
+static func _try_gran_descenso(card: Node, lower: String, controller_id: int) -> bool:
+	if not ("tu oponente descarta tres cartas al azar de su mano" in lower):
+		return false
+	var main := _main_node()
+	if not main:
+		return true
+	var opp: int = 1 - controller_id
+	var hand: Array = PlayerSideScript.hand_cards(main, opp).filter(func(c): return is_instance_valid(c))
+	hand.shuffle()
+	var to_discard: Array = hand.slice(0, mini(3, hand.size()))
+	if to_discard.is_empty():
+		return true
+	var datas: Array = to_discard.map(func(c): return c.card_data)
+	var res: Dictionary = await ActionModule.discard(opp, to_discard, _name(card, "El Gran Descenso"), true)
+	if res.get("prevented", false) or res.get("cancelled", false):
+		return true
+	for d in datas:
+		var deck: Array = CardManager.get_deck(opp)
+		if deck.size() < 4:
+			break
+		var cem: Array = CardManager.get_cemetery(opp)
+		var idx: int = cem.find(d)
+		if idx < 0:
+			continue
+		var recover := false
+		if PlayerSideScript.is_bot(opp):
+			recover = deck.size() > 20
+		else:
+			recover = await SelectionManager.await_two_choice(main, "El Gran Descenso",
+				"Desterrar cuatro del tope de tu Castillo para subir %s a tu mano" % str(d.get("nombre", "la carta")),
+				"No", opp)
+		if not recover:
+			continue
+		for i in range(4):
+			var top: Dictionary = deck.pop_front()
+			top["esta_oculta"] = false
+			CardManager.append_to_exile(opp, top)
+		var back: Dictionary = CardManager.remove_from_cemetery(opp, CardManager.get_cemetery(opp).find(d))
+		if not back.is_empty():
+			var node = main._create_card(back, opp != 0)
+			if opp == 0:
+				main.player_hand.add_card(node)
+			else:
+				main._opponent_fan.add_card(node)
+			main._connect_card_signals(node)
+		await ActionModule.draw(controller_id, 1, _name(card, "El Gran Descenso"), true)
+	if main.get("_zone_manager"):
+		main._zone_manager._update_castillo_counts()
+	return true
+
+
+# -----------------------------------------------------------------------------
+# Yomiel: "Cuando sea Barajado desde tu mano, puedes buscar un Talismán de
+# coste 1 o más en tu Castillo, jugarlo pagando su coste y Barajar una carta
+# de tu mano." Lo llaman los efectos que Barajan cartas de la mano
+# (players_shuffle_one_from_hand, _shuffle_from_hand).
+# -----------------------------------------------------------------------------
+static func on_shuffled_from_hand(main: Node, pid: int, data: Dictionary) -> void:
+	var text: String = str(data.get("habilidad", "")).to_lower()
+	if not ("cuando sea barajado desde tu mano" in text):
+		return
+	var i: int = text.find("puedes buscar un talismán")
+	if i < 0:
+		return
+	if await TalismanSearchScript.try_execute(null, text.substr(i), pid):
+		if "y barajar una carta de tu mano" in text:
+			await _shuffle_from_hand(main, pid, 1, str(data.get("nombre", "Yomiel")))
 
 
 # -----------------------------------------------------------------------------
@@ -262,10 +340,12 @@ static func _shuffle_from_hand(main: Node, controller_id: int, amount: int, titl
 	else:
 		picked = await main._card_interaction.await_multi_target(
 			"%s: Baraja %d carta(s) de tu mano" % [title, amount], hand, amount, Callable(), Callable(), false, null, controller_id)
+	var shuffled: Array = []
 	for node in picked:
 		if not is_instance_valid(node):
 			continue
 		var data: Dictionary = node.card_data.duplicate()
+		shuffled.append(data)
 		data["esta_oculta"] = true
 		PlayerSideScript.remove_from_hand(main, controller_id, node)
 		if is_instance_valid(node):
@@ -274,6 +354,8 @@ static func _shuffle_from_hand(main: Node, controller_id: int, amount: int, titl
 		CardManager.get_deck(controller_id).append(data)
 	CardManager.shuffle_deck(controller_id)
 	AnimationQueue.queue_shuffle(controller_id, "Barajar mazo (%s)" % title)
+	for d in shuffled:
+		await on_shuffled_from_hand(main, controller_id, d)
 
 
 # -----------------------------------------------------------------------------
@@ -307,6 +389,7 @@ static func players_shuffle_one_from_hand(main: Node, controller_id: int, title:
 		CardManager.get_deck(pid).append(data)
 		CardManager.shuffle_deck(pid)
 		AnimationQueue.queue_shuffle(pid, "Barajar mazo (%s)" % title)
+		await on_shuffled_from_hand(main, pid, data)
 	if main.get("_zone_manager"):
 		main._zone_manager._update_castillo_counts()
 
