@@ -400,6 +400,8 @@ func _ability_is_cementerio_usable(full_text: String) -> bool:
 	var lower := full_text.to_lower()
 	if "desterrarla de tu cementerio" in lower or "desterrarlo de tu cementerio" in lower:
 		return true  # Espada del Juicio
+	if "si está en tu cementerio y si tienes menos cartas en tu mano que tu oponente" in lower:
+		return true  # Envidia (2026-10-14)
 	if "para subir esta carta de tu cementerio a tu mano" in lower:
 		return true  # vision heroica
 	if "desterrarlo de tu mano o cementerio" in lower:

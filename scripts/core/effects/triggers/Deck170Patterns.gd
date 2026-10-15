@@ -82,6 +82,32 @@ static func on_milled_by_damage(pid: int, data: Dictionary, destination: int) ->
 
 
 # -----------------------------------------------------------------------------
+# Envidia: "Si está en tu Cementerio y si tienes menos cartas en tu mano que tu
+# oponente, puedes Desterrarlo para Robar una carta." (botón desde el
+# Cementerio, AbilityButtonPatternsD; source_card es un nodo de solo vista)
+# -----------------------------------------------------------------------------
+static func cemetery_banish_to_draw_if_fewer_cards(source_card: Node) -> void:
+	var main := _main_node()
+	if not main or not is_instance_valid(source_card):
+		return
+	var owner_id: int = source_card.owner_id if source_card.get("owner_id") != null else 0
+	var mine: int = PlayerSideScript.hand_cards(main, owner_id).size()
+	var theirs: int = PlayerSideScript.hand_cards(main, 1 - owner_id).size()
+	if mine >= theirs:
+		main._update_debug("%s: necesitas tener menos cartas en la mano que tu oponente (%d contra %d)" % [
+			_name(source_card, "Envidia"), mine, theirs])
+		return
+	var cemetery: Array = CardManager.get_cemetery(owner_id)
+	var idx: int = cemetery.find(source_card.card_data)
+	if idx < 0:
+		return
+	var data: Dictionary = CardManager.remove_from_cemetery(owner_id, idx)
+	data["esta_oculta"] = false
+	CardManager.append_to_exile(owner_id, data)
+	await ActionModule.draw(owner_id, 1, _name(source_card, "Envidia"), true)
+
+
+# -----------------------------------------------------------------------------
 # Signo Amarillo: "Puedes convertir este Oro en un Oro sin habilidad para
 # cancelar la habilidad de una carta fuera del juego o un Oro." (activada)
 # -----------------------------------------------------------------------------

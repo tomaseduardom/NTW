@@ -127,6 +127,16 @@ func try_build(ability_lower: String, btn: Button, panel: Control, card_for_glow
 	# CEMENTERIO de esta sesión (ver _ability_is_cementerio_usable()),
 	# costo sobre el DATO real del Cementerio (no sobre este nodo de
 	# solo vista) + elegir Aliado y signo del bono.
+	# Envidia (2026-10-14, mazo 170): desde el Cementerio, con menos cartas
+	# en la mano que el oponente, Desterrarlo para Robar una carta.
+	if "si está en tu cementerio y si tienes menos cartas en tu mano que tu oponente" in ability_lower:
+		btn.pressed.connect(func():
+			_inspector.close_card_inspection()
+			await load("res://scripts/core/effects/triggers/Deck170Patterns.gd").cemetery_banish_to_draw_if_fewer_cards(card_for_glow)
+		)
+		panel.add_child(btn)
+		return true
+
 	var is_espada_juicio_pattern: bool = ("desterrarla de tu cementerio" in ability_lower
 		and "gane o pierda 2 de fuerza" in ability_lower)
 	if is_espada_juicio_pattern:
