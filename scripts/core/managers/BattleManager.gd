@@ -45,6 +45,22 @@ func _ready() -> void:
 # =============================================================================
 # CÁLCULO DE DAÑO DE COMBATE (DAR Sección 5.C4)
 # =============================================================================
+## Último turno (GameManager.current_turn) en que cada jugador atacó
+## (2026-10-14, Cuervo Nocturno: "Si atacaste en tu turno anterior...").
+var attacked_on_turn: Dictionary = {0: -1, 1: -1}
+
+
+func attacked_in_previous_own_turn(player_id: int) -> bool:
+	"""¿'player_id' atacó en su turno anterior? El contador de turnos avanza
+	cuando el turno vuelve al jugador 0."""
+	var prev: int
+	if GameManager.active_player_id == player_id:
+		prev = GameManager.current_turn - 1
+	else:
+		prev = GameManager.current_turn if player_id == 0 else GameManager.current_turn - 1
+	return int(attacked_on_turn.get(player_id, -1)) == prev
+
+
 func calculate_combat_damage() -> Dictionary:
 	"""Calcula el daño de combate entre todos los pares atacante-bloqueador
 
@@ -68,6 +84,8 @@ func calculate_combat_damage() -> Dictionary:
 	var blockers = GameManager.blockers.duplicate()
 	var active_player = GameManager.active_player_id
 	var defender_id = 1 - active_player
+	if not attackers.is_empty():
+		attacked_on_turn[active_player] = GameManager.current_turn  # Cuervo Nocturno
 
 	var result = {
 		"total_damage_to_castle": 0,

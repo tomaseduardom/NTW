@@ -16,6 +16,14 @@ var _exhumar_popup: Window = null
 
 func setup(main: Node) -> void:
 	_main = main
+	# Exhumar condicional por turno (Cuervo Nocturno, 2026-10-14): el cache
+	# vence al cambiar de turno.
+	if not GameManager.turn_started.is_connected(_on_turn_started_invalidate):
+		GameManager.turn_started.connect(_on_turn_started_invalidate)
+
+
+func _on_turn_started_invalidate(_player_id: int, _turn: int) -> void:
+	invalidate_cache()
 
 
 # =============================================================================
@@ -42,6 +50,11 @@ func scan_cemetery_for_exhumar(player_id: int) -> Array[Dictionary]:
 
 	for card in cemetery:
 		if _card_has_exhumar(card):
+			# "Si atacaste en tu turno anterior, tiene Exhumar en tu Cementerio"
+			# (Cuervo Nocturno, 2026-10-14).
+			if "si atacaste en tu turno anterior, tiene exhumar" in str(card.get("habilidad", "")).to_lower() \
+					and not BattleManager.attacked_in_previous_own_turn(player_id):
+				continue
 			var card_info = _create_exhumar_card_info(card, player_id)
 			if card_info.can_play:
 				playable_cards.append(card_info)
