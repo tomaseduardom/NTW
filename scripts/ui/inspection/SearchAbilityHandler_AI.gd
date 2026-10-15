@@ -120,6 +120,8 @@ func _activate_belcebu_banish_bottom_and_steal(source_card: Node, ability: Dicti
 	var target: Node = await main._card_interaction.await_target("Elige una carta de coste 3 o menos para ganar su control (opcional)", filter, true, controller_id)
 	if not target or not is_instance_valid(target):
 		return
+	if await EffectController.offer_prevention(target, source_card, "control"):
+		return
 	ContinuousEffectManager.gain_control_of_card(target, controller_id)
 
 	EffectController.schedule_next_final_phase_effect(controller_id, func():

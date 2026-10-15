@@ -1078,7 +1078,7 @@ func offer_prevention(affected_card: Node, effect_source: Node, effect_tag: Stri
 	if affected_card.get("current_zone") == null or not (affected_card.current_zone in Constants.ZONES_IN_PLAY):
 		return false
 	var owner_id: int = affected_card.controller_id if affected_card.get("controller_id") != null else 0
-	if await _fision_toll_prevents(affected_card, owner_id, effect_source):
+	if effect_tag != "annul" and await _fision_toll_prevents(affected_card, owner_id, effect_source):
 		return true
 	return await offer_prevention_for_player(owner_id, effect_source, effect_tag, affected_card)
 
@@ -1125,11 +1125,17 @@ func try_consume_legacy_targeted_prevention(card: Node) -> bool:
 ##  - el JUGADOR protegido: los efectos del rival que lo afectan a él
 ##    (Descartar de su mano, Botar de su Castillo) no ocurren — ver
 ##    fision_blocks_player_effect(), consultado en ActionModule.discard/mill;
+##  - sus Castillo/Cementerio: el rival no puede buscar, mirar ni elegir
+##    cartas ahí (fision_hides_zones_of(), en ActionSearch, CastleLook y el
+##    selector de Cementerios), ni hacerle daño por efecto (DamageManager);
+##    en combate, el daño "al Destierro" de habilidades rivales va como daño
+##    normal (BattleManager);
 ##  - sus cartas EN JUEGO (también las que entren después): cada vez que un
 ##    efecto del rival fuera a afectar una, el rival elige si Destierra una
 ##    carta de su mano para que la afecte; si no puede o no quiere, no la
 ##    afecta — en offer_prevention() (destruir, desterrar, barajar/devolver,
-##    debilitar, silenciar, anular).
+##    debilitar, silenciar, ganar el control). Anular NO es afectar la carta
+##    (usuario, 2026-10-14).
 ## Quién controla el efecto: EffectContext (el efecto en curso) o, si no hay,
 ## el controlador de la carta fuente. Dura hasta que empieza el siguiente
 ## turno del jugador protegido.
@@ -1171,6 +1177,17 @@ func fision_blocks_player_effect(player_id: int) -> bool:
 	var main := get_node_or_null("/root/Main")
 	if main:
 		main._update_debug("Fisión Nuclear: el jugador %d no puede ser afectado por efectos oponentes" % (player_id + 1))
+	return true
+
+
+func fision_hides_zones_of(zone_owner: int, chooser_id: int) -> bool:
+	"""true si 'chooser_id' (el rival) no puede buscar/mirar/elegir en las
+	zonas de 'zone_owner' por Fisión Nuclear."""
+	if chooser_id < 0 or chooser_id == zone_owner or not is_fision_shielded(zone_owner):
+		return false
+	var main := get_node_or_null("/root/Main")
+	if main:
+		main._update_debug("Fisión Nuclear: no puedes buscar ni elegir en las zonas del jugador %d" % (zone_owner + 1))
 	return true
 
 

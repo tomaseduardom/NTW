@@ -488,6 +488,8 @@ func try_execute_iga_ryu_enter_pattern(ability_text: String, card: Node, control
 		return true
 	if await TriggerSystem.open_response_window(card, str(card.card_name) if card.get("card_name") else "iga ryu", controller_id):
 		return true
+	if await EffectController.offer_prevention(target, card, "control"):
+		return true
 	ContinuousEffectManager.gain_control_of_card(target, controller_id)
 	return true
 

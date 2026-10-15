@@ -136,6 +136,10 @@ func apply_damage(target, amount: int, type: int = DamageType.DIRECT, context: D
 	if target is int:
 		target_id = target
 		target_type = DamageTarget.CASTLE
+		if type != DamageType.COMBAT and EffectController.fision_blocks_player_effect(target_id):  # Fisión Nuclear
+			result.success = false
+			result.prevented = amount
+			return result
 	elif target is Node:
 		target_card = target
 		target_type = DamageTarget.CARD

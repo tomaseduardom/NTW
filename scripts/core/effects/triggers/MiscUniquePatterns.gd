@@ -180,6 +180,8 @@ func try_execute_gain_control_ally_rename_titan_pattern(ability_text: String, ca
 	if await TriggerSystem.open_response_window(card, str(card.card_name), controller_id):
 		return true
 
+	if await EffectController.offer_prevention(target, card, "control"):
+		return true
 	var stolen_cost: int = ContinuousEffectManager.get_modified_cost(target)
 	ContinuousEffectManager.gain_control_of_card(target, controller_id)
 	# "cambia su nombre a Titán": solo el campo de datos (nombre), no la

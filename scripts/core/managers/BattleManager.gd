@@ -165,6 +165,12 @@ func calculate_combat_damage() -> Dictionary:
 			])
 			emit_signal("unblocked_damage", attacker, attacker_strength)
 
+	# Fisión Nuclear (2026-10-14): el "doble daño al Destierro" es una
+	# habilidad del rival — contra un jugador protegido es daño normal.
+	if EffectController.is_fision_shielded(defender_id) and result.total_damage_to_exile > 0:
+		result.total_damage_to_castle += result.total_damage_to_exile / 2
+		result.total_damage_to_exile = 0
+
 	# Emitir señal con el daño total calculado (ambos pools combinados —
 	# 2026-09-04: total_damage_to_exile ya viene doblado, ver
 	# _accumulate_castle_damage())
@@ -253,6 +259,8 @@ func _check_damage_to_exile_effect(player_id: int) -> bool:
 	"""Verifica si hay un efecto activo que envíe el daño al Destierro
 	DAR Sección 8: Algunos efectos pueden cambiar el destino del daño
 	"""
+	if EffectController.is_fision_shielded(player_id):  # Fisión Nuclear
+		return false
 	# Verificar efectos continuos en TriggerSystem
 	var effects = TriggerSystem.get_active_continuous_effects("damage_to_exile")
 	for effect in effects:

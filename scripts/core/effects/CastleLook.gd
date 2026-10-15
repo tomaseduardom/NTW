@@ -34,6 +34,8 @@ const PlayerSideScript = preload("res://scripts/core/game/PlayerSide.gd")
 static func look(player_id: int, deck_owner: int, count: int, from_top: bool, boxes: Array, title: String) -> Dictionary:
 	var tree := Engine.get_main_loop() as SceneTree
 	var main: Node = tree.root.get_node_or_null("/root/Main") if tree else null
+	if EffectController.fision_hides_zones_of(deck_owner, player_id):  # Fisión Nuclear
+		return {}
 	var deck: Array = CardManager.get_deck(deck_owner)
 	var n: int = mini(count, deck.size())
 	if n <= 0 or not main:
