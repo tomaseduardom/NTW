@@ -147,6 +147,46 @@ static func on_vigilia_started(active_pid: int) -> void:
 
 
 # -----------------------------------------------------------------------------
+# Reina Nyssara: "Una vez por turno, cuando un Aliado oponente salga del juego
+# por efecto de un Talismán, este Aliado gana las habilidades de esa carta por
+# el resto del juego." GoldManager conecta esto a destruir/desterrar/barajar.
+# -----------------------------------------------------------------------------
+const _EffectContextScript = preload("res://scripts/core/effects/EffectContext.gd")
+
+
+static func on_card_left_play(_pid: int, card) -> void:  # sin tipo: puede llegar liberada
+	if card == null or not is_instance_valid(card) or card.get("card_type") != Constants.CardType.ALIADO:
+		return
+	var ctx: Dictionary = _EffectContextScript.current()
+	if ctx.is_empty() or str(ctx.kind) != "Talismán":
+		return
+	var main := _main_node()
+	if not main:
+		return
+	var left_ctrl: int = card.controller_id if card.get("controller_id") != null else 0
+	var gained_text: String = str(card.get("card_ability"))
+	if gained_text.strip_edges().is_empty():
+		return
+	for c in _in_play_cards(main, 1 - left_ctrl):
+		if not is_instance_valid(c) or c == card or KeywordManager.is_silenced(c):
+			continue
+		if not ("cuando un aliado oponente salga del juego por efecto de un talismán, este aliado gana las habilidades de esa carta" \
+				in str(c.get("card_ability")).to_lower()):
+			continue
+		var key := "nyssara_gain:%d" % c.get_instance_id()
+		if UniversalCardParser.turn_registry.was_used(key, 0, GameManager.current_turn):
+			continue
+		UniversalCardParser.turn_registry.register(key, 0, GameManager.current_turn)
+		c.card_ability = str(c.card_ability) + "\n" + gained_text
+		if c.get("card_data") is Dictionary:
+			c.card_data["habilidad"] = c.card_ability
+		c.parse_triggers_from_ability()
+		KeywordManager.scan_and_apply_keywords(c)
+		main._update_debug("%s gana las habilidades de %s" % [_name(c, "Reina Nyssara"), _name(card, "ese Aliado")])
+		return
+
+
+# -----------------------------------------------------------------------------
 # Signo Amarillo: "Puedes convertir este Oro en un Oro sin habilidad para
 # cancelar la habilidad de una carta fuera del juego o un Oro." (activada)
 # -----------------------------------------------------------------------------

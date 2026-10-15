@@ -104,6 +104,15 @@ func setup(main: Node) -> void:
 			GameManager.turn_started.connect(_on_turn_started_clear_virtual_gold)
 	if not GameManager.phase_changed.is_connected(_on_phase_changed_deck170):
 		GameManager.phase_changed.connect(_on_phase_changed_deck170)
+	# Reina Nyssara (2026-10-14): Aliado oponente que sale del juego por un
+	# Talismán.
+	if not _deck170_left_play_connected:
+		_deck170_left_play_connected = true
+		var deck170 = load("res://scripts/core/effects/triggers/Deck170Patterns.gd")
+		CardManager.card_destroyed.connect(func(pid: int, card) -> void: deck170.on_card_left_play(pid, card))
+		CardManager.card_exiled.connect(func(pid: int, card) -> void: deck170.on_card_left_play(pid, card))
+		EffectController.on_card_returned_to_deck.connect(func(pid: int, card, _top: bool) -> void:
+			deck170.on_card_left_play(pid, card))
 
 
 func _on_phase_changed_deck170(new_phase) -> void:
@@ -115,6 +124,9 @@ func _on_phase_changed_deck170(new_phase) -> void:
 	if NetworkClient.room_code != "" and not NetworkClient.is_host:
 		return
 	await load("res://scripts/core/effects/triggers/Deck170Patterns.gd").on_vigilia_started(GameManager.active_player_id)
+
+
+var _deck170_left_play_connected := false
 
 
 ## "No puedes poner Oros en juego en tu próximo turno" (Escarapela Nacional):
