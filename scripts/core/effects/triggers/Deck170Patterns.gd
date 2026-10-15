@@ -19,7 +19,97 @@ static func try_execute(card: Node, text: String, controller_id: int) -> bool:
 		return true
 	if await _try_mill_per_ally(card, lower, controller_id):
 		return true
+	if await _try_matriz_v_enter(card, lower, controller_id):
+		return true
 	return false
+
+
+# -----------------------------------------------------------------------------
+# Matriz V: "Cuando entra en juego, Roba una carta y hasta dos cartas que
+# controles ganan Indesterrable mientras estén en juego." / "Si está en tu
+# Reserva, tu oponente no puede disparar habilidades de cartas de coste 0 o 1
+# a menos que Destierre una carta de su mano."
+# -----------------------------------------------------------------------------
+static func _try_matriz_v_enter(card: Node, lower: String, controller_id: int) -> bool:
+	if not ("hasta dos cartas que controles ganan indesterrable mientras estén en juego" in lower):
+		return false
+	var main := _main_node()
+	if not main:
+		return true
+	var title := _name(card, "Matriz V")
+	var own: Array = _in_play_cards(main, controller_id)
+	for zone in [PlayerSideScript.gold_reserva(main, controller_id), PlayerSideScript.oro_pagado(main, controller_id)]:
+		if zone:
+			for c in zone.get_children():
+				if is_instance_valid(c):
+					own.append(c)
+	var picked: Array = []
+	if not own.is_empty() and main._card_interaction:
+		if PlayerSideScript.is_bot(controller_id):
+			own.shuffle()
+			picked = own.slice(0, 2)
+		else:
+			picked = await main._card_interaction.await_multi_target(
+				"%s: hasta dos cartas que controles ganan Indesterrable (ESC para terminar)" % title,
+				own, 2, Callable(), Callable(), true, null, controller_id)
+	if await TriggerSystem.open_response_window(card, title, controller_id):
+		return true
+	await ActionModule.draw(controller_id, 1, title, true)
+	for c in picked:
+		if is_instance_valid(c):
+			KeywordManager.grant_keyword(c, Constants.Keyword.INDESTERRABLE, card, "permanent")
+	return true
+
+
+static func matriz_v_blocks_trigger(card: Node, controller_id: int) -> bool:
+	"""true si la habilidad disparada de 'card' no se dispara por Matriz V
+	(el controlador eligió no pagar o no pudo)."""
+	if not is_instance_valid(card) or int(ContinuousEffectManager.get_modified_cost(card)) > 1:
+		return false
+	var main := _main_node()
+	if not main:
+		return false
+	var reserva = PlayerSideScript.gold_reserva(main, 1 - controller_id)
+	if not reserva:
+		return false
+	var has_matriz := false
+	for c in reserva.get_children():
+		if is_instance_valid(c) and c.get("card_ability") != null and not KeywordManager.is_silenced(c) \
+				and "no puede disparar habilidades de cartas de coste 0 o 1 a menos que destierre una carta de su mano" \
+				in str(c.card_ability).to_lower():
+			has_matriz = true
+			break
+	if not has_matriz:
+		return false
+	var paid: bool = await banish_from_hand_toll(main, controller_id,
+		"Matriz V: Destierra una carta de tu mano para disparar la habilidad de %s (ESC: no dispararla)" % _name(card, "esa carta"))
+	if not paid:
+		main._update_debug("Matriz V: la habilidad de %s no se dispara" % _name(card, "esa carta"))
+	return not paid
+
+
+static func banish_from_hand_toll(main: Node, payer: int, prompt: String) -> bool:
+	"""El jugador elige si Destierra una carta de su mano (peaje). El bot paga
+	si tiene 3 cartas o más. true = pagó."""
+	var hand: Array = PlayerSideScript.hand_cards(main, payer).filter(func(c): return is_instance_valid(c))
+	if hand.is_empty():
+		return false
+	var paid: Node = null
+	if PlayerSideScript.is_bot(payer):
+		if hand.size() >= 3:
+			paid = hand.pick_random()
+	elif main._card_interaction:
+		paid = await main._card_interaction.await_target(prompt, func(c: Node) -> bool: return c in hand, true, payer)
+	if paid == null or not is_instance_valid(paid):
+		return false
+	var data: Dictionary = paid.card_data.duplicate()
+	PlayerSideScript.remove_from_hand(main, payer, paid)
+	if is_instance_valid(paid):
+		CardManager._disconnect_card_interaction_signals(paid)
+		paid.queue_free()
+	data["esta_oculta"] = false
+	CardManager.append_to_exile(payer, data)
+	return true
 
 
 # -----------------------------------------------------------------------------

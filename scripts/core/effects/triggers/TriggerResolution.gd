@@ -110,6 +110,11 @@ func resolve_next_trigger() -> Dictionary:
 	# ventana anidada de un trigger, es suya" (comentario propio de ese
 	# archivo). El 'ambos pasaron' de la ventana nueva SÍ llegaba a la
 	# lógica de fin de fase, causando resoluciones dobles.
+	# Matriz V (2026-10-14): habilidades de cartas de coste 0 o 1 del rival
+	# solo se disparan si Destierra una carta de su mano.
+	if await Deck170Script.matriz_v_blocks_trigger(card, controller_id):
+		_main.awaiting_response = false
+		return await resolve_next_trigger()
 	var ctx_token: int = EffectContextScript.push(card, controller_id, "disparada", "pending")
 	var result = await _execute_trigger_effect(card, trigger_type, event_data)
 	var window_state: String = EffectContextScript.window_state(ctx_token)
