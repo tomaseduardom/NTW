@@ -912,7 +912,11 @@ func _execute_trigger_effect(card: Node, trigger_type: String, event_data: Dicti
 			])
 			if not clause.is_empty():
 				var controller_id: int = card.get("owner_id") if card.get("owner_id") != null else 0
-				if await _main._convert_misc_resolver.try_execute_convert_ally_to_gold_pattern(clause, card, controller_id):
+				# Zadquiel (2026-10-14): texto completo, la cláusula aislada
+				# corta antes de "Esa carta no puede ser jugada...".
+				if await _main._look_and_play.try_execute_look_hand_name_play_lock_pattern(ability_text, card, controller_id):
+					result["no_handler"] = false
+				elif await _main._convert_misc_resolver.try_execute_convert_ally_to_gold_pattern(clause, card, controller_id):
 					result["no_handler"] = false
 				elif await _main._draw_shuffle_resolver.try_execute_banish_cemeteries_equal_to_own_strength_pattern(clause, card, controller_id):
 					result["no_handler"] = false

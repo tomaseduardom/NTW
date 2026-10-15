@@ -230,6 +230,7 @@ func _create_card_from_api(data: Dictionary) -> Dictionary:
 	var nombre = data.get("nombre", "")
 
 	var raza_str = data.get("nombre_raza", data.get("raza", ""))
+	var habilidad: String = _corrected_text(str(nombre), str(data.get("habilidad", "")) if data.get("habilidad") != null else "")
 
 	return {
 		"id": str(data.get("id", data.get("uuid", ""))),
@@ -239,13 +240,33 @@ func _create_card_from_api(data: Dictionary) -> Dictionary:
 		"coste": data.get("coste", 0) if data.get("coste") != null else 0,
 		"fuerza": data.get("fuerza", 0) if data.get("fuerza") != null else 0,
 		"raza": raza_str,
-		"habilidad": data.get("habilidad", ""),
+		"habilidad": habilidad,
 		"texto_epico": data.get("texto_epico", ""),
 		"edicion": data.get("nombre_edicion", data.get("edicion", "")),
 		"frecuencia": data.get("frecuencia", ""),
 		"imagen": data.get("imagen", ""),
-		"keywords": _parse_keywords(data.get("habilidad", ""))
+		"keywords": _parse_keywords(habilidad)
 	}
+
+
+## Correcciones de texto confirmadas por el usuario cuando la API trae una
+## versión distinta de la carta impresa: nombre en minúsculas ->
+## [[texto a buscar, reemplazo], ...]. Se aplican al cargar (bundled, caché o
+## API), así que sobreviven a reload_card.ps1.
+const TEXT_CORRECTIONS: Dictionary = {
+	# 2026-10-14, usuario: "la zadquiel no dispara cuando ataque, dice cuando
+	# haga daño".
+	"zadquiel": [["Cuando ataca, mira la mano de tu oponente", "Cuando haga daño, mira la mano de tu oponente"]],
+}
+
+
+func _corrected_text(nombre: String, habilidad: String) -> String:
+	var fixes = TEXT_CORRECTIONS.get(nombre.strip_edges().to_lower())
+	if fixes == null:
+		return habilidad
+	for pair in fixes:
+		habilidad = habilidad.replace(pair[0], pair[1])
+	return habilidad
 
 
 func _parse_card_type(tipo) -> Constants.CardType:

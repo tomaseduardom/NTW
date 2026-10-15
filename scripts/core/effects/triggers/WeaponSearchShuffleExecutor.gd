@@ -351,6 +351,10 @@ func _execute_play_weapon_discount_draw(action: Dictionary, controller_id: int, 
 		# reemplaza por uno real conectado a las señales del juego.
 		weapon_node = main._create_card(picked_data, false)
 		main._connect_card_signals(weapon_node)
+		# Jugada desde el Cementerio sin que el texto lo diga = Exhumar
+		# (Zadquiel): al salir del juego va al Destierro.
+		if params.get("exhume_from_cemetery", false):
+			weapon_node.is_exhumed = true
 	if controller_id != 0:
 		weapon_node.owner_id = controller_id
 		weapon_node.controller_id = controller_id
