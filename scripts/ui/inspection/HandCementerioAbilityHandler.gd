@@ -1,4 +1,4 @@
-﻿extends RefCounted
+extends RefCounted
 ## HandCementerioAbilityHandler — Patrones especiales de habilidades
 ## ACTIVADAS usables DESDE LA MANO o el CEMENTERIO, antes de jugar la carta
 ## (Tyet — 2 habilidades, Ramón Freire, Espada del Juicio, Drácula —
@@ -186,6 +186,8 @@ func _activate_sandraudiga_banish_pair_and_peek(source_card: Node, ability: Dict
 	var opponent_id: int = 1 - owner_id
 	var opponent_hand_container = _inspector._main._opponent_fan if owner_id == 0 else _inspector._main.player_hand
 	if EffectController.fision_hides_zones_of(1 - owner_id, owner_id, Constants.Zone.MANO):  # Fisión Nuclear
+		opponent_hand_container = null
+	if await EffectController.offer_colapso_global(owner_id):  # Colapso Global
 		opponent_hand_container = null
 	if not opponent_hand_container:
 		return

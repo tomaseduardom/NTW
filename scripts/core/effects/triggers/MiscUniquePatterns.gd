@@ -241,6 +241,8 @@ func try_execute_look_hand_name_play_lock_pattern(ability_text: String, card: No
 	var opponent_id: int = 1 - controller_id
 	if EffectController.fision_hides_zones_of(opponent_id, controller_id, Constants.Zone.MANO):  # Fisión Nuclear
 		return true
+	if await EffectController.offer_colapso_global(controller_id):  # Colapso Global
+		return true
 	var opp_hand: Array = PlayerSideScript.hand_cards(main, opponent_id).filter(func(c): return is_instance_valid(c))
 	var picked_name: String = ""
 	if PlayerSideScript.is_bot(controller_id):

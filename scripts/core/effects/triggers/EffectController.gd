@@ -1231,6 +1231,71 @@ func _fision_toll_prevents(affected_card, owner_id: int, effect_source) -> bool:
 	return false
 
 
+## Colapso Global (2026-10-14, mazo 170): "En respuesta a que tu oponente
+## fuera a mirar tu mano o buscar cartas en un Castillo, puedes Desterrar una
+## carta de tu mano para jugarlo sin pagar su coste. Prevén que tu oponente
+## mire tu mano o busque cartas y tú Robas una carta."
+## Se ofrece en las búsquedas (ActionSearch) y en los efectos que miran la
+## mano rival. true = la búsqueda/mirada no ocurre. Se juega pagando su coste
+## o Desterrando una carta de la mano; va al Cementerio y Robas una.
+func offer_colapso_global(searcher_id: int) -> bool:
+	if searcher_id < 0:
+		return false
+	var main := get_node_or_null("/root/Main")
+	if not main:
+		return false
+	var victim: int = 1 - searcher_id
+	var hand: Array = PlayerSideScript.hand_cards(main, victim).filter(func(c): return is_instance_valid(c))
+	var colapso: Node = null
+	for c in hand:
+		if "prevén que tu oponente mire tu mano o busque cartas" in str(c.get("card_ability")).to_lower():
+			colapso = c
+			break
+	if colapso == null:
+		return false
+	var others: Array = hand.filter(func(c): return c != colapso)
+	var can_pay: bool = main._gold_manager.puede_pagar(int(colapso.get("card_cost")), Constants.CardType.TALISMAN, "", -1, victim)
+	if others.is_empty() and not can_pay:
+		return false
+	var use_banish: bool = not others.is_empty()
+	if PlayerSideScript.is_bot(victim):
+		pass  # el bot lo usa siempre que puede
+	else:
+		var label_banish := "Jugar Colapso Global Desterrando una carta de tu mano"
+		var label_pay := "Jugar Colapso Global pagando %d Oro" % int(colapso.get("card_cost"))
+		if not await SelectionManager.await_two_choice(main, "Tu oponente va a mirar tu mano o buscar cartas",
+				label_banish if use_banish else label_pay, "No responder", victim):
+			return false
+		if use_banish and can_pay:
+			use_banish = await SelectionManager.await_two_choice(main, "Colapso Global", label_banish, label_pay, victim)
+	if use_banish:
+		var paid: Node = others.pick_random() if PlayerSideScript.is_bot(victim) else null
+		if paid == null and main._card_interaction:
+			paid = await main._card_interaction.await_target("Colapso Global: Destierra una carta de tu mano",
+				func(c: Node) -> bool: return c in others, false, victim)
+		if paid == null or not is_instance_valid(paid):
+			return false
+		var pdata: Dictionary = paid.card_data.duplicate()
+		PlayerSideScript.remove_from_hand(main, victim, paid)
+		if is_instance_valid(paid):
+			CardManager._disconnect_card_interaction_signals(paid)
+			paid.queue_free()
+		pdata["esta_oculta"] = false
+		CardManager.append_to_exile(victim, pdata)
+	else:
+		await main._gold_manager.pagar_coste(int(colapso.get("card_cost")), Constants.CardType.TALISMAN, "", -1, victim)
+	var cdata: Dictionary = colapso.card_data.duplicate()
+	PlayerSideScript.remove_from_hand(main, victim, colapso)
+	if is_instance_valid(colapso):
+		CardManager._disconnect_card_interaction_signals(colapso)
+		colapso.queue_free()
+	cdata["esta_oculta"] = false
+	CardManager.add_to_cemetery(victim, cdata)
+	main._update_debug("Colapso Global: se previene la búsqueda o mirada del oponente")
+	await ActionModule.draw(victim, 1, "Colapso Global", true)
+	return true
+
+
 ## Prevenir daño al Castillo con un Oro (2026-10-14, mazo 170):
 ##  - Alicanto: "En respuesta a que fueras a recibir daño, puedes Desterrar
 ##    este Oro para prevenirlo. Luego, puedes convertir una carta de tu mano

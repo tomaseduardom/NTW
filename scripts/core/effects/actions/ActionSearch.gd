@@ -136,6 +136,9 @@ func search_zones(player_id: int, zones: Array, filter: Dictionary, amount: int 
 
 	var to_select = mini(amount, result.matching.size())
 	var effective_chooser: int = chooser_id if chooser_id >= 0 else player_id
+	if await EffectController.offer_colapso_global(effective_chooser):  # Colapso Global
+		await _main._end_trigger_collection_and_resolve()
+		return result
 	var min_count: int = 0 if can_fail else to_select
 	var picks: Array = await _pick_from_zones(player_id, zone_infos, to_select, min_count, distinct_names,
 		effective_chooser, source_card)
@@ -272,6 +275,8 @@ func search_either_owner(chooser: int, zones: Array, filter: Dictionary, amount:
 		return result
 
 	EffectContextScript.check_chooser(chooser, "buscar")
+	if await EffectController.offer_colapso_global(chooser):  # Colapso Global
+		return result
 	var title: String = "Buscar"
 	if source_card and source_card.get("card_name") != null:
 		title = "%s: elige hasta %d carta(s)" % [str(source_card.card_name), amount]

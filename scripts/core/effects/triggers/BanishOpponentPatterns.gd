@@ -1,4 +1,4 @@
-﻿extends RefCounted
+extends RefCounted
 ## BanishOpponentPatterns — 3 de 7 mitades de LookAndPlayResolver.gd, dividido
 ## por tamaño el 2026-09-06 ("módulos gordos"). Cubre banish/destierro/mill/
 ## anulación dirigidos al oponente, removal-oriented: ignis desatado, shoki,
@@ -263,6 +263,8 @@ func try_execute_opponent_hand_cost_max_to_bottom_pattern(ability_text: String, 
 	var opponent_id: int = 1 - controller_id
 	var opponent_hand_container = main.player_hand if opponent_id == 0 else main._opponent_fan
 	if EffectController.fision_hides_zones_of(opponent_id, controller_id, Constants.Zone.MANO):  # Fisión Nuclear
+		opponent_hand_container = null
+	if await EffectController.offer_colapso_global(controller_id):  # Colapso Global
 		opponent_hand_container = null
 	if not opponent_hand_container or not opponent_hand_container.has_method("get_cards"):
 		return true
