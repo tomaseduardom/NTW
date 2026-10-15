@@ -1,159 +1,151 @@
 {
-    "slug":  "preset-heroe",
-    "nombre":  "Heroe tech (publico)",
-    "arquetipo":  "Heroe",
+    "slug":  "preset-talisman-control",
+    "nombre":  "Talisman - Control (publico)",
+    "arquetipo":  "Faerie",
     "formato":  "imp",
     "entries":  [
                     {
-                        "myl_id":  "20584",
-                        "quantity":  1
-                    },
-                    {
-                        "myl_id":  "20595",
+                        "myl_id":  "20592",
                         "quantity":  2
                     },
                     {
-                        "myl_id":  "20612",
+                        "myl_id":  "20641",
                         "quantity":  1
                     },
                     {
-                        "myl_id":  "20613",
+                        "myl_id":  "20711",
                         "quantity":  1
                     },
                     {
-                        "myl_id":  "20617",
+                        "myl_id":  "20825",
                         "quantity":  1
                     },
                     {
-                        "myl_id":  "20625",
+                        "myl_id":  "20841",
                         "quantity":  2
                     },
                     {
-                        "myl_id":  "20637",
-                        "quantity":  2
-                    },
-                    {
-                        "myl_id":  "20771",
-                        "quantity":  1
-                    },
-                    {
-                        "myl_id":  "20807",
-                        "quantity":  2
-                    },
-                    {
-                        "myl_id":  "20814",
-                        "quantity":  1
-                    },
-                    {
-                        "myl_id":  "20864",
-                        "quantity":  1
-                    },
-                    {
-                        "myl_id":  "20321",
-                        "quantity":  1
-                    },
-                    {
-                        "myl_id":  "20334",
-                        "quantity":  1
-                    },
-                    {
-                        "myl_id":  "20345",
-                        "quantity":  1
-                    },
-                    {
-                        "myl_id":  "20483",
-                        "quantity":  2
-                    },
-                    {
-                        "myl_id":  "20486",
-                        "quantity":  1
-                    },
-                    {
-                        "myl_id":  "20488",
-                        "quantity":  1
-                    },
-                    {
-                        "myl_id":  "20554",
-                        "quantity":  1
-                    },
-                    {
-                        "myl_id":  "20556",
-                        "quantity":  1
-                    },
-                    {
-                        "myl_id":  "20557",
+                        "myl_id":  "19962",
                         "quantity":  3
                     },
                     {
-                        "myl_id":  "20565",
+                        "myl_id":  "20270",
                         "quantity":  1
                     },
                     {
-                        "myl_id":  "20107",
+                        "myl_id":  "custom_kvm_227",
                         "quantity":  1
                     },
                     {
-                        "myl_id":  "20255",
-                        "quantity":  1
-                    },
-                    {
-                        "myl_id":  "20256",
-                        "quantity":  1
-                    },
-                    {
-                        "myl_id":  "20288",
-                        "quantity":  1
-                    },
-                    {
-                        "myl_id":  "20307",
-                        "quantity":  1
-                    },
-                    {
-                        "myl_id":  "20581",
-                        "quantity":  1
-                    },
-                    {
-                        "myl_id":  "20582",
+                        "myl_id":  "custom_tk26_20",
                         "quantity":  2
                     },
                     {
-                        "myl_id":  "19893",
+                        "myl_id":  "custom_tk26i_35",
                         "quantity":  1
                     },
                     {
-                        "myl_id":  "19905",
+                        "myl_id":  "custom_mig_22",
                         "quantity":  1
                     },
                     {
-                        "myl_id":  "19888",
+                        "myl_id":  "custom_mig_27",
+                        "quantity":  1
+                    },
+                    {
+                        "myl_id":  "custom_mig_38",
+                        "quantity":  1
+                    },
+                    {
+                        "myl_id":  "custom_mig_43",
+                        "quantity":  1
+                    },
+                    {
+                        "myl_id":  "custom_mid_23",
+                        "quantity":  1
+                    },
+                    {
+                        "myl_id":  "custom_mid_25",
+                        "quantity":  1
+                    },
+                    {
+                        "myl_id":  "custom_mid_30",
                         "quantity":  2
                     },
                     {
-                        "myl_id":  "18647",
+                        "myl_id":  "custom_mid_32",
                         "quantity":  1
                     },
                     {
-                        "myl_id":  "18652",
-                        "quantity":  2
-                    },
-                    {
-                        "myl_id":  "18928",
+                        "myl_id":  "custom_mid_34",
                         "quantity":  1
                     },
                     {
-                        "myl_id":  "18197",
-                        "quantity":  2
-                    },
-                    {
-                        "myl_id":  "17618",
-                        "quantity":  2
-                    },
-                    {
-                        "myl_id":  "17658",
+                        "myl_id":  "custom_mid_37",
                         "quantity":  1
                     },
                     {
-                        "myl_id":  "custom_tk26_02",
+                        "myl_id":  "custom_mid_38",
+                        "quantity":  2
+                    },
+                    {
+                        "myl_id":  "custom_mie_28",
+                        "quantity":  1
+                    },
+                    {
+                        "myl_id":  "custom_mie_31",
+                        "quantity":  2
+                    },
+                    {
+                        "myl_id":  "custom_mie_34",
+                        "quantity":  2
+                    },
+                    {
+                        "myl_id":  "custom_mie_37",
+                        "quantity":  2
+                    },
+                    {
+                        "myl_id":  "custom_mie_42",
+                        "quantity":  1
+                    },
+                    {
+                        "myl_id":  "custom_aydv_xm006",
+                        "quantity":  2
+                    },
+                    {
+                        "myl_id":  "custom_aydv_xu002",
+                        "quantity":  1
+                    },
+                    {
+                        "myl_id":  "custom_aydv_xv024",
+                        "quantity":  1
+                    },
+                    {
+                        "myl_id":  "21658",
+                        "quantity":  1
+                    },
+                    {
+                        "myl_id":  "custom_drac_020",
+                        "quantity":  3
+                    },
+                    {
+                        "myl_id":  "custom_drac_p014",
+                        "quantity":  2
+                    },
+                    {
+                        "myl_id":  "custom_drac_p019",
+                        "quantity":  1
+                    },
+                    {
+                        "myl_id":  "custom_drac_p020",
+                        "quantity":  1
+                    },
+                    {
+                        "myl_id":  "custom_drac_p045",
+                        "quantity":  1
+                    },
+                    {
+                        "myl_id":  "custom_drac_p052",
                         "quantity":  1
                     }
                 ]
