@@ -108,6 +108,45 @@ static func cemetery_banish_to_draw_if_fewer_cards(source_card: Node) -> void:
 
 
 # -----------------------------------------------------------------------------
+# Escarapela Nacional: "Al comienzo de la Vigilia oponente, si no controlas más
+# Oros que él puedes ponerlo en juego como si fuera tu Vigilia y no puedes
+# poner Oros en juego en tu próximo turno." (GoldManager lo llama al empezar
+# cada Vigilia)
+# -----------------------------------------------------------------------------
+static func on_vigilia_started(active_pid: int) -> void:
+	var main := _main_node()
+	if not main or not main._gold_manager:
+		return
+	var pid: int = 1 - active_pid
+	var golds := func(p: int) -> int:
+		return PlayerSideScript.gold_reserva(main, p).get_child_count() + PlayerSideScript.oro_pagado(main, p).get_child_count()
+	if golds.call(pid) > golds.call(active_pid):
+		return
+	for c in PlayerSideScript.hand_cards(main, pid):
+		if not is_instance_valid(c):
+			continue
+		var t: String = str(c.get("card_ability")).to_lower()
+		if not ("al comienzo de la vigilia oponente, si no controlas más oros que él puedes ponerlo en juego" in t
+				or "puede ser puesto en juego en la vigilia oponente como si fuera tu vigilia" in t):
+			continue
+		var use_it: bool = PlayerSideScript.is_bot(pid)
+		if not use_it:
+			use_it = await SelectionManager.await_two_choice(main, str(c.card_name),
+				"Ponerlo en juego ahora (no podrás poner Oros en tu próximo turno)", "No", pid)
+		if not use_it or not is_instance_valid(c):
+			return
+		var data: Dictionary = c.card_data.duplicate()
+		PlayerSideScript.remove_from_hand(main, pid, c)
+		if is_instance_valid(c):
+			CardManager._disconnect_card_interaction_signals(c)
+			c.queue_free()
+		data["esta_oculta"] = false
+		main._gold_manager.block_gold_next_turn(pid)
+		await main._gold_manager.put_gold_directly_in_reserva(pid, data)
+		return
+
+
+# -----------------------------------------------------------------------------
 # Signo Amarillo: "Puedes convertir este Oro en un Oro sin habilidad para
 # cancelar la habilidad de una carta fuera del juego o un Oro." (activada)
 # -----------------------------------------------------------------------------

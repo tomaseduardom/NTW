@@ -102,6 +102,28 @@ func setup(main: Node) -> void:
 	if GameManager and GameManager.has_signal("turn_started"):
 		if not GameManager.turn_started.is_connected(_on_turn_started_clear_virtual_gold):
 			GameManager.turn_started.connect(_on_turn_started_clear_virtual_gold)
+	if not GameManager.phase_changed.is_connected(_on_phase_changed_deck170):
+		GameManager.phase_changed.connect(_on_phase_changed_deck170)
+
+
+func _on_phase_changed_deck170(new_phase) -> void:
+	"""Escarapela Nacional (2026-10-14): al comienzo de cada Vigilia, el
+	rival del jugador activo puede ponerla en juego. Solo donde corre la
+	lógica (no en el Remoto)."""
+	if new_phase != Constants.Phase.VIGILIA or not GameManager.is_game_active:
+		return
+	if NetworkClient.room_code != "" and not NetworkClient.is_host:
+		return
+	await load("res://scripts/core/effects/triggers/Deck170Patterns.gd").on_vigilia_started(GameManager.active_player_id)
+
+
+## "No puedes poner Oros en juego en tu próximo turno" (Escarapela Nacional):
+## {player_id: "pending" | "active"}.
+var _no_gold_turn: Dictionary = {}
+
+
+func block_gold_next_turn(player_id: int) -> void:
+	_no_gold_turn[player_id] = "pending"
 
 
 ## Armas de más (2026-10-14, a pedido del usuario): si un Aliado porta más
@@ -147,6 +169,11 @@ func _enforce_weapon_capacity() -> void:
 
 
 func _on_turn_started_clear_virtual_gold(_player_id: int, _turn: int) -> void:
+	for pid in _no_gold_turn.keys():
+		if _no_gold_turn[pid] == "pending" and _player_id == pid:
+			_no_gold_turn[pid] = "active"
+		elif _no_gold_turn[pid] == "active" and _player_id != pid:
+			_no_gold_turn.erase(pid)
 	limpiar_oros_virtuales()
 	limpiar_oro_restringido(_player_id)
 	for pid in [0, 1]:
@@ -393,6 +420,10 @@ func _place_card_as_gold(card: Node) -> void:
 		return
 	if card.card_type != Constants.CardType.ORO:
 		_main._update_debug("Solo puedes colocar cartas de tipo Oro")
+		return
+	if _no_gold_turn.get(player_id, "") == "active":
+		_main._update_debug("No puedes poner Oros en juego este turno (Escarapela Nacional)")
+		if _main._card_interaction: _main._card_interaction.is_placing_gold = false
 		return
 	if not TurnManager.can_place_oro(GameManager.current_phase, card):
 		_main._update_debug("No puedes colocar Oro ahora")
