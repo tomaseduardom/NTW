@@ -39,6 +39,10 @@ static func try_annul_on_stack(card: Node, text: String, controller_id: int) -> 
 		return await _culto_a_la_muerte(card, controller_id)
 	if "elige un efecto" in lower:
 		return false
+	# Visión de Enoc: "Anula un Talismán de coste 2 o menos o prevén que un
+	# Aliado sea afectado por un efecto oponente."
+	if "o prevén que un aliado sea afectado por un efecto oponente" in lower:
+		return await _vision_de_enoc(card, lower, controller_id)
 	# Primera oración que empieza con Anula/Cancela (saltando "Única.",
 	# "Cuando lo juegues, Destiérralo.", "No puede ser Anulado.").
 	var sentence := ""
@@ -68,6 +72,34 @@ static func try_annul_on_stack(card: Node, text: String, controller_id: int) -> 
 	# Dragón Dorado: "Luego, Baraja tantas cartas de tu mano como coste tenga."
 	if "luego, baraja tantas cartas de tu mano como coste tenga" in lower and StackAnnulScript.is_card_play(obj):
 		await _shuffle_from_hand(main, controller_id, target_cost, _name(card, "Dragón Dorado"))
+	return true
+
+
+static func _vision_de_enoc(card: Node, lower: String, controller_id: int) -> bool:
+	var main := _main_node()
+	var title := _name(card, "Visión de Enoc")
+	var m := RegEx.create_from_string("anula un talismán de coste (\\w+) o menos").search(lower)
+	var max_cost: int = UniversalCardParser._parse_amount(m.get_string(1)) if m else 2
+	var obj: Dictionary = StackAnnulScript.find_target(controller_id, true, false, func(o: Dictionary) -> bool:
+		return StackAnnulScript.type_of(o) == Constants.CardType.TALISMAN and StackAnnulScript.cost_of(o) <= max_cost)
+	var own_allies: Array = _in_play_cards(main, controller_id).filter(
+		func(c): return c.get("card_type") == Constants.CardType.ALIADO)
+	var annul_it: bool = not obj.is_empty()
+	if not obj.is_empty() and not own_allies.is_empty():
+		annul_it = await SelectionManager.await_two_choice(main, title,
+			"Anular %s" % str(StackAnnulScript.data_of(obj).get("nombre", "el Talismán")),
+			"Prevenir que un Aliado tuyo sea afectado", controller_id)
+	if annul_it:
+		StackAnnulScript.apply(obj, card)
+		return true
+	if own_allies.is_empty() or not main._card_interaction:
+		main._update_debug("%s: no hay nada que Anular ni Aliados que proteger" % title)
+		return true
+	var ally: Node = await main._card_interaction.await_target(
+		"%s: elige un Aliado tuyo: el próximo efecto oponente no lo afecta" % title,
+		func(c: Node) -> bool: return c in own_allies, true, controller_id)
+	if ally and is_instance_valid(ally):
+		EffectController.add_legacy_targeted_prevention(ally, 1)
 	return true
 
 

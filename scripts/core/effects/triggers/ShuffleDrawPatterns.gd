@@ -1,4 +1,4 @@
-﻿extends RefCounted
+extends RefCounted
 ## ShuffleDrawPatterns — 4 de 7 mitades de LookAndPlayResolver.gd, dividido por
 ## tamaño el 2026-09-06 ("módulos gordos"). Cubre combos de Barajar/Robar sobre
 ## recursos propios (sin apuntar al oponente): Caín (x2), vision heroica, el
@@ -7,6 +7,8 @@
 ## Tótem del Dragón Ancestral. Llamada solo desde LookAndPlayResolver.gd
 ## (facade) — ver ese archivo para la lista completa de las 7 mitades
 ## hermanas.
+
+const StackAnnulScript = preload("res://scripts/core/effects/StackAnnul.gd")
 
 var _main: Node
 
@@ -154,6 +156,17 @@ func try_execute_shuffle_cost_max_three_pattern(ability_text: String, controller
 	var main := _main.get_node_or_null("/root/Main")
 	if not main or not main._card_interaction:
 		return true
+	# 2026-10-14 (StackAnnul): si hay un Talismán oponente en la pila, se
+	# puede elegir Anularlo.
+	var talisman_obj: Dictionary = StackAnnulScript.find_target(controller_id, true, false, func(obj: Dictionary) -> bool:
+		return StackAnnulScript.type_of(obj) == Constants.CardType.TALISMAN)
+	if not talisman_obj.is_empty():
+		var annul_it: bool = await SelectionManager.await_two_choice(main, "Visión Heroica",
+			"Anular %s" % str(StackAnnulScript.data_of(talisman_obj).get("nombre", "el Talismán")),
+			"Barajar una carta de coste 3 o menos", controller_id)
+		if annul_it:
+			StackAnnulScript.apply(talisman_obj, null)
+			return true
 	var filter := func(c: Node) -> bool:
 		# 2026-09-12: current_zone en vez de get_parent() (ver §10.5)
 		if c.get("current_zone") not in [Constants.Zone.LINEA_DEFENSA, Constants.Zone.LINEA_ATAQUE, Constants.Zone.LINEA_APOYO]:

@@ -2278,7 +2278,10 @@ func _play_talisman(card: Node) -> void:
 	# mismo, y el check viejo lo mandaba de vuelta al mazo en lugar de al
 	# Cementerio). El pronombre reflejo "-la" es lo que de verdad distingue
 	# 'esta carta se baraja a sí misma' de cualquier otro uso del verbo.
-	var self_shuffle := "barájala" in habilidad or "barajala" in habilidad
+	# "barájalo" (2026-10-14, Visión de Enoc: "Cuando se resuelva, Barájalo
+	# en tu Castillo").
+	var self_shuffle := "barájala" in habilidad or "barajala" in habilidad \
+		or "barájalo en tu castillo" in habilidad or "barajalo en tu castillo" in habilidad
 
 	# card.owner_id, no 0 fijo (2026-08-29): esta función asumía siempre
 	# Talismanes propios (jugados de la mano del jugador humano, owner_id=0
