@@ -1,4 +1,5 @@
 extends Node
+const Deck170Script = preload("res://scripts/core/effects/triggers/Deck170Patterns.gd")
 ## BattleManager - Gestiona el combate y asignación de daño (DAR Sección 5.C4)
 ## Calcula el resultado de combate entre atacantes y bloqueadores
 
@@ -105,7 +106,7 @@ func calculate_combat_damage() -> Dictionary:
 				# y no hace daño.
 				print("[BattleManager] %s: su bloqueador ya no está en juego, no hace daño" % attacker_name)
 				continue
-			var blocker_strength = _get_strength(blocker)
+			var blocker_strength = _get_strength(blocker) + Deck170Script.blocker_strength_bonus(blocker)  # Diadema Celestial
 			var blocker_name = _get_card_name(blocker)
 
 			var pair_result = _resolve_combat_pair(attacker, blocker, attacker_strength, blocker_strength)
@@ -372,6 +373,13 @@ func _apply_castle_damage(defender_id: int, damage: int, to_exile: bool = false)
 		if mill_result.actual > 0:
 			result.cards_milled += 1
 			result.milled_cards.append_array(mill_result.milled_cards)
+		# "Si Botas esta carta por daño..." (Diadema Celestial, Visión de Enoc).
+		var stop_milling := false
+		for milled in mill_result.milled_cards:
+			if milled is Dictionary and await Deck170Script.on_milled_by_damage(defender_id, milled, destination):
+				stop_milling = true
+		if stop_milling:
+			break
 
 		# Pequeña pausa para efecto visual
 		await get_tree().create_timer(0.1).timeout

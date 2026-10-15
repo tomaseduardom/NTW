@@ -32,6 +32,56 @@ static func try_execute(card: Node, text: String, controller_id: int) -> bool:
 
 
 # -----------------------------------------------------------------------------
+# Diadema Celestial: "Tus Aliados bloqueadores ganan 1 de Fuerza y los Aliados
+# oponentes pierden Imbloqueable. Si Botas esta carta por daño, dejas de Botar
+# cartas y Destierras este Oro." / Visión de Enoc: "Cuando Botes esta carta
+# por daño, puedes Barajar hasta cinco cartas de los Cementerios."
+# -----------------------------------------------------------------------------
+static func count_in_gold_zones(pid: int, phrase: String) -> int:
+	var main := _main_node()
+	if not main:
+		return 0
+	var n := 0
+	for zone in [PlayerSideScript.gold_reserva(main, pid), PlayerSideScript.oro_pagado(main, pid)]:
+		if not zone:
+			continue
+		for c in zone.get_children():
+			if is_instance_valid(c) and c.get("card_ability") != null and c.get("is_converted") != true \
+					and not KeywordManager.is_silenced(c) and phrase in str(c.card_ability).to_lower():
+				n += 1
+	return n
+
+
+static func blocker_strength_bonus(blocker: Node) -> int:
+	var pid: int = blocker.controller_id if blocker.get("controller_id") != null else 0
+	return count_in_gold_zones(pid, "tus aliados bloqueadores ganan 1 de fuerza")
+
+
+static func opponent_removes_unblockable(attacker: Node) -> bool:
+	var pid: int = attacker.controller_id if attacker.get("controller_id") != null else 0
+	return count_in_gold_zones(1 - pid, "los aliados oponentes pierden imbloqueable") > 0
+
+
+static func on_milled_by_damage(pid: int, data: Dictionary, destination: int) -> bool:
+	"""Una carta Botada por daño. true = dejar de Botar (Diadema Celestial)."""
+	var text: String = str(data.get("habilidad", "")).to_lower()
+	if "si botas esta carta por daño, dejas de botar cartas y destierras este oro" in text:
+		var zone: Array = CardManager.get_cemetery(pid) if destination == Constants.Zone.CEMENTERIO else []
+		var idx: int = zone.find(data)
+		if idx >= 0:
+			CardManager.remove_from_cemetery(pid, idx)
+			CardManager.append_to_exile(pid, data)
+		var main := _main_node()
+		if main:
+			main._update_debug("Diadema Celestial: se deja de Botar y se Destierra")
+		return true
+	if "cuando botes esta carta por daño, puedes barajar hasta cinco cartas de los cementerios" in text \
+			and not PlayerSideScript.is_bot(pid):
+		await ActionModule.search_either_owner(pid, [Constants.Zone.CEMENTERIO], {}, 5, true, null, Constants.Zone.CASTILLO)
+	return false
+
+
+# -----------------------------------------------------------------------------
 # Signo Amarillo: "Puedes convertir este Oro en un Oro sin habilidad para
 # cancelar la habilidad de una carta fuera del juego o un Oro." (activada)
 # -----------------------------------------------------------------------------

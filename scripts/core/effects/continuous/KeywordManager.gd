@@ -405,6 +405,9 @@ func can_be_blocked(attacker: Node, blocker: Node = null) -> bool:
 	Aliado puede bloquear Imbloqueables, lo dice su propio texto."""
 	if not has_keyword(attacker, Keyword.IMBLOQUEABLE):
 		return true  # Atacante normal, puede ser bloqueado
+	# "los Aliados oponentes pierden Imbloqueable" (Diadema Celestial, 2026-10-14)
+	if load("res://scripts/core/effects/triggers/Deck170Patterns.gd").opponent_removes_unblockable(attacker):
+		return true
 
 	# Atacante es Imbloqueable — solo lo bloquea algo cuyo propio texto lo permita
 	if blocker != null and blocker.get("card_ability") != null:
