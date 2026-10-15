@@ -1066,7 +1066,7 @@ func _advance_card_to_attack_line(card: Node, ataque_container: HBoxContainer) -
 	await tween.finished
 	if is_instance_valid(card) and "equipped_weapons" in card and card.equipped_weapons is Array:
 		for w_idx in range(card.equipped_weapons.size()):
-			var w: Node = card.equipped_weapons[w_idx]
+			var w = card.equipped_weapons[w_idx]
 			if is_instance_valid(w):
 				w.top_level = false
 				w.position = Vector2(0.0, Constants.WEAPON_OFFSET_Y + w_idx * Constants.WEAPON_STACK_STEP_Y)
@@ -1102,7 +1102,7 @@ func _move_card_to_line(card: Node, target_container: HBoxContainer, zone: int) 
 	await tween.finished
 	if is_instance_valid(card) and "equipped_weapons" in card and card.equipped_weapons is Array:
 		for w_idx in range(card.equipped_weapons.size()):
-			var w: Node = card.equipped_weapons[w_idx]
+			var w = card.equipped_weapons[w_idx]
 			if is_instance_valid(w):
 				w.top_level = false
 				w.position = Vector2(0.0, Constants.WEAPON_OFFSET_Y + w_idx * Constants.WEAPON_STACK_STEP_Y)

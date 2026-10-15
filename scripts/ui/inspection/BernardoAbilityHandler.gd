@@ -113,6 +113,11 @@ func _bernardo_shuffle_into_deck(card: Node, owner_id: int) -> void:
 	var _main := _inspector._main
 	var data: Dictionary = card.card_data.duplicate()
 	data["esta_oculta"] = true
+	# 2026-10-14, bug real ("Trying to assign invalid previously freed
+	# instance" al Desterrar con Bernardo): Barajar como coste un Arma
+	# equipada la liberaba sin sacarla de equipped_weapons de su portador;
+	# el compact_all_fields() del Destierro leía esa referencia liberada.
+	CardManager._unequip_from_wielder(card)
 	var parent = card.get_parent()
 	if parent == _main.player_hand:
 		var idx = _main.player_hand.cards.find(card)

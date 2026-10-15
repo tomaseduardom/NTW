@@ -659,8 +659,14 @@ func compact_field_slots(container: Control, animate: bool = true, exclude_anim_
 
 		# Revalidar posición de armas equipadas en el Aliado
 		if "equipped_weapons" in card and card.equipped_weapons is Array:
+			# Sin tipar a propósito: un Arma que salió del juego por un camino
+			# que no la desequipó deja una referencia liberada, y asignarla a
+			# una variable 'Node' revienta. Se purga de paso (2026-10-14).
+			for w_idx in range(card.equipped_weapons.size() - 1, -1, -1):
+				if not is_instance_valid(card.equipped_weapons[w_idx]):
+					card.equipped_weapons.remove_at(w_idx)
 			for w_idx in range(card.equipped_weapons.size()):
-				var w: Node = card.equipped_weapons[w_idx]
+				var w = card.equipped_weapons[w_idx]
 				if is_instance_valid(w):
 					w.top_level = false
 					w.position = Vector2(0.0, Constants.WEAPON_OFFSET_Y + w_idx * Constants.WEAPON_STACK_STEP_Y)
