@@ -234,8 +234,8 @@ var remote_ability_disabled: bool = false:
 
 
 func _refresh_disabled_rotation() -> void:
-	"""Gira la carta 180° desde su centro si es del oponente en juego (Mano, Oro, Aliado, Arma, Tótem),
-	o si está silenciada o convertida. Además aplica un tinte gris "sin
+	"""Gira la carta 180° desde su centro si es del oponente en juego (Mano, Oro, Aliado, Arma, Tótem);
+	si está silenciada o convertida, 180° más respecto de esa posición. Además aplica un tinte gris "sin
 	habilidad" (2026-09-15, a pedido del usuario) — antes lo único que
 	indicaba "silenciada/convertida" era este mismo giro de 180°, pero para
 	una carta del RIVAL ese giro ya pasa SIEMPRE (así se muestra cualquier
@@ -271,7 +271,14 @@ func _refresh_disabled_rotation() -> void:
 	# excepción aquí que lo hacía ver con habilidad de nuevo apenas
 	# equipaba un Arma, aunque su PROPIA habilidad siguiera bloqueada de
 	# verdad (is_silenced() no mira Armas para nada, ver KeywordManager).
-	var should_rotate: bool = is_opp_in_play or is_disabled_ability
+	# 2026-10-14, a pedido del usuario: "sin habilidad" gira 180° respecto
+	# de la posición ORIGINAL de la carta, sea propia o rival. Antes era un
+	# OR: una carta rival en juego ya está a 180°, así que silenciarla o
+	# convertirla no la giraba (solo el tinte). Ahora es XOR — propia
+	# 0°→180°, rival 180°→0°. En la mano no aplica (el abanico rival no se
+	# toca).
+	var flip_disabled: bool = is_disabled_ability and current_zone != Constants.Zone.MANO
+	var should_rotate: bool = is_opp_in_play != flip_disabled
 
 	var target_rot: float = 180.0 if should_rotate else 0.0
 	var card_size: Vector2 = size if (size.x > 0 and size.y > 0) else (custom_minimum_size if (custom_minimum_size.x > 0 and custom_minimum_size.y > 0) else Vector2(150, 210))
