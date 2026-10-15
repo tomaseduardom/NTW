@@ -239,6 +239,17 @@ func try_execute_golpe_solar_pattern(full_text: String, card: Node, controller_i
 				for w in weapons:
 					if is_instance_valid(w) and ContinuousEffectManager.get_modified_cost(w) <= 2:
 						shuffle_candidates.append(w)
+	# Los Oros rivales también son cartas en juego (2026-10-14, a pedido del
+	# usuario: "falta la otra parte del efecto"; el texto no excluye Oros,
+	# a diferencia de Estaca "que no sea Oro").
+	var opp_reserva: Node = main.player_gold if opponent_id == 0 else main.opponent_gold
+	var opp_pagado: Node = main.player_oro_pagado if opponent_id == 0 else main.opponent_oro_pagado
+	for gold_zone in [opp_reserva, opp_pagado]:
+		if not gold_zone:
+			continue
+		for c in gold_zone.get_children():
+			if is_instance_valid(c) and c.get("card_data") != null 					and ContinuousEffectManager.get_modified_cost(c) <= 2:
+				shuffle_candidates.append(c)
 
 	var shuffle_chosen: Node = null
 	if not shuffle_candidates.is_empty() and main._card_interaction:
@@ -283,7 +294,21 @@ func try_execute_golpe_solar_pattern(full_text: String, card: Node, controller_i
 
 	if shuffle_chosen and is_instance_valid(shuffle_chosen):
 		var true_owner: int = shuffle_chosen.owner_id if shuffle_chosen.get("owner_id") != null else opponent_id
-		await ActionModule.return_to_deck(shuffle_chosen, true_owner, true, card)
+		var gold_parent: Node = shuffle_chosen.get_parent()
+		var from_reserva: bool = gold_parent != null and gold_parent == opp_reserva
+		var from_pagado: bool = gold_parent != null and gold_parent == opp_pagado
+		if await ActionModule.return_to_deck(shuffle_chosen, true_owner, true, card):
+			# Un Oro sale del juego: el contador de GameState y gold_cards
+			# no se enteran solos (mismo criterio que _discard_oro_from_reserva).
+			if from_reserva:
+				GameState.agregar_oro_reserva(opponent_id, -1)
+			elif from_pagado:
+				GameState.agregar_oro_pagado(opponent_id, -1)
+			if (from_reserva or from_pagado) and opponent_id == 0:
+				main.gold_cards.erase(shuffle_chosen)
+			if from_reserva or from_pagado:
+				main._gold_manager.update_gold_containers_spacing()
+				main._gold_manager._update_gold_display()
 		CardManager.shuffle_deck(true_owner)
 
 	return true
