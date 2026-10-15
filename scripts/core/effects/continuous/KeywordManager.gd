@@ -756,6 +756,8 @@ func is_silenced(card: Node) -> bool:
 		return true
 	if _is_silenced_by_low_strength_aura(card):
 		return true
+	if _is_turn_name_locked(card):
+		return true
 	var card_name: String = str(card.get("card_name")) if card.get("card_name") != null else ""
 	if card_name.is_empty():
 		return false
@@ -778,6 +780,29 @@ func lock_ability_by_name(card_name: String, source: Node) -> void:
 		card_name, _get_card_name(source)
 	])
 	_notify_abilities_changed()
+
+
+## "Tu oponente no puede utilizar más habilidades de cartas con ese nombre este
+## turno" (Culto a la Muerte, 2026-10-14): {nombre: {player, turn, active}}.
+var _turn_name_locks: Dictionary = {}
+
+
+func lock_name_this_turn(card_name: String, player_id: int) -> void:
+	_turn_name_locks[card_name.to_lower()] = {"player": player_id, "turn": GameManager.current_turn,
+		"active": GameManager.active_player_id}
+
+
+func _is_turn_name_locked(card: Node) -> bool:
+	if _turn_name_locks.is_empty():
+		return false
+	var entry: Dictionary = _turn_name_locks.get(str(card.get("card_name")).to_lower(), {})
+	if entry.is_empty():
+		return false
+	if entry.turn != GameManager.current_turn or entry.active != GameManager.active_player_id:
+		_turn_name_locks.erase(str(card.get("card_name")).to_lower())
+		return false
+	var ctrl: int = card.controller_id if card.get("controller_id") != null else 0
+	return ctrl == int(entry.player)
 
 
 func is_name_locked(card_name: String) -> bool:

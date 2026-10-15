@@ -4,6 +4,7 @@ extends RefCounted
 ## texto; try_execute() los prueba en orden. Se usa con preload (ver §54).
 
 const PlayerSideScript = preload("res://scripts/core/game/PlayerSide.gd")
+const StackAnnulScript = preload("res://scripts/core/effects/StackAnnul.gd")
 
 
 static func _main_node() -> Node:
@@ -19,6 +20,110 @@ static func try_execute(card: Node, text: String, controller_id: int) -> bool:
 	if await _try_mill_per_ally(card, lower, controller_id):
 		return true
 	return false
+
+
+# -----------------------------------------------------------------------------
+# Anular / Cancelar en la pila (StackAnnul). Se llama al principio de la
+# cadena de resolución, con el texto COMPLETO de la carta.
+# -----------------------------------------------------------------------------
+static func try_annul_on_stack(card: Node, text: String, controller_id: int) -> bool:
+	var lower := text.to_lower().replace("\n", " ")
+	var main := _main_node()
+	if not main:
+		return false
+	# Culto a la Muerte: "Elige un efecto: - Anula una carta de coste 2 o
+	# menos que no sea Aliado y Destierra esa carta. - Cancela la habilidad
+	# de una carta y tu oponente no puede utilizar más habilidades de cartas
+	# con ese nombre este turno."
+	if "anula una carta de coste 2 o menos que no sea aliado y destierra esa carta" in lower:
+		return await _culto_a_la_muerte(card, controller_id)
+	if "elige un efecto" in lower:
+		return false
+	# Primera oración que empieza con Anula/Cancela (saltando "Única.",
+	# "Cuando lo juegues, Destiérralo.", "No puede ser Anulado.").
+	var sentence := ""
+	for raw in lower.split("."):
+		var s: String = raw.strip_edges()
+		if s.begins_with("anula") or s.begins_with("cancela"):
+			sentence = s
+			break
+	if sentence.is_empty() or " o prevén" in sentence:
+		return false
+	var res: Dictionary = StackAnnulScript.try_from_text(card, sentence, controller_id)
+	if res.is_empty():
+		main._update_debug("%s: no hay nada en la pila que pueda Anular o Cancelar" % _name(card, "Anular"))
+		return true
+	var obj: Dictionary = res.obj
+	if not res.applied:
+		return true
+	var target_cost: int = StackAnnulScript.cost_of(obj)
+	var node = StackAnnulScript.card_of(obj)
+	# Red de Plata: "Si tenía coste 2 o menos, Destierra ese Aliado."
+	var m := RegEx.create_from_string("si tenía coste (\\w+) o menos, destierra ese aliado").search(lower)
+	if m and target_cost <= UniversalCardParser._parse_amount(m.get_string(1)) and node != null and is_instance_valid(node):
+		if StackAnnulScript.is_card_play(obj):
+			node.set_meta("annul_to_exile", true)
+		elif node.get("current_zone") in Constants.ZONES_IN_PLAY and node.get("card_type") == Constants.CardType.ALIADO:
+			await ActionModule.banish([node], card, true)
+	# Dragón Dorado: "Luego, Baraja tantas cartas de tu mano como coste tenga."
+	if "luego, baraja tantas cartas de tu mano como coste tenga" in lower and StackAnnulScript.is_card_play(obj):
+		await _shuffle_from_hand(main, controller_id, target_cost, _name(card, "Dragón Dorado"))
+	return true
+
+
+static func _culto_a_la_muerte(card: Node, controller_id: int) -> bool:
+	var main := _main_node()
+	var annul_obj: Dictionary = StackAnnulScript.find_target(controller_id, true, false, func(obj: Dictionary) -> bool:
+		return StackAnnulScript.type_of(obj) != Constants.CardType.ALIADO and StackAnnulScript.cost_of(obj) <= 2)
+	var cancel_obj: Dictionary = StackAnnulScript.find_target(controller_id, false, true)
+	var title := _name(card, "Culto a la Muerte")
+	var use_annul: bool = not annul_obj.is_empty()
+	if not annul_obj.is_empty() and not cancel_obj.is_empty():
+		use_annul = await SelectionManager.await_two_choice(main, title,
+			"Anular y Desterrar %s" % str(StackAnnulScript.data_of(annul_obj).get("nombre", "la carta")),
+			"Cancelar la habilidad de %s" % str(StackAnnulScript.data_of(cancel_obj).get("nombre", "la carta")),
+			controller_id)
+	elif annul_obj.is_empty() and cancel_obj.is_empty():
+		main._update_debug("%s: no hay nada en la pila que pueda Anular o Cancelar" % title)
+		return true
+	if use_annul:
+		if StackAnnulScript.apply(annul_obj, card):
+			var node = StackAnnulScript.card_of(annul_obj)
+			if node != null and is_instance_valid(node):
+				node.set_meta("annul_to_exile", true)
+	else:
+		if StackAnnulScript.apply(cancel_obj, card):
+			var src_name: String = str(StackAnnulScript.data_of(cancel_obj).get("nombre", ""))
+			if not src_name.is_empty():
+				KeywordManager.lock_name_this_turn(src_name, int(cancel_obj.get("context", {}).get("controller_id", 1 - controller_id)))
+	return true
+
+
+static func _shuffle_from_hand(main: Node, controller_id: int, amount: int, title: String) -> void:
+	"""Baraja 'amount' cartas de tu mano (todas o nada, como antes)."""
+	var hand: Array = PlayerSideScript.hand_cards(main, controller_id).filter(func(c): return is_instance_valid(c))
+	amount = mini(amount, hand.size())
+	if amount <= 0 or not main._card_interaction:
+		return
+	var picked: Array = []
+	if PlayerSideScript.is_bot(controller_id):
+		hand.shuffle()
+		picked = hand.slice(0, amount)
+	else:
+		picked = await main._card_interaction.await_multi_target(
+			"%s: Baraja %d carta(s) de tu mano" % [title, amount], hand, amount, Callable(), Callable(), false, null, controller_id)
+	for node in picked:
+		if not is_instance_valid(node):
+			continue
+		var data: Dictionary = node.card_data.duplicate()
+		data["esta_oculta"] = true
+		PlayerSideScript.remove_from_hand(main, controller_id, node)
+		if is_instance_valid(node):
+			CardManager._disconnect_card_interaction_signals(node)
+			node.queue_free()
+		CardManager.get_deck(controller_id).append(data)
+	CardManager.shuffle_deck(controller_id)
+	AnimationQueue.queue_shuffle(controller_id, "Barajar mazo (%s)" % title)
 
 
 # -----------------------------------------------------------------------------

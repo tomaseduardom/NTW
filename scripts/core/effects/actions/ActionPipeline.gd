@@ -613,6 +613,11 @@ func _process_stack() -> void:
 		if pre_check.should_remove:
 			await _handle_removed_object(top, pre_check.reason)
 			continue
+		# Anulado mientras esperaba (StackAnnul, 2026-10-14): no abre otra
+		# ventana.
+		if top.get("was_annulled", false):
+			await _handle_annulled_object(top)
+			continue
 
 		# PASO D: Ventana de Prioridad (Sección 6.D) — ambos jugadores deben
 		# pasar consecutivamente para resolver.
@@ -892,8 +897,13 @@ func _handle_annulled_object(stack_obj: Dictionary) -> void:
 	emit_signal("object_annulled", stack_obj, stack_obj.annuller)
 
 	# Mover al cementerio sin resolver (2026-08-28: 'move_to_zone' no existe
-	# en ActionModule.gd — ver mismo fix en _handle_cancelled_object/_handle_fizzled_object)
-	CardManager.add_to_cemetery(controller_id, stack_obj.card_data)
+	# en ActionModule.gd — ver mismo fix en _handle_cancelled_object/_handle_fizzled_object).
+	# 2026-10-14: si la ventana es de una carta real (source_card_node), quien
+	# la abrió la manda a su destino al recibir object_annulled
+	# (GoldManager._trigger_enter_play/_play_talisman) — agregarla aquí la
+	# duplicaba en el Cementerio.
+	if stack_obj.context.get("source_card_node") == null:
+		CardManager.add_to_cemetery(controller_id, stack_obj.card_data)
 
 	# (2026-08-28): 'trigger_event' no existe en TriggerSystem.gd — este
 	# disparo de on_card_annulled nunca ocurrió realmente. Documentado, no

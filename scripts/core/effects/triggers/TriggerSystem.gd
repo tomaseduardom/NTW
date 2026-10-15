@@ -907,6 +907,10 @@ func open_response_window(source_card: Node, description: String, controller_id:
 	var context: Dictionary = {
 		"controller_id": controller_id,
 		"source_card_node": source_card,
+		# Qué es esta ventana (2026-10-14, StackAnnul): "carta" = una carta
+		# jugada (Aliado/Arma/Tótem/Oro, se Anula), "Talismán" (se Anula),
+		# "disparada"/"activada" (habilidades, se Cancelan).
+		"window_kind": str(ctx.kind) if tracked else "carta",
 	}
 	var outcome: Dictionary = await ActionPipeline.add_triggered_ability_to_stack_and_await(ability_data, source_data, context)
 	var stopped: bool = outcome.get("annulled", false) or outcome.get("cancelled", false)

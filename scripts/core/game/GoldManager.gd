@@ -1133,6 +1133,8 @@ func play_card_for_free(card_data: Dictionary, owner_id: int = 0, exile_after: b
 		return false
 	var card = _main._create_card(card_data, false)
 	card.owner_id = owner_id
+	# "jugada sin pagar su coste este turno" (Sacrificio Solar, StackAnnul).
+	card.set_meta("played_free", true)
 	# "juégalo ... y Destiérralo" (2026-10-14, haka pei): al salir del juego
 	# va al Destierro, igual que una carta exhumada.
 	if exile_after:
@@ -2104,7 +2106,10 @@ func _trigger_enter_play(card: Node, zone: int = Constants.Zone.LINEA_DEFENSA) -
 	# de arriba).
 	var controller_id: int = card.get("owner_id") if card.get("owner_id") != null else 0
 	if await TriggerSystem.open_response_window(card, str(card.card_name) if card.get("card_name") else "", controller_id):
-		await EffectController.destroy_card(controller_id, card, false)
+		if card.get_meta("annul_to_exile", false):  # p.ej. Red de Plata, Culto a la Muerte
+			await EffectController.exile_card(card.owner_id if card.get("owner_id") != null else controller_id, card, true)
+		else:
+			await EffectController.destroy_card(controller_id, card, false)
 		_update_gold_display()
 		_main._update_buttons_for_phase(GameManager.current_phase)
 		return true
@@ -2251,7 +2256,10 @@ func _play_talisman(card: Node) -> void:
 		# aplican a un efecto que no ocurrió) — va directo al Cementerio,
 		# mismo destino por defecto que cualquier Anular.
 		var true_owner_annulled: int = card.owner_id if card.get("owner_id") != null else 0
-		await EffectController.destroy_card(true_owner_annulled, card, false)
+		if card.get_meta("annul_to_exile", false):
+			await EffectController.exile_card(true_owner_annulled, card, true)
+		else:
+			await EffectController.destroy_card(true_owner_annulled, card, false)
 		_update_gold_display()
 		_main._update_buttons_for_phase(GameManager.current_phase)
 		return

@@ -268,6 +268,13 @@ func _resolve_look_and_play_patterns(card: Node, full_ability_text: String, isol
 	# de patrones de siempre. Va primero a propósito: la cadena vieja busca
 	# sobre el texto COMPLETO y gana la primera coincidencia, que puede
 	# quedarse con una parte del efecto y saltarse el resto.
+	# Anular/Cancelar sobre la pila real (2026-10-14, StackAnnul): antes que
+	# todo, con el texto completo — si no, "Anula X" caía en patrones que
+	# destruían una carta en juego o en otra parte del texto (Sacrificio
+	# Solar barajaba el mazo).
+	if card and card.get("card_type") == Constants.CardType.TALISMAN \
+			and await Deck170Script.try_annul_on_stack(card, full_ability_text, controller_id):
+		return true
 	if await _main._effect_interpreter.try_execute(card, isolated_ability_text, controller_id):
 		return true
 	# "Mira N cartas del tope/fondo de un Castillo" (2026-10-13, §69): una sola
