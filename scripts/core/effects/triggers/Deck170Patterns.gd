@@ -69,10 +69,38 @@ static func try_annul_on_stack(card: Node, text: String, controller_id: int) -> 
 			node.set_meta("annul_to_exile", true)
 		elif node.get("current_zone") in Constants.ZONES_IN_PLAY and node.get("card_type") == Constants.CardType.ALIADO:
 			await ActionModule.banish([node], card, true)
+	# Envidia: "Juega esa carta bajo tu control sin pagar su coste."
+	if "juega esa carta bajo tu control sin pagar su coste" in lower and StackAnnulScript.is_card_play(obj):
+		await _play_annulled_under_control(main, obj, controller_id)
 	# Dragón Dorado: "Luego, Baraja tantas cartas de tu mano como coste tenga."
 	if "luego, baraja tantas cartas de tu mano como coste tenga" in lower and StackAnnulScript.is_card_play(obj):
 		await _shuffle_from_hand(main, controller_id, target_cost, _name(card, "Dragón Dorado"))
 	return true
+
+
+static func _play_annulled_under_control(main: Node, obj: Dictionary, controller_id: int) -> void:
+	"""Envidia (2026-10-14): espera a que la carta Anulada llegue al
+	Cementerio de su dueño y la juega bajo tu control sin pagar su coste
+	(sigue siendo de su dueño). Si es un Talismán, elige objetivos de nuevo
+	al resolverse."""
+	var owner_id: int = int(obj.get("context", {}).get("controller_id", 1 - controller_id))
+	var data: Dictionary = StackAnnulScript.data_of(obj)
+	var card_name: String = str(data.get("nombre", ""))
+	# La pila lo maneja cuando vuelve a tocarle: hasta ~6 s.
+	for i in range(60):
+		if not ActionPipeline.get_stack().has(obj):
+			break
+		await main.get_tree().create_timer(0.1).timeout
+	await main.get_tree().create_timer(0.3).timeout
+	var cemetery: Array = CardManager.get_cemetery(owner_id)
+	for i in range(cemetery.size() - 1, -1, -1):
+		if str(cemetery[i].get("nombre", "")) == card_name:
+			var found: Dictionary = cemetery[i]
+			CardManager.remove_from_cemetery(owner_id, i)
+			found["esta_oculta"] = false
+			await main._gold_manager.play_found_card(found, owner_id, controller_id, 99, true)
+			return
+	main._update_debug("Envidia: %s no llegó al Cementerio, no se puede jugar" % card_name)
 
 
 static func _vision_de_enoc(card: Node, lower: String, controller_id: int) -> bool:
