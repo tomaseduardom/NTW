@@ -18,15 +18,18 @@ func setup(main: Node) -> void:
 
 
 func try_execute_bubble_protection_and_schedule_final_phase_pattern(ability_text: String, controller_id: int, card: Node = null) -> bool:
-	"""'Hasta tu próximo turno, no puedes ser afectado por efectos
-	oponentes y para afectar tus cartas en juego tu oponente debe
+	"""Fisión Nuclear: 'Hasta tu próximo turno, no puedes ser afectado por
+	efectos oponentes y para afectar tus cartas en juego tu oponente debe
 	Desterrar una carta de su mano. En la próxima Fase Final oponente,
-	Baraja una carta de coste 2 o menos o Roba dos cartas' (Fisión
-	Nuclear, 2026-09-06, aclarado por el usuario: la primera cláusula es
-	una protección TOTAL — 'burbuja' — para el jugador y sus cartas en
-	juego; el peaje de Destierro para el oponente no se modela aparte
-	porque el bot nunca elegiría pagarlo. La cláusula de Fase Final es un
-	efecto suspendido de una sola vez, sin ventana de respuesta posible."""
+	Baraja una carta de coste 2 o menos o Roba dos cartas.'
+	Rehecha el 2026-10-14 (a pedido del usuario). El escudo vive en
+	EffectController (activate_fision_shield, ver su comentario): protege al
+	jugador y cobra el Destierro al rival por cada carta en juego que quiera
+	afectar, también las que entren después. Antes eran 99 cargas sobre las
+	cartas que ya estaban en juego, que frenaban hasta tus propios efectos.
+	Fase Final oponente, sin popup: brillan las cartas en juego de coste 2 o
+	menos (no Oros) y tu Castillo; tu Castillo = Robar dos cartas. Sin
+	cartas que barajar, roba directo."""
 	var lower := ability_text.to_lower()
 	if not ("hasta tu próximo turno, no puedes ser afectado por efectos oponentes" in lower):
 		return false
@@ -37,42 +40,54 @@ func try_execute_bubble_protection_and_schedule_final_phase_pattern(ability_text
 	if await TriggerSystem.open_response_window(card, "Fisión Nuclear", controller_id):
 		return true
 
-	# Burbuja: protección de "carga alta" (aproximación de una duración por
-	# tiempo, ver docstring) para cada carta en juego del controlador AHORA
-	# MISMO — no cubre cartas que entren en juego DESPUÉS de este momento.
-	var fields = [main.player_field, main.player_linea_ataque, main.player_linea_apoyo,
-		main.player_gold, main.player_oro_pagado] if controller_id == 0 \
-		else [main.opponent_field, main.opponent_linea_ataque, main.opponent_linea_apoyo,
-			main.opponent_gold, main.opponent_oro_pagado]
-	for field in fields:
+	EffectController.activate_fision_shield(controller_id)
+	main._update_debug("Fisión Nuclear: hasta tu próximo turno no puedes ser afectado por efectos oponentes")
+
+	# La carta se destierra al jugarla: el efecto suspendido no guarda la
+	# referencia al Nodo (quedaría liberado).
+	var opponent_id: int = 1 - controller_id
+	EffectController.schedule_next_final_phase_effect(opponent_id, func() -> void:
+		await _fision_final_phase(controller_id)
+	)
+	return true
+
+
+func _fision_final_phase(controller_id: int) -> void:
+	var main := _main.get_node_or_null("/root/Main")
+	if not main:
+		return
+	var candidates: Array = []
+	for field in [main.player_field, main.player_linea_ataque, main.player_linea_apoyo,
+			main.opponent_field, main.opponent_linea_ataque, main.opponent_linea_apoyo]:
 		if not field:
 			continue
 		for c in field.get_children():
-			EffectController.add_legacy_targeted_prevention(c, 99)
-
-	var opponent_id: int = 1 - controller_id
-	EffectController.schedule_next_final_phase_effect(opponent_id, func() -> void:
-		var choose_shuffle: bool = await SelectionManager.await_two_choice(
-			main, "Fisión Nuclear", "Barajar una carta de coste 2 o menos", "Robar dos cartas")
-		if await TriggerSystem.open_response_window(card, "Fisión Nuclear", controller_id):
-			return
-		if choose_shuffle:
-			if not main._card_interaction:
-				return
-			var filter := func(c: Node) -> bool:
-				# 2026-09-12: current_zone en vez de get_parent() (ver §10.5)
-				if c.get("current_zone") not in [Constants.Zone.LINEA_DEFENSA, Constants.Zone.LINEA_ATAQUE, Constants.Zone.LINEA_APOYO]:
-					return false
-				return ContinuousEffectManager.get_modified_cost(c) <= 2
-			var target: Node = await main._card_interaction.await_target("Elige una carta de coste 2 o menos para barajar", filter)
-			if target and is_instance_valid(target):
-				var target_owner: int = target.controller_id if target.get("controller_id") != null else controller_id
-				if await ActionModule.return_to_deck(target, target_owner, true):
-					CardManager.shuffle_deck(target_owner)
+			if not is_instance_valid(c):
+				continue
+			if c.get("card_type") != Constants.CardType.ORO and ContinuousEffectManager.get_modified_cost(c) <= 2:
+				candidates.append(c)
+			var weapons = c.get("equipped_weapons")
+			if weapons is Array:
+				for w in weapons:
+					if is_instance_valid(w) and ContinuousEffectManager.get_modified_cost(w) <= 2:
+						candidates.append(w)
+	var target: Node = null
+	if not candidates.is_empty() and main._card_interaction:
+		if PlayerSideScript.is_bot(controller_id):
+			target = candidates.filter(func(c): return c.get("controller_id") != controller_id).pick_random() \
+				if candidates.any(func(c): return c.get("controller_id") != controller_id) else null
 		else:
-			await ActionModule.draw(controller_id, 2, "etb_trigger", true)
-	)
-	return true
+			var pick: Dictionary = await main._card_interaction.await_target_or_castillo_pick(
+				"Fisión Nuclear: baraja una carta de coste 2 o menos, o tu Castillo para Robar dos cartas",
+				func(c: Node) -> bool: return c in candidates, "Fisión Nuclear: Robar dos cartas", false, true, controller_id)
+			if pick.get("type", "") == "card":
+				target = pick.get("card")
+	if target and is_instance_valid(target):
+		var target_owner: int = target.owner_id if target.get("owner_id") != null else controller_id
+		if await ActionModule.return_to_deck(target, target_owner, true):
+			CardManager.shuffle_deck(target_owner)
+	else:
+		await ActionModule.draw(controller_id, 2, "Fisión Nuclear", true)
 
 
 

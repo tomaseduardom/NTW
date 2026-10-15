@@ -1078,6 +1078,8 @@ func offer_prevention(affected_card: Node, effect_source: Node, effect_tag: Stri
 	if affected_card.get("current_zone") == null or not (affected_card.current_zone in Constants.ZONES_IN_PLAY):
 		return false
 	var owner_id: int = affected_card.controller_id if affected_card.get("controller_id") != null else 0
+	if await _fision_toll_prevents(affected_card, owner_id, effect_source):
+		return true
 	return await offer_prevention_for_player(owner_id, effect_source, effect_tag, affected_card)
 
 
@@ -1114,6 +1116,99 @@ func try_consume_legacy_targeted_prevention(card: Node) -> bool:
 	if main:
 		main._update_debug("%s: protegida (Almirante Akari)" % card_name)
 	return true
+
+
+## Fisión Nuclear (2026-10-14, a pedido del usuario: "carta importante que
+## tiene varios efectos complicados"). "Hasta tu próximo turno, no puedes ser
+## afectado por efectos oponentes y para afectar tus cartas en juego tu
+## oponente debe Desterrar una carta de su mano":
+##  - el JUGADOR protegido: los efectos del rival que lo afectan a él
+##    (Descartar de su mano, Botar de su Castillo) no ocurren — ver
+##    fision_blocks_player_effect(), consultado en ActionModule.discard/mill;
+##  - sus cartas EN JUEGO (también las que entren después): cada vez que un
+##    efecto del rival fuera a afectar una, el rival elige si Destierra una
+##    carta de su mano para que la afecte; si no puede o no quiere, no la
+##    afecta — en offer_prevention() (destruir, desterrar, barajar/devolver,
+##    debilitar, silenciar, anular).
+## Quién controla el efecto: EffectContext (el efecto en curso) o, si no hay,
+## el controlador de la carta fuente. Dura hasta que empieza el siguiente
+## turno del jugador protegido.
+const PlayerSideScript = preload("res://scripts/core/game/PlayerSide.gd")
+const EffectContextScript = preload("res://scripts/core/effects/EffectContext.gd")
+var _fision_shields: Dictionary = {}  # player_id -> true
+
+
+func activate_fision_shield(player_id: int) -> void:
+	_fision_shields[player_id] = true
+	var clear_it: Callable
+	clear_it = func(started_player_id: int, _turn: int) -> void:
+		if started_player_id != player_id:
+			return
+		_fision_shields.erase(player_id)
+		if GameManager.turn_started.is_connected(clear_it):
+			GameManager.turn_started.disconnect(clear_it)
+	GameManager.turn_started.connect(clear_it)
+
+
+func is_fision_shielded(player_id: int) -> bool:
+	return _fision_shields.get(player_id, false)
+
+
+func _current_effect_controller(effect_source) -> int:
+	var ctx: Dictionary = EffectContextScript.current()
+	if not ctx.is_empty():
+		return int(ctx.controller_id)
+	if effect_source != null and is_instance_valid(effect_source) and effect_source.get("controller_id") != null:
+		return int(effect_source.controller_id)
+	return -1
+
+
+func fision_blocks_player_effect(player_id: int) -> bool:
+	"""true si 'player_id' está protegido por Fisión Nuclear y el efecto en
+	curso es de su rival (Descartar/Botar no ocurren)."""
+	if not is_fision_shielded(player_id) or _current_effect_controller(null) != 1 - player_id:
+		return false
+	var main := get_node_or_null("/root/Main")
+	if main:
+		main._update_debug("Fisión Nuclear: el jugador %d no puede ser afectado por efectos oponentes" % (player_id + 1))
+	return true
+
+
+func _fision_toll_prevents(affected_card, owner_id: int, effect_source) -> bool:
+	"""Peaje de Fisión Nuclear: true = la carta NO es afectada."""
+	if not is_fision_shielded(owner_id):
+		return false
+	var payer: int = _current_effect_controller(effect_source)
+	if payer != 1 - owner_id:
+		return false
+	var main := get_node_or_null("/root/Main")
+	if not main:
+		return true
+	var card_name: String = str(affected_card.get("card_name")) if affected_card.get("card_name") != null else "esa carta"
+	var hand: Array = PlayerSideScript.hand_cards(main, payer).filter(func(c): return is_instance_valid(c))
+	var paid: Node = null
+	if not hand.is_empty():
+		if PlayerSideScript.is_bot(payer):
+			# El bot paga si le sobran cartas en la mano.
+			if hand.size() >= 3:
+				paid = hand.pick_random()
+		elif main._card_interaction:
+			paid = await main._card_interaction.await_target(
+				"Fisión Nuclear: Destierra una carta de tu mano para afectar a %s (ESC: no afectarla)" % card_name,
+				func(c: Node) -> bool: return c in hand, true, payer)
+	if paid == null or not is_instance_valid(paid):
+		main._update_debug("Fisión Nuclear: %s no es afectada" % card_name)
+		return true
+	var data: Dictionary = paid.card_data.duplicate()
+	PlayerSideScript.remove_from_hand(main, payer, paid)
+	if is_instance_valid(paid):
+		CardManager._disconnect_card_interaction_signals(paid)
+		paid.queue_free()
+	data["esta_oculta"] = false
+	CardManager.append_to_exile(payer, data)
+	main._update_debug("Fisión Nuclear: el jugador %d Destierra %s de su mano para afectar a %s" % [
+		payer + 1, str(data.get("nombre", "una carta")), card_name])
+	return false
 
 
 ## Efectos suspendidos que resuelven en la PRÓXIMA Fase Final de un jugador

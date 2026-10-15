@@ -191,6 +191,8 @@ func _put_found_card_into_play(main: Node, player_id: int, card_data: Dictionary
 func mill(player_id: int, amount: int, to_exile: bool = false, source: String = "", skip_validation: bool = false) -> Dictionary:
 	if await EffectContextScript.ensure_window():  # ventana única por efecto (§59)
 		return {"success": false, "cancelled": true}
+	if EffectController.fision_blocks_player_effect(player_id):  # Fisión Nuclear
+		return {"success": false, "prevented": true}
 	return await _action_mill.mill(player_id, amount, to_exile, source, skip_validation)
 
 
@@ -224,6 +226,8 @@ func return_to_deck(card: Node, player_id: int, to_top: bool = true, source: Nod
 func discard(player_id: int, cards: Array, source: String = "", skip_validation: bool = false) -> Dictionary:
 	if await EffectContextScript.ensure_window():  # ventana única por efecto (§59)
 		return {"success": false, "cancelled": true}
+	if EffectController.fision_blocks_player_effect(player_id):  # Fisión Nuclear
+		return {"success": false, "prevented": true}
 	return await _action_return_discard.discard(player_id, cards, source, skip_validation)
 
 
