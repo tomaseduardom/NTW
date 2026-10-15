@@ -226,7 +226,8 @@ func _arrange_cards(animated: bool = true) -> void:
 
 		card.set_meta("hand_base_z_index", i)
 		card.set("target_rotation", target_rot)
-		card.set("original_position", target_pos)
+		card.set("original_position", to_global(target_pos))
+		card.set_meta("hand_target_pos", target_pos)
 
 		var is_card_hovered: bool = card.get("is_hovered") == true
 		if is_card_hovered:

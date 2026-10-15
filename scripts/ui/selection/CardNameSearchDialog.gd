@@ -145,7 +145,8 @@ func open_and_wait(prompt: String = "Nombra una carta", chooser_id: int = 0) -> 
 			card_node.load_from_data(c)
 			card_node.scale = Vector2(RESULT_CARD_SCALE, RESULT_CARD_SCALE)
 			card_node.base_scale = Vector2(RESULT_CARD_SCALE, RESULT_CARD_SCALE)
-			card_node.card_scale_hover = 1.08
+			card_node.card_scale_hover = 1.0
+			card_node.hover_enabled = false
 			card_node.can_interact = true
 			card_node.set_zone(Constants.Zone.CEMENTERIO)
 			card_node.card_clicked.connect(on_result_clicked)

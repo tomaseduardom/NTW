@@ -28,7 +28,7 @@ func process(_delta: float) -> void:
 	mouse — dejando una carta con la que 'no se puede targetear ni hacer
 	zoom' aunque el mouse esté encima. Se corrige el estado cada frame
 	comparando contra la posición real del mouse."""
-	if _card.is_dragging or not _card.can_interact:
+	if _card.is_dragging or not _card.can_interact or not _card.get("hover_enabled", true):
 		return
 	# get_global_rect() NO tiene en cuenta la escala del nodo (limitación
 	# conocida de Godot) — con pivot_offset != (0,0), escalar en hover corre
@@ -58,7 +58,7 @@ func process(_delta: float) -> void:
 
 
 func _on_mouse_entered() -> void:
-	if not _card.can_interact or _card.is_dragging:
+	if not _card.can_interact or _card.is_dragging or not _card.get("hover_enabled", true):
 		return
 
 	_card.is_hovered = true
@@ -88,8 +88,8 @@ func _on_mouse_exited() -> void:
 	if _card.is_dragging:
 		return
 
-	# Si no puede interactuar, no hacer nada (evita resetear escala en inspección)
-	if not _card.can_interact:
+	# Si no puede interactuar o tiene hover desactivado, no hacer nada
+	if not _card.can_interact or not _card.get("hover_enabled", true):
 		return
 
 	_card.is_hovered = false
@@ -329,13 +329,38 @@ func return_to_hand() -> void:
 	else:
 		# Carta de la mano: animar de vuelta a la posición guardada
 		_card.current_state = Card.CardState.IN_HAND
-		_card.top_level = false
+		var parent = _card.get_parent()
+		var target_global_pos: Vector2 = _card.original_position
+		var target_rot: float = _card.target_rotation
+		var local_target_pos: Vector2 = Vector2.ZERO
+		var has_local_target: bool = false
+
+		if parent and parent.has_method("get_card_target_position"):
+			local_target_pos = parent.get_card_target_position(_card)
+			target_global_pos = parent.to_global(local_target_pos)
+			has_local_target = true
+			if parent.has_method("get_card_target_rotation"):
+				target_rot = parent.get_card_target_rotation(_card)
+		elif parent:
+			local_target_pos = parent.to_local(target_global_pos)
+			has_local_target = true
+
+		# Si no estuvo en drag (top_level == false) y ya está en reposo en la mano, no mover
+		if not _card.top_level and has_local_target and _card.position.distance_to(local_target_pos) < 3.0:
+			_card._refresh_disabled_rotation()
+			_card.z_index = _card.original_z_index
+			return
+
 		var tween = _card.create_tween()
 		tween.set_parallel(true)
-		tween.tween_property(_card, "global_position", _card.original_position, 0.25).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_BACK)
-		tween.tween_property(_card, "rotation_degrees", _card.target_rotation, 0.25).set_ease(Tween.EASE_OUT)
+		tween.tween_property(_card, "global_position", target_global_pos, 0.25).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_BACK)
+		tween.tween_property(_card, "rotation_degrees", target_rot, 0.25).set_ease(Tween.EASE_OUT)
 		tween.tween_property(_card, "scale", _card.base_scale, 0.25).set_ease(Tween.EASE_OUT)
 		await tween.finished
+		_card.top_level = false
+		if has_local_target:
+			_card.position = local_target_pos
+		_card.rotation_degrees = target_rot
 		_card._refresh_disabled_rotation()
 
 	_card.z_index = _card.original_z_index

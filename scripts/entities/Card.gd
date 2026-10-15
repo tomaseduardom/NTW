@@ -25,6 +25,7 @@ signal trigger_activated(card: Card, trigger_type: String, event_data: Dictionar
 @export var card_scale_normal: float = 1.0
 @export var card_scale_hover: float = 1.0
 @export var card_scale_selected: float = 1.05
+@export var hover_enabled: bool = true
 @export var hover_lift: float = 0.0
 @export var animation_speed: float = 0.15
 @export var flip_duration: float = 0.25

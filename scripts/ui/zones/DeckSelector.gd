@@ -1023,40 +1023,53 @@ func _build_section_divider(label_text: String) -> Control:
 	holder.custom_minimum_size = Vector2(46, CARD_SIZE.y)
 	holder.size_flags_vertical = Control.SIZE_SHRINK_END
 	holder.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	holder.clip_contents = true
 
 	var line := ColorRect.new()
-	line.color = Color(GOLD.r, GOLD.g, GOLD.b, 0.45)
+	line.color = Color(GOLD.r, GOLD.g, GOLD.b, 0.35)
 	line.set_anchor(SIDE_LEFT, 0.5)
 	line.set_anchor(SIDE_RIGHT, 0.5)
 	line.set_anchor(SIDE_TOP, 0.0)
 	line.set_anchor(SIDE_BOTTOM, 1.0)
 	line.offset_left = -1
 	line.offset_right = 1
-	line.offset_top = 6
-	line.offset_bottom = -6
+	line.offset_top = 10
+	line.offset_bottom = -10
 	line.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	holder.add_child(line)
 
+	var bg_pill := ColorRect.new()
+	bg_pill.color = Color(0.08, 0.06, 0.04, 0.85)
+	bg_pill.set_anchor(SIDE_LEFT, 0.5)
+	bg_pill.set_anchor(SIDE_RIGHT, 0.5)
+	bg_pill.set_anchor(SIDE_TOP, 0.5)
+	bg_pill.set_anchor(SIDE_BOTTOM, 0.5)
+	bg_pill.offset_left = -15
+	bg_pill.offset_right = 15
+	bg_pill.offset_top = -90
+	bg_pill.offset_bottom = 90
+	bg_pill.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	holder.add_child(bg_pill)
+
+	var lbl_w := 170.0
+	var lbl_h := 28.0
 	var lbl := Label.new()
 	lbl.text = label_text
 	lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	lbl.set_anchor(SIDE_LEFT, 0.5)
-	lbl.set_anchor(SIDE_RIGHT, 0.5)
-	lbl.set_anchor(SIDE_TOP, 0.5)
-	lbl.set_anchor(SIDE_BOTTOM, 0.5)
-	lbl.offset_left = -CARD_SIZE.y / 2.0
-	lbl.offset_right = CARD_SIZE.y / 2.0
-	lbl.offset_top = -18
-	lbl.offset_bottom = 18
-	lbl.rotation_degrees = -90
+	lbl.custom_minimum_size = Vector2(lbl_w, lbl_h)
+	lbl.size = Vector2(lbl_w, lbl_h)
+	lbl.pivot_offset = Vector2(lbl_w / 2.0, lbl_h / 2.0)
+	lbl.position = Vector2((46.0 - lbl_w) / 2.0, (CARD_SIZE.y - lbl_h) / 2.0)
+	lbl.rotation_degrees = -90.0
 	lbl.add_theme_font_override("font", FONT_TITLE)
-	lbl.add_theme_font_size_override("font_size", 12)
+	lbl.add_theme_font_size_override("font_size", 10)
 	lbl.add_theme_color_override("font_color", GOLD)
-	lbl.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.9))
+	lbl.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.95))
 	lbl.add_theme_constant_override("shadow_offset_x", 1)
 	lbl.add_theme_constant_override("shadow_offset_y", 1)
+	lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	holder.add_child(lbl)
 
 	return holder
