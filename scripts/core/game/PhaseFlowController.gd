@@ -249,6 +249,15 @@ func _on_priority_changed_glow(player_id: int) -> void:
 			# exclusión total de arriba.
 			if _main._card_inspector:
 				_main._card_inspector.refresh_activatable_glows()
+			# 2026-10-17, a pedido del usuario ("no alcancé a responder" con
+			# Ciempiés/Dragón Dorado al Yomiel del bot): si la ventana es sobre
+			# algo del rival y tienes un Talismán de respuesta que puedes
+			# pagar, se espera como online (5s con cuenta regresiva); si no,
+			# el pase rápido de siempre.
+			if PriorityManager.needs_real_decision(0) and _human_has_instant_response_talisman_in_hand():
+				_main._game_hud.start_paso_countdown(int(PriorityManager.ONLINE_RESPONSE_TIMEOUT))
+				_human_pass_after(PriorityManager.ONLINE_RESPONSE_TIMEOUT, PriorityManager._window_generation)
+				return
 			# 2026-09-15: se captura la generación de ESTA ventana (ver
 			# PriorityManager._window_generation) para que el timer no actúe
 			# sobre una ventana NUEVA si esta ya cerró sola antes de que pase el delay.
