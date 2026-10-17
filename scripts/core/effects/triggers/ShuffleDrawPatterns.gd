@@ -50,7 +50,7 @@ func try_execute_shuffle_or_draw_choice_pattern(ability_text: String, controller
 		# 2026-09-12: current_zone en vez de get_parent() (ver §10.5)
 		return c.get("current_zone") in [Constants.Zone.LINEA_DEFENSA, Constants.Zone.LINEA_ATAQUE, Constants.Zone.LINEA_APOYO]
 	var target: Node = await main._card_interaction.await_target(
-		"Baraja hasta una carta en juego (coste 2 o menos) — ESC para no barajar ninguna", filter, true, controller_id)
+		"Baraja hasta una carta en juego (coste 2 o menos) — N para no barajar ninguna", filter, true, controller_id)
 	# Sin ventana genérica aquí: return_to_deck() ya consulta Prevención adentro.
 	if target and is_instance_valid(target):
 		var owner: int = target.owner_id if target.get("owner_id") != null else controller_id
@@ -286,7 +286,7 @@ func try_execute_shuffle_one_in_play_and_four_cemetery_pattern(ability_text: Str
 	if not in_play_candidates.is_empty() and main._card_interaction:
 		var in_play_filter := func(c: Node) -> bool: return c in in_play_candidates
 		var picked1_node: Node = await main._card_interaction.await_target(
-			"Elige hasta una carta de coste 2 o menos para Barajar (ESC para omitir)", in_play_filter, true, controller_id)
+			"Elige hasta una carta de coste 2 o menos para Barajar (N para omitir)", in_play_filter, true, controller_id)
 		if picked1_node and is_instance_valid(picked1_node):
 			var owner_id: int = picked1_node.owner_id if picked1_node.get("owner_id") != null else 0
 			var data: Dictionary = picked1_node.card_data.duplicate()

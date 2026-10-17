@@ -40,6 +40,20 @@ var _disabled_ids: Dictionary = {}
 ## prioridad que se está respondiendo (-1 si no hay ninguna).
 var _paso_action: Callable = Callable()
 var _priority_window_id: int = -1
+## Tecla N (2026-10-17): qué hace "no hacerlo / terminar" en el prompt de
+## objetivo activo (solo selecciones opcionales). Vacío si no hay ninguno.
+var _skip_action: Callable = Callable()
+
+
+func skip_optional() -> bool:
+	"""Tecla N en el Remoto: no hacer la acción opcional o terminar la
+	selección múltiple con lo ya marcado. false si no hay nada que saltar."""
+	if not _skip_action.is_valid():
+		return false
+	var action: Callable = _skip_action
+	_skip_action = Callable()
+	action.call()
+	return true
 ## Último prompt de Vigilia todavía sin responder: si una ventana de
 ## prioridad lo tapa (p.ej. el Anfitrión responde a tu carta con un
 ## Talismán), se vuelve a mostrar al cerrarse esa ventana.
@@ -794,8 +808,9 @@ func _show_await_target_prompt(data: Dictionary) -> void:
 	if not candidates.is_empty() and _start_board_pick(_ids_of(candidates), on_target):
 		_main._update_debug("%s: clic en una carta brillante" % title)
 		if cancellable:
-			_set_remote_paso("Cancelar [P]", false, func():
+			_set_remote_paso("No hacerlo [N]", false, func():
 				_send_intent_and_close({"op": "intent", "kind": "await_target_choice", "cancelled": true}))
+			_skip_action = _paso_action
 		return
 	var vbox := _build_overlay(title)
 
@@ -830,6 +845,8 @@ func _show_await_multi_target_prompt(data: Dictionary) -> void:
 			for id in _pick_multi:
 				chosen_ids.append(id)
 			_send_intent_and_close({"op": "intent", "kind": "await_multi_target_choice", "card_ids": chosen_ids}))
+		if bool(data.get("cancellable", true)):
+			_skip_action = _paso_action
 		return
 	var vbox := _build_overlay(title)
 
@@ -883,8 +900,9 @@ func _show_await_target_or_castillo_prompt(data: Dictionary) -> void:
 		_start_remote_castillo_pick(castillo_title, castillo_own_only)
 		_main._update_debug("%s: clic en una carta brillante o en un Castillo" % title)
 		if cancellable:
-			_set_remote_paso("Cancelar [P]", false, func():
+			_set_remote_paso("No hacerlo [N]", false, func():
 				_send_intent_and_close({"op": "intent", "kind": "await_target_or_castillo_choice", "type": "none"}))
+			_skip_action = _paso_action
 		return
 	var vbox := _build_overlay(title)
 
@@ -952,12 +970,14 @@ func on_paso_pressed() -> void:
 
 func _set_remote_paso(text: String, glow: bool, action: Callable) -> void:
 	_paso_action = action
+	_skip_action = Callable()  # quien la necesite la vuelve a poner después
 	if _main._game_hud:
 		_main._game_hud.show_paso_button_with_text(text, glow)
 
 
 func _clear_remote_paso() -> void:
 	_paso_action = Callable()
+	_skip_action = Callable()
 	_priority_window_id = -1
 	if _main._game_hud:
 		_main._game_hud.stop_paso_countdown()

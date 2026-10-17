@@ -65,6 +65,17 @@ func _input(event: InputEvent) -> void:
 				if _main._game_hud and _main._game_hud.is_paso_button_ready():
 					_main._phase_flow._on_paso_pressed()
 					get_viewport().set_input_as_handled()
+			KEY_N:
+				# 2026-10-17, a pedido del usuario: N = no hacer la acción
+				# opcional ("hasta una", "puedes") o terminar una selección
+				# múltiple con lo ya elegido. El resto del efecto sigue (p.ej.
+				# "Destierra hasta una carta y Roba una": Robas igual). Las
+				# selecciones obligatorias no se pueden saltar.
+				if _main._card_interaction and _main._card_interaction.is_selecting_target:
+					_main._card_interaction.cancel_target_selection()
+					get_viewport().set_input_as_handled()
+				elif _main._remote_mirror and _main._remote_mirror.skip_optional():
+					get_viewport().set_input_as_handled()
 			KEY_F12:
 				var dp = _main.get_node_or_null("UI/DebugPanel")
 				if dp: dp.visible = !dp.visible

@@ -1214,7 +1214,7 @@ func _fision_toll_prevents(affected_card, owner_id: int, effect_source) -> bool:
 				paid = hand.pick_random()
 		elif main._card_interaction:
 			paid = await main._card_interaction.await_target(
-				"Fisión Nuclear: Destierra una carta de tu mano para afectar a %s (ESC: no afectarla)" % card_name,
+				"Fisión Nuclear: Destierra una carta de tu mano para afectar a %s (N: no afectarla)" % card_name,
 				func(c: Node) -> bool: return c in hand, true, payer)
 	if paid == null or not is_instance_valid(paid):
 		main._update_debug("Fisión Nuclear: %s no es afectada" % card_name)
@@ -1360,7 +1360,7 @@ func _alicanto_convert_hand_card(main: Node, pid: int) -> void:
 	if hand.is_empty() or PlayerSideScript.is_bot(pid) or not main._card_interaction:
 		return
 	var picked: Node = await main._card_interaction.await_target(
-		"Alicanto: puedes convertir una carta de tu mano en un Oro sin habilidad en tu Oro Pagado (ESC: no)",
+		"Alicanto: puedes convertir una carta de tu mano en un Oro sin habilidad en tu Oro Pagado (N: no)",
 		func(c: Node) -> bool: return c in hand, true, pid)
 	if not picked or not is_instance_valid(picked):
 		return

@@ -546,7 +546,7 @@ func _on_paso_pressed() -> void:
 	# jugador tiene que resolver el objetivo (o cancelar con ESC, si la
 	# habilidad lo permite) antes de poder avanzar de fase.
 	if _main._card_interaction and _main._card_interaction.is_selecting_target:
-		_main._update_debug("Resuelve la selección de objetivo pendiente antes de pasar (ESC para cancelar si es opcional)")
+		_main._update_debug("Resuelve la selección de objetivo pendiente antes de pasar (N para no hacerlo si es opcional)")
 		return
 
 	var phase = GameManager.current_phase

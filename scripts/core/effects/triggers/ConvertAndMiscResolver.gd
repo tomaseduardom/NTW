@@ -152,7 +152,7 @@ func try_execute_mill_convert_to_ally_pattern(ability_text: String, card: Node, 
 		picked.append(first_target)
 		while picked.size() < max_amount:
 			var target: Node = await main._card_interaction.await_target(
-				"Elige otra carta en juego (no Oro) para Convertir — ESC para terminar", filter)
+				"Elige otra carta en juego (no Oro) para Convertir — N para terminar", filter)
 			if not target or not is_instance_valid(target):
 				break
 			picked.append(target)
@@ -256,7 +256,7 @@ func try_execute_convert_ally_to_gold_pattern(ability_text: String, card: Node, 
 		return true
 	var self_filter := func(c: Node) -> bool: return c == card
 	var accepted: Node = await main._card_interaction.await_target(
-		"%s: clickéala para convertirla en un Oro y moverla a tu Oro Pagado (ESC para declinar)" % card.card_name, self_filter)
+		"%s: clickéala para convertirla en un Oro y moverla a tu Oro Pagado (N para declinar)" % card.card_name, self_filter)
 	if not accepted or not is_instance_valid(accepted):
 		return true
 	if await TriggerSystem.open_response_window(card, str(card.card_name), controller_id):

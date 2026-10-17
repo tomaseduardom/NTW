@@ -156,7 +156,7 @@ func try_execute_flechar_xoon_leave_pattern(ability_text: String, card: Node, co
 			return false
 		return ContinuousEffectManager.get_modified_cost(c) <= 2
 	var target: Node = await main._card_interaction.await_target(
-		"flechar xoon: puedes Desterrar una carta de coste 2 o menos (ESC para no hacerlo)", filter, true, controller_id)
+		"flechar xoon: puedes Desterrar una carta de coste 2 o menos (N para no hacerlo)", filter, true, controller_id)
 	if not target or not is_instance_valid(target):
 		return true
 	await ActionModule.banish([target], card, true, true)
@@ -364,7 +364,7 @@ func try_execute_armadura_celestial_leave_pattern(ability_text: String, card: No
 	var hand_cards: Array = hand_container.cards.duplicate()
 	var discard_filter := func(c: Node) -> bool: return c in hand_cards
 	var to_discard: Node = await main._card_interaction.await_target(
-		"%s: puedes Descartar una carta para recuperarla del Cementerio (ESC para no hacerlo)" % card_name, discard_filter, true, controller_id)
+		"%s: puedes Descartar una carta para recuperarla del Cementerio (N para no hacerlo)" % card_name, discard_filter, true, controller_id)
 	if not to_discard or not is_instance_valid(to_discard):
 		return true
 	var discard_result: Dictionary = await ActionModule.discard(controller_id, [to_discard], card_name, true)

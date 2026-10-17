@@ -339,7 +339,7 @@ func _resolve_discard_cost_reduction(card: Node, player_id: int = 0) -> bool:
 	if candidates.is_empty():
 		return false
 	var chosen: Node = await _main._card_interaction.await_target(
-		"Puedes descartar una carta para reducir el coste en 1 Oro (ESC para no hacerlo)",
+		"Puedes descartar una carta para reducir el coste en 1 Oro (N para no hacerlo)",
 		func(c: Node) -> bool: return c in candidates,
 		true, player_id)
 	if not chosen or not is_instance_valid(chosen):

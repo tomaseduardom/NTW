@@ -179,6 +179,14 @@ static func on_card_left_play(_pid: int, card) -> void:  # sin tipo: puede llega
 		UniversalCardParser.turn_registry.register(key, 0, GameManager.current_turn)
 		c.card_ability = str(c.card_ability) + "\n" + gained_text
 		if c.get("card_data") is Dictionary:
+			# 2026-10-17, a pedido del usuario: al inspeccionarla, la carta
+			# muestra su texto original y las habilidades ganadas se apilan a
+			# la derecha (CardInspectionLayer._build_gained_abilities_panel()).
+			if not c.card_data.has("_base_habilidad"):
+				c.card_data["_base_habilidad"] = str(c.card_data.get("habilidad", ""))
+			var gained: Array = c.card_data.get("_gained_abilities", [])
+			gained.append({"from": _name(card, "un Aliado"), "text": gained_text})
+			c.card_data["_gained_abilities"] = gained
 			c.card_data["habilidad"] = c.card_ability
 		c.parse_triggers_from_ability()
 		KeywordManager.scan_and_apply_keywords(c)
@@ -342,7 +350,7 @@ static func _try_matriz_v_enter(card: Node, lower: String, controller_id: int) -
 			picked = own.slice(0, 2)
 		else:
 			picked = await main._card_interaction.await_multi_target(
-				"%s: hasta dos cartas que controles ganan Indesterrable (ESC para terminar)" % title,
+				"%s: hasta dos cartas que controles ganan Indesterrable (N para terminar)" % title,
 				own, 2, Callable(), Callable(), true, null, controller_id)
 	if await TriggerSystem.open_response_window(card, title, controller_id):
 		return true
@@ -374,7 +382,7 @@ static func matriz_v_blocks_trigger(card: Node, controller_id: int) -> bool:
 	if not has_matriz:
 		return false
 	var paid: bool = await banish_from_hand_toll(main, controller_id,
-		"Matriz V: Destierra una carta de tu mano para disparar la habilidad de %s (ESC: no dispararla)" % _name(card, "esa carta"))
+		"Matriz V: Destierra una carta de tu mano para disparar la habilidad de %s (N: no dispararla)" % _name(card, "esa carta"))
 	if not paid:
 		main._update_debug("Matriz V: la habilidad de %s no se dispara" % _name(card, "esa carta"))
 	return not paid
@@ -667,7 +675,7 @@ static func _try_ursitoare(card: Node, lower: String, controller_id: int) -> boo
 	var theirs: Node = null
 	if not own_allies.is_empty() and main._card_interaction and not PlayerSideScript.is_bot(controller_id):
 		mine = await main._card_interaction.await_target(
-			"%s: elige un Aliado que controles para Barajar (ESC: no barajar)" % title,
+			"%s: elige un Aliado que controles para Barajar (N: no barajar)" % title,
 			func(c: Node) -> bool: return c in own_allies, true, controller_id)
 		if mine and is_instance_valid(mine):
 			var max_cost: int = int(ContinuousEffectManager.get_modified_cost(mine))

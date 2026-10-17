@@ -337,7 +337,7 @@ func await_multi_target(prompt_prefix: String, candidates: Array, max_count: int
 				return false
 			return true
 		var count_label: String = " (%d elegidas)" % chosen.size() if chosen.size() > 0 else ""
-		var prompt: String = "%s%s%s" % [prompt_prefix, count_label, " — ESC para terminar" if cancellable else ""]
+		var prompt: String = "%s%s%s" % [prompt_prefix, count_label, " — N para terminar" if cancellable else ""]
 
 		var card_state := {"done": false, "chosen": null}
 		var on_selected := func(c: Node) -> void:
@@ -696,7 +696,7 @@ func _resolve_target_selection(card: Node) -> void:
 		# ESC para no barajar ninguna' — sin este recordatorio, cada click
 		# en la mano solo repetía este mensaje para siempre, sin pista de
 		# cómo salir). El mensaje ahora lo dice explícito.
-		_main._update_debug("Objetivo no válido — elige otra carta o presiona ESC para cancelar")
+		_main._update_debug("Objetivo no válido — elige otra carta o presiona N si es opcional")
 		return
 	var callback = _target_callback
 	is_selecting_target = false

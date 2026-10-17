@@ -330,7 +330,7 @@ func try_execute_search_azi_ally_to_hand_pattern(ability_text: String, controlle
 		elif own_in_play.size() > 1 and main._card_interaction:
 			var convert_filter := func(c: Node) -> bool: return c in own_in_play
 			to_convert = await main._card_interaction.await_target(
-				"Azi Sruvara: elige una carta de coste 1 o menos para convertir en un Oro (ESC para no hacerlo)",
+				"Azi Sruvara: elige una carta de coste 1 o menos para convertir en un Oro (N para no hacerlo)",
 				convert_filter, true, controller_id)
 		if to_convert and is_instance_valid(to_convert):
 			var new_gold_data: Dictionary = to_convert.card_data.duplicate()
@@ -759,7 +759,7 @@ func try_execute_cuarto_sello_pattern(ability_text: String, card: Node, controll
 			return false
 		return ContinuousEffectManager.get_modified_cost(c) <= 4
 	var destroy_target: Node = await main._card_interaction.await_target(
-		"Destruye hasta una carta de coste 4 o menos (ESC para no hacerlo)", destroy_filter, true, controller_id)
+		"Destruye hasta una carta de coste 4 o menos (N para no hacerlo)", destroy_filter, true, controller_id)
 	if destroy_target and is_instance_valid(destroy_target):
 		await ActionModule.destroy([destroy_target], card, true, true)
 

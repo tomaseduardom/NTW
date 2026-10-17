@@ -224,7 +224,13 @@ func _open_card_inspection(card: Node) -> void:
 		close_card_inspection()
 	_inspected_source_card = card
 	inspected_card = CardScene.instantiate()
-	inspected_card.load_from_data(card.card_data)
+	# Habilidades ganadas (Reina Nyssara): la carta se ve con su texto
+	# impreso; lo ganado va en el panel de la derecha.
+	var shown_data: Dictionary = card.card_data
+	if card.card_data.has("_base_habilidad"):
+		shown_data = card.card_data.duplicate()
+		shown_data["habilidad"] = card.card_data["_base_habilidad"]
+	inspected_card.load_from_data(shown_data)
 	inspected_card.can_interact = false
 	inspected_card.esta_oculta = card.esta_oculta
 	inspected_card.current_state = Card.CardState.IN_PLAY
@@ -245,10 +251,81 @@ func _open_card_inspection(card: Node) -> void:
 	tween.tween_property(inspected_card, "scale", Vector2(3.2, 3.2), 0.3).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_BACK)
 	tween.tween_property(inspected_card, "modulate:a", 1.0, 0.2)
 	tween.chain().tween_callback(_build_ability_buttons.bind(card))
+	tween.chain().tween_callback(_build_gained_abilities_panel.bind(card))
 	if not _main.inspection_blur.gui_input.is_connected(_on_inspection_blur_input):
 		_main.inspection_blur.gui_input.connect(_on_inspection_blur_input)
 	if not inspected_card.gui_input.is_connected(_on_inspection_blur_input):
 		inspected_card.gui_input.connect(_on_inspection_blur_input)
+
+
+func _build_gained_abilities_panel(source_card: Node) -> void:
+	"""Habilidades ganadas de otras cartas (2026-10-17, Reina Nyssara: "gana
+	las habilidades de esa carta"), apiladas a la derecha de la carta
+	inspeccionada, una por carta de origen. Si alguna es una habilidad
+	activada que puedes usar ahora, lleva su botón "Usar"."""
+	if not is_instance_valid(inspected_card) or not is_instance_valid(source_card):
+		return
+	var gained: Array = source_card.card_data.get("_gained_abilities", [])
+	if gained.is_empty():
+		return
+	var card_size: Vector2 = inspected_card.custom_minimum_size
+	var width: float = card_size.x * 0.95
+	var box := VBoxContainer.new()
+	box.name = "GainedAbilitiesPanel"
+	box.position = Vector2(card_size.x + 4.0, 0.0)
+	box.custom_minimum_size = Vector2(width, 0.0)
+	box.add_theme_constant_override("separation", 3)
+	box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	inspected_card.add_child(box)
+
+	var base_lower: String = str(source_card.card_data.get("_base_habilidad", "")).to_lower()
+	var usable: Array = usable_abilities_for(source_card, 0)
+	for g in gained:
+		var text: String = str(g.get("text", "")).strip_edges()
+		var block := PanelContainer.new()
+		var sb := StyleBoxFlat.new()
+		sb.bg_color = Color(0.07, 0.06, 0.11, 0.94)
+		sb.border_color = Color(0.85, 0.68, 0.32)
+		sb.set_border_width_all(1)
+		sb.set_corner_radius_all(2)
+		sb.content_margin_left = 3.0
+		sb.content_margin_right = 3.0
+		sb.content_margin_top = 2.0
+		sb.content_margin_bottom = 2.0
+		block.add_theme_stylebox_override("panel", sb)
+		block.mouse_filter = Control.MOUSE_FILTER_STOP  # clic aquí no cierra la inspección
+		box.add_child(block)
+		var col := VBoxContainer.new()
+		col.add_theme_constant_override("separation", 1)
+		block.add_child(col)
+		var title := Label.new()
+		title.text = "Habilidad de %s" % str(g.get("from", "otra carta"))
+		title.add_theme_font_size_override("font_size", 5)
+		title.add_theme_color_override("font_color", Color(0.95, 0.78, 0.38))
+		col.add_child(title)
+		var body := Label.new()
+		body.text = text
+		body.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		body.custom_minimum_size = Vector2(width - 6.0, 0.0)
+		body.add_theme_font_size_override("font_size", 4)
+		col.add_child(body)
+		var text_lower := text.to_lower()
+		for entry in usable:
+			var ability: Dictionary = entry.ability
+			var raw: String = str(ability.get("raw_text", "")).to_lower().strip_edges()
+			var probe: String = raw.substr(0, 24)
+			if probe.is_empty() or not (probe in text_lower) or probe in base_lower:
+				continue
+			var btn := Button.new()
+			btn.text = "Usar"
+			btn.add_theme_font_size_override("font_size", 4)
+			btn.tooltip_text = str(ability.get("raw_text", ""))
+			var captured: Dictionary = ability.duplicate()
+			btn.pressed.connect(func():
+				close_card_inspection()
+				await _button_support._activate_ability_via_pipeline(source_card, source_card.card_data.duplicate(), captured,
+					{"controller_id": 0, "source_card_node": source_card}))
+			col.add_child(btn)
 
 
 func _on_inspection_blur_input(event: InputEvent) -> void:
@@ -598,6 +675,11 @@ func _build_ability_buttons(source_card: Node) -> void:
 	var card_id: String = str(source_card.card_data.get("id", ""))
 	var habilidad_text: String = source_card.card_data.get("habilidad", "")
 	var all_parsed := UniversalCardParser.parse_abilities(habilidad_text, card_id)
+	# Habilidades ganadas (Reina Nyssara): el texto impreso es el original;
+	# las ganadas tienen su botón en el panel de la derecha.
+	var has_gained: bool = source_card.card_data.has("_base_habilidad")
+	if has_gained:
+		habilidad_text = str(source_card.card_data["_base_habilidad"])
 
 	if not is_instance_valid(inspected_card):
 		return
@@ -644,6 +726,8 @@ func _build_ability_buttons(source_card: Node) -> void:
 		var first_chunk: String = raw_lower.split(".")[0].strip_edges()
 		if first_chunk.length() > 6:
 			first_chunk = first_chunk.substr(0, 24)
+		if has_gained and not (first_chunk in habilidad_text.to_lower()):
+			continue
 
 		var match_p: Dictionary = {}
 		for p in visual_paragraphs:

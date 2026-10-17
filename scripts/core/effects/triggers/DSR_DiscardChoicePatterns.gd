@@ -104,7 +104,7 @@ func try_execute_tempilcahue_choice_pattern(full_text: String, card: Node, contr
 	var chosen: Array = [first_pick]
 	if not rest.is_empty():
 		chosen += await main._card_interaction.await_multi_target(
-			"Baraja más cartas en juego (suma de costes hasta 4) — ESC para terminar", rest, -1, Callable(),
+			"Baraja más cartas en juego (suma de costes hasta 4) — N para terminar", rest, -1, Callable(),
 			budget_filter, true, null, controller_id)
 	# Sin ventana genérica aquí (2026-09-09): return_to_deck() (dentro del
 	# loop) ya consulta Prevención adentro por cada carta.
@@ -150,7 +150,7 @@ func try_execute_shuffle_ally_or_search_castle_pattern(full_text: String, card: 
 				allies.append(c)
 	var card_name: String = str(card.get("card_name")) if is_instance_valid(card) else "Barajar o buscar"
 	var pick: Dictionary = await main._card_interaction.await_target_or_castillo_pick(
-		"%s: baraja un Aliado de Fuerza %d o menos, o busca en tu Castillo (ESC: nada)" % [card_name, max_str],
+		"%s: baraja un Aliado de Fuerza %d o menos, o busca en tu Castillo (N: nada)" % [card_name, max_str],
 		func(c: Node) -> bool: return c in allies, "%s: buscar en tu Castillo" % card_name, true, true, controller_id)
 	match str(pick.get("type", "")):
 		"card":
@@ -213,6 +213,37 @@ func try_execute_golpe_solar_pattern(full_text: String, card: Node, controller_i
 	var hand_container_golpe = main.player_hand if controller_id == 0 else main._opponent_fan
 
 	# ============ DECLARAR (nada se ejecuta todavía) ============
+
+	# 2026-10-17, a pedido del usuario: el objetivo a Barajar se elige PRIMERO
+	# (N para no barajar ninguna), luego el descarte y el Aliado. Se resuelve
+	# igual en el orden impreso.
+	# --- Declarar "Baraja hasta una carta oponente de coste 2 o menos" ---
+	var opponent_id: int = 1 - controller_id
+	var opp_fields: Array = [main.player_field, main.player_linea_ataque, main.player_linea_apoyo] if opponent_id == 0 \
+		else [main.opponent_field, main.opponent_linea_ataque, main.opponent_linea_apoyo]
+	var shuffle_candidates: Array = []
+	# Sin Oros (confirmado por el usuario 2026-10-14: Golpe Solar no
+	# puede barajar Oros).
+	for field in opp_fields:
+		if not field:
+			continue
+		for c in field.get_children():
+			if not is_instance_valid(c):
+				continue
+			if ContinuousEffectManager.get_modified_cost(c) <= 2:
+				shuffle_candidates.append(c)
+			var weapons = c.get("equipped_weapons")
+			if weapons is Array:
+				for w in weapons:
+					if is_instance_valid(w) and ContinuousEffectManager.get_modified_cost(w) <= 2:
+						shuffle_candidates.append(w)
+
+	var shuffle_chosen: Node = null
+	if not shuffle_candidates.is_empty() and main._card_interaction:
+		var shuffle_filter := func(c: Node) -> bool:
+			return c in shuffle_candidates
+		shuffle_chosen = await main._card_interaction.await_target(
+			"Baraja hasta una carta rival en juego (coste 2 o menos) — N para no barajar ninguna", shuffle_filter, true, controller_id)
 
 	# --- Declarar "Descarta hasta dos cartas" (0-2, elección del jugador) ---
 	# 2026-09-13, a pedido del usuario: click directo en la mano en vez del
@@ -279,34 +310,6 @@ func try_execute_golpe_solar_pattern(full_text: String, card: Node, controller_i
 			if not puede_pagar and not from_hand:
 				ally_node.queue_free()
 				ally_node = null
-
-	# --- Declarar "Baraja hasta una carta oponente de coste 2 o menos" ---
-	var opponent_id: int = 1 - controller_id
-	var opp_fields: Array = [main.player_field, main.player_linea_ataque, main.player_linea_apoyo] if opponent_id == 0 \
-		else [main.opponent_field, main.opponent_linea_ataque, main.opponent_linea_apoyo]
-	var shuffle_candidates: Array = []
-	# Sin Oros (confirmado por el usuario 2026-10-14: Golpe Solar no
-	# puede barajar Oros).
-	for field in opp_fields:
-		if not field:
-			continue
-		for c in field.get_children():
-			if not is_instance_valid(c):
-				continue
-			if ContinuousEffectManager.get_modified_cost(c) <= 2:
-				shuffle_candidates.append(c)
-			var weapons = c.get("equipped_weapons")
-			if weapons is Array:
-				for w in weapons:
-					if is_instance_valid(w) and ContinuousEffectManager.get_modified_cost(w) <= 2:
-						shuffle_candidates.append(w)
-
-	var shuffle_chosen: Node = null
-	if not shuffle_candidates.is_empty() and main._card_interaction:
-		var shuffle_filter := func(c: Node) -> bool:
-			return c in shuffle_candidates
-		shuffle_chosen = await main._card_interaction.await_target(
-			"Baraja hasta una carta rival en juego (coste 2 o menos) — ESC para no barajar ninguna", shuffle_filter, true, controller_id)
 
 	# Sin ventana genérica aquí (2026-09-09): Golpe Solar es un Talismán —
 	# TriggerSystem.resolve_talisman() ya abrió UNA ventana para toda la
