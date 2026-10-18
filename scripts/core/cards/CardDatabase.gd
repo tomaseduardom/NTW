@@ -308,7 +308,18 @@ func _parse_keywords(habilidad: String) -> Array:
 		keywords.append(Constants.Keyword.INDESTRUCTIBLE)
 	if "indesterrable" in text:
 		keywords.append(Constants.Keyword.INDESTERRABLE)
-	if "exhumar" in text or "desde tu cementerio" in text:
+	# Solo "Exhumar" o jugarse a sí misma desde el Cementerio (2026-10-17, bug
+	# real reportado por el usuario: Alto Prime decía tener Exhumar — antes
+	# bastaba "desde tu Cementerio" en cualquier parte, p.ej. "Desterrarlo
+	# desde tu Cementerio" o "poner este Aliado en juego desde tu Cementerio
+	# como un Aliado sin habilidad", que son otras habilidades).
+	var self_play := false
+	for phrase in ["jugarlo desde tu cementerio", "jugarla desde tu cementerio", "jugar esta carta desde tu cementerio",
+			"jugar esta arma desde tu cementerio", "ponerlo en juego desde tu cementerio como si estuviera en tu mano",
+			"poner este oro en juego desde tu cementerio"]:
+		if phrase in text:
+			self_play = true
+	if "exhumar" in text or self_play:
 		keywords.append(Constants.Keyword.EXHUMAR)
 	if "única" in text:
 		keywords.append(Constants.Keyword.UNICA)

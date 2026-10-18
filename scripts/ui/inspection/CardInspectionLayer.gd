@@ -479,6 +479,8 @@ func _ability_is_cementerio_usable(full_text: String) -> bool:
 		return true  # Espada del Juicio
 	if "si está en tu cementerio y si tienes menos cartas en tu mano que tu oponente" in lower:
 		return true  # Envidia (2026-10-14)
+	if "en juego desde tu cementerio como un aliado sin habilidad" in lower:
+		return true  # Alto Prime, Belta (2026-10-17)
 	if "para subir esta carta de tu cementerio a tu mano" in lower:
 		return true  # vision heroica
 	if "desterrarlo de tu mano o cementerio" in lower:

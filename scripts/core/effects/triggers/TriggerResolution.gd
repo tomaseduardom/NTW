@@ -12,6 +12,7 @@ const Deck170Script = preload("res://scripts/core/effects/triggers/Deck170Patter
 const AziScript = preload("res://scripts/core/effects/triggers/AziPatterns.gd")
 const DagonScript = preload("res://scripts/core/effects/triggers/DagonPatterns.gd")
 const RatPlagueScript = preload("res://scripts/core/effects/triggers/RatPlaguePatterns.gd")
+const CemeteryReviveScript = preload("res://scripts/core/effects/triggers/CemeteryRevivePatterns.gd")
 const TriggerTollScript = preload("res://scripts/core/effects/triggers/TriggerTollPatterns.gd")
 const CastleLookScript = preload("res://scripts/core/effects/CastleLook.gd")  # "mira N cartas" (§69)
 
@@ -297,6 +298,9 @@ func _resolve_look_and_play_patterns(card: Node, full_ability_text: String, isol
 		return true
 	# Plaga de Ratas (2026-10-17).
 	if await RatPlagueScript.try_execute(card, isolated_ability_text, controller_id):
+		return true
+	# Kaitai (2026-10-17): su habilidad de Fase Final.
+	if await CemeteryReviveScript.try_execute(card, isolated_ability_text, controller_id):
 		return true
 	if await _main._effect_interpreter.try_execute(card, isolated_ability_text, controller_id):
 		return true

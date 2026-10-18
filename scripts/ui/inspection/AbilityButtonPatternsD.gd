@@ -129,6 +129,16 @@ func try_build(ability_lower: String, btn: Button, panel: Control, card_for_glow
 	# solo vista) + elegir Aliado y signo del bono.
 	# Envidia (2026-10-14, mazo 170): desde el Cementerio, con menos cartas
 	# en la mano que el oponente, Desterrarlo para Robar una carta.
+	# Alto Prime (2026-10-17): Descartar una carta para ponerlo en juego
+	# desde tu Cementerio como un Aliado sin habilidad.
+	if "descartar una carta para poner este aliado en juego desde tu cementerio como un aliado sin habilidad" in ability_lower:
+		btn.pressed.connect(func():
+			_inspector.close_card_inspection()
+			await load("res://scripts/core/effects/triggers/CemeteryRevivePatterns.gd").discard_to_revive_without_ability(card_for_glow)
+		)
+		panel.add_child(btn)
+		return true
+
 	if "si está en tu cementerio y si tienes menos cartas en tu mano que tu oponente" in ability_lower:
 		btn.pressed.connect(func():
 			_inspector.close_card_inspection()
