@@ -119,9 +119,17 @@ func search_zones(player_id: int, zones: Array, filter: Dictionary, amount: int 
 
 	_main._begin_trigger_collection()
 
+	# Sidhes del Bosque (2026-10-18): respuesta a buscar en un Castillo.
+	var sidhes_chooser: int = chooser_id if chooser_id >= 0 else player_id
+	if zone_infos.any(func(i): return i.zone == Constants.Zone.CASTILLO):
+		await EffectController.offer_sidhes(sidhes_chooser)
+	var blocked_names: Array = EffectController.sidhes_blocked_names(sidhes_chooser)
+
 	for info in zone_infos:
 		_main.emit_signal("action_search_started", player_id, info.zone, filter)
 		info.matching = _main._apply_card_filter(info.data, filter)
+		if info.zone == Constants.Zone.CASTILLO and not blocked_names.is_empty():
+			info.matching = info.matching.filter(func(d): return not (str(d.get("nombre", "")).to_lower() in blocked_names))
 		result.matching.append_array(info.matching)
 
 	_main.emit_signal("action_search_revealed", player_id, result.matching)
@@ -148,6 +156,7 @@ func search_zones(player_id: int, zones: Array, filter: Dictionary, amount: int 
 		selected_data.append(p.data)
 	result.selected = selected_data
 	_main.emit_signal("action_search_selected", player_id, selected_data)
+	_sidhes_reveal(effective_chooser, picks)
 
 	var main := _main.get_node_or_null("/root/Main")
 	for p in picks:
@@ -256,6 +265,9 @@ func search_either_owner(chooser: int, zones: Array, filter: Dictionary, amount:
 	var result := {"success": true, "selected": [], "matching": []}
 	var pools: Array = []
 	var src: Array = []  # [{owner, zone, data}] en el mismo orden que pools
+	if Constants.Zone.CASTILLO in zones:
+		await EffectController.offer_sidhes(chooser)  # Sidhes del Bosque
+	var blocked_names: Array = EffectController.sidhes_blocked_names(chooser)
 	for zone_owner in [chooser, 1 - chooser]:
 		for zone in zones:
 			if EffectController.fision_hides_zones_of(zone_owner, chooser, zone):  # Fisión Nuclear
@@ -264,6 +276,8 @@ func search_either_owner(chooser: int, zones: Array, filter: Dictionary, amount:
 			if zone_data == null:
 				continue
 			var matching: Array = _main._apply_card_filter(zone_data, filter)
+			if zone == Constants.Zone.CASTILLO and not blocked_names.is_empty():
+				matching = matching.filter(func(d): return not (str(d.get("nombre", "")).to_lower() in blocked_names))
 			var cards: Array = []
 			for d in zone_data:
 				cards.append({"data": d, "eligible": matching.has(d)})
@@ -298,6 +312,7 @@ func search_either_owner(chooser: int, zones: Array, filter: Dictionary, amount:
 		picks.append(p)
 
 	var main := _main.get_node_or_null("/root/Main")
+	_sidhes_reveal(chooser, picks)
 	_main._begin_trigger_collection()
 	var to_shuffle: Dictionary = {}
 	for pi in info.get("opened_castles", []):
@@ -475,3 +490,16 @@ func _put_found_card_into_play(main: Node, player_id: int, card_data: Dictionary
 			PaymentManager.remover_modificador_coste(card_node)
 
 	return card_node
+
+
+func _sidhes_reveal(searcher: int, picks: Array) -> void:
+	"""Sidhes del Bosque: "tu oponente debe mostrar las cartas que busca"."""
+	var reveal_to: int = EffectController.sidhes_reveal_to(searcher)
+	if reveal_to < 0 or PlayerSideScript.is_bot(reveal_to):
+		return
+	var shown: Array = []
+	for p in picks:
+		if p is Dictionary and p.get("zone", -1) == Constants.Zone.CASTILLO and p.get("data") is Dictionary:
+			shown.append(p.data)
+	if not shown.is_empty():
+		SelectionManager.open_reveal(shown, "Sidhes del Bosque: tu oponente busca", reveal_to)

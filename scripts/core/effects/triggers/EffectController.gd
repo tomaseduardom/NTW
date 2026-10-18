@@ -1315,6 +1315,96 @@ func _fision_toll_prevents(affected_card, owner_id: int, effect_source) -> bool:
 ## Se ofrece en las búsquedas (ActionSearch) y en los efectos que miran la
 ## mano rival. true = la búsqueda/mirada no ocurre. Se juega pagando su coste
 ## o Desterrando una carta de la mano; va al Cementerio y Robas una.
+## Sidhes del Bosque (2026-10-18): "Puedes jugarlo en respuesta a que tu
+## oponente fuera a buscar cartas en un Castillo. Nombra dos cartas. Este
+## turno tu oponente debe mostrar las cartas que busca y no puede buscar las
+## cartas nombradas. Roba una carta o sube un Aliado de tu Cementerio a tu
+## mano." ActionSearch lo ofrece antes de buscar en un Castillo y aplica el
+## candado (sidhes_blocked_names) y el mostrar (sidhes_reveal_to).
+func offer_sidhes(searcher_id: int) -> void:
+	if searcher_id < 0:
+		return
+	var main := get_node_or_null("/root/Main")
+	if not main or not main._gold_manager:
+		return
+	var victim: int = 1 - searcher_id
+	var sidhes: Node = null
+	for c in PlayerSideScript.hand_cards(main, victim):
+		if is_instance_valid(c) and "puedes jugarlo en respuesta a que tu oponente fuera a buscar cartas en un castillo" \
+				in str(c.get("card_ability")).to_lower():
+			sidhes = c
+			break
+	if sidhes == null:
+		return
+	var cost: int = int(PaymentManager.calcular_coste_real(sidhes))
+	if not main._gold_manager.puede_pagar(cost, Constants.CardType.TALISMAN, "", int(sidhes.get("card_cost")), victim):
+		return
+	var card_name: String = str(sidhes.get("card_name"))
+	if not PlayerSideScript.is_bot(victim):
+		if not await SelectionManager.await_two_choice(main, "Tu oponente va a buscar en un Castillo",
+				"Jugar %s (%d Oro)" % [card_name, cost], "No responder", victim):
+			return
+	if cost > 0:
+		await main._gold_manager.pagar_coste(cost, Constants.CardType.TALISMAN, "", int(sidhes.get("card_cost")), victim)
+	var sdata: Dictionary = sidhes.card_data.duplicate()
+	PlayerSideScript.remove_from_hand(main, victim, sidhes)
+	if is_instance_valid(sidhes):
+		CardManager._disconnect_card_interaction_signals(sidhes)
+		sidhes.queue_free()
+	# Nombrar dos cartas.
+	var names: Array = []
+	if PlayerSideScript.is_bot(victim):
+		var deck: Array = CardManager.get_deck(searcher_id).duplicate()
+		deck.shuffle()
+		for d in deck:
+			var n: String = str(d.get("nombre", "")).to_lower()
+			if not n.is_empty() and not (n in names):
+				names.append(n)
+			if names.size() >= 2:
+				break
+	else:
+		for i in range(2):
+			var picked: Dictionary = await TriggerSystem._card_name_search.open_and_wait(
+				"%s: nombra una carta que tu oponente no podrá buscar (%d de 2)" % [card_name, i + 1], victim)
+			var n: String = str(picked.get("nombre", "")).to_lower()
+			if not n.is_empty() and not (n in names):
+				names.append(n)
+	main.set_meta("sidhes_lock", {"searcher": searcher_id, "turn": GameManager.current_turn, "names": names,
+		"reveal_to": victim})
+	main._update_debug("%s: este turno tu oponente muestra lo que busca y no puede buscar %s" % [card_name,
+		" ni ".join(names) if not names.is_empty() else "nada nombrado"])
+	# Roba una carta o sube un Aliado de tu Cementerio a tu mano.
+	var has_ally_in_cemetery: bool = CardManager.get_cemetery(victim).any(func(d): return int(d.get("tipo", -1)) == Constants.CardType.ALIADO)
+	var draw_it := true
+	if has_ally_in_cemetery and not PlayerSideScript.is_bot(victim):
+		draw_it = await SelectionManager.await_two_choice(main, card_name, "Robar una carta", "Subir un Aliado de tu Cementerio a tu mano", victim)
+	if draw_it:
+		await ActionModule.draw(victim, 1, card_name, true)
+	else:
+		await ActionModule.search(victim, Constants.Zone.CEMENTERIO, {"type": Constants.CardType.ALIADO}, 1, true, false, false,
+			null, Constants.Zone.MANO, false, victim)
+	sdata["esta_oculta"] = false
+	CardManager.add_to_cemetery(victim, sdata)
+
+
+func _sidhes_lock_for(searcher_id: int) -> Dictionary:
+	var main := get_node_or_null("/root/Main")
+	if not main:
+		return {}
+	var lock: Dictionary = main.get_meta("sidhes_lock", {})
+	if lock.is_empty() or int(lock.get("searcher", -1)) != searcher_id or int(lock.get("turn", -1)) != GameManager.current_turn:
+		return {}
+	return lock
+
+
+func sidhes_blocked_names(searcher_id: int) -> Array:
+	return _sidhes_lock_for(searcher_id).get("names", [])
+
+
+func sidhes_reveal_to(searcher_id: int) -> int:
+	return int(_sidhes_lock_for(searcher_id).get("reveal_to", -1))
+
+
 func offer_colapso_global(searcher_id: int) -> bool:
 	if searcher_id < 0:
 		return false
