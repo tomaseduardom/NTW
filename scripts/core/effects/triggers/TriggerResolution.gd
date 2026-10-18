@@ -13,6 +13,7 @@ const AziScript = preload("res://scripts/core/effects/triggers/AziPatterns.gd")
 const DagonScript = preload("res://scripts/core/effects/triggers/DagonPatterns.gd")
 const RatPlagueScript = preload("res://scripts/core/effects/triggers/RatPlaguePatterns.gd")
 const CemeteryReviveScript = preload("res://scripts/core/effects/triggers/CemeteryRevivePatterns.gd")
+const VampireScript = preload("res://scripts/core/effects/triggers/VampirePatterns.gd")
 const TriggerTollScript = preload("res://scripts/core/effects/triggers/TriggerTollPatterns.gd")
 const CastleLookScript = preload("res://scripts/core/effects/CastleLook.gd")  # "mira N cartas" (§69)
 
@@ -301,6 +302,9 @@ func _resolve_look_and_play_patterns(card: Node, full_ability_text: String, isol
 		return true
 	# Kaitai (2026-10-17): su habilidad de Fase Final.
 	if await CemeteryReviveScript.try_execute(card, isolated_ability_text, controller_id):
+		return true
+	# Vlad el Empalador, Dhampir (2026-10-17).
+	if await VampireScript.try_execute(card, isolated_ability_text, controller_id):
 		return true
 	if await _main._effect_interpreter.try_execute(card, isolated_ability_text, controller_id):
 		return true
@@ -631,7 +635,7 @@ func _execute_trigger_effect(card: Node, trigger_type: String, event_data: Dicti
 			# 2026-08-29: una carta puede tener DOS "Cuando entra en juego"
 			# independientes (p.ej. Alicia en Wonderland) — se procesa cada
 			# bloque aislado por separado, no solo el primero.
-			var clauses: Array[String] = _isolate_all_trigger_clauses(full_ability_text, ["cuando entra", "al entrar"])
+			var clauses: Array[String] = _isolate_all_trigger_clauses(full_ability_text, ["cuando entra", "al entrar", "cuando ataca, entra"])
 			if clauses.is_empty() and not full_ability_text.is_empty():
 				clauses = [full_ability_text]
 			var controller_id: int = card.get("owner_id") if card.get("owner_id") != null else 0
@@ -698,7 +702,7 @@ func _execute_trigger_effect(card: Node, trigger_type: String, event_data: Dicti
 				full_ability_text = card.card_data.get("habilidad", "")
 			var ability_text := _isolate_trigger_clause(full_ability_text, [
 				"al salir del juego", "cuando salga del juego", "cuando sale del juego", "cuando entra o salga del juego",
-				"cuando entra o sale del juego"
+				"cuando entra o sale del juego", "entra o sale del juego"
 			])
 			if ability_text.is_empty():
 				ability_text = full_ability_text

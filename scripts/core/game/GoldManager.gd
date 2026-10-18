@@ -115,6 +115,13 @@ func setup(main: Node) -> void:
 		CardManager.card_exiled.connect(func(pid: int, card) -> void: deck170.on_card_left_play(pid, card))
 		EffectController.on_card_returned_to_deck.connect(func(pid: int, card, _top: bool) -> void:
 			deck170.on_card_left_play(pid, card))
+		# Vlad el Empalador (2026-10-17): "cuando este u otro de tus Aliados
+		# salga del juego".
+		var vampire = load("res://scripts/core/effects/triggers/VampirePatterns.gd")
+		CardManager.card_destroyed.connect(func(pid: int, card) -> void: vampire.on_card_left_play(pid, card))
+		CardManager.card_exiled.connect(func(pid: int, card) -> void: vampire.on_card_left_play(pid, card))
+		EffectController.on_card_returned_to_deck.connect(func(pid: int, card, _top: bool) -> void:
+			vampire.on_card_left_play(pid, card))
 
 
 func _on_phase_changed_deck170(new_phase) -> void:
@@ -2203,6 +2210,10 @@ func _trigger_enter_play(card: Node, zone: int = Constants.Zone.LINEA_DEFENSA) -
 	# (mismo destino por defecto que cualquier Anular, igual que el Talismán
 	# de arriba).
 	var controller_id: int = card.get("owner_id") if card.get("owner_id") != null else 0
+	# Dhampir (2026-10-17): "Cuando tu oponente juegue una carta" — los Oros
+	# se ponen en juego, no se juegan.
+	if card.get("card_type") != Constants.CardType.ORO:
+		load("res://scripts/core/effects/triggers/VampirePatterns.gd").on_card_played(card, controller_id)
 	if _alicanto_paid_pending.get(controller_id, false):
 		_alicanto_paid_pending.erase(controller_id)
 		if card.get("card_type") == Constants.CardType.ALIADO:

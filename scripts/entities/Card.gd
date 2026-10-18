@@ -331,9 +331,10 @@ const TRIGGER_KEYWORDS: Dictionary = {
 	"on_draw": ["cuando robes", "al robar", "cada vez que robes"],
 	"on_card_drawn": ["cuando robes una carta", "al robar una carta"],
 	# (2026-08-28, misma corrección de terminología que CardFactory.TRIGGER_PATTERNS)
-	"on_enter_play": ["cuando entre al juego", "al entrar al juego", "cuando entra al juego", "cuando entre en juego", "al entrar en juego", "cuando entra en juego", "cuando entra o salga del juego", "cuando entra o sale del juego", "cuando entra en juego o ataque", "cuando entra en juego o ataca"],
+	"on_enter_play": ["cuando entre al juego", "al entrar al juego", "cuando entra al juego", "cuando entre en juego", "al entrar en juego", "cuando entra en juego", "cuando entra o salga del juego", "cuando entra o sale del juego", "cuando entra en juego o ataque", "cuando entra en juego o ataca",
+		"cuando ataca, entra"],  # Dhampir (2026-10-17): "Cuando ataca, entra o sale del juego"
 	"on_leave_play": ["al salir del juego", "cuando salga del juego", "cuando sale del juego", "cuando entra o salga del juego",
-		"cuando entra o sale del juego"],
+		"cuando entra o sale del juego", "entra o sale del juego"],
 	"on_destroyed": ["cuando sea destruido", "al ser destruido"],
 	"on_discard": ["cuando descartes", "al descartar"],
 	# "cuando entra en juego o ataque" (2026-08-29, p.ej. Sherlock Holmes) es

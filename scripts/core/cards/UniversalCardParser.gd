@@ -269,6 +269,9 @@ const TRIGGER_EVENTS: Dictionary = {
 	"al entrar":         "ENTER",
 	"al salir":          "EXIT",
 	"cuando sale":       "EXIT",
+	# "Una vez en tu turno, cuando este u otro de tus Aliados salga del juego"
+	# (Vlad el Empalador, 2026-10-17): disparada, no un botón.
+	"salga del juego":   "EXIT",
 	"al atacar":         "ATTACK",
 	"cuando ataca":      "ATTACK",
 	"al bloquear":       "BLOCK",
