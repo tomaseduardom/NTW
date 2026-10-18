@@ -231,7 +231,7 @@ func _max_weapons_for(ally: Node, for_new_weapon: bool = true) -> int:
 			continue
 		if "aliados pueden portar un arma adicional" in text:
 			total += 1
-		if "tu aliado de mayor coste puede portar un arma adicional" in text and has_kgh 				and int(ContinuousEffectManager.get_modified_cost(ally)) >= top_cost:
+		if "tu aliado de mayor coste puede portar un arma adicional" in text and has_kgh and int(ContinuousEffectManager.get_modified_cost(ally)) >= top_cost:
 			total += 1
 	return total
 

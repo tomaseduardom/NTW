@@ -116,7 +116,7 @@ func _activate_belcebu_banish_bottom_and_steal(source_card: Node, ability: Dicti
 		# 2026-09-12: current_zone en vez de get_parent() (ver §10.5)
 		if c.get("current_zone") not in [Constants.Zone.LINEA_DEFENSA, Constants.Zone.LINEA_ATAQUE, Constants.Zone.LINEA_APOYO]:
 			return false
-		return ContinuousEffectManager.get_modified_cost(c) <= 3
+		return ContinuousEffectManager.cost_at_most(c, 3)
 	var target: Node = await main._card_interaction.await_target("Elige una carta de coste 3 o menos para ganar su control (opcional)", filter, true, controller_id)
 	if not target or not is_instance_valid(target):
 		return

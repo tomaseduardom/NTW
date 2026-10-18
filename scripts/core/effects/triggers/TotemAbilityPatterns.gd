@@ -232,7 +232,7 @@ func try_execute_kotoku_in_vigilia_pattern(ability_text: String, card: Node, con
 		var filter := func(c: Node) -> bool:
 			if c.get("card_type") == Constants.CardType.ORO:
 				return false
-			return ContinuousEffectManager.get_modified_cost(c) <= 2
+			return ContinuousEffectManager.cost_at_most(c, 2)
 		var target: Node = await main._card_interaction.await_target("Elige una carta de coste 2 o menos para Destruir", filter, true, controller_id)
 		if target and is_instance_valid(target):
 			await ActionModule.destroy([target], card, true, true)

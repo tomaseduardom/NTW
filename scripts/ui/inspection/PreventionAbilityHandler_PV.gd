@@ -233,7 +233,7 @@ func _activate_quimera_voragh_banish_annul_talisman_draw(source_card: Node, abil
 		# 2026-09-12: current_zone en vez de get_parent() (ver §10.5)
 		if c.get("current_zone") not in [Constants.Zone.LINEA_DEFENSA, Constants.Zone.LINEA_APOYO]:
 			return false
-		return ContinuousEffectManager.get_modified_cost(c) <= 1
+		return ContinuousEffectManager.cost_at_most(c, 1)
 	var target: Node = await main._card_interaction.await_target("Elige un Talismán de coste 1 o menos para anular", filter, true, owner_id)
 	if not target or not is_instance_valid(target):
 		return
@@ -377,7 +377,7 @@ func _activate_shub_niggurath_shuffle_or_mill_opponent(source_card: Node, abilit
 			# 2026-09-12: current_zone en vez de get_parent() (ver §10.5)
 			if c.get("current_zone") not in [Constants.Zone.LINEA_DEFENSA, Constants.Zone.LINEA_ATAQUE, Constants.Zone.LINEA_APOYO]:
 				return false
-			return ContinuousEffectManager.get_modified_cost(c) <= 3
+			return ContinuousEffectManager.cost_at_most(c, 3)
 		var target: Node = await main._card_interaction.await_target("Elige una carta de coste 3 o menos para barajar", filter, true, owner_id)
 		if not target or not is_instance_valid(target):
 			return

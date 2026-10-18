@@ -143,6 +143,9 @@ static func try_from_text(card: Node, text: String, controller_id: int) -> Dicti
 		if not type_word.is_empty() and type_of(obj) != type_map.get(type_word, -99):
 			return false
 		if max_cost >= 0:
+			# Un Oro no tiene coste (2026-10-17): nunca es "de coste N o menos".
+			if type_of(obj) == Constants.CardType.ORO:
+				return false
 			var ok_cost: bool = cost_of(obj) <= max_cost
 			if not ok_cost and free_this_turn:
 				var node = card_of(obj)

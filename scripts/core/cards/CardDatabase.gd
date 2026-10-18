@@ -995,7 +995,7 @@ func run_smoke_test() -> void:
 ## ERRORs del motor en la consola (ERR_FILE_CORRUPT, "Not a PNG file")
 ## aunque la imagen terminara cargando bien como JPG.
 static func image_buffer_format(body: PackedByteArray) -> String:
-	if body.size() >= 12 and body.slice(0, 4).get_string_from_ascii() == "RIFF" 			and body.slice(8, 12).get_string_from_ascii() == "WEBP":
+	if body.size() >= 12 and body.slice(0, 4).get_string_from_ascii() == "RIFF" and body.slice(8, 12).get_string_from_ascii() == "WEBP":
 		return "webp"
 	if body.size() >= 8 and body[0] == 0x89 and body[1] == 0x50 and body[2] == 0x4E and body[3] == 0x47:
 		return "png"

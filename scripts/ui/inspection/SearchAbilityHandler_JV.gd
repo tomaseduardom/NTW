@@ -192,7 +192,7 @@ func _activate_kuchiku_cazador_destroy_and_discard(source_card: Node, ability: D
 		# get_modified_cost(), no card_cost crudo (2026-09-04, a pedido del
 		# usuario: una carta en juego puede tener el coste reducido de forma
 		# continua, p.ej. Samael — el filtro tiene que verlo).
-		return ContinuousEffectManager.get_modified_cost(c) <= 3
+		return ContinuousEffectManager.cost_at_most(c, 3)
 	var chosen_target: Node = await main._card_interaction.await_target(
 		"Elige una carta de coste 3 o menos para destruir (opcional)", filter, true, owner_id)
 

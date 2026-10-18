@@ -34,7 +34,7 @@ func _activate_akari_banish_annul_non_ally(source_card: Node, ability: Dictionar
 		# 2026-09-12: current_zone en vez de get_parent() (ver §10.5)
 		if c.get("current_zone") not in [Constants.Zone.LINEA_DEFENSA, Constants.Zone.LINEA_ATAQUE, Constants.Zone.LINEA_APOYO]:
 			return false
-		return ContinuousEffectManager.get_modified_cost(c) <= 1
+		return ContinuousEffectManager.cost_at_most(c, 1)
 	var target: Node = await main._card_interaction.await_target("Elige un Arma o Tótem de coste 1 o menos para anular", filter, true, owner_id)
 	if not target or not is_instance_valid(target):
 		return

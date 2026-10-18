@@ -241,12 +241,12 @@ func try_execute_draw_and_shuffle_opponent_card_pattern(ability_text: String, co
 		for c in field.get_children():
 			if not is_instance_valid(c):
 				continue
-			if ContinuousEffectManager.get_modified_cost(c) <= ally_count:
+			if ContinuousEffectManager.cost_at_most(c, ally_count):
 				candidates.append(c)
 			var weapons = c.get("equipped_weapons")
 			if weapons is Array:
 				for w in weapons:
-					if is_instance_valid(w) and ContinuousEffectManager.get_modified_cost(w) <= ally_count:
+					if is_instance_valid(w) and ContinuousEffectManager.cost_at_most(w, ally_count):
 						candidates.append(w)
 
 	if candidates.is_empty():

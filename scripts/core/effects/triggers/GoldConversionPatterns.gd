@@ -169,7 +169,7 @@ func try_execute_gold_for_allies_or_shuffle_cost_max_pattern(ability_text: Strin
 			# 2026-09-12: current_zone en vez de get_parent() (ver §10.5)
 			if c.get("current_zone") not in [Constants.Zone.LINEA_DEFENSA, Constants.Zone.LINEA_ATAQUE, Constants.Zone.LINEA_APOYO]:
 				return false
-			return ContinuousEffectManager.get_modified_cost(c) <= max_cost
+			return ContinuousEffectManager.cost_at_most(c, max_cost)
 		var target: Node = await main._card_interaction.await_target("Elige una carta de coste %d o menos para barajar" % max_cost, filter, true, controller_id)
 		# Sin ventana genérica aquí (2026-09-09): return_to_deck() ya consulta
 		# Prevención adentro por su cuenta.
@@ -271,7 +271,7 @@ func try_execute_convert_gold_or_opponent_cost_max_draw_pattern(ability_text: St
 			return true
 		if c.get("owner_id") != opponent_id:
 			return false
-		return ContinuousEffectManager.get_modified_cost(c) <= max_cost
+		return ContinuousEffectManager.cost_at_most(c, max_cost)
 	var target: Node = await main._card_interaction.await_target("Elige un Oro (cualquiera) o una carta oponente de coste %d o menos para convertir" % max_cost, filter, true, controller_id)
 	# Ventana única para todo el efecto (convertir + robar) — silence_card()
 	# abajo consulta Prevención por su cuenta para el objetivo puntual, pero

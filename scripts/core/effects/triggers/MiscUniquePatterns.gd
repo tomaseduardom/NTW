@@ -64,12 +64,12 @@ func _fision_final_phase(controller_id: int) -> void:
 		for c in field.get_children():
 			if not is_instance_valid(c):
 				continue
-			if c.get("card_type") != Constants.CardType.ORO and ContinuousEffectManager.get_modified_cost(c) <= 2:
+			if c.get("card_type") != Constants.CardType.ORO and ContinuousEffectManager.cost_at_most(c, 2):
 				candidates.append(c)
 			var weapons = c.get("equipped_weapons")
 			if weapons is Array:
 				for w in weapons:
-					if is_instance_valid(w) and ContinuousEffectManager.get_modified_cost(w) <= 2:
+					if is_instance_valid(w) and ContinuousEffectManager.cost_at_most(w, 2):
 						candidates.append(w)
 	var target: Node = null
 	if not candidates.is_empty() and main._card_interaction:

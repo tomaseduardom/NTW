@@ -242,7 +242,7 @@ func _select_annul_target_cost_filter(prompt: String, max_cost: int, chooser_id:
 			return false
 		# get_modified_cost(), no card_cost crudo (2026-09-04) — ver nota en
 		# _select_convert_target() más arriba.
-		return ContinuousEffectManager.get_modified_cost(c) <= max_cost
+		return ContinuousEffectManager.cost_at_most(c, max_cost)
 	return await main._card_interaction.await_target(prompt, filter, true, chooser_id)
 
 
@@ -259,7 +259,7 @@ func _select_destroy_target_cost_filter(prompt: String, max_cost: int, chooser_i
 		# 2026-09-12: current_zone en vez de get_parent() (ver §10.5)
 		if c.get("current_zone") not in [Constants.Zone.LINEA_DEFENSA, Constants.Zone.LINEA_ATAQUE, Constants.Zone.LINEA_APOYO]:
 			return false
-		return ContinuousEffectManager.get_modified_cost(c) <= max_cost
+		return ContinuousEffectManager.cost_at_most(c, max_cost)
 	return await main._card_interaction.await_target(prompt, filter, true, chooser_id)
 
 
@@ -277,7 +277,7 @@ func _select_banish_target_cost_filter(prompt: String, max_cost: int, chooser_id
 		# 2026-09-12: current_zone en vez de get_parent() (ver §10.5)
 		if c.get("current_zone") not in [Constants.Zone.LINEA_DEFENSA, Constants.Zone.LINEA_ATAQUE, Constants.Zone.LINEA_APOYO]:
 			return false
-		return ContinuousEffectManager.get_modified_cost(c) <= max_cost
+		return ContinuousEffectManager.cost_at_most(c, max_cost)
 	return await main._card_interaction.await_target(prompt, filter, true, chooser_id)
 
 
@@ -565,7 +565,7 @@ func _select_convert_target(max_cost: int, source_card: Node = null, chooser_id:
 		# usuario): una carta YA EN JUEGO puede tener su coste reducido de
 		# forma continua (p.ej. Samael, 'las cartas oponentes en juego
 		# reducen su coste en un Oro') — el filtro tiene que verlo.
-		return ContinuousEffectManager.get_modified_cost(c) <= max_cost
+		return ContinuousEffectManager.cost_at_most(c, max_cost)
 
 	# Chequeo defensivo ANTES de abrir la selección (2026-09-03, bug
 	# reportado: sin ningún Oro en juego en ese momento — max_cost=-1

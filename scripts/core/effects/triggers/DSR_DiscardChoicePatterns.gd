@@ -230,12 +230,12 @@ func try_execute_golpe_solar_pattern(full_text: String, card: Node, controller_i
 		for c in field.get_children():
 			if not is_instance_valid(c):
 				continue
-			if ContinuousEffectManager.get_modified_cost(c) <= 2:
+			if ContinuousEffectManager.cost_at_most(c, 2):
 				shuffle_candidates.append(c)
 			var weapons = c.get("equipped_weapons")
 			if weapons is Array:
 				for w in weapons:
-					if is_instance_valid(w) and ContinuousEffectManager.get_modified_cost(w) <= 2:
+					if is_instance_valid(w) and ContinuousEffectManager.cost_at_most(w, 2):
 						shuffle_candidates.append(w)
 
 	var shuffle_chosen: Node = null

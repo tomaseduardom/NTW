@@ -158,7 +158,7 @@ func try_execute_peek_hand_banish_search_castillo_cemetery_draw_pattern(ability_
 	# (Nodos ya visibles) en vez del modal de lista viejo.
 	if not candidates.is_empty() and main._card_interaction:
 		var cost_filter := func(c: Node) -> bool:
-			return c in candidates and int(c.card_data.get("coste", 99)) <= 2
+			return c in candidates and ContinuousEffectManager.data_cost_at_most(c.card_data, 2)
 		var chosen: Node = await main._card_interaction.await_target(
 			"Mira la mano rival: elige una carta de coste 2 o menos para desterrar", cost_filter, true, controller_id)
 		if chosen and is_instance_valid(chosen):

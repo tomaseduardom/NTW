@@ -393,6 +393,9 @@ func _apply_card_filter(cards: Array, filter: Dictionary) -> Array:
 				matches = false
 
 		# Filtro por coste máximo
+		# Un Oro no tiene coste (2026-10-17): no cumple filtros de coste.
+		if matches and (filter.has("cost_max") or filter.has("cost_min")) and int(card_data.get("tipo", -1)) == Constants.CardType.ORO:
+			matches = false
 		if matches and filter.has("cost_max"):
 			var card_cost = card_data.get("coste", 0)
 			if card_cost > filter.cost_max:

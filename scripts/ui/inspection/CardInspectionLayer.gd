@@ -644,10 +644,10 @@ func usable_abilities_for(source_card: Node, player_id: int) -> Array:
 		# Estaca): los DOS jugadores juegan Talismanes y usan habilidades,
 		# no solo Anular/Cancelar — mientras la palabra sea de la propia
 		# Guerra (no una ventana de respuesta a algo puntual).
-		var in_guerra: bool = GameManager.current_phase == Constants.Phase.GUERRA_TALISMANES 			and PriorityManager.current_priority_context == PriorityManager.PriorityContext.GUERRA_TALISMANES
+		var in_guerra: bool = GameManager.current_phase == Constants.Phase.GUERRA_TALISMANES and PriorityManager.current_priority_context == PriorityManager.PriorityContext.GUERRA_TALISMANES
 		if not is_own_turn:
 			var ability_lower := ability_raw_text.to_lower()
-			if "en tu turno" in ability_lower 					or not (in_guerra or _button_support._is_annul_or_cancel_ability(ability_raw_text)):
+			if "en tu turno" in ability_lower or not (in_guerra or _button_support._is_annul_or_cancel_ability(ability_raw_text)):
 				continue
 		if not in_play:
 			var zone_ok: bool = (source_zone == Constants.Zone.MANO and _ability_is_hand_usable(ability_raw_text)) \

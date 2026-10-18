@@ -171,7 +171,7 @@ func try_execute_shuffle_cost_max_three_pattern(ability_text: String, controller
 		# 2026-09-12: current_zone en vez de get_parent() (ver §10.5)
 		if c.get("current_zone") not in [Constants.Zone.LINEA_DEFENSA, Constants.Zone.LINEA_ATAQUE, Constants.Zone.LINEA_APOYO]:
 			return false
-		return ContinuousEffectManager.get_modified_cost(c) <= 3
+		return ContinuousEffectManager.cost_at_most(c, 3)
 	var target: Node = await main._card_interaction.await_target("Elige una carta de coste 3 o menos para barajar", filter, true, controller_id)
 	if target and is_instance_valid(target):
 		var target_owner: int = target.controller_id if target.get("controller_id") != null else controller_id
@@ -221,7 +221,7 @@ func try_execute_shuffle_cost_max_two_draw_two_pattern(ability_text: String, con
 		# 2026-09-12: current_zone en vez de get_parent() (ver §10.5)
 		if c.get("current_zone") not in [Constants.Zone.LINEA_DEFENSA, Constants.Zone.LINEA_ATAQUE, Constants.Zone.LINEA_APOYO]:
 			return false
-		return ContinuousEffectManager.get_modified_cost(c) <= 2
+		return ContinuousEffectManager.cost_at_most(c, 2)
 	var target: Node = await main._card_interaction.await_target("Elige una carta de coste 2 o menos para barajar", filter, true, controller_id)
 	if await TriggerSystem.open_response_window(card, "el caleuche", controller_id):
 		return true
@@ -279,7 +279,7 @@ func try_execute_shuffle_one_in_play_and_four_cemetery_pattern(ability_text: Str
 		if not field:
 			continue
 		for c in field.get_children():
-			if is_instance_valid(c) and int(ContinuousEffectManager.get_modified_cost(c)) <= 2:
+			if is_instance_valid(c) and ContinuousEffectManager.cost_at_most(c, 2):
 				in_play_candidates.append(c)
 	# 2026-09-13, a pedido del usuario: click directo en vez de los modales
 	# de lista viejos.

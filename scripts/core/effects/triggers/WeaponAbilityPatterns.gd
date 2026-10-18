@@ -154,7 +154,7 @@ func try_execute_flechar_xoon_leave_pattern(ability_text: String, card: Node, co
 			return false
 		if c.get("current_zone") not in [Constants.Zone.LINEA_DEFENSA, Constants.Zone.LINEA_ATAQUE, Constants.Zone.LINEA_APOYO]:
 			return false
-		return ContinuousEffectManager.get_modified_cost(c) <= 2
+		return ContinuousEffectManager.cost_at_most(c, 2)
 	var target: Node = await main._card_interaction.await_target(
 		"flechar xoon: puedes Desterrar una carta de coste 2 o menos (N para no hacerlo)", filter, true, controller_id)
 	if not target or not is_instance_valid(target):

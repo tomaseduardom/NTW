@@ -176,6 +176,22 @@ func get_modified_cost(card: Node) -> int:
 	return _modifier_registry.get_modified_cost(card)
 
 
+## "Carta de coste N o menos" (2026-10-17, regla confirmada por el usuario):
+## un Oro NO tiene coste salvo que esté en juego como Aliado, así que nunca
+## cumple un filtro de coste. get_modified_cost() sigue igual (pagos, badge).
+func cost_at_most(card, max_cost: int) -> bool:
+	if card == null or not is_instance_valid(card) or card.get("card_type") == Constants.CardType.ORO:
+		return false
+	return get_modified_cost(card) <= max_cost
+
+
+func data_cost_at_most(card_data: Dictionary, max_cost: int) -> bool:
+	"""Lo mismo para datos (Castillo, Cementerio, Destierro)."""
+	if int(card_data.get("tipo", -1)) == Constants.CardType.ORO:
+		return false
+	return int(card_data.get("coste", 99)) <= max_cost
+
+
 func get_modified_damage(card: Node) -> int:
 	return _modifier_registry.get_modified_damage(card)
 

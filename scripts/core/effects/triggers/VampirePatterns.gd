@@ -36,7 +36,7 @@ static func _name(c, fallback: String) -> String:
 static func _in_play_non_gold_max_cost(max_cost: int) -> Callable:
 	return func(c: Node) -> bool:
 		return c.get("card_type") != Constants.CardType.ORO and c.get("current_zone") in Constants.ZONES_IN_PLAY \
-			and int(ContinuousEffectManager.get_modified_cost(c)) <= max_cost
+			and ContinuousEffectManager.cost_at_most(c, max_cost)
 
 
 static func try_execute(card: Node, text: String, controller_id: int) -> bool:

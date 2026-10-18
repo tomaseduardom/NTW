@@ -44,7 +44,7 @@ func try_execute_banish_opponent_ally_search_ignis_titan_discount_pattern(abilit
 		# el usuario, ver arquitectura.md §10.5).
 		if c.get("current_zone") not in [Constants.Zone.LINEA_DEFENSA, Constants.Zone.LINEA_ATAQUE, Constants.Zone.LINEA_APOYO]:
 			return false
-		return ContinuousEffectManager.get_modified_cost(c) <= 3
+		return ContinuousEffectManager.cost_at_most(c, 3)
 	var target: Node = await main._card_interaction.await_target("Elige un Aliado oponente de coste 3 o menos para desterrar", filter, true, controller_id)
 	if target and is_instance_valid(target):
 		await ActionModule.banish([target], card, true)
@@ -273,7 +273,7 @@ func try_execute_opponent_hand_cost_max_to_bottom_pattern(ability_text: String, 
 	var opponent_hand: Array = opponent_hand_container.get_cards()
 	var to_move: Array = []
 	for c in opponent_hand:
-		if is_instance_valid(c) and int(ContinuousEffectManager.get_modified_cost(c)) <= 2:
+		if is_instance_valid(c) and ContinuousEffectManager.cost_at_most(c, 2):
 			to_move.append(c)
 	var deck: Array = CardManager.get_deck(opponent_id)
 	for c in to_move:
@@ -349,7 +349,7 @@ func try_execute_raise_opponent_cemetery_or_destroy_cost1_draw_pattern(ability_t
 			# 2026-09-13, a pedido del usuario: click directo en el
 			# Cementerio rival en vez del modal de lista viejo.
 			var eligible_filter := func(c: Node) -> bool:
-				return c.owner_id == opponent_id and int(c.card_data.get("coste", 99)) <= 2
+				return c.owner_id == opponent_id and ContinuousEffectManager.data_cost_at_most(c.card_data, 2)
 			var picked_list: Array = await main._zone_viewer.open_cemetery_target_picker(
 				"Sube una carta oponente de coste 2 o menos a su mano", eligible_filter, 1, "cemetery", false, false, controller_id)
 			# _put_found_card_into_play() no consulta Prevención (a diferencia
@@ -367,7 +367,7 @@ func try_execute_raise_opponent_cemetery_or_destroy_cost1_draw_pattern(ability_t
 			if c.get("current_zone") not in [Constants.Zone.LINEA_DEFENSA, Constants.Zone.LINEA_ATAQUE,
 					Constants.Zone.LINEA_APOYO, Constants.Zone.RESERVA_ORO]:
 				return false
-			return ContinuousEffectManager.get_modified_cost(c) <= 1
+			return ContinuousEffectManager.cost_at_most(c, 1)
 		# Selección de hasta 2 objetivos en juego vía clicks sucesivos.
 		var destroyed := 0
 		while destroyed < 2:
@@ -416,7 +416,7 @@ func try_execute_annul_non_ally_banish_or_cancel_ability_pattern(ability_text: S
 			if c.get("current_zone") not in [Constants.Zone.LINEA_DEFENSA, Constants.Zone.LINEA_ATAQUE,
 					Constants.Zone.LINEA_APOYO, Constants.Zone.RESERVA_ORO]:
 				return false
-			return ContinuousEffectManager.get_modified_cost(c) <= 2
+			return ContinuousEffectManager.cost_at_most(c, 2)
 		var target: Node = await main._card_interaction.await_target("Elige una carta de coste 2 o menos (no Aliado) para anular y desterrar", filter, true, controller_id)
 		if target and is_instance_valid(target):
 			if TriggerSystem._targeted_executor._target_text_denies(target, ["no puede ser anulad"]):
@@ -598,7 +598,7 @@ func try_execute_shuffle_or_banish_opponent_cost_max_pattern(ability_text: Strin
 		# 2026-09-12: current_zone en vez de get_parent() (ver §10.5)
 		if c.get("current_zone") not in [Constants.Zone.LINEA_DEFENSA, Constants.Zone.LINEA_ATAQUE, Constants.Zone.LINEA_APOYO]:
 			return false
-		return ContinuousEffectManager.get_modified_cost(c) <= max_cost
+		return ContinuousEffectManager.cost_at_most(c, max_cost)
 	var target: Node = await main._card_interaction.await_target("Elige una carta oponente de coste %d o menos" % max_cost, filter, true, controller_id)
 	if not target or not is_instance_valid(target):
 		return true

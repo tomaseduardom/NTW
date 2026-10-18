@@ -524,7 +524,7 @@ static func _vision_de_enoc(card: Node, lower: String, controller_id: int) -> bo
 static func _culto_a_la_muerte(card: Node, controller_id: int) -> bool:
 	var main := _main_node()
 	var annul_obj: Dictionary = StackAnnulScript.find_target(controller_id, true, false, func(obj: Dictionary) -> bool:
-		return StackAnnulScript.type_of(obj) != Constants.CardType.ALIADO and StackAnnulScript.cost_of(obj) <= 2)
+		return not (StackAnnulScript.type_of(obj) in [Constants.CardType.ALIADO, Constants.CardType.ORO]) and StackAnnulScript.cost_of(obj) <= 2)
 	var cancel_obj: Dictionary = StackAnnulScript.find_target(controller_id, false, true)
 	var title := _name(card, "Culto a la Muerte")
 	var use_annul: bool = not annul_obj.is_empty()
@@ -680,7 +680,7 @@ static func _try_ursitoare(card: Node, lower: String, controller_id: int) -> boo
 		if mine and is_instance_valid(mine):
 			var max_cost: int = int(ContinuousEffectManager.get_modified_cost(mine))
 			var opp_cards: Array = _in_play_cards(main, 1 - controller_id).filter(
-				func(c): return int(ContinuousEffectManager.get_modified_cost(c)) <= max_cost)
+				func(c): return ContinuousEffectManager.cost_at_most(c, max_cost))
 			if opp_cards.is_empty():
 				mine = null  # "y": sin carta oponente válida no se baraja ninguna
 			else:
