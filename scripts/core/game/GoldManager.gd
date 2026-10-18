@@ -2373,7 +2373,14 @@ func _play_talisman(card: Node) -> void:
 	# "-la" pegado al verbo mueve el acento y SÍ lleva tilde en español
 	# correcto ("destierra" sola no la lleva, pero "destiérralo" sí),
 	# aunque el texto esté bien escrito sin ningún mojibake de por medio.
-	var self_exile := "destierr" in habilidad or "destiérr" in habilidad    # cubre "destiérralo", "destierra esta carta", etc.
+	# Solo si se destierra a SÍ MISMO (2026-10-17, bug real reportado por el
+	# usuario: Cuervo Nocturno, jugado de la mano, se desterraba por su
+	# "Destierra seis cartas del tope del Castillo oponente").
+	var self_exile := false
+	for phrase in ["destiérralo", "destiérrala", "destierralo", "destierrala", "destierra esta carta",
+			"destierra este talismán", "destierra este talisman"]:
+		if phrase in habilidad:
+			self_exile = true
 	# "barájala"/"barajala" (2026-08-30, antes bastaba "baraj" sin más —
 	# falso positivo real con Aaru: su texto dice 'Baraja cualquier cantidad
 	# de cartas de tu MANO', un efecto sobre OTRAS cartas, no sobre sí
