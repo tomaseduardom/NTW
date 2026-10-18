@@ -27,6 +27,26 @@ class_name EasyBotController
 ## de este archivo se los saltaba todos en silencio.
 
 var _main: Node = null
+const EffectContextScript = preload("res://scripts/core/effects/EffectContext.gd")
+
+
+func _wait_until_settled() -> void:
+	"""Espera a que termine lo que se está resolviendo (2026-10-17, bug real
+	reportado por el usuario: respondió con Dragón Dorado y, mientras elegía
+	qué Barajar de su mano, el bot siguió atacando y pasando de turno). Hay
+	algo en curso si hay un efecto resolviéndose (EffectContext), la Pila
+	está procesando, o el humano está eligiendo una carta/búsqueda."""
+	var waited := 0.0
+	while waited < 45.0:
+		var busy: bool = not EffectContextScript._stack.is_empty() or ActionPipeline._is_resolving
+		if _main._card_interaction and _main._card_interaction.is_selecting_target:
+			busy = true
+		if _main.get("_zone_browse_picker") and _main._zone_browse_picker.is_active():
+			busy = true
+		if not busy:
+			return
+		await get_tree().create_timer(0.2).timeout
+		waited += 0.2
 
 
 func setup(main: Node) -> void:
@@ -41,11 +61,13 @@ func take_vigilia_actions() -> void:
 		return
 
 	await get_tree().create_timer(0.6).timeout
+	await _wait_until_settled()
 	_place_gold_if_possible()
 
 	await get_tree().create_timer(0.6).timeout
 	var plays := 0
 	while plays < 10:
+		await _wait_until_settled()
 		var candidates: Array = _affordable_allies_in_hand()
 		if candidates.is_empty():
 			break
@@ -55,6 +77,7 @@ func take_vigilia_actions() -> void:
 		await get_tree().create_timer(0.5).timeout
 
 	await get_tree().create_timer(0.6).timeout
+	await _wait_until_settled()
 	if GameManager.is_game_active and GameManager.active_player_id == 1 \
 			and GameManager.current_phase == Constants.Phase.VIGILIA:
 		_main._update_debug("Oponente ataca")
@@ -417,6 +440,7 @@ func try_respond_with_activated_ability() -> bool:
 # =============================================================================
 func take_ataque_actions() -> void:
 	await get_tree().create_timer(0.8).timeout
+	await _wait_until_settled()
 	if not (GameManager.is_game_active and GameManager.active_player_id == 1 \
 			and GameManager.current_phase == Constants.Phase.ATAQUE):
 		return
@@ -436,6 +460,7 @@ func take_ataque_actions() -> void:
 				await _main._card_interaction._declare_attacker(ally)
 
 	await get_tree().create_timer(0.6).timeout
+	await _wait_until_settled()
 	if GameManager.is_game_active and GameManager.active_player_id == 1 \
 			and GameManager.current_phase == Constants.Phase.ATAQUE:
 		_main._update_debug("Oponente confirma atacantes")
