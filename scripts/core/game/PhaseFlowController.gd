@@ -650,7 +650,7 @@ func _resolve_fase_final(player_id: int) -> void:
 	_main._game_hud.show_phase_announcement("FIN DEL TURNO")
 	await get_tree().create_timer(1.2).timeout
 
-	_main._update_debug("Fin del turno %d" % GameManager.current_turn)
+	# (El CombatLog ya dice "── Fin del turno de Jugador N ──".)
 	GameManager.end_turn()
 
 

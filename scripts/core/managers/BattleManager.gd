@@ -376,9 +376,10 @@ func _apply_castle_damage(defender_id: int, damage: int, to_exile: bool = false)
 		print("[BattleManager] Oros Azi reducen el daño en %d" % mini(azi_reduction, damage))
 		damage = maxi(0, damage - azi_reduction)
 
-	print("[BattleManager] Procesando %d daño al Castillo del Jugador %d → %s" % [
-		damage, defender_id + 1, dest_name
-	])
+	if Constants.VERBOSE_DIAG_LOGS:
+		print("[BattleManager] Procesando %d daño al Castillo del Jugador %d → %s" % [
+			damage, defender_id + 1, dest_name
+		])
 
 	# Procesar daño UNA CARTA A LA VEZ
 	for i in range(damage):
@@ -394,7 +395,7 @@ func _apply_castle_damage(defender_id: int, damage: int, to_exile: bool = false)
 			break
 
 		# Botar una carta
-		var mill_result = await EffectController.mill_cards(defender_id, 1, destination)
+		var mill_result = await EffectController.mill_cards(defender_id, 1, destination, false)
 		if mill_result.actual > 0:
 			result.cards_milled += 1
 			result.milled_cards.append_array(mill_result.milled_cards)
@@ -417,7 +418,8 @@ func _apply_castle_damage(defender_id: int, damage: int, to_exile: bool = false)
 			GameManager.player_loses(defender_id, "castle_empty_combat")
 			break
 
-	print("[BattleManager] Daño aplicado: %d/%d cartas botadas" % [result.cards_milled, damage])
+	print("[BattleManager] Jugador %d bota %d/%d por daño al %s: %s" % [defender_id + 1, result.cards_milled, damage, dest_name,
+		", ".join(result.milled_cards.map(func(c): return str(c.get("nombre", "?")) if c is Dictionary else "?"))])
 
 	return result
 

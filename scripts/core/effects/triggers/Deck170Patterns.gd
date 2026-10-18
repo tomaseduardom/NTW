@@ -138,14 +138,24 @@ static func on_vigilia_started(active_pid: int) -> void:
 				"Ponerla en juego ahora (en tu próximo turno no podrás poner Oros)", "No ponerla", pid)
 		if not use_it or not is_instance_valid(c):
 			return
+		# 2026-10-17, bug real reportado por el usuario: antes se bloqueaba el
+		# próximo turno y se sacaba la carta de la mano ANTES de ponerla en
+		# juego — si eso fallaba, la Escarapela desaparecía y el bloqueo
+		# quedaba igual. Ahora solo si de verdad entró en juego; si no, la
+		# carta sigue en la mano.
 		var data: Dictionary = c.card_data.duplicate()
-		PlayerSideScript.remove_from_hand(main, pid, c)
-		if is_instance_valid(c):
-			CardManager._disconnect_card_interaction_signals(c)
-			c.queue_free()
 		data["esta_oculta"] = false
+		var node = await main._gold_manager.put_gold_directly_in_reserva(pid, data)
+		if node == null or not is_instance_valid(node):
+			main._update_debug("%s no pudo ponerse en juego: sigue en tu mano" % str(data.get("nombre", "Escarapela Nacional")))
+			return
+		if is_instance_valid(c):
+			PlayerSideScript.remove_from_hand(main, pid, c)
+			if is_instance_valid(c):
+				CardManager._disconnect_card_interaction_signals(c)
+				c.queue_free()
 		main._gold_manager.block_gold_next_turn(pid)
-		await main._gold_manager.put_gold_directly_in_reserva(pid, data)
+		main._update_debug("%s entra en juego: en tu próximo turno no podrás poner Oros" % str(data.get("nombre", "Escarapela Nacional")))
 		return
 
 

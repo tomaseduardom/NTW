@@ -224,7 +224,6 @@ func _add_turn_header(turn_number: int, player_id: int) -> void:
 	var content = "║           TURNO %d - %s            ║" % [turn_number, "JUGADOR %d" % (player_id + 1)]
 	var bottom = "╚══════════════════════════════════════════════╝"
 
-	add_entry("turn_header", "")  # Línea vacía
 	add_entry("turn_header", border, {"turn": turn_number}, 1)
 	add_entry("turn_header", content, {"turn": turn_number, "player": player_id}, 1)
 	add_entry("turn_header", bottom, {"turn": turn_number}, 1)

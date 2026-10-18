@@ -179,7 +179,7 @@ func _draw_cards_fallback(player_id: int, amount: int) -> Dictionary:
 # =============================================================================
 # 3. BOTAR CARTAS - MILL (DAR Sección 8 - Botar)
 # =============================================================================
-func mill_cards(player_id: int, amount: int, destination: int = Constants.Zone.CEMENTERIO) -> Dictionary:
+func mill_cards(player_id: int, amount: int, destination: int = Constants.Zone.CEMENTERIO, log_it: bool = true) -> Dictionary:
 	"""Bota cartas del tope del Castillo una a una
 	'En medida de lo posible': bota hasta que el mazo se vacíe
 	Nota: Botar NO causa derrota, solo robar (DAR 2.1)
@@ -197,7 +197,7 @@ func mill_cards(player_id: int, amount: int, destination: int = Constants.Zone.C
 	if not _validate_board():
 		# GameBoard legacy no disponible (docs/audit, hallazgo 2/4) — usar el
 		# fallback basado en CardManager en vez de fallar en silencio.
-		return await _mill_cards_fallback(player_id, amount, destination)
+		return await _mill_cards_fallback(player_id, amount, destination, log_it)
 
 	# Validar destino
 	if destination != Constants.Zone.CEMENTERIO and destination != Constants.Zone.DESTIERRO:
@@ -228,24 +228,26 @@ func mill_cards(player_id: int, amount: int, destination: int = Constants.Zone.C
 		# Emitir trigger para cada carta botada (DAR 7.3)
 		emit_signal("on_card_milled", player_id, card, destination)
 
-		print("[EffectController] Botada: %s -> %s" % [
-			card.card_name if card.get("card_name") else "Carta",
-			dest_name
-		])
+		if Constants.VERBOSE_DIAG_LOGS:
+			print("[EffectController] Botada: %s -> %s" % [
+				card.card_name if card.get("card_name") else "Carta",
+				dest_name
+			])
 
 		# Pausa visual
 		if i < amount - 1:
 			await get_tree().create_timer(0.1).timeout
 
-	print("[EffectController] Jugador %d botó %d/%d cartas al %s" % [
-		player_id + 1, result.actual, amount, dest_name
-	])
+	if log_it:
+		print("[EffectController] Jugador %d botó %d/%d cartas al %s" % [
+			player_id + 1, result.actual, amount, dest_name
+		])
 
 	emit_signal("effect_completed", "mill_cards", player_id, result)
 	return result
 
 
-func _mill_cards_fallback(player_id: int, amount: int, destination: int) -> Dictionary:
+func _mill_cards_fallback(player_id: int, amount: int, destination: int, log_it: bool = true) -> Dictionary:
 	"""Fallback para botar cartas cuando no hay GameBoard legacy registrado.
 	Usa CardManager (su deck/cementerio/destierro quedan sincronizados con
 	Main por referencia compartida desde sync_from_main()) en vez de fallar
@@ -282,9 +284,14 @@ func _mill_cards_fallback(player_id: int, amount: int, destination: int) -> Dict
 		result.actual = dmg_result.get("actual", 0)
 		result.milled_cards = dmg_result.get("cards", [])
 
-	print("[EffectController] (fallback) Jugador %d botó %d/%d cartas al %s" % [
-		player_id + 1, result.actual, amount, Constants.ZONE_NAMES.get(destination, "?")
-	])
+	# Una línea con los nombres (2026-10-17, a pedido del usuario: el log
+	# del daño repetía 2 líneas por carta). El daño de combate lo resume
+	# BattleManager al final (log_it=false).
+	if log_it:
+		print("[EffectController] Jugador %d bota %d al %s: %s" % [
+			player_id + 1, result.actual, Constants.ZONE_NAMES.get(destination, "?"),
+			", ".join(result.milled_cards.map(func(c): return str(c.get("nombre", "?")) if c is Dictionary else "?"))
+		])
 
 	emit_signal("effect_completed", "mill_cards", player_id, result)
 	return result

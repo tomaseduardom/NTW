@@ -659,10 +659,11 @@ func take_damage(player_id: int, amount: int) -> Dictionary:
 	emit_signal("damage_taken", player_id, result.actual, result.cards)
 
 	# Log
-	var card_names = result.cards.map(func(c): return c.get("nombre", "?"))
-	print("[CardManager] Jugador %d recibe %d daño: %s" % [
-		player_id, result.actual, card_names
-	])
+	if Constants.VERBOSE_DIAG_LOGS:
+		var card_names = result.cards.map(func(c): return c.get("nombre", "?"))
+		print("[CardManager] Jugador %d recibe %d daño: %s" % [
+			player_id, result.actual, card_names
+		])
 
 	# Log parcial si no se pudo hacer todo el daño
 	# (2026-08-28, "módulos gordos" punto 1): 'log_partial_damage' espera
