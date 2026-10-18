@@ -1015,7 +1015,21 @@ func offer_prevention_for_player(target_owner_id: int, effect_source: Node, effe
 
 	if candidates.is_empty():
 		return false
+	# Una sola respuesta por efecto (2026-10-17, a pedido del usuario — DAR):
+	# aunque tengas 3 Estacas, contra un mismo efecto solo previenes con una;
+	# las demás cartas quedan afectadas.
+	var effect_ctx: Dictionary = EffectContextScript.current()
+	if not effect_ctx.is_empty() and target_owner_id in effect_ctx.get("prevented_by", []):
+		return false
+	var prevented: bool = await _offer_prevention_choice(target_owner_id, candidates)
+	if prevented and not effect_ctx.is_empty():
+		var by: Array = effect_ctx.get("prevented_by", [])
+		by.append(target_owner_id)
+		effect_ctx["prevented_by"] = by
+	return prevented
 
+
+func _offer_prevention_choice(target_owner_id: int, candidates: Array) -> bool:
 	if target_owner_id != 0:
 		# Capa 2 de la Pila de Respuesta Universal (2026-09-09): el bot ya
 		# puede usar Prevención de verdad — sin diálogo, decide solo, al azar
