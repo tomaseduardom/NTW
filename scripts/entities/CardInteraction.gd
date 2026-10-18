@@ -337,12 +337,12 @@ func return_to_hand() -> void:
 
 		if parent and parent.has_method("get_card_target_position"):
 			local_target_pos = parent.get_card_target_position(_card)
-			target_global_pos = parent.to_global(local_target_pos)
+			target_global_pos = parent.get_global_transform() * local_target_pos  # Control no tiene to_global()
 			has_local_target = true
 			if parent.has_method("get_card_target_rotation"):
 				target_rot = parent.get_card_target_rotation(_card)
 		elif parent:
-			local_target_pos = parent.to_local(target_global_pos)
+			local_target_pos = parent.get_global_transform().affine_inverse() * target_global_pos  # Control no tiene to_local()
 			has_local_target = true
 
 		# Si no estuvo en drag (top_level == false) y ya está en reposo en la mano, no mover
