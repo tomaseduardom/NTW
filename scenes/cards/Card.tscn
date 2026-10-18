@@ -1,6 +1,18 @@
-[gd_scene load_steps=2 format=3 uid="uid://card_scene"]
+[gd_scene load_steps=4 format=3 uid="uid://card_scene"]
 
 [ext_resource type="Script" path="res://scripts/entities/Card.gd" id="1_card"]
+[ext_resource type="Shader" path="res://shaders/card_relief.gdshader" id="2_relief"]
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_relief"]
+shader = ExtResource("2_relief")
+shader_parameter/card_size = Vector2(150, 210)
+shader_parameter/corner_radius = 7.0
+shader_parameter/bevel_width = 1.8
+shader_parameter/bevel_intensity = 0.28
+shader_parameter/rim_width = 1.0
+shader_parameter/rim_darkness = 0.5
+shader_parameter/rim_color = Color(0.06, 0.05, 0.04, 1)
+shader_parameter/ambient_depth = 0.045
 
 [node name="Card" type="Control"]
 custom_minimum_size = Vector2(150, 210)
@@ -11,6 +23,15 @@ offset_bottom = 210.0
 pivot_offset = Vector2(75, 105)
 script = ExtResource("1_card")
 
+[node name="ShadowPanel" type="Panel" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+
 [node name="CardBase" type="Panel" parent="."]
 layout_mode = 1
 anchors_preset = 15
@@ -20,7 +41,9 @@ grow_horizontal = 2
 grow_vertical = 2
 pivot_offset = Vector2(75, 105)
 mouse_filter = 2
+
 [node name="CardArt" type="TextureRect" parent="CardBase"]
+material = SubResource("ShaderMaterial_relief")
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0

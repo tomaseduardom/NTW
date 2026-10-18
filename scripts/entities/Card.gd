@@ -51,6 +51,7 @@ var _is_ready: bool = false
 # =============================================================================
 # REFERENCIAS A NODOS (se asignan en _ready)
 # =============================================================================
+var shadow_panel: Panel
 var card_base: Panel
 var card_art: TextureRect
 var hover_effect: Panel
@@ -474,6 +475,15 @@ func _ready() -> void:
 	add_to_group("cards")
 
 	# Obtener referencias a nodos
+	shadow_panel = get_node_or_null("ShadowPanel")
+	if shadow_panel == null:
+		shadow_panel = Panel.new()
+		shadow_panel.name = "ShadowPanel"
+		shadow_panel.set_anchors_preset(Control.PRESET_FULL_RECT)
+		shadow_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		add_child(shadow_panel)
+		move_child(shadow_panel, 0)
+
 	card_base = get_node_or_null("CardBase")
 	if card_base:
 		card_art = card_base.get_node_or_null("CardArt")
@@ -543,19 +553,51 @@ func _ready() -> void:
 				placeholder.visible = false
 
 
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_RESIZED:
+		_sync_shader_card_size()
+
+
+func _sync_shader_card_size() -> void:
+	if card_art and card_art.material is ShaderMaterial:
+		var effective_size: Vector2 = card_art.size if card_art.size.x > 0 else (size if size.x > 0 else Vector2(150, 210))
+		(card_art.material as ShaderMaterial).set_shader_parameter("card_size", effective_size)
+
+
 func _setup_styles() -> void:
 	"""Configura los estilos visuales de la carta"""
 	if not card_base:
 		return
 
-	# Estilo del panel base (transparente, la imagen lo cubre todo)
+	# Sombra física de contacto y oclusión ambiental (relieve 3D)
+	if shadow_panel:
+		var shadow_style = StyleBoxFlat.new()
+		shadow_style.bg_color = Color(0.04, 0.04, 0.04, 0.70)
+		shadow_style.corner_radius_top_left = 7
+		shadow_style.corner_radius_top_right = 7
+		shadow_style.corner_radius_bottom_left = 7
+		shadow_style.corner_radius_bottom_right = 7
+		shadow_style.shadow_color = Color(0.0, 0.0, 0.0, 0.65)
+		shadow_style.shadow_size = 10
+		shadow_style.shadow_offset = Vector2(0, 5)
+		shadow_panel.add_theme_stylebox_override("panel", shadow_style)
+
+	# Estilo del panel base (transparente para que el shader defina el recorte exacto)
 	var base_style = StyleBoxFlat.new()
-	base_style.bg_color = Color(0.1, 0.1, 0.1, 1)
-	base_style.corner_radius_top_left = 8
-	base_style.corner_radius_top_right = 8
-	base_style.corner_radius_bottom_left = 8
-	base_style.corner_radius_bottom_right = 8
+	base_style.bg_color = Color(0, 0, 0, 0)
+	base_style.corner_radius_top_left = 7
+	base_style.corner_radius_top_right = 7
+	base_style.corner_radius_bottom_left = 7
+	base_style.corner_radius_bottom_right = 7
 	card_base.add_theme_stylebox_override("panel", base_style)
+
+	# Material de relieve con bisel 3D, bordes troquelados e iluminación cenital
+	if card_art:
+		if card_art.material == null:
+			var mat = ShaderMaterial.new()
+			mat.shader = preload("res://shaders/card_relief.gdshader")
+			card_art.material = mat
+		_sync_shader_card_size()
 
 	# Estilo del hover
 	if hover_effect:
