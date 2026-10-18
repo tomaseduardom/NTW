@@ -11,6 +11,7 @@ const TalismanSearchScript = preload("res://scripts/core/effects/triggers/Talism
 const Deck170Script = preload("res://scripts/core/effects/triggers/Deck170Patterns.gd")
 const AziScript = preload("res://scripts/core/effects/triggers/AziPatterns.gd")
 const DagonScript = preload("res://scripts/core/effects/triggers/DagonPatterns.gd")
+const RatPlagueScript = preload("res://scripts/core/effects/triggers/RatPlaguePatterns.gd")
 const TriggerTollScript = preload("res://scripts/core/effects/triggers/TriggerTollPatterns.gd")
 const CastleLookScript = preload("res://scripts/core/effects/CastleLook.gd")  # "mira N cartas" (§69)
 
@@ -293,6 +294,9 @@ func _resolve_look_and_play_patterns(card: Node, full_ability_text: String, isol
 		return true
 	# Padre Dagón (2026-10-17): la mitad activada, global.
 	if await DagonScript.try_execute(card, isolated_ability_text, controller_id):
+		return true
+	# Plaga de Ratas (2026-10-17).
+	if await RatPlagueScript.try_execute(card, isolated_ability_text, controller_id):
 		return true
 	if await _main._effect_interpreter.try_execute(card, isolated_ability_text, controller_id):
 		return true

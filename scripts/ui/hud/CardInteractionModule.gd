@@ -641,6 +641,10 @@ func await_target_or_castillo_pick(prompt: String, filter: Callable, castillo_ti
 		start_target_selection(prompt, filter, func(c: Node) -> void:
 			card_state.chosen = c
 			card_state.done = true)
+		# Las cartas válidas brillan junto con el Castillo (2026-10-17, a
+		# pedido del usuario: Espada de O'Higgins solo hacía brillar el
+		# Castillo, sin mostrar qué cartas se podían Barajar).
+		_glow_valid_targets(filter)
 		while not card_state.done and not _state["race_done"]:
 			await get_tree().process_frame
 		if _state["race_done"]:
