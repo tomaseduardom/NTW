@@ -15,10 +15,6 @@ Estado: ✅ hecho · ⏳ falta · ⏸ para después (pedido del usuario)
 
 | Carta | Mazo | Qué falta |
 |---|---|---|
-| Linaje Maldito | douglas | Dado de seis caras: par = sin daño de combate y el oponente Destierra cuatro; impar = sin daño directo y hasta dos Aliados +2 y Furia. |
-| Abu Simbel | ezequiel | Al entrar, cada jugador recupera el control de sus cartas; nadie puede ganar el control de cartas ajenas. |
-| Sidhes del Bosque | ezequiel | Respuesta a una búsqueda del oponente: nombrar dos cartas que no puede buscar y mostrar lo que busca. |
-| Trono del Cielo | douglas | Cuenta como dos Oros si el oponente generó o puso más de un Oro en su turno anterior. |
 | Cañón Helios | ezequiel | Cuando el portador ataca, elegir un Aliado oponente que lo bloquee. |
 | Armadura Dorada | bestia-plaga | Desterrarla (o pagar un Oro y Desterrarla de la mano) para prevenir que tus Aliados sean afectados o un Aliado Anulado. |
 | Camino del Guerrero | bestia-plaga | Solo se juega si controlas y/o muestras al menos cuatro Aliados. |
@@ -48,3 +44,8 @@ Estado: ✅ hecho · ⏳ falta · ⏸ para después (pedido del usuario)
 | Maldición Vudú | ✅ Solo en tu turno. ✅ Cancela una habilidad (si hay una del oponente en la pila) o una carta en juego pierde su habilidad por el turno. ✅ En tu Fase Final tus Oros van al Oro Pagado. ✅ Desde el Cementerio: Desterrarla para Barajar o Desterrar una carta de un Cementerio. |
 | Seducción | ✅ Elegir: cada jugador Roba hasta tres (el oponente Destierra dos del tope por cada una), o cada jugador pone un Oro de su mano en su Oro Pagado (el del oponente sin habilidad por el turno). |
 | el huascar | ✅ El portador duplica su Fuerza y tus demás Aliados ganan Fuerza igual a su coste. ✅ Al entrar, un Oro no se agrupa el próximo turno. ✅ Una vez por turno, Desterrar hasta un Arma o Tótem en juego y Robar dos. |
+| Linaje Maldito | ✅ Dado: par = sin daño de combate hasta tu próximo turno y el oponente Destierra cuatro; impar = sin daño directo y hasta dos Aliados +2 (por el turno) y Furia. |
+| Trono del Cielo | ✅ Cuenta como dos Oros si el oponente generó o puso más de un Oro en su turno anterior. |
+| Abu Simbel | ✅ Al entrar, cada jugador recupera el control de sus cartas; mientras esté, nadie gana el control de cartas ajenas. |
+| Sidhes del Bosque | ✅ Respuesta a buscar en un Castillo: nombrar dos cartas que no puede buscar, ver lo que busca, Robar una o subir un Aliado. |
+| manuel rodriguez | ✅ "Al comienzo del turno" también en el turno del oponente. |
