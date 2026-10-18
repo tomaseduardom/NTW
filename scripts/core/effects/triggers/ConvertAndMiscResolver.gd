@@ -1,4 +1,4 @@
-﻿extends RefCounted
+extends RefCounted
 ## ConvertAndMiscResolver — Patrones compuestos de Convertir/transformar
 ## cartas (Sherlock Holmes, Jormundgander), destierro por cantidad dinámica
 ## de Aliados (Espada del Juicio), descarte+robo del oponente (Miguel) y
@@ -57,6 +57,9 @@ func try_execute_mill_convert_to_ally_pattern(ability_text: String, card: Node, 
 	Returns: true si el patrón aplicaba."""
 	var lower := ability_text.to_lower()
 	if not ("del tope de un castillo" in lower and "gana su control" in lower):
+		return false
+	# Viejo del Saco (2026-10-18) tiene su propio patrón (PresetDeckPatterns).
+	if "en un aliado de fuerza 2 con la habilidad furia, imbloqueable" in lower:
 		return false
 	if controller_id != 0 or not is_instance_valid(card):
 		return true
@@ -496,7 +499,7 @@ func try_execute_name_a_card_pattern(ability_text: String, card: Node, _controll
 		return false
 
 	var picked: Dictionary = await _executor._main._card_name_search.open_and_wait(
-		"Nombra una carta: pierde su habilidad en todas las Zonas mientras %s esté en juego" % str(card.get("card_name"))
+		"Escribe el nombre de una carta"
 	)
 	if picked.is_empty():
 		return true  # el jugador canceló la búsqueda — el 'nombra' no se declinaba, pero sin nombre no hay nada que hacer
