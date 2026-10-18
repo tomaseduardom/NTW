@@ -59,12 +59,23 @@ static func try_execute(card: Node, text: String, controller_id: int) -> bool:
 	if victims.is_empty():
 		main._update_debug("%s: tu oponente no tiene cartas que no sean Oro" % card_name)
 		return true
-	# 1) Pierden su habilidad — 2) son Destruidas.
+	# 0) Antes de que pase nada (2026-10-17, a pedido del usuario): el
+	# oponente puede prevenir que cada carta sea afectada (Estaca, Cañón
+	# Helios...) — la que se previene no pierde su habilidad ni es Destruida.
+	var affected: Array = []
 	for v in victims:
+		if not is_instance_valid(v) or not (v.get("current_zone") in Constants.ZONES_IN_PLAY):
+			continue
+		if await EffectController.offer_prevention(v, card, "silence"):
+			continue
+		affected.append(v)
+	# 1) Pierden su habilidad (también Indestructible, salvo las que no
+	# pueden perderla) — 2) son Destruidas.
+	for v in affected:
 		if is_instance_valid(v):
-			await KeywordManager.silence_card(v, card, "permanent")
-	var to_destroy: Array = victims.filter(func(v): return is_instance_valid(v) and v.get("current_zone") in Constants.ZONES_IN_PLAY)
+			await KeywordManager.silence_card(v, card, "permanent", true)
+	var to_destroy: Array = affected.filter(func(v): return is_instance_valid(v) and v.get("current_zone") in Constants.ZONES_IN_PLAY)
 	if not to_destroy.is_empty():
-		await ActionModule.destroy(to_destroy, card)
+		await ActionModule.destroy(to_destroy, card, false)
 	main._update_debug("%s: las cartas oponentes que no son Oro pierden su habilidad y son Destruidas" % card_name)
 	return true

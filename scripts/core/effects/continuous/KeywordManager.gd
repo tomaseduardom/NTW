@@ -576,7 +576,7 @@ func _is_protected_from_silence_by_reserva_source(card: Node) -> bool:
 	return protected_generally
 
 
-func silence_card(card: Node, source: Node = null, duration: String = "permanent") -> void:
+func silence_card(card: Node, source: Node = null, duration: String = "permanent", skip_prevention: bool = false) -> void:
 	"""Silencia una carta: pierde todas sus keywords (vía remove_keyword, así
 	respeta la misma limpieza por duración/salida de juego que cualquier otra
 	remoción) y deja de disparar sus habilidades activadas/disparadas — eso lo
@@ -606,7 +606,9 @@ func silence_card(card: Node, source: Node = null, duration: String = "permanent
 	# Prevención reactiva real (2026-09-09 — Estaca, tag "silence"): los
 	# ~20 llamadores de silence_card() ya se actualizaron con 'await' para
 	# soportar esto (a pedido del usuario).
-	if await EffectController.offer_prevention(card, source, "silence"):
+	# skip_prevention: el llamador ya ofreció la Prevención antes de todo el
+	# efecto (p.ej. Padre Dagón) — no se vuelve a preguntar.
+	if not skip_prevention and await EffectController.offer_prevention(card, source, "silence"):
 		return
 	var card_id = card.get_instance_id()
 	if not _silenced_cards.has(card_id):
