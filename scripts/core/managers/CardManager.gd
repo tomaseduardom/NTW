@@ -87,16 +87,30 @@ func sync_from_main() -> void:
 		push_warning("[CardManager] Main.gd no disponible para sincronizar")
 		return
 
+	# Partida nueva (2026-10-17, bug real reportado por el usuario: al
+	# empezar otra partida seguían las cartas del Cementerio de la anterior).
+	# CardManager es autoload y sobrevive entre partidas; antes se usaba
+	# 'if main.get("player_cemetery"):', y un Array VACÍO es falso, así que
+	# el Cementerio nuevo (vacío) nunca reemplazaba al viejo. El Destierro
+	# (que solo vive aquí) tampoco se limpiaba nunca.
+	for pid in [0, 1]:
+		_zones[pid].exile = []
+		_zones[pid].hand = []
+		_zones[pid].field = []
+		_zones[pid].gold = []
+		_zones[pid].gold_paid = []
+	_cemetery_silence_capture_active = false
+
 	# Sincronizar decks
-	if main.get("player_deck"):
+	if main.get("player_deck") != null:
 		_zones[0].deck = main.player_deck
-	if main.get("opponent_deck"):
+	if main.get("opponent_deck") != null:
 		_zones[1].deck = main.opponent_deck
 
 	# Sincronizar cementerios
-	if main.get("player_cemetery"):
+	if main.get("player_cemetery") != null:
 		_zones[0].cemetery = main.player_cemetery
-	if main.get("opponent_cemetery"):
+	if main.get("opponent_cemetery") != null:
 		_zones[1].cemetery = main.opponent_cemetery
 
 	print("[CardManager] Sincronizado - Deck P0: %d, Deck P1: %d" % [

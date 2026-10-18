@@ -37,7 +37,7 @@ func _wait_until_settled() -> void:
 	algo en curso si hay un efecto resolviéndose (EffectContext), la Pila
 	está procesando, o el humano está eligiendo una carta/búsqueda."""
 	var waited := 0.0
-	while waited < 45.0:
+	while waited < 10.0:
 		var busy: bool = not EffectContextScript._stack.is_empty() or ActionPipeline._is_resolving
 		if _main._card_interaction and _main._card_interaction.is_selecting_target:
 			busy = true
