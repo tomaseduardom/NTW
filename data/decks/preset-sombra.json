@@ -1,0 +1,144 @@
+{
+    "slug":  "preset-sombra",
+    "nombre":  "sombra new (publico)",
+    "arquetipo":  "Sombra",
+    "formato":  "imp",
+    "entries":  [
+                    {
+                        "myl_id":  "20611",
+                        "quantity":  1
+                    },
+                    {
+                        "myl_id":  "20831",
+                        "quantity":  1
+                    },
+                    {
+                        "myl_id":  "20842",
+                        "quantity":  1
+                    },
+                    {
+                        "myl_id":  "20850",
+                        "quantity":  1
+                    },
+                    {
+                        "myl_id":  "20861",
+                        "quantity":  2
+                    },
+                    {
+                        "myl_id":  "20863",
+                        "quantity":  2
+                    },
+                    {
+                        "myl_id":  "20336",
+                        "quantity":  3
+                    },
+                    {
+                        "myl_id":  "20345",
+                        "quantity":  1
+                    },
+                    {
+                        "myl_id":  "20485",
+                        "quantity":  1
+                    },
+                    {
+                        "myl_id":  "20554",
+                        "quantity":  1
+                    },
+                    {
+                        "myl_id":  "20556",
+                        "quantity":  1
+                    },
+                    {
+                        "myl_id":  "20557",
+                        "quantity":  3
+                    },
+                    {
+                        "myl_id":  "20253",
+                        "quantity":  1
+                    },
+                    {
+                        "myl_id":  "20576",
+                        "quantity":  2
+                    },
+                    {
+                        "myl_id":  "20579",
+                        "quantity":  2
+                    },
+                    {
+                        "myl_id":  "20582",
+                        "quantity":  2
+                    },
+                    {
+                        "myl_id":  "custom_tk26_11",
+                        "quantity":  1
+                    },
+                    {
+                        "myl_id":  "custom_tk26i_35",
+                        "quantity":  1
+                    },
+                    {
+                        "myl_id":  "custom_co2_04",
+                        "quantity":  2
+                    },
+                    {
+                        "myl_id":  "custom_mig_32",
+                        "quantity":  2
+                    },
+                    {
+                        "myl_id":  "custom_mig_35",
+                        "quantity":  1
+                    },
+                    {
+                        "myl_id":  "custom_mid_04",
+                        "quantity":  1
+                    },
+                    {
+                        "myl_id":  "custom_mid_08",
+                        "quantity":  1
+                    },
+                    {
+                        "myl_id":  "custom_mid_33",
+                        "quantity":  1
+                    },
+                    {
+                        "myl_id":  "custom_mie_19",
+                        "quantity":  1
+                    },
+                    {
+                        "myl_id":  "custom_aydv_182",
+                        "quantity":  2
+                    },
+                    {
+                        "myl_id":  "custom_aydv_213",
+                        "quantity":  1
+                    },
+                    {
+                        "myl_id":  "custom_aydv_xp021",
+                        "quantity":  2
+                    },
+                    {
+                        "myl_id":  "custom_aydv_xr017",
+                        "quantity":  2
+                    },
+                    {
+                        "myl_id":  "custom_aydv_xr027",
+                        "quantity":  1
+                    },
+                    {
+                        "myl_id":  "custom_aydv_xr036",
+                        "quantity":  2
+                    },
+                    {
+                        "myl_id":  "custom_aydv_xu005",
+                        "quantity":  1
+                    },
+                    {
+                        "myl_id":  "20967",
+                        "quantity":  2
+                    },
+                    {
+                        "myl_id":  "custom_drac_129",
+                        "quantity":  1
+                    }
+                ]
+}

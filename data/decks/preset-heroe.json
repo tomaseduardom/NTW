@@ -1,0 +1,148 @@
+{
+    "slug":  "preset-heroe",
+    "nombre":  "Héroe al peo (publico)",
+    "arquetipo":  "Héroe",
+    "formato":  "imp",
+    "entries":  [
+                    {
+                        "myl_id":  "20584",
+                        "quantity":  1
+                    },
+                    {
+                        "myl_id":  "20595",
+                        "quantity":  1
+                    },
+                    {
+                        "myl_id":  "20625",
+                        "quantity":  2
+                    },
+                    {
+                        "myl_id":  "20637",
+                        "quantity":  1
+                    },
+                    {
+                        "myl_id":  "20692",
+                        "quantity":  3
+                    },
+                    {
+                        "myl_id":  "20857",
+                        "quantity":  1
+                    },
+                    {
+                        "myl_id":  "20374",
+                        "quantity":  1
+                    },
+                    {
+                        "myl_id":  "20375",
+                        "quantity":  1
+                    },
+                    {
+                        "myl_id":  "20417",
+                        "quantity":  2
+                    },
+                    {
+                        "myl_id":  "20470",
+                        "quantity":  2
+                    },
+                    {
+                        "myl_id":  "20483",
+                        "quantity":  3
+                    },
+                    {
+                        "myl_id":  "20488",
+                        "quantity":  1
+                    },
+                    {
+                        "myl_id":  "20490",
+                        "quantity":  1
+                    },
+                    {
+                        "myl_id":  "20518",
+                        "quantity":  1
+                    },
+                    {
+                        "myl_id":  "20112",
+                        "quantity":  1
+                    },
+                    {
+                        "myl_id":  "20255",
+                        "quantity":  2
+                    },
+                    {
+                        "myl_id":  "20581",
+                        "quantity":  1
+                    },
+                    {
+                        "myl_id":  "custom_kvm_225",
+                        "quantity":  3
+                    },
+                    {
+                        "myl_id":  "custom_mig_37",
+                        "quantity":  1
+                    },
+                    {
+                        "myl_id":  "custom_mid_04",
+                        "quantity":  1
+                    },
+                    {
+                        "myl_id":  "custom_mid_25",
+                        "quantity":  1
+                    },
+                    {
+                        "myl_id":  "custom_mid_27",
+                        "quantity":  2
+                    },
+                    {
+                        "myl_id":  "custom_mid_32",
+                        "quantity":  1
+                    },
+                    {
+                        "myl_id":  "custom_mid_34",
+                        "quantity":  1
+                    },
+                    {
+                        "myl_id":  "custom_mid_36",
+                        "quantity":  1
+                    },
+                    {
+                        "myl_id":  "custom_mid_38",
+                        "quantity":  2
+                    },
+                    {
+                        "myl_id":  "custom_mid_39",
+                        "quantity":  1
+                    },
+                    {
+                        "myl_id":  "custom_mid_40",
+                        "quantity":  1
+                    },
+                    {
+                        "myl_id":  "custom_mid_42",
+                        "quantity":  1
+                    },
+                    {
+                        "myl_id":  "custom_mid_44",
+                        "quantity":  1
+                    },
+                    {
+                        "myl_id":  "custom_mie_31",
+                        "quantity":  2
+                    },
+                    {
+                        "myl_id":  "custom_mie_41",
+                        "quantity":  1
+                    },
+                    {
+                        "myl_id":  "custom_aydv_181",
+                        "quantity":  1
+                    },
+                    {
+                        "myl_id":  "cbg028",
+                        "quantity":  2
+                    },
+                    {
+                        "myl_id":  "custom_drac_p008",
+                        "quantity":  2
+                    }
+                ]
+}

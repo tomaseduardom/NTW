@@ -1,0 +1,92 @@
+{
+    "slug":  "preset-douglas",
+    "nombre":  "Al tomas le gusta el pilin (publico)",
+    "arquetipo":  "Douglas",
+    "formato":  "imp",
+    "entries":  [
+                    {
+                        "myl_id":  "20482",
+                        "quantity":  3
+                    },
+                    {
+                        "myl_id":  "20486",
+                        "quantity":  3
+                    },
+                    {
+                        "myl_id":  "20487",
+                        "quantity":  1
+                    },
+                    {
+                        "myl_id":  "20490",
+                        "quantity":  3
+                    },
+                    {
+                        "myl_id":  "20106",
+                        "quantity":  3
+                    },
+                    {
+                        "myl_id":  "20114",
+                        "quantity":  3
+                    },
+                    {
+                        "myl_id":  "custom_aydv_xl005",
+                        "quantity":  1
+                    },
+                    {
+                        "myl_id":  "custom_aydv_xl006",
+                        "quantity":  3
+                    },
+                    {
+                        "myl_id":  "custom_drac_115",
+                        "quantity":  3
+                    },
+                    {
+                        "myl_id":  "custom_drac_p004",
+                        "quantity":  3
+                    },
+                    {
+                        "myl_id":  "custom_drac_p010",
+                        "quantity":  2
+                    },
+                    {
+                        "myl_id":  "custom_drac_p020",
+                        "quantity":  3
+                    },
+                    {
+                        "myl_id":  "custom_drac_p021",
+                        "quantity":  3
+                    },
+                    {
+                        "myl_id":  "custom_drac_p022",
+                        "quantity":  3
+                    },
+                    {
+                        "myl_id":  "custom_drac_p025",
+                        "quantity":  3
+                    },
+                    {
+                        "myl_id":  "custom_drac_p026",
+                        "quantity":  3
+                    },
+                    {
+                        "myl_id":  "custom_drac_p031",
+                        "quantity":  1
+                    },
+                    {
+                        "myl_id":  "custom_drac_p032",
+                        "quantity":  1
+                    },
+                    {
+                        "myl_id":  "custom_drac_p040",
+                        "quantity":  1
+                    },
+                    {
+                        "myl_id":  "custom_drac_p052",
+                        "quantity":  1
+                    },
+                    {
+                        "myl_id":  "custom_drac_p059",
+                        "quantity":  3
+                    }
+                ]
+}

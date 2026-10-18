@@ -1,0 +1,132 @@
+{
+    "slug":  "preset-bestia-plaga",
+    "nombre":  "Bestia Plaga (publico)",
+    "arquetipo":  "Bestia",
+    "formato":  "imp",
+    "entries":  [
+                    {
+                        "myl_id":  "20588",
+                        "quantity":  1
+                    },
+                    {
+                        "myl_id":  "20637",
+                        "quantity":  1
+                    },
+                    {
+                        "myl_id":  "20642",
+                        "quantity":  3
+                    },
+                    {
+                        "myl_id":  "20643",
+                        "quantity":  2
+                    },
+                    {
+                        "myl_id":  "20743",
+                        "quantity":  2
+                    },
+                    {
+                        "myl_id":  "20807",
+                        "quantity":  2
+                    },
+                    {
+                        "myl_id":  "20814",
+                        "quantity":  2
+                    },
+                    {
+                        "myl_id":  "20864",
+                        "quantity":  1
+                    },
+                    {
+                        "myl_id":  "20488",
+                        "quantity":  1
+                    },
+                    {
+                        "myl_id":  "20537",
+                        "quantity":  2
+                    },
+                    {
+                        "myl_id":  "20557",
+                        "quantity":  3
+                    },
+                    {
+                        "myl_id":  "20101",
+                        "quantity":  1
+                    },
+                    {
+                        "myl_id":  "20576",
+                        "quantity":  2
+                    },
+                    {
+                        "myl_id":  "custom_mig_22",
+                        "quantity":  1
+                    },
+                    {
+                        "myl_id":  "custom_mid_33",
+                        "quantity":  2
+                    },
+                    {
+                        "myl_id":  "custom_mid_34",
+                        "quantity":  1
+                    },
+                    {
+                        "myl_id":  "custom_mid_35",
+                        "quantity":  1
+                    },
+                    {
+                        "myl_id":  "custom_mid_42",
+                        "quantity":  1
+                    },
+                    {
+                        "myl_id":  "custom_mie_28",
+                        "quantity":  2
+                    },
+                    {
+                        "myl_id":  "custom_aydv_194",
+                        "quantity":  1
+                    },
+                    {
+                        "myl_id":  "custom_mig_05",
+                        "quantity":  1
+                    },
+                    {
+                        "myl_id":  "custom_mig_07",
+                        "quantity":  1
+                    },
+                    {
+                        "myl_id":  "custom_mig_10",
+                        "quantity":  1
+                    },
+                    {
+                        "myl_id":  "custom_aydv_xl006",
+                        "quantity":  2
+                    },
+                    {
+                        "myl_id":  "21134",
+                        "quantity":  3
+                    },
+                    {
+                        "myl_id":  "custom_drac_122",
+                        "quantity":  1
+                    },
+                    {
+                        "myl_id":  "custom_drac_129",
+                        "quantity":  2
+                    },
+                    {
+                        "myl_id":  "custom_drac_032",
+                        "quantity":  2
+                    },
+                    {
+                        "myl_id":  "custom_drac_090",
+                        "quantity":  3
+                    },
+                    {
+                        "myl_id":  "custom_drac_p018",
+                        "quantity":  1
+                    },
+                    {
+                        "myl_id":  "custom_drac_p031",
+                        "quantity":  1
+                    }
+                ]
+}
