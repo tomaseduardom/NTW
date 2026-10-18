@@ -117,8 +117,8 @@ func pick(title: String, pools: Array, min_count: int, max_count: int, distinct_
 	for i in range(_pools.size()):
 		_arm_panel(i)
 		labels.append(zone_label(_pools[i].is_own, _pools[i].zone))
-	_main._update_debug("%s — clic en %s para ver sus cartas; confirma con el botón de paso" % [
-		title, " / ".join(labels)])
+	_main._update_debug("%s — clic en %s para ver sus cartas; confirma con el botón de paso%s" % [
+		title, " / ".join(labels), " (N: no elegir ninguna)" if _min == 0 else ""])
 	_refresh_paso()
 	_hand_nodes = hand_nodes.duplicate()
 	if _castle_pool_count() > 1:
@@ -174,6 +174,18 @@ func _unglow_hand() -> void:
 	for c in _hand_nodes:
 		if is_instance_valid(c):
 			c.set_activatable(false, CardBadges.GLOW_COLOR_CELESTE, &"zone_pick")
+
+
+func skip_optional() -> bool:
+	"""Tecla N (2026-10-17, a pedido del usuario): fallar la búsqueda — se
+	cierra sin elegir ninguna carta, aunque haya alguna válida. Solo si la
+	búsqueda puede fallar (mínimo 0)."""
+	if not _active or _done or _min > 0:
+		return false
+	_selected = []
+	_done = true
+	_main._update_debug("%s: no eliges ninguna carta" % _title)
+	return true
 
 
 func on_paso_pressed() -> void:

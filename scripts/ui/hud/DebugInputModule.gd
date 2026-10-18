@@ -71,7 +71,9 @@ func _input(event: InputEvent) -> void:
 				# múltiple con lo ya elegido. El resto del efecto sigue (p.ej.
 				# "Destierra hasta una carta y Roba una": Robas igual). Las
 				# selecciones obligatorias no se pueden saltar.
-				if _main._card_interaction and _main._card_interaction.is_selecting_target:
+				if _main._zone_browse_picker and _main._zone_browse_picker.skip_optional():
+					get_viewport().set_input_as_handled()
+				elif _main._card_interaction and _main._card_interaction.is_selecting_target:
 					_main._card_interaction.cancel_target_selection()
 					get_viewport().set_input_as_handled()
 				elif _main._remote_mirror and _main._remote_mirror.skip_optional():

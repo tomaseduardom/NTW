@@ -906,6 +906,7 @@ func _extract_action_impl(text: String) -> Dictionary:
 			"method":       "draw",
 			"params":       {"target_player": 0, "amount": amount},
 			"raw_text":     m.get_string(0),
+			"up_to":        "hasta" in m.get_string(0).to_lower(),
 		}
 
 	# ── 2. Resto de ABILITY_PATTERNS ───────────────────────────────────────────

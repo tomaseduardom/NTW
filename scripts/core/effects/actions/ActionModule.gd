@@ -56,6 +56,7 @@ signal action_validation_passed(action_type: String, can_resolve_percent: float)
 # REFERENCIAS
 # =============================================================================
 const EffectContextScript = preload("res://scripts/core/effects/EffectContext.gd")  # detector de paridad (§56)
+const PlayerSideScript = preload("res://scripts/core/game/PlayerSide.gd")
 var _game_board: Node = null
 
 ## Módulos extraídos (Fase 4 de reestructuración)
@@ -121,6 +122,28 @@ func draw(player_id: int, amount: int, source: String = "", skip_validation: boo
 	if await EffectContextScript.ensure_window():  # ventana única por efecto (§59)
 		return {"success": false, "cancelled": true}
 	return await _action_draw.draw(player_id, amount, source, skip_validation)
+
+
+func draw_up_to(player_id: int, max_amount: int, source: String = "", skip_validation: bool = false) -> Dictionary:
+	"""'Roba hasta N cartas' (2026-10-17, a pedido del usuario, p.ej.
+	Mecha-Daikaiju): tu Castillo brilla y cada clic en él roba una carta;
+	N (o ESC) para no robar más. El bot roba todas. En el Remoto, el mismo
+	prompt de "carta o Castillo" que ya usa await_target_or_castillo_pick()."""
+	if await EffectContextScript.ensure_window():  # ventana única por efecto (§59)
+		return {"success": false, "cancelled": true}
+	var main: Node = get_tree().root.get_node_or_null("Main")
+	if max_amount <= 0 or PlayerSideScript.is_bot(player_id) or not main or not main._card_interaction:
+		return await _action_draw.draw(player_id, max_amount, source, skip_validation)
+	var drawn := 0
+	while drawn < max_amount and CardManager.get_deck_count(player_id) > 0:
+		var pick: Dictionary = await main._card_interaction.await_target_or_castillo_pick(
+			"Roba hasta %d cartas (%d robadas): clic en tu Castillo para robar una — N para no robar más" % [max_amount, drawn],
+			func(_c: Node) -> bool: return false, "Robar una carta", true, true, player_id)
+		if str(pick.get("type", "none")) != "castillo":
+			break
+		await _action_draw.draw(player_id, 1, source, skip_validation)
+		drawn += 1
+	return {"success": true, "drawn": drawn}
 
 
 # =============================================================================

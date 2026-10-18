@@ -70,7 +70,10 @@ func execute_parsed_action(action: Dictionary, card: Node, _event_data: Dictiona
 			# ActionModule es autoload — siempre existe, sin necesidad de
 			# get_node_or_null/has_method (2026-08-28, "módulos gordos" punto
 			# 1: esos guards solo escondían un fallback roto, ver abajo).
-			await ActionModule.draw(controller_id, amount, "etb_trigger", true)
+			if action.get("up_to", false):  # "Roba hasta N" (2026-10-17)
+				await ActionModule.draw_up_to(controller_id, amount, "etb_trigger", true)
+			else:
+				await ActionModule.draw(controller_id, amount, "etb_trigger", true)
 
 		"DESTROY":
 			await _execute_targeted_destroy(card)

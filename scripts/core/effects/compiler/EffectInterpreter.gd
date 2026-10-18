@@ -237,7 +237,10 @@ func _execute_step(main: Node, st: Dictionary, targets: Array, card: Node, contr
 	var opponent_id := 1 - controller_id
 	match st.op:
 		"draw":
-			await ActionModule.draw(controller_id, st.amount, "efecto_compilado", true)
+			if st.get("up_to", false):
+				await ActionModule.draw_up_to(controller_id, st.amount, "efecto_compilado", true)
+			else:
+				await ActionModule.draw(controller_id, st.amount, "efecto_compilado", true)
 			return true
 		"mill":
 			var mill_pid: int = controller_id if st.who == "self" else opponent_id
@@ -511,7 +514,7 @@ static func describe_steps(steps: Array) -> String:
 	for st in steps:
 		match st.op:
 			"draw":
-				parts.append("Robar %d" % st.amount)
+				parts.append(("Robar hasta %d" if st.get("up_to", false) else "Robar %d") % st.amount)
 			"mill":
 				parts.append(("Botar %d" if st.who == "self" else "Tu oponente bota %d") % st.amount)
 			"discard":

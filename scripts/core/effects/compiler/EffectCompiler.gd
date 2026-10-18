@@ -119,7 +119,7 @@ const TARGET_RX := "(?<det>(?:hasta )?" + NUM + ") (?<kind>aliados?|cartas?|tote
 ## 'descarta... de la mano de tu oponente al azar' antes que 'descarta N
 ## cartas'). Cada uno se ancla al inicio del texto restante.
 const ATOMS := [
-	["draw", "(?:tu )?roba(?:s|r)? (?:hasta )?(?<n>" + NUM + ") cartas?(?: de tu castillo)?"],
+	["draw", "(?:tu )?roba(?:s|r)? (?<upto>hasta )?(?<n>" + NUM + ") cartas?(?: de tu castillo)?"],
 	["mill_per", "tu oponente bota (?<n>" + NUM + ") cartas? por cada (?<per>aliado en tu linea de defensa" \
 		+ "|aliado que controles|totem en juego|totem que controles)"],
 	["mill_opp", "tu oponente bota (?<n>" + NUM + ") cartas?"],
@@ -382,7 +382,7 @@ static func _build(atom_name: String, m: RegExMatch) -> Dictionary:
 	pero el caso es ambiguo (que lo resuelva la cadena vieja)."""
 	match atom_name:
 		"draw":
-			return {"op": "draw", "amount": parse_amount(m.get_string("n"))}
+			return {"op": "draw", "amount": parse_amount(m.get_string("n")), "up_to": not m.get_string("upto").is_empty()}
 		"mill_per":
 			var per_map := {
 				"aliado en tu linea de defensa": "own_allies_defense", "aliado que controles": "own_allies",
