@@ -376,7 +376,10 @@ func _apply_card_filter(cards: Array, filter: Dictionary) -> Array:
 		if filter.has("type"):
 			var card_type = card_data.get("tipo", -1)
 			if filter.type is Array:
-				if card_type not in filter.type:
+				# int() (2026-10-17): el tipo de los datos viene de JSON como
+				# float (2.0) y `2.0 in [2]` es false — "busca un Arma o un
+				# Oro" no encontraba nada.
+				if not (int(card_type) in filter.type.map(func(t): return int(t))):
 					matches = false
 			elif card_type != filter.type:
 				matches = false
