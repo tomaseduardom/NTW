@@ -291,6 +291,10 @@ func confirm_attackers() -> void:  # coroutine — el llamador debe usar 'await'
 		# Sin atacantes, terminar batalla
 		_end_batalla()
 		return
+	# "Al comienzo del Ataque" (2026-10-17, a pedido del usuario — Almirante
+	# Akari: "no puede generar si no se declara ataque"): se resuelve recién
+	# aquí, con atacantes declarados, no al entrar a la fase.
+	await TriggerSystem.resolve_ataque_triggers(active_player_id)
 
 	# "Cuando ataque" (DAR 5.3.1) se dispara AQUÍ, una sola vez por Aliado,
 	# no en declare_attacker() (2026-08-29, corrige exploit real: declarar/

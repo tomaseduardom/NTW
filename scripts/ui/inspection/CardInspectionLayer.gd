@@ -545,6 +545,22 @@ func activate_ability_for(source_card: Node, ability: Dictionary, controller_id:
 		await _button_support._activate_ability_via_pipeline(source_card, captured_card_data, captured, context)
 
 
+func _is_response_only_ability(raw_text: String) -> bool:
+	var lower := raw_text.to_lower()
+	var at := lower.find(" para ")
+	var effect: String = lower.substr(at + 6) if at >= 0 else lower
+	if not ("anular" in effect or "cancelar" in effect or "prevenir" in effect or "prevén" in effect):
+		return false
+	for other in ["destru", "desterr", "roba", "baraj", "busca", "gana", "pierd", "genera", "juega", "jugar", "pon "]:
+		if other in effect:
+			return false
+	return true
+
+
+func _responding_to_opponent(player_id: int) -> bool:
+	return PriorityManager.priority_window_active and PriorityManager.current_priority_context == PriorityManager.PriorityContext.RESPONSE_WINDOW and PriorityManager.current_stack_controller == 1 - player_id
+
+
 func usable_abilities_for(source_card: Node, player_id: int) -> Array:
 	"""Habilidades ACTIVADAS de esta carta que 'player_id' puede usar AHORA:
 	[{ability, validation}]. Mismo filtro que los botones de la
@@ -649,6 +665,13 @@ func usable_abilities_for(source_card: Node, player_id: int) -> Array:
 			var ability_lower := ability_raw_text.to_lower()
 			if "en tu turno" in ability_lower or not (in_guerra or _button_support._is_annul_or_cancel_ability(ability_raw_text)):
 				continue
+		# Solo de respuesta (2026-10-17, a pedido del usuario: Almirante
+		# Akari "no podría usar su habilidad cuando quiera"): si TODO lo que
+		# hace es Anular/Cancelar/prevenir, el botón aparece solo mientras
+		# respondes a algo del oponente (la prevención ya la ofrece el juego
+		# sola cuando corresponde).
+		if _is_response_only_ability(ability_raw_text) and not _responding_to_opponent(player_id):
+			continue
 		if not in_play:
 			var zone_ok: bool = (source_zone == Constants.Zone.MANO and _ability_is_hand_usable(ability_raw_text)) \
 				or (source_zone == Constants.Zone.CEMENTERIO and _ability_is_cementerio_usable(ability_raw_text))

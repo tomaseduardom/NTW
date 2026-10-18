@@ -751,22 +751,22 @@
         "uuid":  "20963"
     },
     {
+        "id":  "20964",
+        "uuid":  "20964",
+        "nombre":  "zadquiel",
+        "tipo":  1,
         "coste":  1,
-        "edicion":  "Angeles y Demonios: Vigilantes",
-        "frecuencia":  "Secreta",
         "fuerza":  3,
         "habilidad":  "Furia. Imbloqueable.\nCuando ataca, mira la mano de tu oponente y nombra una carta. Esa carta no puede ser jugada hasta tu próximo turno. \nUna vez por turno, puedes jugar un Arma sobre este Aliado o uno oponente, reduciendo su coste en un Oro, hasta un mínimo de 1.",
-        "id":  "20964",
+        "raza":  "Caballero",
+        "edicion":  "Angeles y Demonios: Vigilantes",
+        "frecuencia":  "Secreta",
         "imagen":  "https://ik.imagekit.io/crttm6rou/crttm6rou/deckshado/myl_cards/aydv_api_sync_2026_07/007_zadquiel.png",
         "keywords":  [
                          0,
                          1
                      ],
-        "nombre":  "zadquiel",
-        "raza":  "Caballero",
-        "texto_epico":  "",
-        "tipo":  1,
-        "uuid":  "20964"
+        "texto_epico":  ""
     },
     {
         "coste":  2,
@@ -3956,22 +3956,22 @@
         "uuid":  "custom_aydv_xm008"
     },
     {
+        "id":  "custom_aydv_xm009",
+        "uuid":  "custom_aydv_xm009",
+        "nombre":  "Zadquiel",
+        "tipo":  1,
         "coste":  1,
-        "edicion":  "Angeles y Demonios: Vigilantes",
-        "frecuencia":  "Mega Real",
         "fuerza":  3,
         "habilidad":  "Furia. Imbloqueable.\nCuando ataca, mira la mano de tu oponente y nombra una carta. Esa carta no puede ser jugada hasta tu próximo turno. \nUna vez por turno, puedes jugar un Arma sobre este Aliado o uno oponente, reduciendo su coste en un Oro, hasta un mínimo de 1.",
-        "id":  "custom_aydv_xm009",
+        "raza":  "Caballero",
+        "edicion":  "Angeles y Demonios: Vigilantes",
+        "frecuencia":  "Mega Real",
         "imagen":  "https://ik.imagekit.io/crttm6rou/deckshado/myl_cards/aydv_nonsecret_fix_2026_07/fixed_048_zadquiel_mega-real_custom-aydv-xm009.png",
         "keywords":  [
                          0,
                          1
                      ],
-        "nombre":  "Zadquiel",
-        "raza":  "Caballero",
-        "texto_epico":  "",
-        "tipo":  1,
-        "uuid":  "custom_aydv_xm009"
+        "texto_epico":  ""
     },
     {
         "coste":  0,
@@ -6176,21 +6176,21 @@
         "texto_epico":  ""
     },
     {
+        "id":  "custom_aydv_blog_cab_002",
+        "uuid":  "custom_aydv_blog_cab_002",
+        "nombre":  "Zadquiel",
+        "tipo":  1,
         "coste":  0,
-        "edicion":  "AYDV Blog Caballero (Jul 2026)",
-        "frecuencia":  "\u003cnull\u003e",
         "fuerza":  0,
         "habilidad":  "Nombra una carta de la mano rival para que no pueda jugarse hasta tu proximo turno.",
-        "id":  "custom_aydv_blog_cab_002",
+        "raza":  "Caballero",
+        "edicion":  "AYDV Blog Caballero (Jul 2026)",
+        "frecuencia":  "",
         "imagen":  "https://res.cloudinary.com/daobfx9yb/image/upload/v1783444417/deckshado/myl_cards/aydv_blog_caballero/aydv_cab_zadquiel.png",
         "keywords":  [
 
                      ],
-        "nombre":  "Zadquiel",
-        "raza":  "Caballero",
-        "texto_epico":  "",
-        "tipo":  1,
-        "uuid":  "custom_aydv_blog_cab_002"
+        "texto_epico":  ""
     },
     {
         "coste":  0,
@@ -8527,21 +8527,21 @@
         "uuid":  "custom_mig_15"
     },
     {
+        "id":  "custom_mig_16",
+        "uuid":  "custom_mig_16",
+        "nombre":  "Antonio Pincheira",
+        "tipo":  1,
         "coste":  3,
-        "edicion":  "Ángeles y Demonios: Vigilantes - Mazo Guerreros",
-        "frecuencia":  "Promocional",
         "fuerza":  5,
         "habilidad":  "Furia.\r\nCuando entra en juego o ataca, tu oponente Bota seis cartas. Pon hasta un Oro de su Cementerio en tu Reserva.\r\nUna vez por turno, Roba dos cartas.\r\nEn tu Fase Final, agrupa hasta dos Aliados.\r\nLos Talismanes cuestan un Oro adicional.",
-        "id":  "custom_mig_16",
+        "raza":  "Guerrero",
+        "edicion":  "Ángeles y Demonios: Vigilantes - Mazo Guerreros",
+        "frecuencia":  "Promocional",
         "imagen":  "https://res.cloudinary.com/drw7y27sm/image/fetch/https%3A%2F%2Fcdn.shopify.com%2Fs%2Ffiles%2F1%2F0103%2F3601%2F0303%2Ffiles%2F03_mazos_imperio-guerrero_016_copia.png%3Fv%3D1780113044",
         "keywords":  [
                          0
                      ],
-        "nombre":  "Antonio Pincheira",
-        "raza":  "Guerrero",
-        "texto_epico":  "",
-        "tipo":  1,
-        "uuid":  "custom_mig_16"
+        "texto_epico":  ""
     },
     {
         "coste":  1,
@@ -27464,21 +27464,21 @@
         "uuid":  "20315"
     },
     {
+        "id":  "20316",
+        "uuid":  "20316",
+        "nombre":  "antonio pincheira",
+        "tipo":  1,
         "coste":  3,
-        "edicion":  "IMP - Libertadores",
-        "frecuencia":  "Ultra Real",
         "fuerza":  5,
         "habilidad":  "Furia.\nCuando entra en juego o ataca, tu oponente Bota seis cartas. Pon hasta un Oro de su Cementerio en tu Reserva.\nUna vez por turno, Roba dos cartas.\nEn tu Fase Final, agrupa hasta dos Aliados.\nLos Talismanes cuestan un Oro adicional.",
-        "id":  "20316",
+        "raza":  "Guerrero",
+        "edicion":  "IMP - Libertadores",
+        "frecuencia":  "Ultra Real",
         "imagen":  "https://res.cloudinary.com/daobfx9yb/image/upload/v1782775747/deckshado/myl_cards/libertadores/006.png",
         "keywords":  [
                          0
                      ],
-        "nombre":  "antonio pincheira",
-        "raza":  "Guerrero",
-        "texto_epico":  "",
-        "tipo":  1,
-        "uuid":  "20316"
+        "texto_epico":  ""
     },
     {
         "coste":  2,
@@ -30302,21 +30302,21 @@
         "uuid":  "20481"
     },
     {
+        "id":  "20482",
+        "uuid":  "20482",
+        "nombre":  "antonio pincheira",
+        "tipo":  1,
         "coste":  3,
+        "fuerza":  5,
+        "habilidad":  "Furia. Cuando entra en juego o ataca, tu oponente Bota seis cartas. Pon hasta un Oro de su Cementerio en tu Reserva. Una vez por turno, Roba dos cartas. En tu Fase Final, agrupa hasta dos Aliados. Los Talismanes cuestan un Oro adicional.",
+        "raza":  "Guerrero",
         "edicion":  "IMP - Libertadores",
         "frecuencia":  "Legendaria",
-        "fuerza":  5,
-        "habilidad":  "Furia.\nEn tu Vigilia, una vez por turno, tu oponente Bota seis cartas. Pon hasta un Oro de su Cementerio en tu Reserva y busca dos Aliados en tu Castillo y ponlos en tu mano.\nLos Talismanes cuestan un Oro adicional.",
-        "id":  "20482",
         "imagen":  "https://res.cloudinary.com/daobfx9yb/image/upload/v1782775868/deckshado/myl_cards/libertadores/172.png",
         "keywords":  [
                          0
                      ],
-        "nombre":  "antonio pincheira",
-        "raza":  "Guerrero",
-        "texto_epico":  "",
-        "tipo":  1,
-        "uuid":  "20482"
+        "texto_epico":  ""
     },
     {
         "coste":  2,

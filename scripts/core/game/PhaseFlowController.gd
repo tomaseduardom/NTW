@@ -103,7 +103,8 @@ func _on_phase_state_machine(new_phase: Constants.Phase) -> void:
 			_main._game_hud.show_phase_announcement("BATALLA MITOLÓGICA")
 			# "Al comienzo del Ataque" (2026-09-04, p.ej. almirante akari) —
 			# mismo patrón que Agrupación/Vigilia/Fase Final.
-			await TriggerSystem.resolve_ataque_triggers(GameManager.active_player_id)
+			# "Al comienzo del Ataque" se resuelve al confirmar atacantes
+			# (GameManager.confirm_attackers(), 2026-10-17): sin ataque, no hay.
 			# Sin ningún Aliado que pueda atacar, directo a la Fase Final
 			# (2026-10-17, a pedido del usuario).
 			if GameManager.current_phase == Constants.Phase.ATAQUE and not _active_player_can_attack():
