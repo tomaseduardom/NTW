@@ -1529,7 +1529,22 @@ func _on_confirm_pressed() -> void:
 		await tw.finished
 
 	var player_deck: Dictionary = _mazos[_selected_player_idx]
-	var opponent_deck: Dictionary = _mazos[randi() % _mazos.size()] if not _mazos.is_empty() else {}
+	# Mazo del bot (2026-10-17, bug real reportado por el usuario: salió con un
+	# mazo de 5 cartas — se elegía al azar entre TODOS los mazos, incluidos
+	# los personales incompletos). Ahora al azar entre los presets (los mazos
+	# públicos importados) completos; si no hubiera ninguno, como antes.
+	var bot_pool: Array = _mazos.filter(func(m: Dictionary) -> bool:
+		if not str(m.get("slug", "")).begins_with("preset-"):
+			return false
+		var total := 0
+		for e in m.get("entries", []):
+			total += int(e.get("quantity", 1))
+		return total >= 40)
+	var opponent_deck: Dictionary = {}
+	if not bot_pool.is_empty():
+		opponent_deck = bot_pool[randi() % bot_pool.size()]
+	elif not _mazos.is_empty():
+		opponent_deck = _mazos[randi() % _mazos.size()]
 
 	# 2026-09-22, a pedido del usuario (fusión de mazos privados/públicos en
 	# el carrusel principal, ver _fetch_and_merge_public_decks() arriba): los
