@@ -480,8 +480,15 @@ func _card_matches_filter(card: Node, filter: Dictionary) -> bool:
 
 	# Filtro por tipo
 	if filter.has("type"):
-		var card_type = _main._get_card_type(card)
-		if card_type != filter.type:
+		# 2026-10-17, bug real reportado por el usuario ("Invalid operands
+		# 'String' and 'int' in operator '!='"): _get_card_type() devuelve el
+		# nombre ("ALIADO") pero varios registros pasan el enum
+		# (Constants.CardType.ALIADO). Se comparan los dos como nombre.
+		var card_type: String = str(_main._get_card_type(card))
+		var wanted = filter.type
+		if wanted is int:
+			wanted = Constants.CardType.keys()[wanted] if wanted >= 0 and wanted < Constants.CardType.size() else ""
+		if card_type != str(wanted):
 			return false
 
 	# Filtro por coste

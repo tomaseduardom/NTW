@@ -1,5 +1,6 @@
 extends Node
 const Deck170Script = preload("res://scripts/core/effects/triggers/Deck170Patterns.gd")
+const AziScript = preload("res://scripts/core/effects/triggers/AziPatterns.gd")
 ## BattleManager - Gestiona el combate y asignación de daño (DAR Sección 5.C4)
 ## Calcula el resultado de combate entre atacantes y bloqueadores
 
@@ -368,6 +369,12 @@ func _apply_castle_damage(defender_id: int, damage: int, to_exile: bool = false)
 
 	var destination = Constants.Zone.DESTIERRO if to_exile else Constants.Zone.CEMENTERIO
 	var dest_name = "Destierro" if to_exile else "Cementerio"
+	# Oro de Azi del Abismo (2026-10-17): "Reduce el daño recibido por tu
+	# Castillo en 1 por cada Oro Azi que controles".
+	var azi_reduction: int = AziScript.castle_damage_reduction(defender_id)
+	if azi_reduction > 0 and damage > 0:
+		print("[BattleManager] Oros Azi reducen el daño en %d" % mini(azi_reduction, damage))
+		damage = maxi(0, damage - azi_reduction)
 
 	print("[BattleManager] Procesando %d daño al Castillo del Jugador %d → %s" % [
 		damage, defender_id + 1, dest_name

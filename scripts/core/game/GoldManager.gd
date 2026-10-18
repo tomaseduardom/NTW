@@ -104,6 +104,8 @@ func setup(main: Node) -> void:
 			GameManager.turn_started.connect(_on_turn_started_clear_virtual_gold)
 	if not GameManager.phase_changed.is_connected(_on_phase_changed_deck170):
 		GameManager.phase_changed.connect(_on_phase_changed_deck170)
+	if not GameManager.turn_started.is_connected(_on_turn_started_revert_converted):
+		GameManager.turn_started.connect(_on_turn_started_revert_converted)  # Azi del Abismo
 	# Reina Nyssara (2026-10-14): Aliado oponente que sale del juego por un
 	# Talismán.
 	if not _deck170_left_play_connected:
@@ -2853,6 +2855,109 @@ func _revert_gold_to_ally(card: Node) -> void:
 		card.play_enter_animation()
 	_update_gold_display()
 	await _trigger_enter_play(card, Constants.Zone.LINEA_DEFENSA)
+
+
+## Azi del Abismo (2026-10-17): "convertir este Aliado hasta tu próximo
+## turno en un Oro con la habilidad ...". Queda en tu Reserva de Oro con esa
+## habilidad y, al empezar tu próximo turno, vuelve a ser el Aliado original
+## en tu Línea de Defensa (revert_converted_golds()). No usa revert_to_data
+## (eso es Jormundgander: volver a Aliado al pagarlo).
+func convert_ally_to_gold_until_next_turn(card: Node, gold_ability: String) -> void:
+	if not is_instance_valid(card):
+		return
+	var pid: int = card.controller_id if card.get("controller_id") != null else 0
+	var reserva: Node = PlayerSideScript.gold_reserva(_main, pid)
+	var field = card.get_parent()
+	var start_pos: Vector2 = card.global_position
+	card.set_meta("converted_until_turn_of", pid)
+	card.set_meta("converted_original_data", card.card_data.duplicate())
+	if field:
+		field.remove_child(card)
+		if field is Control and _main._zone_manager:
+			_main._zone_manager.compact_field_slots(field)
+	card.can_interact = false
+	var new_data: Dictionary = card.card_data.duplicate()
+	new_data["tipo"] = Constants.CardType.ORO
+	new_data["habilidad"] = gold_ability
+	# Sus efectos continuos de Aliado ("Tus demás Aliados ganan 1 de
+	# Fuerza") no siguen mientras es un Oro.
+	ContinuousEffectManager.remove_modifiers_from_source(card)
+	ContinuousEffectManager._invalidate_cache()
+	card.load_from_data(new_data)
+	reserva.add_child(card)
+	card.top_level = false
+	card.set_zone(Constants.Zone.RESERVA_ORO)
+	card.scale = Constants.GOLD_CARD_SCALE
+	card.base_scale = Constants.GOLD_CARD_SCALE
+	GameState.agregar_oro_reserva(pid, 1)
+	if pid == 0 and not _main.gold_cards.has(card):
+		_main.gold_cards.append(card)
+	update_gold_containers_spacing()
+	_update_gold_display()
+	await get_tree().process_frame
+	var end_pos: Vector2 = card.global_position
+	card.global_position = start_pos
+	var tween = create_tween()
+	tween.tween_property(card, "global_position", end_pos, 0.3).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_CUBIC)
+	await tween.finished
+	card.can_interact = true
+	_main._update_debug("%s se convierte en un Oro hasta tu próximo turno" % str(card.card_name))
+
+
+func revert_converted_golds(pid: int) -> void:
+	"""Al empezar el turno de 'pid': sus Oros convertidos "hasta tu próximo
+	turno" vuelven a ser el Aliado original en su Línea de Defensa."""
+	for container in [PlayerSideScript.gold_reserva(_main, pid), PlayerSideScript.oro_pagado(_main, pid)]:
+		if not container:
+			continue
+		for c in container.get_children():
+			if is_instance_valid(c) and int(c.get_meta("converted_until_turn_of", -1)) == pid:
+				await _revert_converted_gold(c, pid)
+
+
+func _revert_converted_gold(card: Node, pid: int) -> void:
+	var original: Dictionary = card.get_meta("converted_original_data", {})
+	card.remove_meta("converted_until_turn_of")
+	card.remove_meta("converted_original_data")
+	if original.is_empty():
+		return
+	var parent = card.get_parent()
+	if parent == PlayerSideScript.gold_reserva(_main, pid):
+		GameState.agregar_oro_reserva(pid, -1)
+	elif parent == PlayerSideScript.oro_pagado(_main, pid):
+		GameState.agregar_oro_pagado(pid, -1)
+	if pid == 0:
+		_main.gold_cards.erase(card)
+	var start_pos: Vector2 = card.global_position
+	if parent:
+		parent.remove_child(card)
+	card.can_interact = false
+	card.load_from_data(original)
+	var field: Node = _main.player_field if pid == 0 else _main.opponent_field
+	field.add_child(card)
+	card.top_level = false
+	card.set_zone(Constants.Zone.LINEA_DEFENSA)
+	card.scale = Vector2.ONE
+	card.base_scale = Vector2.ONE
+	card.modulate = Color(1, 1, 1, 1)
+	ContinuousEffectManager._register_card_continuous_effects(card)
+	ContinuousEffectManager._invalidate_cache()
+	update_gold_containers_spacing()
+	_update_gold_display()
+	await get_tree().process_frame
+	var end_pos: Vector2 = _main._zone_manager.pin_card_to_field_slot(card, field)
+	card.global_position = start_pos
+	var tween = create_tween()
+	tween.tween_property(card, "global_position", end_pos, 0.3).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_CUBIC)
+	await tween.finished
+	card.can_interact = true
+	_main._update_debug("%s vuelve a ser un Aliado" % str(card.card_name))
+
+
+func _on_turn_started_revert_converted(player_id: int, _turn: int) -> void:
+	if NetworkClient.room_code != "" and not NetworkClient.is_host:
+		return  # la lógica corre en el Anfitrión
+	await revert_converted_golds(player_id)
 
 
 func convert_ally_to_gold_in_pagado(card: Node) -> void:

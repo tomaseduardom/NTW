@@ -9,6 +9,7 @@ class_name TriggerResolution
 const EffectContextScript = preload("res://scripts/core/effects/EffectContext.gd")  # detector de paridad (§56)
 const TalismanSearchScript = preload("res://scripts/core/effects/triggers/TalismanSearchPatterns.gd")
 const Deck170Script = preload("res://scripts/core/effects/triggers/Deck170Patterns.gd")
+const AziScript = preload("res://scripts/core/effects/triggers/AziPatterns.gd")
 const CastleLookScript = preload("res://scripts/core/effects/CastleLook.gd")  # "mira N cartas" (§69)
 
 var _main: Node
@@ -279,6 +280,10 @@ func _resolve_look_and_play_patterns(card: Node, full_ability_text: String, isol
 	# Solar barajaba el mazo).
 	if card and card.get("card_type") == Constants.CardType.TALISMAN \
 			and await Deck170Script.try_annul_on_stack(card, full_ability_text, controller_id):
+		return true
+	# Azi del Abismo (2026-10-17): Descartar para convertirse en Oro hasta tu
+	# próximo turno — antes del intérprete, que solo veía "Descarta una".
+	if await AziScript.try_execute(card, isolated_ability_text, controller_id):
 		return true
 	if await _main._effect_interpreter.try_execute(card, isolated_ability_text, controller_id):
 		return true

@@ -41,6 +41,7 @@ enum DamageTarget {
 	PLAYER          # Daño al jugador (vida, si aplica)
 }
 
+const AziScript = preload("res://scripts/core/effects/triggers/AziPatterns.gd")
 const TYPE_NAMES: Dictionary = {
 	DamageType.COMBAT: "Combate",
 	DamageType.DIRECT: "Directo",
@@ -525,6 +526,13 @@ func _apply_damage_reduction(player_id: int, damage: int, type: int, context: Di
 			var actual_reduce = mini(reduce_amount, result.remaining)
 			result.reduced += actual_reduce
 			result.remaining -= actual_reduce
+
+	# Oro de Azi del Abismo (2026-10-17): "Reduce el daño recibido por tu
+	# Castillo en 1 por cada Oro Azi que controles".
+	if player_id >= 0:
+		var azi: int = mini(AziScript.castle_damage_reduction(player_id), maxi(0, result.remaining))
+		result.reduced += azi
+		result.remaining -= azi
 
 	result.remaining = maxi(0, result.remaining)
 
