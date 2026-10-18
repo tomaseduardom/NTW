@@ -128,11 +128,13 @@ static func _grant_furia(card: Node, controller_id: int) -> void:
 			if target:
 				break
 	elif main._card_interaction:
-		target = await main._card_interaction.await_target("Un Aliado gana Furia por el turno", filter, true, controller_id)
+		target = await main._card_interaction.await_target("Un Aliado gana Furia", filter, true, controller_id)
 	if not target or not is_instance_valid(target):
 		return
-	KeywordManager.grant_keyword(target, Constants.Keyword.FURIA, card, "turn")
-	main._update_debug("%s gana Furia por el turno" % str(target.get("card_name")))
+	# Permanente (2026-10-17, regla del usuario: sin duración escrita, solo
+	# los cambios de Fuerza son "por el turno"; lo demás es permanente).
+	KeywordManager.grant_keyword(target, Constants.Keyword.FURIA, card, "permanent")
+	main._update_debug("%s gana Furia" % str(target.get("card_name")))
 
 
 static func _kai_piloto(card: Node, controller_id: int) -> void:
