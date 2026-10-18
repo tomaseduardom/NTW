@@ -25,6 +25,16 @@ func setup(inspector: CardInspectionLayer) -> void:
 
 
 func try_build(ability_lower: String, btn: Button, panel: Control, card_for_glow: Node, captured: Dictionary) -> bool:
+	# Maldición Vudú (2026-10-18): desde el Cementerio, Desterrarla para
+	# Barajar o Desterrar una carta de un Cementerio. Antes que el patrón de
+	# Espíritu de la Máquina (grupo B), que tiene el mismo final de texto.
+	if "desterrarlo de tu cementerio para barajar o desterrar una carta de un cementerio" in ability_lower:
+		btn.pressed.connect(func():
+			_inspector.close_card_inspection()
+			await load("res://scripts/core/effects/triggers/NoePatterns.gd").maldicion_from_cemetery(card_for_glow)
+		)
+		panel.add_child(btn)
+		return true
 	# Patrón especial de Bernardo O'Higgins (2026-08-26): coste alternativo
 	# (barajar un Arma/Aliado Caballero) + elegir entre dos efectos con
 	# objetivo (desterrar ≤3 / cancelar habilidad) — no encaja en el

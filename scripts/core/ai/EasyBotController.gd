@@ -475,6 +475,11 @@ func reset_gold() -> void:
 	if _main.opponent_oro_pagado:
 		for card in _main.opponent_oro_pagado.get_children().duplicate():
 			if is_instance_valid(card):
+				# el huascar (2026-10-18): "no puede ser agrupado el próximo turno"
+				if int(card.get_meta("no_regroup_turn", -1)) == GameManager.current_turn:
+					GameState.agregar_oro_reserva(1, -1)
+					GameState.agregar_oro_pagado(1, 1)
+					continue
 				_main.opponent_oro_pagado.remove_child(card)
 				card.can_interact = false
 				_main.opponent_gold.add_child(card)

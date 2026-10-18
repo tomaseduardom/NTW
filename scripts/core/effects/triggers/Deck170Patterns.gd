@@ -442,6 +442,8 @@ static func try_annul_on_stack(card: Node, text: String, controller_id: int) -> 
 		return await _culto_a_la_muerte(card, controller_id)
 	if "elige un efecto" in lower:
 		return false
+	if "o una carta en juego pierde su habilidad" in lower:
+		return false  # Maldición Vudú (NoePatterns)
 	# Visión de Enoc: "Anula un Talismán de coste 2 o menos o prevén que un
 	# Aliado sea afectado por un efecto oponente."
 	if "o prevén que un aliado sea afectado por un efecto oponente" in lower:

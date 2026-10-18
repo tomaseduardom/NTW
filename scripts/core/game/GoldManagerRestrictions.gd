@@ -128,6 +128,10 @@ func _is_response_only_ability_text(ability_text: String) -> bool:
 		return false
 	for raw_sentence in ability_text.split("."):
 		var sentence: String = raw_sentence.strip_edges().to_lower()
+		# "Cancela una habilidad o una carta en juego pierde su habilidad"
+		# (Maldición Vudú, 2026-10-18): la otra opción no es una respuesta.
+		if "o una carta en juego pierde su habilidad" in sentence:
+			continue
 		if sentence.begins_with("anula") or sentence.begins_with("cancela") \
 				or sentence.begins_with("puedes jugarlo en respuesta a"):
 			return true

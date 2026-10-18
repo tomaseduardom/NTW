@@ -742,6 +742,12 @@ func play_card(card: Node) -> bool:
 	# 2026-10-14, a pedido del usuario (Sacrificio Solar jugado en Vigilia
 	# sin nada que anular): un Talismán de Anular/Cancelar solo se juega en
 	# respuesta a una carta o habilidad del rival.
+	# "Sólo puedes jugarlo durante tu turno" (Maldición Vudú, 2026-10-18).
+	if card.card_type == Constants.CardType.TALISMAN and GameManager.active_player_id != player_id \
+			and "sólo puedes jugarlo durante tu turno" in str(card.get("card_ability")).to_lower():
+		_main._update_debug("%s solo se puede jugar durante tu turno" % card.card_name)
+		await _return_card_rejected(card)
+		return false
 	if is_instant_response and not _responding_to_opponent(player_id):
 		_main._update_debug("%s solo se puede jugar en respuesta a una carta o habilidad oponente" % card.card_name)
 		await _return_card_rejected(card)
@@ -1416,6 +1422,38 @@ func _register_weapon_strength_bonus(weapon: Node, ally: Node) -> void:
 	modificador alcanza para que todo se refleje solo."""
 	var ability_text: String = weapon.get("card_ability") if weapon.get("card_ability") != null else ""
 	if ability_text.is_empty():
+		return
+
+	# el huascar (2026-10-18): "El portador duplica su Fuerza y tus demás
+	# Aliados ganan Fuerza igual a su coste." — mientras esté equipada.
+	if "el portador duplica su fuerza y tus demás aliados ganan fuerza igual a su coste" in ability_text.to_lower():
+		ContinuousEffectManager.register_modifier({
+			"source": weapon,
+			"target": ally,
+			"type": ContinuousEffectManager.ModifierType.STRENGTH,
+			"stat": "strength",
+			"value": func(_c: Node, current: int, _mod: Dictionary) -> int: return current,
+			"operation": "add",
+			"duration": ContinuousEffectManager.ModifierDuration.PERMANENT,
+			"static_ability": true,
+			"layer": ContinuousEffectManager.ModifierLayer.LAYER_7B_CHAR_MODIFY,
+			"description": "%s duplica su Fuerza (%s)" % [ally.card_name, weapon.card_name],
+		})
+		ContinuousEffectManager.register_modifier({
+			"source": weapon,
+			"target": "ALLIES",
+			"type": ContinuousEffectManager.ModifierType.STRENGTH,
+			"stat": "strength",
+			"value": func(c: Node, _current: int, _mod: Dictionary) -> int:
+				if c == ally or not is_instance_valid(c):
+					return 0
+				return int(c.get("card_cost")) if c.get("card_cost") != null else 0,
+			"operation": "add",
+			"duration": ContinuousEffectManager.ModifierDuration.PERMANENT,
+			"static_ability": true,
+			"layer": ContinuousEffectManager.ModifierLayer.LAYER_7B_CHAR_MODIFY,
+			"description": "%s: tus demás Aliados +Fuerza igual a su coste" % weapon.card_name,
+		})
 		return
 
 	# "El portador gana Furia y 1 de Fuerza por cada Oro que controles"
@@ -3082,6 +3120,11 @@ func _reset_gold() -> void:
 	if _main.player_oro_pagado:
 		for card in _main.player_oro_pagado.get_children().duplicate():
 			if is_instance_valid(card):
+				# el huascar (2026-10-18): "no puede ser agrupado el próximo turno"
+				if int(card.get_meta("no_regroup_turn", -1)) == GameManager.current_turn:
+					GameState.agregar_oro_reserva(0, -1)
+					GameState.agregar_oro_pagado(0, 1)
+					continue
 				await _mover_oro_a_reserva(card)
 	_update_gold_display()
 
