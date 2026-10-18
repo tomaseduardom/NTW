@@ -2494,7 +2494,14 @@ func pagar_coste(cantidad: int, card_type: int = -1, card_race: String = "", car
 		# vez, preguntando 3+2+1=6 veces para restante=3 en vez de 3 — esa
 		# función ya junta por sí sola tantas cartas como pida 'restante',
 		# no devuelve una sola).
-		var oros_reserva: Array = reserva_container.get_children()
+		# Solo Oros físicos (2026-10-17, bug real reportado por el usuario:
+		# con 3 Oros + 1 Oro generado para Armas/Tótems, jugar un Aliado de
+		# coste 3 te hacía elegir — la Reserva también tiene las fichas de
+		# Oro Virtual, genérico y restringido, que no se pagan así).
+		var token_nodes: Array = virtual_gold_tokens.get(player_id, []).duplicate()
+		for pool in restricted_gold_pools.get(player_id, []):
+			token_nodes.append_array(pool.tokens)
+		var oros_reserva: Array = reserva_container.get_children().filter(func(c): return not (c in token_nodes))
 		var chosen_oros: Array = await _choose_physical_gold_to_spend(oros_reserva, restante, player_id)
 		var chosen_idx := 0
 
@@ -2858,7 +2865,8 @@ func _revert_gold_to_ally(card: Node) -> void:
 
 
 ## Azi del Abismo (2026-10-17): "convertir este Aliado hasta tu próximo
-## turno en un Oro con la habilidad ...". Queda en tu Reserva de Oro con esa
+## turno en un Oro con la habilidad ...". Queda en tu Oro Pagado (fe de
+## erratas, confirmado por el usuario; antes era la Reserva) con esa
 ## habilidad y, al empezar tu próximo turno, vuelve a ser el Aliado original
 ## en tu Línea de Defensa (revert_converted_golds()). No usa revert_to_data
 ## (eso es Jormundgander: volver a Aliado al pagarlo).
@@ -2866,7 +2874,7 @@ func convert_ally_to_gold_until_next_turn(card: Node, gold_ability: String) -> v
 	if not is_instance_valid(card):
 		return
 	var pid: int = card.controller_id if card.get("controller_id") != null else 0
-	var reserva: Node = PlayerSideScript.gold_reserva(_main, pid)
+	var pagado: Node = PlayerSideScript.oro_pagado(_main, pid)
 	var field = card.get_parent()
 	var start_pos: Vector2 = card.global_position
 	card.set_meta("converted_until_turn_of", pid)
@@ -2884,14 +2892,12 @@ func convert_ally_to_gold_until_next_turn(card: Node, gold_ability: String) -> v
 	ContinuousEffectManager.remove_modifiers_from_source(card)
 	ContinuousEffectManager._invalidate_cache()
 	card.load_from_data(new_data)
-	reserva.add_child(card)
+	pagado.add_child(card)
 	card.top_level = false
-	card.set_zone(Constants.Zone.RESERVA_ORO)
+	card.set_zone(Constants.Zone.ORO_PAGADO)
 	card.scale = Constants.GOLD_CARD_SCALE
 	card.base_scale = Constants.GOLD_CARD_SCALE
-	GameState.agregar_oro_reserva(pid, 1)
-	if pid == 0 and not _main.gold_cards.has(card):
-		_main.gold_cards.append(card)
+	GameState.agregar_oro_pagado(pid, 1)
 	update_gold_containers_spacing()
 	_update_gold_display()
 	await get_tree().process_frame
@@ -2899,9 +2905,10 @@ func convert_ally_to_gold_until_next_turn(card: Node, gold_ability: String) -> v
 	card.global_position = start_pos
 	var tween = create_tween()
 	tween.tween_property(card, "global_position", end_pos, 0.3).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_CUBIC)
+	tween.parallel().tween_property(card, "modulate", Color(0.6, 0.6, 0.6, 1.0), 0.3)
 	await tween.finished
 	card.can_interact = true
-	_main._update_debug("%s se convierte en un Oro hasta tu próximo turno" % str(card.card_name))
+	_main._update_debug("%s se convierte en un Oro en tu Oro Pagado hasta tu próximo turno" % str(card.card_name))
 
 
 func revert_converted_golds(pid: int) -> void:
