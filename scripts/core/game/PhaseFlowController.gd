@@ -104,6 +104,14 @@ func _on_phase_state_machine(new_phase: Constants.Phase) -> void:
 			# "Al comienzo del Ataque" (2026-09-04, p.ej. almirante akari) —
 			# mismo patrón que Agrupación/Vigilia/Fase Final.
 			await TriggerSystem.resolve_ataque_triggers(GameManager.active_player_id)
+			# Sin ningún Aliado que pueda atacar, directo a la Fase Final
+			# (2026-10-17, a pedido del usuario).
+			if GameManager.current_phase == Constants.Phase.ATAQUE and not _active_player_can_attack():
+				_main._update_debug("Ningún Aliado puede atacar — pasas a la Fase Final")
+				await get_tree().create_timer(0.4).timeout
+				if GameManager.current_phase == Constants.Phase.ATAQUE:
+					await GameManager.confirm_attackers()
+				return
 			if GameManager.active_player_id == 1:
 				await _main._easy_bot.take_ataque_actions()
 
@@ -120,6 +128,20 @@ func _on_phase_state_machine(new_phase: Constants.Phase) -> void:
 			_main._game_hud.show_phase_announcement("FASE FINAL")
 			if GameManager.active_player_id == 1:
 				await _resolve_fase_final(1)
+
+
+func _active_player_can_attack() -> bool:
+	"""¿Tiene el jugador activo al menos un Aliado que pueda declarar ataque?"""
+	var pid: int = GameManager.active_player_id
+	for container in [_main.player_field, _main.player_linea_ataque] if pid == 0 \
+			else [_main.opponent_field, _main.opponent_linea_ataque]:
+		if not container:
+			continue
+		for ally in container.get_children():
+			if is_instance_valid(ally) and ally.get("card_type") == Constants.CardType.ALIADO \
+					and TurnManager.can_attack(ally).get("can_attack", false):
+				return true
+	return false
 
 
 func _on_turn_started(player_id: int, turn_number: int) -> void:
