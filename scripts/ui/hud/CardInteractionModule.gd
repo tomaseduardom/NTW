@@ -632,7 +632,7 @@ func await_target_or_castillo_pick(prompt: String, filter: Callable, castillo_ti
 				_state["race_done"] = true
 				_state["castillo_own"] = picked_own
 				_state["castillo_chosen"] = true
-				cancel_target_selection())
+				cancel_target_selection(), castillo_own_only)
 	_state["arm"].call()
 
 	var chosen_card: Node = null

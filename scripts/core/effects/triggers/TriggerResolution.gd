@@ -10,6 +10,7 @@ const EffectContextScript = preload("res://scripts/core/effects/EffectContext.gd
 const TalismanSearchScript = preload("res://scripts/core/effects/triggers/TalismanSearchPatterns.gd")
 const Deck170Script = preload("res://scripts/core/effects/triggers/Deck170Patterns.gd")
 const AziScript = preload("res://scripts/core/effects/triggers/AziPatterns.gd")
+const TriggerTollScript = preload("res://scripts/core/effects/triggers/TriggerTollPatterns.gd")
 const CastleLookScript = preload("res://scripts/core/effects/CastleLook.gd")  # "mira N cartas" (§69)
 
 var _main: Node
@@ -114,6 +115,10 @@ func resolve_next_trigger() -> Dictionary:
 	# Matriz V (2026-10-14): habilidades de cartas de coste 0 o 1 del rival
 	# solo se disparan si Destierra una carta de su mano.
 	if await Deck170Script.matriz_v_blocks_trigger(card, controller_id):
+		_main.awaiting_response = false
+		return await resolve_next_trigger()
+	# Mecha-Daikaiju (2026-10-17): pagar un Oro para usar habilidades disparadas.
+	if await TriggerTollScript.blocks_trigger(card, controller_id):
 		_main.awaiting_response = false
 		return await resolve_next_trigger()
 	var ctx_token: int = EffectContextScript.push(card, controller_id, "disparada", "pending")

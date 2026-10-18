@@ -1,4 +1,5 @@
 ﻿extends RefCounted
+const TriggerTollScript = preload("res://scripts/core/effects/triggers/TriggerTollPatterns.gd")
 ## WeaponSearchShuffleExecutor — Slice de TargetedEffectExecutor.gd dividido
 ## por tamaño (2026-09-06, "módulos gordos"). Agrupa el cluster compuesto de
 ## Buscar/Barajar-para-robar/Arma-con-descuento: _execute_targeted_search,
@@ -37,6 +38,18 @@ func _execute_targeted_search(card: Node, controller_id: int, source_text: Strin
 	# buscar en el Castillo rival).
 	if not source_text.strip_edges().is_empty():
 		ability_text = source_text
+	# Solo la oración de la búsqueda (2026-10-17, bug real reportado por el
+	# usuario: Mecha-Daikaiju "busca en tu Castillo un Oro, ponlo en tu Oro
+	# Pagado y hasta tu próximo turno tu oponente no puede..." buscaba en el
+	# Castillo rival por el "oponente" de la otra parte).
+	var full_text_before_trim: String = ability_text
+	var busca_at: int = ability_text.to_lower().find("busca")
+	if busca_at >= 0:
+		var end_at: int = ability_text.find(".", busca_at)
+		ability_text = ability_text.substr(busca_at, (end_at - busca_at) if end_at >= 0 else -1)
+		var tail_at: int = ability_text.to_lower().find(" y hasta tu próximo turno")
+		if tail_at > 0:
+			ability_text = ability_text.substr(0, tail_at)
 	var ability_lower := ability_text.to_lower()
 
 	var zone := Constants.Zone.CASTILLO
@@ -50,10 +63,10 @@ func _execute_targeted_search(card: Node, controller_id: int, source_text: Strin
 	var opponent_id := 1 - controller_id
 	var zone_owner := controller_id
 	var owner_is_ambiguous := false
-	if "oponente" in ability_lower or "rival" in ability_lower:
-		zone_owner = opponent_id
-	elif "tu castillo" in ability_lower or "tu cementerio" in ability_lower:
+	if "tu castillo" in ability_lower or "tu cementerio" in ability_lower:
 		zone_owner = controller_id
+	elif "oponente" in ability_lower or "rival" in ability_lower:
+		zone_owner = opponent_id
 	elif "un castillo" in ability_lower or "un cementerio" in ability_lower:
 		owner_is_ambiguous = true
 
@@ -125,6 +138,8 @@ func _execute_targeted_search(card: Node, controller_id: int, source_text: Strin
 	var destination := Constants.Zone.MANO
 	if "destiérra" in ability_lower or "destierra" in ability_lower:
 		destination = Constants.Zone.DESTIERRO
+	elif "en tu oro pagado" in ability_lower:
+		destination = Constants.Zone.ORO_PAGADO  # Mecha-Daikaiju (2026-10-17)
 	elif "en tu reserva" in ability_lower or "en su reserva" in ability_lower:
 		destination = Constants.Zone.RESERVA_ORO
 
@@ -137,6 +152,9 @@ func _execute_targeted_search(card: Node, controller_id: int, source_text: Strin
 	# del proyecto) — sí le corresponde la ventana genérica aquí.
 	if await TriggerSystem.open_response_window(card, str(card.card_name), controller_id):
 		return
+	# Mecha-Daikaiju: "...y hasta tu próximo turno tu oponente no puede
+	# utilizar habilidades disparadas a menos que pague un Oro".
+	TriggerTollScript.register_if_text(full_text_before_trim, controller_id)
 	# "un Castillo/un Cementerio" (2026-10-14, a pedido del usuario): el
 	# selector del tablero con las zonas de los dos jugadores, en vez de
 	# elegir primero de quién (popup en el caso del Cementerio).

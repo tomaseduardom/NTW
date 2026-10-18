@@ -529,8 +529,8 @@ func await_castillo_pick(main: Node, title: String, chooser_id: int = 0) -> bool
 	return await _dialogs.await_castillo_pick(main, title, chooser_id)
 
 
-func start_castillo_pick(main: Node, title: String, callback: Callable) -> void:
-	_dialogs.start_castillo_pick(main, title, callback)
+func start_castillo_pick(main: Node, title: String, callback: Callable, own_only: bool = false) -> void:
+	_dialogs.start_castillo_pick(main, title, callback, own_only)
 
 
 func cancel_castillo_pick() -> void:

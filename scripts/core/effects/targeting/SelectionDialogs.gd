@@ -517,7 +517,7 @@ var _castillo_pick_callback: Callable = Callable()
 var _castillo_pick_cleanup: Callable = Callable()
 
 
-func start_castillo_pick(main: Node, title: String, callback: Callable) -> void:
+func start_castillo_pick(main: Node, title: String, callback: Callable, own_only: bool = false) -> void:
 	"""Versión 'start' de await_castillo_pick() (2026-09-06, a pedido del
 	usuario) — separada para poder correr EN CARRERA contra otro tipo de
 	selección (p.ej. CardInteractionModule.start_target_selection(), usada
@@ -532,7 +532,7 @@ func start_castillo_pick(main: Node, title: String, callback: Callable) -> void:
 		callback.call(await await_two_choice(main, title, "Tu Castillo", "Castillo del oponente"))
 		return
 
-	if main.has_method("_update_debug"):
+	if main.has_method("_update_debug") and not own_only:
 		main._update_debug("%s — clickea tu Castillo o el del rival" % title)
 
 	_castillo_pick_active = true
@@ -589,7 +589,16 @@ func start_castillo_pick(main: Node, title: String, callback: Callable) -> void:
 		if ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_LEFT:
 			_resolve_castillo_pick(false)
 	player_castillo.gui_input.connect(on_player_input)
-	opponent_castillo.gui_input.connect(on_opponent_input)
+	if own_only:
+		# Solo tu Castillo (2026-10-17, p.ej. "Roba hasta N"): el rival no
+		# brilla ni se puede clickear.
+		pulse_opponent.kill()
+		opponent_castillo.modulate = Color(1.0, 1.0, 1.0, 1.0)
+		_set_castillo_pick_glow(opponent_castillo, false)
+		opponent_castillo.mouse_filter = prev_opponent_filter
+		opponent_castillo.mouse_default_cursor_shape = prev_opponent_cursor
+	else:
+		opponent_castillo.gui_input.connect(on_opponent_input)
 
 
 func _resolve_castillo_pick(picked_own: bool) -> void:

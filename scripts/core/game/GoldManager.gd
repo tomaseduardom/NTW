@@ -520,19 +520,29 @@ func _resolve_become_opponent_gold_copy(card: Node) -> void:
 	que ninguna referencia externa (contenedor, señales ya conectadas) se
 	rompe — solo cambia QUÉ carta representa visualmente y funcionalmente."""
 	var player_id: int = card.controller_id
-	var rival_gold = _main.opponent_gold if player_id == 0 else _main.player_gold
-	if not rival_gold or not _main._card_interaction:
+	if not _main._card_interaction:
 		return
+	# Reserva Y Oro Pagado del rival (2026-10-17, bug real reportado por el
+	# usuario: "un Oro que controle tu oponente" incluye los ya pagados; antes
+	# solo miraba la Reserva). Sin las fichas de Oro Virtual.
+	var rival_id: int = 1 - player_id
+	var token_nodes: Array = virtual_gold_tokens.get(rival_id, []).duplicate()
+	for pool in restricted_gold_pools.get(rival_id, []):
+		token_nodes.append_array(pool.tokens)
 	var candidates: Array = []
-	for c in rival_gold.get_children():
-		if is_instance_valid(c) and c != card:
-			candidates.append(c)
+	for rival_zone in [PlayerSideScript.gold_reserva(_main, rival_id), PlayerSideScript.oro_pagado(_main, rival_id)]:
+		if not rival_zone:
+			continue
+		for c in rival_zone.get_children():
+			if is_instance_valid(c) and c != card and not (c in token_nodes) and c.get("card_data") is Dictionary:
+				candidates.append(c)
 	if candidates.is_empty():
 		_main._update_debug("No hay ningún Oro rival para copiar — %s se queda sin habilidad" % card.card_name)
 		return
 	var filter := func(c: Node) -> bool:
 		return c in candidates
-	var target: Node = await _main._card_interaction.await_target("Elige un Oro rival para copiar", filter, true, player_id)
+	# Condición de juego: no se puede rechazar (no cancelable).
+	var target: Node = await _main._card_interaction.await_target("Elige un Oro rival para copiar", filter, false, player_id)
 	if not target or not is_instance_valid(target):
 		return
 	var copied_data: Dictionary = target.card_data.duplicate(true)
