@@ -235,7 +235,17 @@ func refresh_cost_badge(source_override: Node = null) -> void:
 	- Resto (Castillo, Destierro): sin insignia."""
 	var effective := _card.card_cost
 	var zone = _card.get("current_zone")
-	if zone == Constants.Zone.MANO or zone == Constants.Zone.CEMENTERIO:
+	# Cementerio: solo si esa carta se puede jugar desde ahí (Exhumar, etc.)
+	# (2026-10-17, a pedido del usuario: la reducción/aumento de coste se
+	# muestra solo en cartas que se van a jugar).
+	# Los Oros no se juegan ni tienen coste: nunca muestran reducción (2026-10-17,
+	# bug real: Crono Diamante en la mano mostraba -1).
+	if _card.get("card_type") == Constants.CardType.ORO:
+		_apply_cost_badge_text(_card.card_cost)
+		return
+	var playable_here: bool = zone == Constants.Zone.MANO or (zone == Constants.Zone.CEMENTERIO
+		and _card.get("card_data") is Dictionary and PaymentManager.card_has_exhumar(_card.card_data))
+	if playable_here:
 		if PaymentManager.has_method("calcular_coste_real"):
 			effective = PaymentManager.calcular_coste_real(source_override if source_override else _card)
 	elif zone in Constants.ZONES_IN_PLAY:

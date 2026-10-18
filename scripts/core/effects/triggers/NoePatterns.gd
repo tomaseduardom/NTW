@@ -28,6 +28,15 @@ static func try_execute(card: Node, text: String, controller_id: int) -> bool:
 	if "hacer que un aliado gane 1 de fuerza, furia y haga doble daño de combate este turno" in lower:
 		await _kai_piloto(card, controller_id)
 		return true
+	# Javiera Carrera (2026-10-17).
+	if "un aliado duplica su fuerza por el turno" in lower:
+		await _javiera_double(card, controller_id, "si es un carrera, en vez de eso triplica su fuerza" in lower)
+		return true
+	if "destierra hasta tres cartas de un cementerio y roba una carta" in lower:
+		await ActionModule.search_either_owner(controller_id, [Constants.Zone.CEMENTERIO], {}, 3, true, card,
+			Constants.Zone.DESTIERRO, false, true)
+		await ActionModule.draw(controller_id, 1, str(card.get("card_name")) if is_instance_valid(card) else "", true)
+		return true
 	var core := lower.trim_suffix(".").replace("una vez por turno,", "").strip_edges()
 	if core == "un aliado gana furia":
 		await _grant_furia(card, controller_id)
@@ -157,3 +166,49 @@ static func _kai_piloto(card: Node, controller_id: int) -> void:
 	KeywordManager.grant_keyword(target, Constants.Keyword.FURIA, card, "turn")
 	target.set_meta("double_combat_damage_turn", GameManager.current_turn)
 	main._update_debug("%s gana 1 de Fuerza, Furia y hace doble daño de combate este turno" % str(target.get("card_name")))
+
+
+## Javiera Carrera: "Una vez por turno, un Aliado duplica su Fuerza por el
+## turno. Si es un Carrera, en vez de eso triplica su Fuerza y no puede salir
+## del juego hasta tu próximo turno." ("un Carrera" = su nombre lo dice)
+static func _javiera_double(card: Node, controller_id: int, carrera_clause: bool) -> void:
+	var main := _main_node()
+	if not main:
+		return
+	var filter := func(c: Node) -> bool:
+		return c.get("card_type") == Constants.CardType.ALIADO and c.get("current_zone") in Constants.ZONES_IN_PLAY
+	var target: Node = null
+	if PlayerSideScript.is_bot(controller_id):
+		for container in PlayerSideScript.ally_containers(main, controller_id):
+			for a in container.get_children():
+				if is_instance_valid(a) and filter.call(a):
+					target = a
+					break
+			if target:
+				break
+	elif main._card_interaction:
+		target = await main._card_interaction.await_target("Un Aliado duplica su Fuerza por el turno (un Carrera la triplica)",
+			filter, true, controller_id)
+	if not target or not is_instance_valid(target):
+		return
+	if await EffectController.offer_prevention(target, card, "strength_change"):
+		return
+	var is_carrera: bool = carrera_clause and "carrera" in str(target.get("card_name")).to_lower()
+	var current: int = int(ContinuousEffectManager.get_modified_strength(target))
+	var extra: int = current * (2 if is_carrera else 1)
+	if extra > 0:
+		ContinuousEffectManager.register_modifier({
+			"source": target,
+			"target": target,
+			"type": ContinuousEffectManager.ModifierType.STRENGTH,
+			"stat": "strength",
+			"value": extra,
+			"operation": "add",
+			"duration": ContinuousEffectManager.ModifierDuration.UNTIL_END_TURN,
+			"layer": ContinuousEffectManager.ModifierLayer.LAYER_7B_CHAR_MODIFY,
+			"description": "Javiera Carrera x%d" % (3 if is_carrera else 2),
+		})
+	if is_carrera:
+		EffectController.add_single_card_leave_play_immunity(target, controller_id)
+	main._update_debug("%s %s su Fuerza%s" % [str(target.get("card_name")), "triplica" if is_carrera else "duplica",
+		" y no puede salir del juego hasta tu próximo turno" if is_carrera else " por el turno"])
