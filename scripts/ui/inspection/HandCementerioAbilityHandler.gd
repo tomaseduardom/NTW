@@ -351,7 +351,8 @@ func _activate_dracula_cancel_attacks(source_card: Node, ability: Dictionary) ->
 	# atacando en vez del modal de lista viejo.
 	var candidates: Array = []
 	for a in GameManager.attackers:
-		if is_instance_valid(a):
+		# "su ataque no puede ser cancelado" (Ira, 2026-10-17)
+		if is_instance_valid(a) and int(a.get_meta("attack_uncancellable_turn", -1)) != GameManager.current_turn:
 			candidates.append(a)
 	var chosen: Array = await _inspector._main._card_interaction.await_multi_target(
 		"Cancela el ataque de hasta dos Aliados", candidates, 2, Callable(), Callable(), true, null, owner_id)

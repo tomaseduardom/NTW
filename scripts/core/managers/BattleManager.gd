@@ -325,6 +325,8 @@ func _accumulate_castle_damage(result: Dictionary, attacker: Node, amount: int) 
 		amount *= 2
 	if is_instance_valid(attacker) and attacker.get("doubles_damage_to_exile") == true:
 		result.total_damage_to_exile += amount * 2
+	elif is_instance_valid(attacker) and int(attacker.get_meta("damage_to_exile_turn", -1)) == GameManager.current_turn:
+		result.total_damage_to_exile += amount  # Ira: "hace daño al Destierro por el turno"
 	else:
 		result.total_damage_to_castle += amount
 

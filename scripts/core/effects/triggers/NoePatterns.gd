@@ -42,6 +42,11 @@ static func try_execute(card: Node, text: String, controller_id: int) -> bool:
 	if "agrupa hasta dos aliados" in lower:
 		await _regroup_up_to(card, controller_id, 2)
 		return true
+	# Ira (2026-10-17): "Un Aliado gana Furia, Imbloqueable, 3 de Fuerza y
+	# hace daño al Destierro por el turno."
+	if "un aliado gana furia, imbloqueable, 3 de fuerza y hace daño al destierro por el turno" in lower:
+		await _ira(card, controller_id)
+		return true
 	var core := lower.trim_suffix(".").replace("una vez por turno,", "").strip_edges()
 	if core == "un aliado gana furia":
 		await _grant_furia(card, controller_id)
@@ -243,3 +248,72 @@ static func _regroup_up_to(card: Node, controller_id: int, amount: int) -> void:
 		return
 	await main._card_interaction.unmark_attackers(chosen)
 	main._update_debug("%d Aliado(s) agrupados" % chosen.size())
+
+
+static func _pick_ally(main: Node, controller_id: int, prompt: String) -> Node:
+	var filter := func(c: Node) -> bool:
+		return c.get("card_type") == Constants.CardType.ALIADO and c.get("current_zone") in Constants.ZONES_IN_PLAY
+	if PlayerSideScript.is_bot(controller_id):
+		for container in PlayerSideScript.ally_containers(main, controller_id):
+			for a in container.get_children():
+				if is_instance_valid(a) and filter.call(a):
+					return a
+		return null
+	if not main._card_interaction:
+		return null
+	return await main._card_interaction.await_target(prompt, filter, true, controller_id)
+
+
+static func _turn_strength(target: Node, amount: int, label: String) -> void:
+	ContinuousEffectManager.register_modifier({
+		"source": target,
+		"target": target,
+		"type": ContinuousEffectManager.ModifierType.STRENGTH,
+		"stat": "strength",
+		"value": amount,
+		"operation": "add",
+		"duration": ContinuousEffectManager.ModifierDuration.UNTIL_END_TURN,
+		"layer": ContinuousEffectManager.ModifierLayer.LAYER_7B_CHAR_MODIFY,
+		"description": label,
+	})
+
+
+static func _ira(card: Node, controller_id: int) -> void:
+	var main := _main_node()
+	if not main:
+		return
+	var target: Node = await _pick_ally(main, controller_id, "Ira: un Aliado gana Furia, Imbloqueable, 3 de Fuerza y hace daño al Destierro")
+	if not target or not is_instance_valid(target):
+		return
+	if await EffectController.offer_prevention(target, card, "strength_change"):
+		return
+	_turn_strength(target, 3, "Ira +3")
+	KeywordManager.grant_keyword(target, Constants.Keyword.FURIA, card, "turn")
+	KeywordManager.grant_keyword(target, Constants.Keyword.IMBLOQUEABLE, card, "turn")
+	target.set_meta("damage_to_exile_turn", GameManager.current_turn)  # BattleManager._accumulate_castle_damage
+	main._update_debug("%s gana Furia, Imbloqueable, 3 de Fuerza y hace daño al Destierro por el turno" % str(target.get("card_name")))
+
+
+## Ira, desde el Cementerio: "puedes Desterrarlo para que un Aliado gane 1 de
+## Fuerza y su ataque no pueda ser cancelado por el turno."
+static func ira_from_cemetery(source_card: Node) -> void:
+	var main := _main_node()
+	if not main or not is_instance_valid(source_card):
+		return
+	var owner_id: int = source_card.owner_id if source_card.get("owner_id") != null else 0
+	var cemetery: Array = CardManager.get_cemetery(owner_id)
+	var idx: int = cemetery.find(source_card.card_data)
+	if idx < 0:
+		return
+	var target: Node = await _pick_ally(main, owner_id, "Ira: un Aliado gana 1 de Fuerza y su ataque no puede ser cancelado")
+	if not target or not is_instance_valid(target):
+		return
+	idx = CardManager.get_cemetery(owner_id).find(source_card.card_data)
+	if idx < 0:
+		return
+	var data: Dictionary = CardManager.remove_from_cemetery(owner_id, idx)
+	data["esta_oculta"] = false
+	CardManager.append_to_exile(owner_id, data)
+	_turn_strength(target, 1, "Ira +1")
+	target.set_meta("attack_uncancellable_turn", GameManager.current_turn)
+	main._update_debug("%s gana 1 de Fuerza y su ataque no puede ser cancelado por el turno" % str(target.get("card_name")))
