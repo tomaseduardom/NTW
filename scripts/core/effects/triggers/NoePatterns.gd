@@ -23,6 +23,11 @@ static func try_execute(card: Node, text: String, controller_id: int) -> bool:
 	if "hasta mostra" in lower and "dos aliados y ponlos en tu mano" in lower and REVEAL_TEXT in card_lower:
 		await _reveal_two_allies(card, controller_id)
 		return true
+	# Kai Piloto Prodigio (2026-10-17): "puedes hacer que un Aliado gane 1 de
+	# Fuerza, Furia y haga doble daño de combate este turno".
+	if "hacer que un aliado gane 1 de fuerza, furia y haga doble daño de combate este turno" in lower:
+		await _kai_piloto(card, controller_id)
+		return true
 	var core := lower.trim_suffix(".").replace("una vez por turno,", "").strip_edges()
 	if core == "un aliado gana furia":
 		await _grant_furia(card, controller_id)
@@ -114,3 +119,41 @@ static func _grant_furia(card: Node, controller_id: int) -> void:
 		return
 	KeywordManager.grant_keyword(target, Constants.Keyword.FURIA, card, "turn")
 	main._update_debug("%s gana Furia por el turno" % str(target.get("card_name")))
+
+
+static func _kai_piloto(card: Node, controller_id: int) -> void:
+	var main := _main_node()
+	if not main:
+		return
+	var filter := func(c: Node) -> bool:
+		return c.get("card_type") == Constants.CardType.ALIADO and c.get("current_zone") in Constants.ZONES_IN_PLAY
+	var target: Node = null
+	if PlayerSideScript.is_bot(controller_id):
+		for container in PlayerSideScript.ally_containers(main, controller_id):
+			for a in container.get_children():
+				if is_instance_valid(a) and filter.call(a):
+					target = a
+					break
+			if target:
+				break
+	elif main._card_interaction:
+		target = await main._card_interaction.await_target(
+			"Un Aliado gana 1 de Fuerza, Furia y hace doble daño de combate este turno", filter, true, controller_id)
+	if not target or not is_instance_valid(target):
+		return
+	if await EffectController.offer_prevention(target, card, "strength_change"):
+		return
+	ContinuousEffectManager.register_modifier({
+		"source": target,
+		"target": target,
+		"type": ContinuousEffectManager.ModifierType.STRENGTH,
+		"stat": "strength",
+		"value": 1,
+		"operation": "add",
+		"duration": ContinuousEffectManager.ModifierDuration.UNTIL_END_TURN,
+		"layer": ContinuousEffectManager.ModifierLayer.LAYER_7B_CHAR_MODIFY,
+		"description": "Kai Piloto Prodigio +1",
+	})
+	KeywordManager.grant_keyword(target, Constants.Keyword.FURIA, card, "turn")
+	target.set_meta("double_combat_damage_turn", GameManager.current_turn)
+	main._update_debug("%s gana 1 de Fuerza, Furia y hace doble daño de combate este turno" % str(target.get("card_name")))

@@ -319,6 +319,10 @@ func _accumulate_castle_damage(result: Dictionary, attacker: Node, amount: int) 
 	pool separado que _apply_castle_damage() manda al Destierro en vez del
 	Cementerio. El resto de atacantes en el mismo combate sigue sumando al
 	pool normal sin verse afectado."""
+	# "haga doble daño de combate este turno" (2026-10-17, Kai Piloto
+	# Prodigio): meta con el turno en que vale.
+	if is_instance_valid(attacker) and int(attacker.get_meta("double_combat_damage_turn", -1)) == GameManager.current_turn:
+		amount *= 2
 	if is_instance_valid(attacker) and attacker.get("doubles_damage_to_exile") == true:
 		result.total_damage_to_exile += amount * 2
 	else:
