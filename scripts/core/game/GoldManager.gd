@@ -104,6 +104,8 @@ func setup(main: Node) -> void:
 			GameManager.turn_started.connect(_on_turn_started_clear_virtual_gold)
 	if not GameManager.phase_changed.is_connected(_on_phase_changed_deck170):
 		GameManager.phase_changed.connect(_on_phase_changed_deck170)
+	if not GameManager.turn_started.is_connected(_on_turn_started_gold_events):
+		GameManager.turn_started.connect(_on_turn_started_gold_events)  # Trono del Cielo
 	if not GameManager.turn_started.is_connected(_on_turn_started_revert_converted):
 		GameManager.turn_started.connect(_on_turn_started_revert_converted)  # Azi del Abismo
 	# Reina Nyssara (2026-10-14): Aliado oponente que sale del juego por un
@@ -306,6 +308,23 @@ func is_name_play_locked(player_id: int, card_name: String, card_type: int = -1)
 	return _play_locked_names.has("%d|%s" % [player_id, card_name.strip_edges().to_lower()])
 
 
+## Trono del Cielo (2026-10-18): Oros puestos en juego o generados por cada
+## jugador en SU turno; al empezar el turno siguiente pasa a "_prev".
+var _gold_events_turn: Dictionary = {0: 0, 1: 0}
+var _gold_events_prev: Dictionary = {0: 0, 1: 0}
+
+
+func _note_gold_event(player_id: int, amount: int = 1) -> void:
+	if GameManager.active_player_id == player_id:
+		_gold_events_turn[player_id] = int(_gold_events_turn.get(player_id, 0)) + amount
+
+
+func _on_turn_started_gold_events(started_player_id: int, _turn: int) -> void:
+	var prev: int = 1 - started_player_id
+	_gold_events_prev[prev] = int(_gold_events_turn.get(prev, 0))
+	_gold_events_turn[prev] = 0
+
+
 func _register_gold_placed(player_id: int) -> void:
 	"""Punto único de conteo para gold_placed — llamar SOLO desde la acción
 	real de 'Colocar un Oro' (_place_card_as_gold, DAR: un Oro de la mano
@@ -316,6 +335,7 @@ func _register_gold_placed(player_id: int) -> void:
 	Oro' contra el OTRO jugador."""
 	oro_colocado_conteo[player_id] = oro_colocado_conteo.get(player_id, 0) + 1
 	oros_en_juego_turno[player_id] = oros_en_juego_turno.get(player_id, 0) + 1
+	_note_gold_event(player_id)
 	gold_placed.emit(player_id, oro_colocado_conteo[player_id])
 	_check_reactive_second_gold_triggers(player_id)
 
@@ -410,6 +430,7 @@ func put_gold_directly_in_pagado(player_id: int, card_data: Dictionary) -> Node:
 	if await EffectContextScript.ensure_window():  # ventana única por efecto (§59)
 		return null
 	oros_en_juego_turno[player_id] = oros_en_juego_turno.get(player_id, 0) + 1
+	_note_gold_event(player_id)
 	var data: Dictionary = card_data.duplicate()
 	data["esta_oculta"] = false
 	var card_node = _main._create_card(data)
@@ -674,6 +695,7 @@ func put_gold_directly_in_reserva(player_id: int, card_data: Dictionary) -> Node
 		return null
 	_oro_por_efecto_used_game[player_id] = true
 	oros_en_juego_turno[player_id] = oros_en_juego_turno.get(player_id, 0) + 1
+	_note_gold_event(player_id)
 
 	var card_node = _main._create_card(card_data, false)  # Oro es información pública (DAR), boca arriba siempre
 	card_node.owner_id = player_id
@@ -2691,6 +2713,13 @@ func _resolve_gold_paid_reaction(oro_card: Node, card_type: int, card_race: Stri
 	if ability_text.is_empty():
 		return
 	var lower := _fix_mojibake(ability_text).to_lower()
+	# Trono del Cielo (2026-10-18): "Si en su turno anterior tu oponente
+	# generó o puso en juego más de un Oro, cuenta como dos Oros para pagar
+	# el coste de una carta."
+	if "cuenta como dos oros para pagar el coste de una carta" in lower and card_type >= 0 \
+			and not KeywordManager.is_silenced(oro_card) and int(_gold_events_prev.get(1 - player_id, 0)) > 1:
+		generar_oros_virtuales(1, player_id)
+		_main._update_debug("%s cuenta como dos Oros" % str(oro_card.get("card_name")))
 	# Alicanto (2026-10-14): "Los Aliados de coste 2 o más pagados con este
 	# Oro no pueden ser Anulados" — se marca y lo toma el próximo Aliado que
 	# entra (_trigger_enter_play), antes de su ventana de respuesta.
@@ -2726,6 +2755,7 @@ func _resolve_gold_paid_reaction(oro_card: Node, card_type: int, card_race: Stri
 
 func generar_oros_virtuales(cantidad: int, player_id: int = 0) -> void:
 	oros_virtuales[player_id] = oros_virtuales.get(player_id, 0) + cantidad
+	_note_gold_event(player_id, cantidad)
 	var tokens: Array = virtual_gold_tokens.get(player_id, [])
 	for i in range(cantidad):
 		_spawn_gold_token("Oro Virtual Libre", "Libre", tokens, player_id)
@@ -2765,6 +2795,7 @@ func limpiar_oros_virtuales() -> void:
 
 func generar_oro_virtual_restringido(cantidad: int, predicate: Callable, label: String, player_id: int = 0,
 		until_own_next_turn: bool = false) -> void:
+	_note_gold_event(player_id, cantidad)
 	"""Oro Virtual que SOLO paga cartas que cumplan 'predicate(card_type,
 	card_race) -> bool' (p.ej. Padre de la Patria: 'para jugar Armas o
 	Aliados Caballero'). A diferencia de generar_oros_virtuales(), queda

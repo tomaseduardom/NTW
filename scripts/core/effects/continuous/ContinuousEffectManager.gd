@@ -440,6 +440,18 @@ func _get_card_owner(card: Node) -> int:
 	return -1
 
 
+func _abu_simbel_in_play(main: Node) -> bool:
+	for container in [main.player_gold, main.player_oro_pagado, main.opponent_gold, main.opponent_oro_pagado,
+			main.player_field, main.opponent_field, main.player_linea_apoyo, main.opponent_linea_apoyo]:
+		if not container:
+			continue
+		for c in container.get_children():
+			if is_instance_valid(c) and not KeywordManager.is_silenced(c) \
+					and "los jugadores no pueden ganar el control de cartas de las que no sean dueño" in str(c.get("card_ability")).to_lower():
+				return true
+	return false
+
+
 func gain_control_of_card(card: Node, new_controller_id: int) -> void:
 	"""'Gana el control de' una carta EN JUEGO (2026-09-04, a pedido del
 	usuario — p.ej. shedo titan: 'gana el control de un Aliado') —
@@ -456,6 +468,12 @@ func gain_control_of_card(card: Node, new_controller_id: int) -> void:
 		return
 	var main := get_node_or_null("/root/Main")
 	if not main:
+		return
+	# Abu Simbel (2026-10-18): "Los jugadores no pueden ganar el control de
+	# cartas de las que no sean dueño."
+	var owner_of: int = card.owner_id if card.get("owner_id") != null else new_controller_id
+	if new_controller_id != owner_of and _abu_simbel_in_play(main):
+		main._update_debug("Abu Simbel: no se puede ganar el control de cartas ajenas")
 		return
 	var card_type: int = card.get("card_type") if card.get("card_type") != null else -1
 	var old_parent = card.get_parent()

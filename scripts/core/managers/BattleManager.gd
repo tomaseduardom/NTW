@@ -1,6 +1,7 @@
 extends Node
 const Deck170Script = preload("res://scripts/core/effects/triggers/Deck170Patterns.gd")
 const AziScript = preload("res://scripts/core/effects/triggers/AziPatterns.gd")
+const NoeScript = preload("res://scripts/core/effects/triggers/NoePatterns.gd")
 ## BattleManager - Gestiona el combate y asignación de daño (DAR Sección 5.C4)
 ## Calcula el resultado de combate entre atacantes y bloqueadores
 
@@ -377,6 +378,11 @@ func _apply_castle_damage(defender_id: int, damage: int, to_exile: bool = false)
 	var dest_name = "Destierro" if to_exile else "Cementerio"
 	# Oro de Azi del Abismo (2026-10-17): "Reduce el daño recibido por tu
 	# Castillo en 1 por cada Oro Azi que controles".
+	# Linaje Maldito (2026-10-18): "no puedes recibir daño de combate hasta tu
+	# próximo turno".
+	if damage > 0 and NoeScript.damage_immune(defender_id, "combat"):
+		print("[BattleManager] Jugador %d no recibe daño de combate (Linaje Maldito)" % (defender_id + 1))
+		damage = 0
 	var azi_reduction: int = AziScript.castle_damage_reduction(defender_id)
 	if azi_reduction > 0 and damage > 0:
 		print("[BattleManager] Oros Azi reducen el daño en %d" % mini(azi_reduction, damage))

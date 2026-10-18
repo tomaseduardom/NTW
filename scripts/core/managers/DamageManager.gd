@@ -42,6 +42,7 @@ enum DamageTarget {
 }
 
 const AziScript = preload("res://scripts/core/effects/triggers/AziPatterns.gd")
+const NoeScript = preload("res://scripts/core/effects/triggers/NoePatterns.gd")
 const TYPE_NAMES: Dictionary = {
 	DamageType.COMBAT: "Combate",
 	DamageType.DIRECT: "Directo",
@@ -527,6 +528,11 @@ func _apply_damage_reduction(player_id: int, damage: int, type: int, context: Di
 			result.reduced += actual_reduce
 			result.remaining -= actual_reduce
 
+	# Linaje Maldito (2026-10-18): "no recibes daño directo hasta tu próximo
+	# turno" (el de combate lo corta BattleManager).
+	if player_id >= 0 and type != DamageType.COMBAT and NoeScript.damage_immune(player_id, "direct"):
+		result.reduced += result.remaining
+		result.remaining = 0
 	# Oro de Azi del Abismo (2026-10-17): "Reduce el daño recibido por tu
 	# Castillo en 1 por cada Oro Azi que controles".
 	if player_id >= 0:

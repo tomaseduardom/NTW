@@ -69,6 +69,15 @@ static func try_execute(card: Node, text: String, controller_id: int) -> bool:
 	if "desterrar hasta un arma o tótem en juego y robar dos cartas" in lower:
 		await _banish_weapon_or_totem_draw(card, controller_id)
 		return true
+	# Linaje Maldito (2026-10-18).
+	if "lanza una dado de seis caras" in lower or "lanza un dado de seis caras" in lower:
+		await _linaje_maldito(card, controller_id)
+		return true
+	# Abu Simbel (2026-10-18): "Cuando entra en juego, cada jugador gana el
+	# control de todas las cartas de las que sea dueño."
+	if "cada jugador gana el control de todas las cartas de las que sea dueño" in lower:
+		_everyone_regains_control()
+		return true
 	var core := lower.trim_suffix(".").replace("una vez por turno,", "").strip_edges()
 	if core == "un aliado gana furia":
 		await _grant_furia(card, controller_id)
@@ -561,3 +570,78 @@ static func _banish_weapon_or_totem_draw(card: Node, controller_id: int) -> void
 	if target and is_instance_valid(target):
 		await ActionModule.banish([target], card)
 	await ActionModule.draw(controller_id, 2, str(card.get("card_name")) if is_instance_valid(card) else "", true)
+
+
+# -----------------------------------------------------------------------------
+# Linaje Maldito: "Lanza una dado de seis caras. Si sale par, no puedes
+# recibir daño de combate hasta tu próximo turno y tu oponente Destierra
+# cuatro cartas del tope de su Castillo. Si sale impar, no recibes daño
+# directo hasta tu próximo turno y hasta dos Aliados ganan 2 de Fuerza y
+# Furia." (Fuerza por el turno; Furia permanente — regla del usuario.)
+# -----------------------------------------------------------------------------
+static func _linaje_maldito(card: Node, controller_id: int) -> void:
+	var main := _main_node()
+	if not main:
+		return
+	var card_name: String = str(card.get("card_name")) if is_instance_valid(card) else "Linaje Maldito"
+	var roll: int = randi_range(1, 6)
+	var until: int = GameManager.current_turn + 2  # hasta tu próximo turno
+	var immunity: Dictionary = main.get_meta("damage_immunity", {})
+	var mine: Dictionary = immunity.get(controller_id, {})
+	if roll % 2 == 0:
+		mine["combat"] = until
+		immunity[controller_id] = mine
+		main.set_meta("damage_immunity", immunity)
+		main._update_debug("%s: el dado sale %d (par) — no recibes daño de combate hasta tu próximo turno" % [card_name, roll])
+		await ActionModule.mill(1 - controller_id, 4, true, card_name)
+		return
+	mine["direct"] = until
+	immunity[controller_id] = mine
+	main.set_meta("damage_immunity", immunity)
+	main._update_debug("%s: el dado sale %d (impar) — no recibes daño directo hasta tu próximo turno" % [card_name, roll])
+	var candidates: Array = []
+	for container in PlayerSideScript.ally_containers(main, controller_id):
+		for a in container.get_children():
+			if is_instance_valid(a) and a.get("card_type") == Constants.CardType.ALIADO:
+				candidates.append(a)
+	if candidates.is_empty():
+		return
+	var chosen: Array = candidates.slice(0, 2)
+	if not PlayerSideScript.is_bot(controller_id) and main._card_interaction:
+		chosen = await main._card_interaction.await_multi_target("%s: hasta dos Aliados ganan 2 de Fuerza y Furia" % card_name,
+			candidates, 2, Callable(), Callable(), true, null, controller_id)
+	for a in chosen:
+		if is_instance_valid(a):
+			_turn_strength(a, 2, "Linaje Maldito +2")
+			KeywordManager.grant_keyword(a, Constants.Keyword.FURIA, card, "permanent")
+
+
+static func damage_immune(player_id: int, kind: String) -> bool:
+	"""kind: "combat" o "direct". Linaje Maldito."""
+	var main := _main_node()
+	if not main:
+		return false
+	var mine: Dictionary = main.get_meta("damage_immunity", {}).get(player_id, {})
+	return GameManager.current_turn < int(mine.get(kind, -1))
+
+
+static func _everyone_regains_control() -> void:
+	var main := _main_node()
+	if not main:
+		return
+	var moved := 0
+	for pid in [0, 1]:
+		var containers: Array = PlayerSideScript.line_containers(main, pid)
+		containers.append(PlayerSideScript.gold_reserva(main, pid))
+		containers.append(PlayerSideScript.oro_pagado(main, pid))
+		for container in containers:
+			if not container:
+				continue
+			for c in container.get_children().duplicate():
+				if not is_instance_valid(c) or c.get("owner_id") == null or c.get("controller_id") == null:
+					continue
+				if int(c.owner_id) != int(c.controller_id):
+					ContinuousEffectManager.gain_control_of_card(c, int(c.owner_id))
+					moved += 1
+	if moved > 0:
+		main._update_debug("Cada jugador recupera el control de sus cartas (%d)" % moved)
