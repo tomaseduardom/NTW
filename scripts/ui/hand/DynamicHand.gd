@@ -18,10 +18,14 @@ signal card_double_clicked(card: Node)
 var cards: Array[Node] = []
 var _tweens: Dictionary = {}
 var _is_hidden: bool = false
+var _count_badge: PanelContainer = null
+var _count_label: Label = null
+var _badge_tween: Tween = null
 
 
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_setup_count_badge()
 	if not child_exiting_tree.is_connected(_on_child_exiting_tree):
 		child_exiting_tree.connect(_on_child_exiting_tree)
 
@@ -128,6 +132,7 @@ func clear_hand() -> void:
 			card.queue_free()
 	cards.clear()
 	_tweens.clear()
+	_update_count_badge(false)
 
 
 func get_card_target_rotation(card: Node) -> float:
@@ -201,6 +206,7 @@ func _arrange_cards(animated: bool = true) -> void:
 		cards = valid_cards
 
 	if cards.is_empty():
+		_update_count_badge(animated)
 		return
 
 	var card_width = 150.0
@@ -269,6 +275,8 @@ func _arrange_cards(animated: bool = true) -> void:
 			if not is_card_hovered:
 				card.scale = Vector2.ONE
 
+	_update_count_badge(animated)
+
 
 func _on_card_hovered(card: Node) -> void:
 	"""Al hacer hover: la carta no se mueve ni rota (a pedido del usuario),
@@ -312,3 +320,86 @@ func get_card_clip_right(card: Node) -> float:
 			effective_overlap = max_step - card_width
 	var step_x = card_width + effective_overlap
 	return step_x if step_x < card_width else -1.0
+
+
+# =============================================================================
+# CONTADOR DE CARTAS EN MANO
+# =============================================================================
+func _setup_count_badge() -> void:
+	if _count_badge != null:
+		return
+	_count_badge = PanelContainer.new()
+	_count_badge.name = "HandCountBadge"
+	_count_badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_count_badge.z_index = 50
+	_count_badge.custom_minimum_size = Vector2(26, 26)
+
+	var style = StyleBoxFlat.new()
+	style.bg_color = Color(0.08, 0.09, 0.12, 0.92)
+	style.border_color = Color(0.82, 0.70, 0.35, 0.95)
+	style.border_width_left = 1
+	style.border_width_right = 1
+	style.border_width_top = 1
+	style.border_width_bottom = 1
+	style.corner_radius_top_left = 13
+	style.corner_radius_top_right = 13
+	style.corner_radius_bottom_left = 13
+	style.corner_radius_bottom_right = 13
+	style.shadow_color = Color(0, 0, 0, 0.6)
+	style.shadow_size = 4
+	style.content_margin_left = 2
+	style.content_margin_right = 2
+	style.content_margin_top = 2
+	style.content_margin_bottom = 2
+	_count_badge.add_theme_stylebox_override("panel", style)
+
+	_count_label = Label.new()
+	_count_label.name = "CountLabel"
+	_count_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_count_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_count_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var font_cinzel: Font = load("res://assets/fonts/Cinzel-Bold.ttf")
+	if font_cinzel:
+		_count_label.add_theme_font_override("font", font_cinzel)
+	_count_label.add_theme_font_size_override("font_size", 14)
+	_count_label.add_theme_color_override("font_color", Color(1.0, 0.93, 0.72))
+	_count_label.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.85))
+	_count_label.add_theme_constant_override("shadow_offset_x", 1)
+	_count_label.add_theme_constant_override("shadow_offset_y", 1)
+	_count_badge.add_child(_count_label)
+
+	add_child(_count_badge)
+	_count_badge.visible = false
+
+
+func _update_count_badge(animated: bool = true) -> void:
+	if _count_badge == null:
+		return
+	if cards.is_empty() or _is_hidden:
+		_count_badge.visible = false
+		return
+
+	_count_badge.visible = true
+	_count_label.text = str(cards.size())
+
+	var last_card = cards[cards.size() - 1]
+	var last_pos: Vector2 = get_card_target_position(last_card)
+	var card_width = 150.0
+	var badge_size = Vector2(26.0, 26.0)
+
+	var target_x = last_pos.x + card_width + 12.0
+	if size.x > 100.0:
+		target_x = minf(target_x, size.x - badge_size.x - 4.0)
+
+	var target_y = last_pos.y + 105.0 - (badge_size.y / 2.0)
+	var target_pos = Vector2(target_x, target_y)
+
+	if is_instance_valid(_badge_tween):
+		_badge_tween.kill()
+
+	if animated:
+		_badge_tween = create_tween()
+		_badge_tween.tween_property(_count_badge, "position", target_pos, animation_duration).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_CUBIC)
+	else:
+		_count_badge.position = target_pos
+

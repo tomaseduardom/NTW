@@ -85,6 +85,7 @@ func _build_ui() -> void:
 	_inspect_bar = Button.new()
 	_inspect_bar.text = "Modo Inspección de Mesa — Clic aquí o presiona [Enter] / [ESC] para volver al resultado"
 	_inspect_bar.custom_minimum_size = Vector2(620, 42)
+	_inspect_bar.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 	_inspect_bar.set_anchors_preset(Control.PRESET_CENTER_TOP)
 	_inspect_bar.grow_horizontal = Control.GROW_DIRECTION_BOTH
 	_inspect_bar.offset_top = 16
@@ -257,6 +258,7 @@ func show_game_over(stats: Dictionary, animate: bool = true) -> void:
 	# 3. Animación cinemática de entrada con Tween
 	if animate:
 		_backdrop.modulate.a = 0.0
+		_modal_panel.pivot_offset = _modal_panel.size / 2.0
 		_modal_panel.scale = Vector2(0.84, 0.84)
 		_modal_panel.modulate.a = 0.0
 
@@ -329,6 +331,7 @@ func _create_button(text: String, primary: bool, is_victory: bool) -> Button:
 	var btn = Button.new()
 	btn.text = text
 	btn.custom_minimum_size = Vector2(190, 48)
+	btn.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 	btn.focus_mode = Control.FOCUS_ALL
 	btn.add_theme_font_override("font", FONT_TITLE)
 	btn.add_theme_font_size_override("font_size", 15)
@@ -342,6 +345,10 @@ func _create_button(text: String, primary: bool, is_victory: bool) -> Button:
 	normal.border_width_left = 2
 	normal.border_width_right = 2
 	normal.border_width_top = 2
+	normal.content_margin_left = 18
+	normal.content_margin_right = 18
+	normal.content_margin_top = 10
+	normal.content_margin_bottom = 10
 
 	if primary:
 		var accent_col = Color(0.88, 0.74, 0.28, 1.0) if is_victory else Color(0.85, 0.30, 0.30, 1.0)
@@ -367,13 +374,23 @@ func _create_button(text: String, primary: bool, is_victory: bool) -> Button:
 	btn.add_theme_stylebox_override("pressed", pressed)
 	btn.add_theme_stylebox_override("focus", hover)
 
+	btn.mouse_entered.connect(func():
+		var tw = btn.create_tween()
+		tw.tween_property(btn, "modulate", Color(1.12, 1.12, 1.12, 1.0), 0.1)
+	)
+	btn.mouse_exited.connect(func():
+		var tw = btn.create_tween()
+		tw.tween_property(btn, "modulate", Color.WHITE, 0.1)
+	)
+
 	return btn
 
 
 func _create_ghost_button(text: String) -> Button:
 	var btn = Button.new()
 	btn.text = text
-	btn.custom_minimum_size = Vector2(150, 48)
+	btn.custom_minimum_size = Vector2(160, 48)
+	btn.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 	btn.focus_mode = Control.FOCUS_ALL
 	btn.add_theme_font_override("font", FONT_REGULAR)
 	btn.add_theme_font_size_override("font_size", 14)
@@ -390,6 +407,10 @@ func _create_ghost_button(text: String) -> Button:
 	normal.corner_radius_bottom_right = 8
 	normal.corner_radius_top_left = 8
 	normal.corner_radius_top_right = 8
+	normal.content_margin_left = 16
+	normal.content_margin_right = 16
+	normal.content_margin_top = 10
+	normal.content_margin_bottom = 10
 
 	var hover = normal.duplicate()
 	hover.border_color = Color(0.65, 0.65, 0.75, 1.0)
@@ -399,6 +420,15 @@ func _create_ghost_button(text: String) -> Button:
 	btn.add_theme_stylebox_override("hover", hover)
 	btn.add_theme_stylebox_override("pressed", normal)
 	btn.add_theme_stylebox_override("focus", hover)
+
+	btn.mouse_entered.connect(func():
+		var tw = btn.create_tween()
+		tw.tween_property(btn, "modulate", Color(1.12, 1.12, 1.12, 1.0), 0.1)
+	)
+	btn.mouse_exited.connect(func():
+		var tw = btn.create_tween()
+		tw.tween_property(btn, "modulate", Color.WHITE, 0.1)
+	)
 
 	return btn
 

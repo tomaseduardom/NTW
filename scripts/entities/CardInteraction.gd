@@ -123,6 +123,8 @@ func on_gui_input(event: InputEvent) -> void:
 	if _card.wielder != null and is_instance_valid(_card.wielder):
 		var mouse_over_wielder := Rect2(Vector2.ZERO, _card.wielder.size).has_point(_card.wielder.get_local_mouse_position())
 		if mouse_over_wielder:
+			if _card.wielder._interaction:
+				_card.wielder._interaction.on_gui_input(event)
 			return
 	if event is InputEventMouseButton:
 		# Right-click siempre funciona para inspección

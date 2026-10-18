@@ -445,6 +445,16 @@ func _has_point(point: Vector2) -> bool:
 	devuelve false y Godot sigue buscando detrás de esta carta en vez de
 	consumir el click aquí, dejando que la carta realmente visible en ese
 	punto (la que se dibujó encima) lo reciba."""
+	# Si esta carta es un Arma equipada a un Aliado (wielder), el Aliado que está encima
+	# tiene prioridad absoluta para clicks e interacción.
+	# Si el punto cae dentro del rectángulo del Aliado, el Arma NO consume el hit-test
+	# (_has_point = false) para que el click pase directamente al Aliado portador.
+	if wielder != null and is_instance_valid(wielder):
+		var wielder_local = wielder.get_local_mouse_position()
+		if Rect2(Vector2.ZERO, wielder.size).has_point(wielder_local):
+			return false
+		return Rect2(Vector2.ZERO, size).has_point(point)
+
 	# En el campo de juego o zonas de mesa, las cartas NUNCA deben recortarse:
 	if current_zone in [Constants.Zone.LINEA_DEFENSA, Constants.Zone.LINEA_ATAQUE, Constants.Zone.LINEA_APOYO]:
 		return Rect2(Vector2.ZERO, size).has_point(point)
