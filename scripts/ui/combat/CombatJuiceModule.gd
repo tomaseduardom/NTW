@@ -117,8 +117,8 @@ func _draw() -> void:
 		var end_pt = _get_card_center(attacker)
 
 		# Tono zafiro/eléctrico de intercepción
-		var alpha = 0.80 + 0.20 * cos(_pulse_time)
-		var cyan_color = Color(0.30, 0.82, 1.0, alpha)
+		var block_alpha = 0.80 + 0.20 * cos(_pulse_time)
+		var cyan_color = Color(0.30, 0.82, 1.0, block_alpha)
 		_draw_curved_arrow(start_pt, end_pt, cyan_color, 3.6, -0.10)
 
 		# Emblema central de choque (rombo o runa en el punto medio)
