@@ -14,6 +14,7 @@ const DagonScript = preload("res://scripts/core/effects/triggers/DagonPatterns.g
 const RatPlagueScript = preload("res://scripts/core/effects/triggers/RatPlaguePatterns.gd")
 const CemeteryReviveScript = preload("res://scripts/core/effects/triggers/CemeteryRevivePatterns.gd")
 const VampireScript = preload("res://scripts/core/effects/triggers/VampirePatterns.gd")
+const NoeScript = preload("res://scripts/core/effects/triggers/NoePatterns.gd")
 const TriggerTollScript = preload("res://scripts/core/effects/triggers/TriggerTollPatterns.gd")
 const CastleLookScript = preload("res://scripts/core/effects/CastleLook.gd")  # "mira N cartas" (§69)
 
@@ -305,6 +306,9 @@ func _resolve_look_and_play_patterns(card: Node, full_ability_text: String, isol
 		return true
 	# Vlad el Empalador, Dhampir (2026-10-17).
 	if await VampireScript.try_execute(card, isolated_ability_text, controller_id):
+		return true
+	# Noé (2026-10-17).
+	if await NoeScript.try_execute(card, isolated_ability_text, controller_id):
 		return true
 	if await _main._effect_interpreter.try_execute(card, isolated_ability_text, controller_id):
 		return true

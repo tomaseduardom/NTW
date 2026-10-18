@@ -548,8 +548,14 @@ func _resolve_become_opponent_gold_copy(card: Node) -> void:
 		return
 	var filter := func(c: Node) -> bool:
 		return c in candidates
-	# Condición de juego: no se puede rechazar (no cancelable).
-	var target: Node = await _main._card_interaction.await_target("Elige un Oro rival para copiar", filter, false, player_id)
+	# Condición de juego: no se puede rechazar (no cancelable). El bot elige
+	# solo (2026-10-17, bug real: cuando el bot jugaba Corazón de Dragón, la
+	# elección le aparecía al jugador).
+	var target: Node = null
+	if PlayerSideScript.is_bot(player_id):
+		target = candidates[0]
+	else:
+		target = await _main._card_interaction.await_target("Elige un Oro rival para copiar", filter, false, player_id)
 	if not target or not is_instance_valid(target):
 		return
 	var copied_data: Dictionary = target.card_data.duplicate(true)

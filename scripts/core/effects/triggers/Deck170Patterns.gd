@@ -131,8 +131,11 @@ static func on_vigilia_started(active_pid: int) -> void:
 			continue
 		var use_it: bool = PlayerSideScript.is_bot(pid)
 		if not use_it:
-			use_it = await SelectionManager.await_two_choice(main, str(c.card_name),
-				"Ponerlo en juego ahora (no podrás poner Oros en tu próximo turno)", "No", pid)
+			# Texto claro (2026-10-17, a pedido del usuario: se confundía con
+			# lo que estaba jugando el oponente en ese momento).
+			use_it = await SelectionManager.await_two_choice(main,
+				"%s (en tu mano): comienza la Vigilia oponente" % str(c.card_name),
+				"Ponerla en juego ahora (en tu próximo turno no podrás poner Oros)", "No ponerla", pid)
 		if not use_it or not is_instance_valid(c):
 			return
 		var data: Dictionary = c.card_data.duplicate()
