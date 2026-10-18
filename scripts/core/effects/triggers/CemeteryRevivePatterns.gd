@@ -52,7 +52,14 @@ static func discard_to_revive_without_ability(source_card: Node) -> void:
 ## "En tu Fase Final, una vez por turno, puedes Desterrar hasta tantas cartas
 ## de los Cementerios como Fuerza tenga este Aliado."
 static func try_execute(card: Node, text: String, controller_id: int) -> bool:
-	var lower := text.to_lower()
+	var lower := text.to_lower().replace("\n", " ")
+	# Al atacar, la cláusula aislada es solo la primera oración ("...tu
+	# oponente Bota seis cartas"): el resto se lee del texto de la carta.
+	var card_lower: String = str(card.get("card_ability")).to_lower().replace("\n", " ") if is_instance_valid(card) else lower
+	if "tu oponente bota seis cartas" in lower \
+			and "tu oponente bota seis cartas. pon hasta un oro de su cementerio en tu reserva" in card_lower:
+		await _pincheira(card, card_lower, controller_id)
+		return true
 	if not ("desterrar hasta tantas cartas de los cementerios como fuerza tenga este aliado" in lower):
 		return false
 	if not is_instance_valid(card):
@@ -63,3 +70,27 @@ static func try_execute(card: Node, text: String, controller_id: int) -> bool:
 	await ActionModule.search_either_owner(controller_id, [Constants.Zone.CEMENTERIO], {}, amount, true, card,
 		Constants.Zone.DESTIERRO)
 	return true
+
+
+## Antonio Pincheira (2026-10-17, a pedido del usuario): "tu oponente Bota
+## seis cartas. Pon hasta un Oro de su Cementerio en tu Reserva [y busca dos
+## Aliados en tu Castillo y ponlos en tu mano]." — las dos versiones de la
+## carta. El Oro sigue siendo de su dueño (vuelve a SU Cementerio) pero lo
+## controlas tú.
+static func _pincheira(card: Node, lower: String, controller_id: int) -> void:
+	var main := _main_node()
+	if not main or not main._gold_manager:
+		return
+	var opponent_id: int = 1 - controller_id
+	var card_name: String = str(card.get("card_name")) if is_instance_valid(card) else "Antonio Pincheira"
+	await ActionModule.mill(opponent_id, 6, false, card_name)
+	var res: Dictionary = await ActionModule.search(opponent_id, Constants.Zone.CEMENTERIO, {"type": Constants.CardType.ORO},
+		1, true, false, false, card, -1, false, controller_id)
+	for data in res.get("selected", []):
+		var node = await main._gold_manager.put_gold_directly_in_reserva(controller_id, data)
+		if node and is_instance_valid(node):
+			node.owner_id = opponent_id
+			node.controller_id = controller_id
+	if "busca dos aliados en tu castillo y ponlos en tu mano" in lower:
+		await ActionModule.search(controller_id, Constants.Zone.CASTILLO, {"type": Constants.CardType.ALIADO}, 2, true,
+			false, false, card, Constants.Zone.MANO)

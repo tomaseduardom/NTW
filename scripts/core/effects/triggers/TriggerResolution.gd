@@ -755,7 +755,13 @@ func _execute_trigger_effect(card: Node, trigger_type: String, event_data: Dicti
 			])
 			if not clause.is_empty():
 				var controller_id: int = card.get("owner_id") if card.get("owner_id") != null else 0
-				if await _main._totem_patterns.try_execute_metropolitan_attack_pattern(clause, card, controller_id):
+				# Vlad el Empalador, Dhampir, Antonio Pincheira (2026-10-17):
+				# "Cuando entra en juego o ataca" / "Cuando ataca, entra o sale".
+				if await VampireScript.try_execute(card, clause, controller_id):
+					result["no_handler"] = false
+				elif await CemeteryReviveScript.try_execute(card, clause, controller_id):
+					result["no_handler"] = false
+				elif await _main._totem_patterns.try_execute_metropolitan_attack_pattern(clause, card, controller_id):
 					result["no_handler"] = false
 				elif await _main._look_and_play.try_execute_look_hand_name_play_lock_pattern(ability_text, card, controller_id):
 					result["no_handler"] = false
