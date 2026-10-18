@@ -621,6 +621,21 @@ func resolve_agrupacion_triggers(player_id: int) -> void:
 					if is_instance_valid(w) and w.has_method("has_trigger") and w.has_trigger("on_agrupacion") \
 							and _check_trigger_conditions(w, "on_agrupacion", event_data):
 						register_trigger(w, "on_agrupacion", event_data)
+	# "Al comienzo del turno" SIN "tu" (2026-10-18, a pedido del usuario —
+	# manuel rodriguez): también dispara al comienzo del turno del oponente.
+	var other_fields = [main.opponent_field, main.opponent_linea_ataque, main.opponent_linea_apoyo] if player_id == 0 \
+		else [main.player_field, main.player_linea_ataque, main.player_linea_apoyo]
+	for field in other_fields:
+		if not field:
+			continue
+		for card in field.get_children():
+			if not is_instance_valid(card) or not card.has_method("has_trigger") or not card.has_trigger("on_turn_start"):
+				continue
+			var t: String = str(card.get("card_ability")).to_lower()
+			if "al comienzo de tu turno" in t or not ("al comienzo del turno" in t or "al inicio del turno" in t):
+				continue
+			if _check_trigger_conditions(card, "on_turn_start", event_data):
+				register_trigger(card, "on_turn_start", event_data)
 	await end_collecting_and_queue()
 
 	if has_pending_triggers():
