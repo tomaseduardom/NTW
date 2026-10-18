@@ -10,6 +10,7 @@ const EffectContextScript = preload("res://scripts/core/effects/EffectContext.gd
 const TalismanSearchScript = preload("res://scripts/core/effects/triggers/TalismanSearchPatterns.gd")
 const Deck170Script = preload("res://scripts/core/effects/triggers/Deck170Patterns.gd")
 const AziScript = preload("res://scripts/core/effects/triggers/AziPatterns.gd")
+const DagonScript = preload("res://scripts/core/effects/triggers/DagonPatterns.gd")
 const TriggerTollScript = preload("res://scripts/core/effects/triggers/TriggerTollPatterns.gd")
 const CastleLookScript = preload("res://scripts/core/effects/CastleLook.gd")  # "mira N cartas" (§69)
 
@@ -289,6 +290,9 @@ func _resolve_look_and_play_patterns(card: Node, full_ability_text: String, isol
 	# Azi del Abismo (2026-10-17): Descartar para convertirse en Oro hasta tu
 	# próximo turno — antes del intérprete, que solo veía "Descarta una".
 	if await AziScript.try_execute(card, isolated_ability_text, controller_id):
+		return true
+	# Padre Dagón (2026-10-17): la mitad activada, global.
+	if await DagonScript.try_execute(card, isolated_ability_text, controller_id):
 		return true
 	if await _main._effect_interpreter.try_execute(card, isolated_ability_text, controller_id):
 		return true

@@ -717,7 +717,59 @@ func _build_prevention_registry() -> void:
 				UniversalCardParser.turn_registry.register(str(card.get_instance_id()), 0, GameManager.current_turn)
 				return true,
 		},
+		{
+			# Padre Dagón (2026-10-17): "...o prevén que uno o más Aliados
+			# sean afectados por un efecto oponente" — comparte el "Una vez
+			# por turno" con su habilidad activada (DagonPatterns.gd). "Uno o
+			# más": una sola vez cubre a todos tus Aliados afectados por ESE
+			# mismo efecto (_dagon_shield, ver offer_prevention()).
+			"name": "Padre Dagón",
+			"detect": func(text: String) -> bool:
+				return DagonScript.PREVENTION_TEXT in text.to_lower(),
+			"effect_tags": ["destroy", "exile", "debuff", "strength_change", "silence", "control"],
+			"opponent_only": true,
+			"applies": func(target) -> bool:
+				if target == null:
+					return true
+				var tipo = target.get("tipo") if target is Dictionary else target.get("card_type")
+				return tipo == null or int(tipo) == Constants.CardType.ALIADO,
+			"is_available": func(card: Node) -> bool:
+				return not KeywordManager.is_silenced(card) and not DagonScript.used_this_turn(card),
+			"on_used": func(card: Node) -> bool:
+				DagonScript.mark_used(card)
+				var ctx: Dictionary = EffectContextScript.current()
+				_dagon_shield = {"owner": card.controller_id if card.get("controller_id") != null else 0,
+					"token": int(ctx.get("token", -1)), "source": _last_prevention_source_id,
+					"ms": Time.get_ticks_msec()}
+				var main_d := get_node_or_null("/root/Main")
+				if main_d:
+					main_d._update_debug("Padre Dagón: tus Aliados no son afectados por ese efecto")
+				return true,
+		},
 	]
+
+
+## Padre Dagón: el efecto oponente del que ya protegió a tus Aliados.
+var _dagon_shield: Dictionary = {}
+
+
+var _last_prevention_source_id: int = 0
+
+
+func _dagon_shield_covers(affected_card: Node, effect_source: Node) -> bool:
+	if _dagon_shield.is_empty() or affected_card.get("card_type") != Constants.CardType.ALIADO:
+		return false
+	var owner_id: int = affected_card.controller_id if affected_card.get("controller_id") != null else 0
+	if owner_id != int(_dagon_shield.owner):
+		return false
+	var source_id: int = effect_source.get_instance_id() if is_instance_valid(effect_source) else 0
+	if source_id != int(_dagon_shield.source):
+		return false
+	var token: int = int(EffectContextScript.current().get("token", -1))
+	if token >= 0:
+		return token == int(_dagon_shield.token)
+	# Sin contexto de efecto: el mismo lote (mismo origen, pocos segundos).
+	return Time.get_ticks_msec() - int(_dagon_shield.ms) <= 3000
 
 
 ## Costo compartido de Almirante Akari (barajar 1 carta propia, de la mano o
@@ -1075,6 +1127,9 @@ func offer_prevention(affected_card: Node, effect_source: Node, effect_tag: Stri
 		return false
 	if try_consume_legacy_targeted_prevention(affected_card):
 		return true
+	if _dagon_shield_covers(affected_card, effect_source):
+		return true
+	_last_prevention_source_id = effect_source.get_instance_id() if is_instance_valid(effect_source) else 0
 	if affected_card.get("current_zone") == null or not (affected_card.current_zone in Constants.ZONES_IN_PLAY):
 		return false
 	var owner_id: int = affected_card.controller_id if affected_card.get("controller_id") != null else 0
@@ -1142,6 +1197,7 @@ func try_consume_legacy_targeted_prevention(card: Node) -> bool:
 ## turno del jugador protegido.
 const PlayerSideScript = preload("res://scripts/core/game/PlayerSide.gd")
 const EffectContextScript = preload("res://scripts/core/effects/EffectContext.gd")
+const DagonScript = preload("res://scripts/core/effects/triggers/DagonPatterns.gd")
 var _fision_shields: Dictionary = {}  # player_id -> true
 
 

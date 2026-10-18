@@ -66,7 +66,9 @@ static func find_target(controller_id: int, want_card: bool, want_ability: bool,
 
 static func protected_from_annul(obj: Dictionary) -> bool:
 	var data: Dictionary = data_of(obj)
-	if "no puede ser anulad" in str(data.get("habilidad", "")).to_lower() or data.get("_no_annul", false):
+	var annul_text: String = str(data.get("habilidad", "")).to_lower()
+	if "no puede ser anulad" in annul_text or annul_text.begins_with("no se puede anular") \
+			or data.get("_no_annul", false):
 		return true
 	var node = card_of(obj)
 	return node != null and is_instance_valid(node) and node.get_meta("protected_from_annul_this_turn", false)
@@ -76,7 +78,7 @@ static func protected_from_cancel(obj: Dictionary) -> bool:
 	var data: Dictionary = data_of(obj)
 	var text: String = str(data.get("habilidad", "")).to_lower()
 	return "no pueden ser canceladas" in text or "su habilidad no puede ser cancelada" in text \
-		or "ni su habilidad cancelada" in text
+		or "ni su habilidad cancelada" in text or "no se puede anular ni cancelar su habilidad" in text
 
 
 static func apply(obj: Dictionary, annuller_card: Node) -> bool:
