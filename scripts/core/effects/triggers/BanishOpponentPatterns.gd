@@ -1,4 +1,5 @@
 extends RefCounted
+const PlayerSideScript = preload("res://scripts/core/game/PlayerSide.gd")
 ## BanishOpponentPatterns — 3 de 7 mitades de LookAndPlayResolver.gd, dividido
 ## por tamaño el 2026-09-06 ("módulos gordos"). Cubre banish/destierro/mill/
 ## anulación dirigidos al oponente, removal-oriented: ignis desatado, shoki,
@@ -691,7 +692,18 @@ func try_execute_banish_opponent_non_gold_and_talisman_surcharge_pattern(ability
 			return false
 		# 2026-09-12: current_zone en vez de get_parent() (ver §10.5)
 		return c.get("current_zone") in [Constants.Zone.LINEA_DEFENSA, Constants.Zone.LINEA_ATAQUE, Constants.Zone.LINEA_APOYO]
-	var target: Node = await main._card_interaction.await_target("Elige una carta oponente (que no sea Oro) para desterrar", filter, true, controller_id)
+	# Sin cartas válidas no se pide objetivo (2026-10-17, bug real reportado
+	# por el usuario: pedía elegir aunque el oponente no tuviera cartas).
+	var has_target := false
+	for container in PlayerSideScript.line_containers(main, opponent_id):
+		for c in container.get_children():
+			if is_instance_valid(c) and filter.call(c):
+				has_target = true
+	var target: Node = null
+	if has_target:
+		target = await main._card_interaction.await_target("Elige una carta oponente (que no sea Oro) para desterrar", filter, true, controller_id)
+	else:
+		main._update_debug("%s: tu oponente no tiene cartas que no sean Oro para desterrar" % str(card.card_name))
 	# Sin ventana genérica aquí (2026-09-09): banish() ya consulta Prevención adentro.
 	if target and is_instance_valid(target):
 		await ActionModule.banish([target], card, true)
