@@ -12,7 +12,16 @@ extends Control
 @onready var exit_button: Button = $VBoxContainer/ExitButton
 
 
+const GAME_SCENE := "res://scenes/game/Main.tscn"
+
+
 func _ready() -> void:
+	# Carga de la partida en segundo plano (2026-10-17, a pedido del usuario:
+	# "Jugar contra el bot" tardaba 5-7 s — load() de Main.tscn son ~4,5 s,
+	# casi todo compilar los scripts). Mientras se mira el menú ya se va
+	# cargando; al elegir, está lista.
+	if ResourceLoader.load_threaded_get_status(GAME_SCENE) == ResourceLoader.THREAD_LOAD_INVALID_RESOURCE:
+		ResourceLoader.load_threaded_request(GAME_SCENE)
 	# Conectar botones y aplicar estilos interactivos
 	var buttons = [play_button, shadowforge_button, decks_button, backs_button, exit_button]
 	for btn in buttons:
@@ -187,7 +196,7 @@ func _open_play_mode_popup() -> void:
 	var bot_action = func():
 		overlay.queue_free()
 		print("[MainMenu] Iniciando juego contra el bot...")
-		get_tree().change_scene_to_file("res://scenes/game/Main.tscn")
+		_go_to_game()
 
 	var card_bot_node := _build_interactive_mode_card(
 		tex_card_bot,
@@ -320,3 +329,19 @@ func _on_exit_pressed() -> void:
 	"""Sale del juego"""
 	print("[MainMenu] Saliendo...")
 	get_tree().quit()
+
+
+func _go_to_game() -> void:
+	"""Usa la escena ya cargada en segundo plano (ver _ready()); si todavía
+	está cargando, espera a que termine en vez de empezar de nuevo."""
+	var tree := get_tree()
+	var status := ResourceLoader.load_threaded_get_status(GAME_SCENE)
+	while status == ResourceLoader.THREAD_LOAD_IN_PROGRESS:
+		await tree.process_frame
+		status = ResourceLoader.load_threaded_get_status(GAME_SCENE)
+	if status == ResourceLoader.THREAD_LOAD_LOADED:
+		var packed := ResourceLoader.load_threaded_get(GAME_SCENE) as PackedScene
+		if packed:
+			tree.change_scene_to_packed(packed)
+			return
+	tree.change_scene_to_file(GAME_SCENE)
