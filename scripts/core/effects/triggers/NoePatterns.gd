@@ -37,6 +37,11 @@ static func try_execute(card: Node, text: String, controller_id: int) -> bool:
 			Constants.Zone.DESTIERRO, false, true)
 		await ActionModule.draw(controller_id, 1, str(card.get("card_name")) if is_instance_valid(card) else "", true)
 		return true
+	# Antonio Pincheira (2026-10-17): "En tu Fase Final, agrupa hasta dos
+	# Aliados" — vuelven de la Línea de Ataque a la de Defensa.
+	if "agrupa hasta dos aliados" in lower:
+		await _regroup_up_to(card, controller_id, 2)
+		return true
 	var core := lower.trim_suffix(".").replace("una vez por turno,", "").strip_edges()
 	if core == "un aliado gana furia":
 		await _grant_furia(card, controller_id)
@@ -212,3 +217,27 @@ static func _javiera_double(card: Node, controller_id: int, carrera_clause: bool
 		EffectController.add_single_card_leave_play_immunity(target, controller_id)
 	main._update_debug("%s %s su Fuerza%s" % [str(target.get("card_name")), "triplica" if is_carrera else "duplica",
 		" y no puede salir del juego hasta tu próximo turno" if is_carrera else " por el turno"])
+
+
+static func _regroup_up_to(card: Node, controller_id: int, amount: int) -> void:
+	var main := _main_node()
+	if not main or not main._card_interaction:
+		return
+	var atk_line = main.player_linea_ataque if controller_id == 0 else main.opponent_linea_ataque
+	if not atk_line:
+		return
+	var candidates: Array = atk_line.get_children().filter(func(c):
+		return is_instance_valid(c) and c.get("card_type") == Constants.CardType.ALIADO)
+	if candidates.is_empty():
+		return
+	var chosen: Array = []
+	if PlayerSideScript.is_bot(controller_id):
+		chosen = candidates.slice(0, amount)
+	else:
+		chosen = await main._card_interaction.await_multi_target(
+			"%s: agrupa hasta %d Aliados" % [str(card.get("card_name")) if is_instance_valid(card) else "Agrupar", amount],
+			candidates, amount, Callable(), Callable(), true, null, controller_id)
+	if chosen.is_empty():
+		return
+	await main._card_interaction.unmark_attackers(chosen)
+	main._update_debug("%d Aliado(s) agrupados" % chosen.size())
