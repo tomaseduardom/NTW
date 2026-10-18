@@ -621,8 +621,9 @@ func _resolve_armeria_barajar_desterrar(max_amount: int = 2, title: String = "Ar
 	if not _main._zone_viewer:
 		return
 	var no_filter := func(_c: Node) -> bool: return true
+	var card_w := "carta" if max_amount == 1 else "cartas"
 	var picked: Array = await _main._zone_viewer.open_cemetery_target_picker(
-		"%s — elige hasta %d carta(s) de los Cementerios" % [title, max_amount], no_filter, max_amount,
+		"%s — elige hasta %d %s de los Cementerios" % [title, max_amount, card_w], no_filter, max_amount,
 		"cemetery", false, false, chooser_id)
 	for entry in picked:
 		var owner_of_picked: int = entry.owner_id

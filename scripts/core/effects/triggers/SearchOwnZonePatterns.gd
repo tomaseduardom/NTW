@@ -705,8 +705,9 @@ func _shuffle_up_to_from_cemeteries(max_amount: int, title: String, chooser_id: 
 	if not main or not main._zone_viewer:
 		return
 	var no_filter := func(_c: Node) -> bool: return true
+	var card_w := "carta" if max_amount == 1 else "cartas"
 	var picked: Array = await main._zone_viewer.open_cemetery_target_picker(
-		"%s — elige hasta %d carta(s) de los Cementerios para Barajar" % [title, max_amount], no_filter, max_amount, "cemetery", false, false, chooser_id)
+		"%s — elige hasta %d %s de los Cementerios para Barajar" % [title, max_amount, card_w], no_filter, max_amount, "cemetery", false, false, chooser_id)
 	for entry in picked:
 		var owner_of_picked: int = entry.owner_id
 		var picked_data: Dictionary = entry.data
@@ -757,7 +758,7 @@ func try_execute_cuarto_sello_pattern(ability_text: String, card: Node, controll
 		if c.get("current_zone") not in [Constants.Zone.LINEA_DEFENSA, Constants.Zone.LINEA_ATAQUE,
 				Constants.Zone.LINEA_APOYO, Constants.Zone.RESERVA_ORO]:
 			return false
-		return ContinuousEffectManager.get_modified_cost(c) <= 4
+		return ContinuousEffectManager.cost_at_most(c, 4)
 	var destroy_target: Node = await main._card_interaction.await_target(
 		"Destruye hasta una carta de coste 4 o menos (N para no hacerlo)", destroy_filter, true, controller_id)
 	if destroy_target and is_instance_valid(destroy_target):

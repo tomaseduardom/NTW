@@ -64,7 +64,7 @@ func try_execute_hidromiel_pattern(ability_text: String, card: Node, controller_
 		return true
 	var no_filter := func(_c: Node) -> bool: return true
 	var picked: Array = await main._zone_viewer.open_cemetery_target_picker(
-		"hidromiel — elige hasta 3 carta(s) de los Cementerios para Barajar", no_filter, 3, "cemetery", false, false, controller_id)
+		"hidromiel — elige hasta 3 cartas de los Cementerios para Barajar", no_filter, 3, "cemetery", false, false, controller_id)
 	for entry in picked:
 		var owner_of_picked: int = entry.owner_id
 		var picked_data: Dictionary = entry.data
@@ -169,7 +169,7 @@ func try_execute_udjat_final_pattern(ability_text: String, card: Node, controlle
 	if not CardManager.get_cemetery(opponent_id).is_empty():
 		var opp_only := func(c: Node) -> bool: return c.owner_id == opponent_id
 		var opp_picked: Array = await main._zone_viewer.open_cemetery_target_picker(
-			"udjat — Destierra hasta 2 carta(s) del Cementerio oponente", opp_only, 2, "cemetery", false, false, controller_id)
+			"udjat — Destierra hasta 2 cartas del Cementerio oponente", opp_only, 2, "cemetery", false, false, controller_id)
 		for entry in opp_picked:
 			var idx: int = CardManager.get_cemetery(opponent_id).find(entry.data)
 			if idx >= 0:

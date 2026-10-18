@@ -44,8 +44,9 @@ func try_execute_banish_cemeteries_equal_to_own_strength_pattern(ability_text: S
 	# visibles en vez del modal de lista viejo — pool combinado, sin lock
 	# (mismo caso que Espada de O'Higgins, arquitectura.md §10.14/§10.27).
 	var no_filter := func(_c: Node) -> bool: return true
+	var card_w := "carta" if amount == 1 else "cartas"
 	var picked: Array = await main._zone_viewer.open_cemetery_target_picker(
-		"Destierra hasta %d carta(s) de los Cementerios" % amount, no_filter, amount, "cemetery", false, false, controller_id)
+		"Destierra hasta %d %s de los Cementerios" % [amount, card_w], no_filter, amount, "cemetery", false, false, controller_id)
 	if not picked.is_empty() and await TriggerSystem.open_response_window(card, str(card.card_name), controller_id):
 		return true
 	for entry in picked:
@@ -166,8 +167,9 @@ func try_execute_shuffle_up_to_n_cemeteries_pattern(ability_text: String, contro
 	# 2026-09-13, a pedido del usuario: click directo con ambos Cementerios
 	# visibles en vez del modal de lista viejo.
 	var no_filter := func(_c: Node) -> bool: return true
+	var card_w := "carta" if max_amount == 1 else "cartas"
 	var picked: Array = await main._zone_viewer.open_cemetery_target_picker(
-		"Baraja hasta %d carta(s) de los Cementerios" % max_amount, no_filter, max_amount, "cemetery", false, false, controller_id)
+		"Baraja hasta %d %s de los Cementerios" % [max_amount, card_w], no_filter, max_amount, "cemetery", false, false, controller_id)
 	if picked.is_empty() or await TriggerSystem.open_response_window(card, str(card.card_name) if card else "Tamales", controller_id):
 		return true
 	for entry in picked:
@@ -206,8 +208,9 @@ func try_execute_banish_up_to_n_cemeteries_pattern(ability_text: String, control
 	# 2026-09-13, a pedido del usuario: click directo con ambos Cementerios
 	# visibles en vez del modal de lista viejo.
 	var no_filter := func(_c: Node) -> bool: return true
+	var card_w := "carta" if max_amount == 1 else "cartas"
 	var picked: Array = await main._zone_viewer.open_cemetery_target_picker(
-		"Destierra hasta %d carta(s) de los Cementerios" % max_amount, no_filter, max_amount, "cemetery", false, false, controller_id)
+		"Destierra hasta %d %s de los Cementerios" % [max_amount, card_w], no_filter, max_amount, "cemetery", false, false, controller_id)
 	if picked.is_empty() or await TriggerSystem.open_response_window(card, str(card.card_name) if card else "Quantum Megumi", controller_id):
 		return true
 	for entry in picked:

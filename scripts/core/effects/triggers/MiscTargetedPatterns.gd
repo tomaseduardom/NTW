@@ -42,8 +42,9 @@ func _resolve_search_cemetery_to_hand(controller_id: int, max_amount: int, type_
 		if c.owner_id != controller_id:
 			return false
 		return type_filter.is_empty() or c.get("card_type") in type_filter
+	var card_w := "carta" if max_amount == 1 else "cartas"
 	var picked: Array = await main._zone_viewer.open_cemetery_target_picker(
-		"Sube hasta %d carta(s) de tu Cementerio a tu mano" % max_amount, filter, max_amount, "cemetery", false, false, controller_id)
+		"Sube hasta %d %s de tu Cementerio a tu mano" % [max_amount, card_w], filter, max_amount, "cemetery", false, false, controller_id)
 
 	var hand_container = main.player_hand if controller_id == 0 else main._opponent_fan
 	for entry in picked:
@@ -85,8 +86,9 @@ func _resolve_banish_from_both_cemeteries(max_amount: int, card: Node = null, co
 		return
 
 	var no_filter := func(_c: Node) -> bool: return true
+	var card_w := "carta" if max_amount == 1 else "cartas"
 	var picked: Array = await main._zone_viewer.open_cemetery_target_picker(
-		"Destierra hasta %d carta(s) de los Cementerios" % max_amount, no_filter, max_amount, "cemetery", false, false, controller_id)
+		"Destierra hasta %d %s de los Cementerios" % [max_amount, card_w], no_filter, max_amount, "cemetery", false, false, controller_id)
 	if picked.is_empty():
 		return
 	if await TriggerSystem.open_response_window(card, str(card.card_name) if card else "Espada de O'Higgins", controller_id):

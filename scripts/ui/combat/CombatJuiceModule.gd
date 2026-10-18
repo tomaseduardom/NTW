@@ -78,6 +78,7 @@ func _draw() -> void:
 		return
 
 	# 1. Flechas de Atacantes hacia el Castillo rival (si no están bloqueados)
+	var unblocked_by_castle: Dictionary = {}
 	for attacker in gm.attackers:
 		if not is_instance_valid(attacker) or not attacker.is_inside_tree() or not attacker.is_visible_in_tree():
 			continue
@@ -86,13 +87,23 @@ func _draw() -> void:
 		if not is_blocked:
 			var target_castle = _get_enemy_castle_panel(attacker)
 			if target_castle and is_instance_valid(target_castle):
-				var start_pt = _get_card_center(attacker)
-				var end_pt = _get_node_center(target_castle)
+				if not unblocked_by_castle.has(target_castle):
+					unblocked_by_castle[target_castle] = []
+				unblocked_by_castle[target_castle].append(attacker)
 
-				# Tono dorado/fuego mítico con pulso respirante
-				var alpha = 0.70 + 0.25 * sin(_pulse_time)
-				var gold_color = Color(1.0, 0.80, 0.28, alpha)
-				_draw_curved_arrow(start_pt, end_pt, gold_color, 3.2, 0.12)
+	var alpha = 0.70 + 0.25 * sin(_pulse_time)
+	var gold_color = Color(1.0, 0.80, 0.28, alpha)
+
+	for target_castle in unblocked_by_castle:
+		var attackers_group: Array = unblocked_by_castle[target_castle]
+		if attackers_group.size() == 1:
+			var attacker = attackers_group[0]
+			var start_pt = _get_card_center(attacker)
+			var end_pt = _get_node_center(target_castle)
+			_draw_curved_arrow(start_pt, end_pt, gold_color, 3.2, 0.12)
+		else:
+			# Varios aliados atacando: flecha más grande que abarca a todos los aliados
+			_draw_unified_attack_arrow(attackers_group, target_castle, gold_color)
 
 	# 2. Líneas rúnicas de Bloqueo / Duelo (Bloqueador -> Atacante)
 	for attacker in gm.blockers:
@@ -148,6 +159,107 @@ func _draw_curved_arrow(start: Vector2, target: Vector2, color: Color, width: fl
 	var arrow_p2 = visual_target - end_dir * arrow_size - Vector2(-end_dir.y, end_dir.x) * (arrow_size * 0.50)
 	var arrow_pts = PackedVector2Array([visual_target, arrow_p1, visual_target - end_dir * (arrow_size * 0.70), arrow_p2])
 	draw_colored_polygon(arrow_pts, color)
+
+
+func _draw_unified_attack_arrow(attackers: Array, target_castle: Control, color: Color) -> void:
+	"""Dibuja una gran flecha de asalto unificada cuando varios aliados atacan juntos el mismo castillo."""
+	if attackers.is_empty() or not is_instance_valid(target_castle):
+		return
+
+	var target = _get_node_center(target_castle)
+	var card_centers: Array[Vector2] = []
+	var min_pos = Vector2(INF, INF)
+	var max_pos = Vector2(-INF, -INF)
+
+	for attacker in attackers:
+		var c = _get_card_center(attacker)
+		card_centers.append(c)
+		var r_pos = c
+		var r_size = Vector2(110, 160)
+		if attacker is Control:
+			r_pos = attacker.global_position
+			r_size = attacker.size
+		min_pos.x = minf(min_pos.x, r_pos.x)
+		min_pos.y = minf(min_pos.y, r_pos.y)
+		max_pos.x = maxf(max_pos.x, r_pos.x + r_size.x)
+		max_pos.y = maxf(max_pos.y, r_pos.y + r_size.y)
+
+	var min_x = min_pos.x
+	var max_x = max_pos.x
+	var group_center_x = (min_x + max_x) * 0.5
+	var group_center = Vector2(group_center_x, (min_pos.y + max_pos.y) * 0.5)
+
+	var diff = target - group_center
+	var dist = diff.length()
+	if dist < 40.0:
+		return
+	var dir = diff.normalized()
+	var perp = Vector2(-dir.y, dir.x)
+
+	# 1. Soporte horizontal ornamental adaptativo (frente a las cartas según la dirección de ataque)
+	var is_attacking_downwards = dir.y >= 0.0
+	var target_side_y = (max_pos.y + 6.0) if is_attacking_downwards else (min_pos.y - 6.0)
+	var wing_sign = -1.0 if is_attacking_downwards else 1.0
+	var bracket_margin = 16.0
+	var wing_h = 14.0
+
+	var group_origin = Vector2(group_center_x, target_side_y)
+	var bracket_pts: PackedVector2Array = [
+		Vector2(min_x - bracket_margin, target_side_y + wing_sign * wing_h),
+		Vector2(min_x - bracket_margin * 0.3, target_side_y),
+		group_origin,
+		Vector2(max_x + bracket_margin * 0.3, target_side_y),
+		Vector2(max_x + bracket_margin, target_side_y + wing_sign * wing_h)
+	]
+	draw_polyline(bracket_pts, Color(color.r, color.g, color.b, color.a * 0.35), 9.0, true)
+	draw_polyline(bracket_pts, Color(color.r, color.g, color.b, color.a * 0.85), 4.0, true)
+	draw_polyline(bracket_pts, Color.WHITE, 1.5, true)
+
+	# 2. Conectores rúnicos desde cada carta atacante hasta el soporte
+	for c in card_centers:
+		var conn_pts = PackedVector2Array([c, Vector2(c.x, target_side_y)])
+		draw_polyline(conn_pts, Color(color.r, color.g, color.b, color.a * 0.30), 7.0, true)
+		draw_polyline(conn_pts, color, 3.2, true)
+		draw_polyline(conn_pts, Color.WHITE, 1.2, true)
+
+	# 3. La GRAN FLECHA monumental que viaja al Castillo
+	var visual_target = target - dir * 32.0
+	var main_mid = (group_origin + visual_target) * 0.5 + perp * (dist * 0.12)
+
+	var main_pts: PackedVector2Array = []
+	var steps = 28
+	for i in range(steps + 1):
+		var t = float(i) / float(steps)
+		var p = (1.0 - t) * (1.0 - t) * group_origin + 2.0 * (1.0 - t) * t * main_mid + t * t * visual_target
+		main_pts.append(p)
+
+	# Halo exterior amplio
+	draw_polyline(main_pts, Color(color.r, color.g, color.b, color.a * 0.22), 18.0, true)
+	# Resplandor medio
+	draw_polyline(main_pts, Color(color.r, color.g, color.b, color.a * 0.65), 9.0, true)
+	# Núcleo de haz
+	draw_polyline(main_pts, color, 5.5, true)
+	# Filamento central blanco
+	draw_polyline(main_pts, Color.WHITE, 2.0, true)
+
+	# 4. Gran punta de flecha ornamental (tamaño 28px vs 14px de la flecha individual)
+	var end_dir = (visual_target - main_pts[main_pts.size() - 2]).normalized()
+	var arrow_size = 28.0
+	var end_perp = Vector2(-end_dir.y, end_dir.x)
+	var arrow_p1 = visual_target - end_dir * arrow_size + end_perp * (arrow_size * 0.55)
+	var arrow_p2 = visual_target - end_dir * arrow_size - end_perp * (arrow_size * 0.55)
+	var arrow_indent = visual_target - end_dir * (arrow_size * 0.72)
+
+	var arrow_pts = PackedVector2Array([visual_target, arrow_p1, arrow_indent, arrow_p2])
+	var arrow_glow = PackedVector2Array([
+		visual_target + end_dir * 3.0,
+		arrow_p1 + (arrow_p1 - visual_target).normalized() * 4.0,
+		arrow_indent - end_dir * 3.0,
+		arrow_p2 + (arrow_p2 - visual_target).normalized() * 4.0
+	])
+	draw_colored_polygon(arrow_glow, Color(color.r, color.g, color.b, color.a * 0.35))
+	draw_colored_polygon(arrow_pts, color)
+	draw_polyline(PackedVector2Array([visual_target, arrow_p1, arrow_indent, arrow_p2, visual_target]), Color.WHITE, 1.8, true)
 
 
 func _draw_clash_marker(pos: Vector2, color: Color) -> void:

@@ -279,7 +279,8 @@ func search_either_owner(chooser: int, zones: Array, filter: Dictionary, amount:
 		return result
 	var title: String = "Buscar"
 	if source_card and source_card.get("card_name") != null:
-		title = "%s: elige hasta %d carta(s)" % [str(source_card.card_name), amount]
+		var card_word := "carta" if amount == 1 else "cartas"
+		title = "%s: elige hasta %d %s" % [str(source_card.card_name), amount, card_word]
 	var info: Dictionary = {}
 	var raw_picks: Array = await pick_in_zones(chooser, title, pools, 0, amount, distinct_names, [], info)
 
@@ -332,7 +333,8 @@ func _pick_from_zones(player_id: int, zone_infos: Array, to_select: int, min_cou
 	var main := _main.get_node_or_null("/root/Main")
 	var title: String = "Buscar"
 	if source_card and source_card.get("card_name") != null:
-		title = "%s: elige hasta %d carta(s)" % [str(source_card.card_name), to_select]
+		var card_word := "carta" if to_select == 1 else "cartas"
+		title = "%s: elige hasta %d %s" % [str(source_card.card_name), to_select, card_word]
 
 	# Pools completos (todas las cartas de cada zona, elegibles marcadas) —
 	# el jugador ve la zona entera, como al buscar en un mazo físico.
