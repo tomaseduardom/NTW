@@ -15,11 +15,7 @@ Estado: ✅ hecho · ⏳ falta · ⏸ para después (pedido del usuario)
 
 | Carta | Mazo | Qué falta |
 |---|---|---|
-| Maldición Vudú | ezequiel | Solo en tu turno; cancela una habilidad o una carta en juego pierde su habilidad por el turno; en tu Fase Final tus Oros van al Oro Pagado; desde el Cementerio, Desterrarla para Barajar o Desterrar una carta de un Cementerio. |
-| Seducción | douglas | Elegir un efecto: cada jugador Roba hasta tres (el oponente Destierra dos del tope por cada una), o cada jugador pone un Oro de su mano en su Oro Pagado (el oponente sin habilidad por el turno). |
 | Linaje Maldito | douglas | Dado de seis caras: par = sin daño de combate y el oponente Destierra cuatro; impar = sin daño directo y hasta dos Aliados +2 y Furia. |
-| el monstruo | bestia-plaga | Una vez por turno, Botar dos para que hasta dos Aliados ganen Furia y 1 de Fuerza por el turno. |
-| el huascar | ezequiel | El portador duplica su Fuerza y tus demás Aliados ganan Fuerza igual a su coste; al entrar, un Oro no se agrupa el próximo turno. |
 | Abu Simbel | ezequiel | Al entrar, cada jugador recupera el control de sus cartas; nadie puede ganar el control de cartas ajenas. |
 | Sidhes del Bosque | ezequiel | Respuesta a una búsqueda del oponente: nombrar dos cartas que no puede buscar y mostrar lo que busca. |
 | Trono del Cielo | douglas | Cuenta como dos Oros si el oponente generó o puso más de un Oro en su turno anterior. |
@@ -48,3 +44,7 @@ Estado: ✅ hecho · ⏳ falta · ⏸ para después (pedido del usuario)
 | Carta | Qué se hizo |
 |---|---|
 | Ira | ✅ Un Aliado gana Furia, Imbloqueable, 3 de Fuerza y hace daño al Destierro por el turno. ✅ Desde el Cementerio: Desterrarla para +1 de Fuerza y que su ataque no pueda ser cancelado. |
+| el monstruo | ✅ Botar dos cartas: hasta dos Aliados ganan Furia y 1 de Fuerza por el turno. |
+| Maldición Vudú | ✅ Solo en tu turno. ✅ Cancela una habilidad (si hay una del oponente en la pila) o una carta en juego pierde su habilidad por el turno. ✅ En tu Fase Final tus Oros van al Oro Pagado. ✅ Desde el Cementerio: Desterrarla para Barajar o Desterrar una carta de un Cementerio. |
+| Seducción | ✅ Elegir: cada jugador Roba hasta tres (el oponente Destierra dos del tope por cada una), o cada jugador pone un Oro de su mano en su Oro Pagado (el del oponente sin habilidad por el turno). |
+| el huascar | ✅ El portador duplica su Fuerza y tus demás Aliados ganan Fuerza igual a su coste. ✅ Al entrar, un Oro no se agrupa el próximo turno. ✅ Una vez por turno, Desterrar hasta un Arma o Tótem en juego y Robar dos. |
