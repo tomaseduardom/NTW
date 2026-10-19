@@ -316,23 +316,6 @@ func _open_viewer(pool_idx: int) -> void:
 	vbox.add_theme_constant_override("separation", 10)
 	frame.add_child(vbox)
 
-	var title_lbl := Label.new()
-	title_lbl.text = "%s — %s" % [_title, zone_label(pool.is_own, pool.zone)]
-	title_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title_lbl.add_theme_font_size_override("font_size", 18)
-	title_lbl.add_theme_color_override("font_color", Color(0.95, 0.85, 0.6))
-	vbox.add_child(title_lbl)
-
-	var hint := Label.new()
-	hint.text = "Clic en las cartas brillantes para elegirlas · clic derecho para ampliar · clic afuera para cerrar y ver otra zona"
-	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	hint.add_theme_font_size_override("font_size", 12)
-	hint.add_theme_color_override("font_color", Color(0.8, 0.75, 0.65, 0.85))
-	vbox.add_child(hint)
-
-	if pool.cards.size() > 8:
-		vbox.add_child(_build_filter_bar(pool))
-
 	# Tamaño de carta según la pantalla, y tantas columnas como entren.
 	var vp: Vector2 = _viewer.get_viewport().get_visible_rect().size
 	var card_scale: float = clampf(vp.y * 0.00095, VIEWER_SCALE_MIN, VIEWER_SCALE_MAX)
@@ -476,7 +459,8 @@ func _build_viewer_card(pool_idx: int, card_idx: int, card_scale: float) -> Cont
 			_main._card_inspector.on_card_right_clicked(card))
 
 	if not entry.eligible:
-		card.modulate = Color(0.42, 0.42, 0.42, 1.0)
+		card.modulate = Color(0.22, 0.22, 0.25, 0.65)
+		card.mouse_default_cursor_shape = Control.CURSOR_ARROW
 		return wrapper
 
 	card.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
@@ -576,7 +560,11 @@ func _refresh_paso() -> void:
 		_main._game_hud.show_paso_button_with_text(text, ready)
 	if _viewer_count_label:
 		var limit := "" if _max >= 999 else "/%d" % _max
-		_viewer_count_label.text = "Elegidas: %d%s" % [n, limit]
+		if _viewer_pool >= 0 and _viewer_pool < _pools.size():
+			var p: Dictionary = _pools[_viewer_pool]
+			_viewer_count_label.text = "%s — Elegidas: %d%s" % [zone_label(p.is_own, p.zone), n, limit]
+		else:
+			_viewer_count_label.text = "Elegidas: %d%s" % [n, limit]
 	if _viewer_confirm_btn:
 		_viewer_confirm_btn.text = "Confirmar (%d)" % n
 		_viewer_confirm_btn.disabled = not ready

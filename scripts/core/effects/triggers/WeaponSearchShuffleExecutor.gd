@@ -1,4 +1,4 @@
-﻿extends RefCounted
+extends RefCounted
 const TriggerTollScript = preload("res://scripts/core/effects/triggers/TriggerTollPatterns.gd")
 ## WeaponSearchShuffleExecutor — Slice de TargetedEffectExecutor.gd dividido
 ## por tamaño (2026-09-06, "módulos gordos"). Agrupa el cluster compuesto de
@@ -75,27 +75,86 @@ func _execute_targeted_search(card: Node, controller_id: int, source_text: Strin
 	elif owner_is_ambiguous:
 		zone_owner = controller_id  # sin "jugarla": va por search_either_owner() más abajo
 
+	var filter: Dictionary = {}
+	var lower_full := full_text_before_trim.to_lower()
+	if "del mismo tipo" in lower_full and ("descartar" in lower_full or "descarta" in lower_full):
+		# Ángel Redentor / similares: "puedes Descartar una carta para buscar en tu Castillo una carta del mismo tipo..."
+		var main := _main.get_node_or_null("/root/Main")
+		var hand_cards: Array = PlayerSideScript.hand_cards(main, controller_id) if main else []
+		if hand_cards.is_empty():
+			return
+		var to_discard: Array = []
+		if PlayerSideScript.is_bot(controller_id):
+			if hand_cards.size() >= 1:
+				to_discard = [hand_cards[0]]
+			else:
+				return
+		elif main and main._card_interaction:
+			to_discard = await main._card_interaction.await_multi_target(
+				"Descarta una carta para buscar en tu Castillo una del mismo tipo",
+				hand_cards, 1, Callable(), Callable(), true, null, controller_id)
+		if to_discard.is_empty():
+			return
+		var discarded_node: Node = to_discard[0]
+		var discarded_type: int = -1
+		if discarded_node.get("card_type") != null:
+			discarded_type = int(discarded_node.card_type)
+		elif discarded_node.get("card_data") != null:
+			discarded_type = int(discarded_node.card_data.get("tipo", -1))
+		await ActionModule.discard(controller_id, to_discard, "etb_trigger", true)
+		if discarded_type >= 0:
+			filter["type"] = discarded_type
+	elif "del mismo tipo" in lower_full and ("barajar una carta" in lower_full or "baraja una carta" in lower_full):
+		# El Trauco / similares: "puedes Barajar una carta de tu mano para buscar una carta del mismo tipo..."
+		var main := _main.get_node_or_null("/root/Main")
+		var hand_cards: Array = PlayerSideScript.hand_cards(main, controller_id) if main else []
+		if hand_cards.is_empty():
+			return
+		var to_shuffle: Array = []
+		if PlayerSideScript.is_bot(controller_id):
+			if hand_cards.size() >= 1:
+				to_shuffle = [hand_cards[0]]
+			else:
+				return
+		elif main and main._card_interaction:
+			to_shuffle = await main._card_interaction.await_multi_target(
+				"Baraja una carta de tu mano para buscar una del mismo tipo",
+				hand_cards, 1, Callable(), Callable(), true, null, controller_id)
+		if to_shuffle.is_empty():
+			return
+		var shuffled_node: Node = to_shuffle[0]
+		var shuffled_type: int = -1
+		if shuffled_node.get("card_type") != null:
+			shuffled_type = int(shuffled_node.card_type)
+		elif shuffled_node.get("card_data") != null:
+			shuffled_type = int(shuffled_node.card_data.get("tipo", -1))
+		PlayerSideScript.remove_from_hand(main, controller_id, shuffled_node)
+		await ActionModule.return_to_deck(shuffled_node, controller_id, false)
+		CardManager.shuffle_deck(controller_id)
+		if shuffled_type >= 0:
+			filter["type"] = shuffled_type
+
 	# Tipos mencionados (no 'elif' — 2026-08-22): "busca un Arma o un Oro"
 	# (p.ej. Tyet) menciona DOS tipos válidos a la vez, un elif que corta en
 	# el primero que encuentra (antes 'arma' ganaba siempre sobre 'oro')
 	# dejaba la búsqueda incompleta.
-	var wanted_types: Array = []
-	if "aliado" in ability_lower:
-		wanted_types.append(Constants.CardType.ALIADO)
-	if "talismán" in ability_lower or "talisman" in ability_lower:
-		wanted_types.append(Constants.CardType.TALISMAN)
-	if "tótem" in ability_lower or "totem" in ability_lower:
-		wanted_types.append(Constants.CardType.TOTEM)
-	if "arma" in ability_lower:
-		wanted_types.append(Constants.CardType.ARMA)
-	if "oro" in ability_lower:
-		wanted_types.append(Constants.CardType.ORO)
+	if not filter.has("type"):
+		var wanted_types: Array = []
+		if "aliado" in ability_lower:
+			wanted_types.append(Constants.CardType.ALIADO)
+		if "talismán" in ability_lower or "talisman" in ability_lower:
+			wanted_types.append(Constants.CardType.TALISMAN)
+		if "tótem" in ability_lower or "totem" in ability_lower:
+			wanted_types.append(Constants.CardType.TOTEM)
+		if "arma" in ability_lower:
+			wanted_types.append(Constants.CardType.ARMA)
+		if "oro" in ability_lower:
+			wanted_types.append(Constants.CardType.ORO)
 
-	var filter: Dictionary = {}
-	if wanted_types.size() == 1:
-		filter["type"] = wanted_types[0]
-	elif wanted_types.size() > 1:
-		filter["type"] = wanted_types
+		if wanted_types.size() == 1:
+			filter["type"] = wanted_types[0]
+		elif wanted_types.size() > 1:
+			filter["type"] = wanted_types
 	# Raza (2026-10-14, Akari Musashi: "un Aliado Héroe" buscaba cualquier
 	# Aliado): la palabra con mayúscula justo después de "Aliado(s)".
 	var race_rx := RegEx.new()

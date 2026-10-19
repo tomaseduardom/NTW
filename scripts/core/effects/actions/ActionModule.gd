@@ -216,6 +216,14 @@ func mill(player_id: int, amount: int, to_exile: bool = false, source: String = 
 		return {"success": false, "cancelled": true}
 	if EffectController.fision_blocks_player_effect(player_id):  # Fisión Nuclear
 		return {"success": false, "prevented": true}
+	# Pan de Muerto (2026-10-18): hasta quince por Castillo por turno.
+	var limits = load("res://scripts/core/effects/mechanics/TurnLimits.gd")
+	var room: int = limits.castle_removal_room(player_id)
+	if room >= 0:
+		amount = mini(amount, room)
+		if amount <= 0:
+			return {"success": false, "prevented": true}
+		limits.note_castle_removed(player_id, amount)
 	return await _action_mill.mill(player_id, amount, to_exile, source, skip_validation)
 
 
@@ -381,7 +389,7 @@ func _apply_card_filter(cards: Array, filter: Dictionary) -> Array:
 				# Oro" no encontraba nada.
 				if not (int(card_type) in filter.type.map(func(t): return int(t))):
 					matches = false
-			elif card_type != filter.type:
+			elif int(card_type) != int(filter.type):
 				matches = false
 
 		# Filtro por raza — admite una raza única o una lista ("busca... una
@@ -429,6 +437,16 @@ func _apply_card_filter(cards: Array, filter: Dictionary) -> Array:
 		if matches and filter.has("name_not"):
 			var card_name_exact: String = card_data.get("nombre", "")
 			if card_name_exact.to_lower() == String(filter.name_not).to_lower():
+				matches = false
+
+		# Tipos excluidos: "una carta que no sea Aliado ni Talismán" (2026-10-18).
+		if matches and filter.has("types_not"):
+			if int(card_data.get("tipo", -1)) in filter.types_not.map(func(t): return int(t)):
+				matches = false
+
+		# Nombre exacto dentro de una lista (2026-10-18, Dos de Cada Uno).
+		if matches and filter.has("names_in"):
+			if not (str(card_data.get("nombre", "")).to_lower() in filter.names_in):
 				matches = false
 
 		# Filtro por keyword (lista cruda del dato — sin instanciar la carta
