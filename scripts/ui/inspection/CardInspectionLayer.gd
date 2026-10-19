@@ -2,7 +2,7 @@ class_name CardInspectionLayer
 extends Node
 
 const CardScene = preload("res://scenes/cards/Card.tscn")
-const PresetDeckScript = preload("res://scripts/core/effects/triggers/PresetDeckPatterns.gd")
+const TurnLimits = preload("res://scripts/core/effects/mechanics/TurnLimits.gd")
 
 # Manejadores de patrones especiales extraídos de este archivo (2026-08-30,
 # "módulos gordos" — mismo corte que BernardoAbilityHandler/
@@ -29,8 +29,8 @@ const AbilityButtonPatternsDScript = preload("res://scripts/ui/inspection/Abilit
 # Caja de texto de habilidades en el arte impreso de la carta:
 # Margen lateral simétrico para centrar perfectamente el botón cubriendo todo el ancho de texto (sin recortar ni esquivar sellos).
 const ABILITY_TEXT_SIDE_MARGIN := 9.5  ## Margen lateral simétrico para centrar perfectamente el botón cubriendo todo el texto
-const ABILITY_TEXT_TOP_RATIO := 0.772  ## Ratio base del inicio del texto en la carta física
-const ABILITY_TEXT_BOTTOM_RATIO := 0.944  ## Base inferior de la caja de texto en la carta física
+const ABILITY_TEXT_TOP_RATIO := 0.758  ## Ratio base del inicio del texto en la carta física (desplazado hacia arriba para dar respiro sobre la primera línea)
+const ABILITY_TEXT_BOTTOM_RATIO := 0.932  ## Base inferior de la caja de texto en la carta física
 const ABILITY_SEPARATION_GAP := 2.0  ## Separación vertical limpia (en unidades de carta) entre botones contiguos para evitar solapamientos
 
 
@@ -531,7 +531,7 @@ func activate_ability_for(source_card: Node, ability: Dictionary, controller_id:
 	if not is_instance_valid(source_card):
 		return
 	if not (source_card.get("current_zone") in Constants.ZONES_IN_PLAY):
-		PresetDeckScript.note_outside_ability(controller_id)  # Terminal P-12
+		TurnLimits.note_outside_ability(controller_id)  # Terminal P-12
 	var captured: Dictionary = ability.duplicate()
 	var captured_card_data: Dictionary = source_card.card_data.duplicate()
 	var ability_lower: String = str(captured.get("raw_text", "")).to_lower()
@@ -626,7 +626,7 @@ func usable_abilities_for(source_card: Node, player_id: int) -> Array:
 		return []
 	# Terminal P-12 (2026-10-18): hasta dos habilidades de cartas fuera del
 	# juego por turno.
-	if not in_play and not PresetDeckScript.outside_ability_allowed(player_id):
+	if not in_play and not TurnLimits.outside_ability_allowed(player_id):
 		return []
 	# Silencio de Cementerio (2026-08-30, Sable de Napoleón) — 'pierde su
 	# habilidad' bloquea también las habilidades usables DESDE el
@@ -653,7 +653,7 @@ func usable_abilities_for(source_card: Node, player_id: int) -> Array:
 	# (sin oro, ya usadas este turno, etc.) se ocultan en vez de listarse en gris.
 	var usable_abilities: Array = []
 	# Escritura Sagrada (2026-10-18): jugar desde las dos primeras del Castillo.
-	var escritura: Dictionary = load("res://scripts/core/effects/triggers/PresetDeckPatterns.gd").escritura_synthetic_ability(
+	var escritura: Dictionary = load("res://scripts/core/effects/mechanics/CastleTopPlay.gd").escritura_synthetic_ability(
 		source_card, player_id, all_parsed)
 	if not escritura.is_empty():
 		usable_abilities.append({"ability": escritura, "validation": {"can": true}})
@@ -753,15 +753,16 @@ func _calculate_ability_line_offsets(habilidad_text: String, all_parsed: Array, 
 		total_lines = 1
 
 	# Ajuste adaptativo del inicio vertical de la caja de texto según cantidad total de líneas
-	var top_ratio: float = 0.772
+	# Desplazado ligeramente hacia arriba para dar respiro visual exacto sobre la primera línea
+	var top_ratio: float = 0.758
 	if total_lines >= 8:
-		top_ratio = 0.765
+		top_ratio = 0.750
 	elif total_lines >= 6:
-		top_ratio = 0.772
+		top_ratio = 0.758
 	elif total_lines >= 4:
-		top_ratio = 0.785
+		top_ratio = 0.770
 	else:
-		top_ratio = 0.800
+		top_ratio = 0.782
 
 	var zone_top: float = card_size.y * top_ratio
 	var zone_bottom: float = card_size.y * ABILITY_TEXT_BOTTOM_RATIO
@@ -923,7 +924,7 @@ func _build_ability_buttons(source_card: Node) -> void:
 		var card_for_glow      = source_card  # capturado antes del cierre
 		# Terminal P-12: cuenta las habilidades usadas desde fuera del juego.
 		if not (source_card.get("current_zone") in Constants.ZONES_IN_PLAY):
-			btn.pressed.connect(func(): PresetDeckScript.note_outside_ability(0))
+			btn.pressed.connect(func(): TurnLimits.note_outside_ability(0))
 
 		var ability_lower: String = str(captured.get("raw_text", "")).to_lower()
 		# Patrones especiales de habilidades activadas — extraídos a 4 archivos
