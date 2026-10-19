@@ -2,6 +2,7 @@ class_name CardInspectionLayer
 extends Node
 
 const CardScene = preload("res://scenes/cards/Card.tscn")
+const PresetDeckScript = preload("res://scripts/core/effects/triggers/PresetDeckPatterns.gd")
 
 # Manejadores de patrones especiales extraídos de este archivo (2026-08-30,
 # "módulos gordos" — mismo corte que BernardoAbilityHandler/
@@ -26,12 +27,12 @@ const AbilityButtonPatternsCScript = preload("res://scripts/ui/inspection/Abilit
 const AbilityButtonPatternsDScript = preload("res://scripts/ui/inspection/AbilityButtonPatternsD.gd")
 
 # Caja de texto de habilidades en el arte impreso de la carta:
-# El pergamino metálico inferior ocupa una posición física fija en la plantilla de diseño:
-# desde ~76.5% hasta ~93.0% de la altura de la carta, dejando fuera el borde y el pie de crédito.
-const ABILITY_TEXT_TOP_RATIO := 0.745
-const ABILITY_TEXT_BOTTOM_RATIO := 0.930
-const ABILITY_TEXT_SIDE_MARGIN := 12.0
-const ABILITY_TEXT_RIGHT_MARGIN := 34.0  ## Margen derecho que respeta el medallón/sello de la carta sin recortar el texto
+# Margen lateral simétrico para centrar perfectamente el botón cubriendo todo el ancho de texto (sin recortar ni esquivar sellos).
+const ABILITY_TEXT_SIDE_MARGIN := 9.5  ## Margen lateral simétrico para centrar perfectamente el botón cubriendo todo el texto
+const ABILITY_TEXT_TOP_RATIO := 0.772  ## Ratio base del inicio del texto en la carta física
+const ABILITY_TEXT_BOTTOM_RATIO := 0.944  ## Base inferior de la caja de texto en la carta física
+const ABILITY_SEPARATION_GAP := 2.0  ## Separación vertical limpia (en unidades de carta) entre botones contiguos para evitar solapamientos
+
 
 var _main: Node = null
 
@@ -529,6 +530,8 @@ func activate_ability_for(source_card: Node, ability: Dictionary, controller_id:
 	llama y espera (await) esa misma función."""
 	if not is_instance_valid(source_card):
 		return
+	if not (source_card.get("current_zone") in Constants.ZONES_IN_PLAY):
+		PresetDeckScript.note_outside_ability(controller_id)  # Terminal P-12
 	var captured: Dictionary = ability.duplicate()
 	var captured_card_data: Dictionary = source_card.card_data.duplicate()
 	var ability_lower: String = str(captured.get("raw_text", "")).to_lower()
@@ -551,6 +554,10 @@ func _is_response_only_ability(raw_text: String) -> bool:
 	var lower := raw_text.to_lower()
 	var at := lower.find(" para ")
 	var effect: String = lower.substr(at + 6) if at >= 0 else lower
+	# Cancelar un ATAQUE (Drácula, 2026-10-18): no responde a nada de la
+	# pila — se usa en Guerra de Talismanes, mientras los Aliados atacan.
+	if "cancelar el ataque" in effect:
+		return false
 	if not ("anular" in effect or "cancelar" in effect or "prevenir" in effect or "prevén" in effect):
 		return false
 	for other in ["destru", "desterr", "roba", "baraj", "busca", "gana", "pierd", "genera", "juega", "jugar", "pon "]:
@@ -617,6 +624,10 @@ func usable_abilities_for(source_card: Node, player_id: int) -> Array:
 	var in_play: bool = source_zone in Constants.ZONES_IN_PLAY
 	if not in_play and source_zone != Constants.Zone.MANO and source_zone != Constants.Zone.CEMENTERIO:
 		return []
+	# Terminal P-12 (2026-10-18): hasta dos habilidades de cartas fuera del
+	# juego por turno.
+	if not in_play and not PresetDeckScript.outside_ability_allowed(player_id):
+		return []
 	# Silencio de Cementerio (2026-08-30, Sable de Napoleón) — 'pierde su
 	# habilidad' bloquea también las habilidades usables DESDE el
 	# Cementerio (p.ej. Espada del Juicio). No aplica a Mano/en juego, solo
@@ -638,12 +649,17 @@ func usable_abilities_for(source_card: Node, player_id: int) -> Array:
 	var all_parsed := UniversalCardParser.parse_abilities(habilidad_text, card_id)
 	var abilities: Array = all_parsed.filter(func(a): return a.get("ability_type", "") == "ACTIVATED")
 
-	if abilities.is_empty():
-		return []
-
 	# Solo se muestran las habilidades usables ahora mismo — las bloqueadas
 	# (sin oro, ya usadas este turno, etc.) se ocultan en vez de listarse en gris.
 	var usable_abilities: Array = []
+	# Escritura Sagrada (2026-10-18): jugar desde las dos primeras del Castillo.
+	var escritura: Dictionary = load("res://scripts/core/effects/triggers/PresetDeckPatterns.gd").escritura_synthetic_ability(
+		source_card, player_id, all_parsed)
+	if not escritura.is_empty():
+		usable_abilities.append({"ability": escritura, "validation": {"can": true}})
+
+	if abilities.is_empty():
+		return usable_abilities
 	for ability in abilities:
 		var ability_raw_text: String = str(ability.get("raw_text", ""))
 		# Turno rival (§10.11 caso 4): solo Anular/Cancelar son respuesta
@@ -695,6 +711,121 @@ func usable_abilities_for(source_card: Node, player_id: int) -> Array:
 	return usable_abilities
 
 
+func _calculate_ability_line_offsets(habilidad_text: String, all_parsed: Array, card_size: Vector2, has_gained: bool) -> Dictionary:
+	var paragraphs: PackedStringArray = habilidad_text.strip_edges().split("\n")
+	var wrapped_lines: Array[String] = []
+	var line_char_ranges: Array[Vector2i] = []
+	var normalized_full: String = ""
+
+	const MAX_CHARS_PER_LINE: int = 43
+
+	for p in paragraphs:
+		var p_str: String = p.strip_edges()
+		if p_str.is_empty():
+			continue
+		var words: PackedStringArray = p_str.split(" ", false)
+		var curr_line: Array[String] = []
+		var curr_len: int = 0
+		for w in words:
+			var add_len: int = w.length() if curr_len == 0 else w.length() + 1
+			if curr_len + add_len <= MAX_CHARS_PER_LINE:
+				curr_line.append(w)
+				curr_len += add_len
+			else:
+				var line_str: String = " ".join(curr_line)
+				var start_c: int = normalized_full.length()
+				normalized_full += line_str + "\n"
+				var end_c: int = normalized_full.length()
+				wrapped_lines.append(line_str)
+				line_char_ranges.append(Vector2i(start_c, end_c))
+				curr_line = [w]
+				curr_len = w.length()
+		if not curr_line.is_empty():
+			var line_str: String = " ".join(curr_line)
+			var start_c: int = normalized_full.length()
+			normalized_full += line_str + "\n"
+			var end_c: int = normalized_full.length()
+			wrapped_lines.append(line_str)
+			line_char_ranges.append(Vector2i(start_c, end_c))
+
+	var total_lines: int = wrapped_lines.size()
+	if total_lines <= 0:
+		total_lines = 1
+
+	# Ajuste adaptativo del inicio vertical de la caja de texto según cantidad total de líneas
+	var top_ratio: float = 0.772
+	if total_lines >= 8:
+		top_ratio = 0.765
+	elif total_lines >= 6:
+		top_ratio = 0.772
+	elif total_lines >= 4:
+		top_ratio = 0.785
+	else:
+		top_ratio = 0.800
+
+	var zone_top: float = card_size.y * top_ratio
+	var zone_bottom: float = card_size.y * ABILITY_TEXT_BOTTOM_RATIO
+	var zone_height: float = zone_bottom - zone_top
+	var line_height_px: float = zone_height / float(total_lines)
+
+	var norm_lower: String = normalized_full.to_lower()
+	var offsets_by_index: Dictionary = {}
+
+	for a in all_parsed:
+		var raw_t: String = a.get("raw_text", "").strip_edges()
+		var idx: int = a.get("ability_index", -1)
+		var raw_lower: String = raw_t.to_lower()
+
+		var chunk_start: String = raw_lower.substr(0, mini(24, raw_lower.length())).strip_edges()
+		if has_gained and not (chunk_start in habilidad_text.to_lower()):
+			continue
+
+		var pos_start: int = norm_lower.find(chunk_start) if not chunk_start.is_empty() else -1
+		if pos_start == -1 and raw_lower.length() > 12:
+			chunk_start = raw_lower.substr(0, 14)
+			pos_start = norm_lower.find(chunk_start)
+
+		var chunk_end_len: int = mini(24, raw_lower.length())
+		var chunk_end: String = raw_lower.substr(raw_lower.length() - chunk_end_len).strip_edges()
+		var pos_end: int = -1
+		if not chunk_end.is_empty() and pos_start != -1:
+			pos_end = norm_lower.find(chunk_end, pos_start)
+		if pos_end != -1:
+			pos_end += chunk_end.length()
+		elif pos_start != -1:
+			pos_end = pos_start + raw_lower.length()
+
+		var start_line: int = -1
+		var end_line: int = -1
+
+		if pos_start != -1 and pos_end != -1:
+			for l_idx in range(line_char_ranges.size()):
+				var sc: int = line_char_ranges[l_idx].x
+				var ec: int = line_char_ranges[l_idx].y
+				if ec > pos_start and sc < pos_end:
+					if start_line == -1:
+						start_line = l_idx
+					end_line = l_idx
+
+		if start_line == -1:
+			# Fallback proporcional robusto
+			var spos: int = habilidad_text.to_lower().find(chunk_start) if not chunk_start.is_empty() else 0
+			if spos < 0:
+				spos = 0
+			var full_len: float = float(maxi(habilidad_text.length(), 1))
+			start_line = int(floor((float(spos) / full_len) * float(total_lines)))
+			var lines_count: int = maxi(1, int(round((float(raw_t.length()) / full_len) * float(total_lines))))
+			end_line = mini(total_lines - 1, start_line + lines_count - 1)
+
+		var y0: float = zone_top + float(start_line) * line_height_px
+		var y1: float = zone_top + float(end_line + 1) * line_height_px
+		y0 = clampf(y0, zone_top - 2.0, zone_bottom - 8.0)
+		y1 = clampf(y1, y0 + 10.0, zone_bottom + 2.0)
+		offsets_by_index[idx] = Vector2(y0, y1)
+
+	return offsets_by_index
+
+
 func _build_ability_buttons(source_card: Node) -> void:
 	var usable_abilities: Array = usable_abilities_for(source_card, 0)
 	if usable_abilities.is_empty():
@@ -715,73 +846,9 @@ func _build_ability_buttons(source_card: Node) -> void:
 	# en la carta, calculando las líneas visuales ocupadas por cada párrafo/palabra clave.
 	var card_size: Vector2 = inspected_card.custom_minimum_size
 
-	# Normalizar texto en líneas/párrafos
-	var lines_raw: PackedStringArray = habilidad_text.strip_edges().split("\n")
-	var visual_paragraphs: Array[Dictionary] = []
-	var total_visual_lines: float = 0.0
-
-	for p in lines_raw:
-		var p_str = p.strip_edges()
-		if p_str.is_empty():
-			continue
-		# Caracteres aproximados por línea en la caja de texto (~42 caracteres por línea real)
-		var p_lines: float = maxf(1.0, roundf(float(p_str.length()) / 42.0 + 0.2))
-		visual_paragraphs.append({
-			"text": p_str,
-			"lower": p_str.to_lower(),
-			"lines": p_lines,
-			"line_start": total_visual_lines
-		})
-		total_visual_lines += p_lines
-
-	if total_visual_lines <= 0.0:
-		total_visual_lines = 1.0
-
-	# El pergamino metálico en el diseño físico de la carta está anclado en una posición fija:
-	# comienza en ABILITY_TEXT_TOP_RATIO (~76.5%) y finaliza en ABILITY_TEXT_BOTTOM_RATIO (~93.0%).
-	# Las líneas de texto de habilidades se distribuyen proporcionalmente dentro de este marco.
-	var zone_top: float = card_size.y * ABILITY_TEXT_TOP_RATIO
-	var zone_height: float = card_size.y * (ABILITY_TEXT_BOTTOM_RATIO - ABILITY_TEXT_TOP_RATIO)
-
-	var line_height_px: float = zone_height / total_visual_lines
-	var offsets_by_index: Dictionary = {}
-
-	for a in all_parsed:
-		var raw_t: String = a.get("raw_text", "")
-		var idx: int = a.get("ability_index", -1)
-		var raw_lower: String = raw_t.to_lower().strip_edges()
-		var first_chunk: String = raw_lower.split(".")[0].strip_edges()
-		if first_chunk.length() > 6:
-			first_chunk = first_chunk.substr(0, 24)
-		if has_gained and not (first_chunk in habilidad_text.to_lower()):
-			continue
-
-		var match_p: Dictionary = {}
-		for p in visual_paragraphs:
-			if first_chunk in p["lower"] or p["lower"] in raw_lower:
-				match_p = p
-				break
-
-		var a_line_start: float = 0.0
-		var a_lines_count: float = 1.0
-		if not match_p.is_empty():
-			a_line_start = match_p["line_start"]
-			a_lines_count = match_p["lines"]
-		else:
-			# Fallback proporcional
-			var h_lower: String = habilidad_text.to_lower()
-			var spos: int = h_lower.find(first_chunk) if not first_chunk.is_empty() else 0
-			if spos < 0:
-				spos = 0
-			var full_len: float = float(maxi(habilidad_text.length(), 1))
-			a_line_start = (float(spos) / full_len) * total_visual_lines
-			a_lines_count = maxf(1.0, (float(maxi(raw_t.length(), 1)) / full_len) * total_visual_lines)
-
-		var y0: float = zone_top + a_line_start * line_height_px
-		var y1: float = y0 + a_lines_count * line_height_px
-		y0 = clampf(y0, zone_top, zone_top + zone_height - 8.0)
-		y1 = clampf(y1, y0 + 10.0, zone_top + zone_height)
-		offsets_by_index[idx] = Vector2(y0, y1)
+	var offsets_by_index: Dictionary = _calculate_ability_line_offsets(
+		habilidad_text, all_parsed, card_size, has_gained
+	)
 
 	var panel = Control.new()
 	panel.name = "AbilityOverlayButtons"
@@ -823,18 +890,21 @@ func _build_ability_buttons(source_card: Node) -> void:
 	# Ordenar verticalmente por posición en la carta
 	valid_entries.sort_custom(func(a, b): return a["y0"] < b["y0"])
 
-	# Si hay 2 o más habilidades contiguas, juntarlas y unificarlas perfectamente
+	# Separación limpia entre habilidades múltiples (2 o 3 habilidades activadas) para que nunca se solapen
 	if valid_entries.size() > 1:
 		for i in range(valid_entries.size() - 1):
 			var curr = valid_entries[i]
 			var next = valid_entries[i + 1]
-			# Si la distancia entre el final de una y el inicio de la siguiente es contigua (< 6px)
-			if absf(next["y0"] - curr["y1"]) <= 6.0:
-				var mid_seam: float = roundf((curr["y1"] + next["y0"]) * 0.5)
-				curr["y1"] = mid_seam
-				next["y0"] = mid_seam
-				curr["corner_bottom"] = false
-				next["corner_top"] = false
+			if next["y0"] - curr["y1"] < ABILITY_SEPARATION_GAP:
+				var mid_seam: float = (curr["y1"] + next["y0"]) * 0.5
+				curr["y1"] = mid_seam - (ABILITY_SEPARATION_GAP * 0.5)
+				next["y0"] = mid_seam + (ABILITY_SEPARATION_GAP * 0.5)
+			curr["corner_top"] = true
+			curr["corner_bottom"] = true
+			next["corner_top"] = true
+			next["corner_bottom"] = true
+
+	var btn_w: float = card_size.x - (ABILITY_TEXT_SIDE_MARGIN * 2.0)
 
 	for item in valid_entries:
 		var ability = item["ability"]
@@ -842,9 +912,8 @@ func _build_ability_buttons(source_card: Node) -> void:
 		var btn = _button_support._create_ability_overlay_button(
 			ability, validation, item["corner_top"], item["corner_bottom"]
 		)
-		var btn_w: float = card_size.x - ABILITY_TEXT_SIDE_MARGIN - ABILITY_TEXT_RIGHT_MARGIN
 		var btn_y: float = item["y0"]
-		var btn_h: float = maxf(14.0, item["y1"] - item["y0"])
+		var btn_h: float = maxf(12.0, item["y1"] - item["y0"])
 		btn.position = Vector2(ABILITY_TEXT_SIDE_MARGIN, btn_y)
 		btn.size = Vector2(btn_w, btn_h)
 		btn.mouse_filter = Control.MOUSE_FILTER_STOP
@@ -852,6 +921,9 @@ func _build_ability_buttons(source_card: Node) -> void:
 		var captured           = ability.duplicate()
 		var captured_card_data = source_card.card_data.duplicate()
 		var card_for_glow      = source_card  # capturado antes del cierre
+		# Terminal P-12: cuenta las habilidades usadas desde fuera del juego.
+		if not (source_card.get("current_zone") in Constants.ZONES_IN_PLAY):
+			btn.pressed.connect(func(): PresetDeckScript.note_outside_ability(0))
 
 		var ability_lower: String = str(captured.get("raw_text", "")).to_lower()
 		# Patrones especiales de habilidades activadas — extraídos a 4 archivos
