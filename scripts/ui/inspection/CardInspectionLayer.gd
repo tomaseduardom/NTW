@@ -4,22 +4,15 @@ extends Node
 const CardScene = preload("res://scenes/cards/Card.tscn")
 const TurnLimits = preload("res://scripts/core/effects/mechanics/TurnLimits.gd")
 
-# Manejadores de patrones especiales extraídos de este archivo (2026-08-30,
-# "módulos gordos" — mismo corte que BernardoAbilityHandler/
-# ResponseWindowHandler). preload() en vez del nombre de clase global: son
-# scripts NUEVOS de esta sesión, el editor todavía no los escaneó para
-# registrar su class_name (ver el mismo comentario sobre
-# CardNameSearchDialogScript en TriggerSystem.gd) — referenciarlos por
-# nombre tiraría "Could not find type" hasta el próximo reimport manual.
+# Manejadores de patrones especiales separados de este archivo (como
+# BernardoAbilityHandler/ResponseWindowHandler). preload() en vez del class_name global: un editor
+# abierto desde antes de crear la clase falla con "Could not find type".
 const SearchAbilityHandlerScript = preload("res://scripts/ui/inspection/SearchAbilityHandler.gd")
 const PreventionAbilityHandlerScript = preload("res://scripts/ui/inspection/PreventionAbilityHandler.gd")
 const HandCementerioAbilityHandlerScript = preload("res://scripts/ui/inspection/HandCementerioAbilityHandler.gd")
 
-# Validación de habilidades ACTIVADAS + ciclo de vida del botón superpuesto,
-# y los 4 grupos (por posición en el archivo original) del if-chain de
-# patrones especiales de _build_ability_buttons() — extraídos de este mismo
-# archivo (2026-09-06, "módulos gordos", Fase 2 — ver
-# iterative-booping-abelson.md). Mismo motivo de preload() que arriba.
+# Validación de habilidades activadas + ciclo de vida del botón superpuesto, y los 4 grupos del
+# if-chain de patrones especiales de _build_ability_buttons(). preload() por el mismo motivo.
 const AbilityButtonSupportScript = preload("res://scripts/ui/inspection/AbilityButtonSupport.gd")
 const AbilityButtonPatternsAScript = preload("res://scripts/ui/inspection/AbilityButtonPatternsA.gd")
 const AbilityButtonPatternsBScript = preload("res://scripts/ui/inspection/AbilityButtonPatternsB.gd")
@@ -32,6 +25,8 @@ const ABILITY_TEXT_SIDE_MARGIN := 9.5  ## Margen lateral simétrico para centrar
 const ABILITY_TEXT_TOP_RATIO := 0.758  ## Ratio base del inicio del texto en la carta física (desplazado hacia arriba para dar respiro sobre la primera línea)
 const ABILITY_TEXT_BOTTOM_RATIO := 0.932  ## Base inferior de la caja de texto en la carta física
 const ABILITY_SEPARATION_GAP := 2.0  ## Separación vertical limpia (en unidades de carta) entre botones contiguos para evitar solapamientos
+const FONT_TITLE := preload("res://assets/fonts/Cinzel-Bold.ttf")
+const FONT_BODY := preload("res://assets/fonts/Marcellus-Regular.ttf")
 
 
 var _main: Node = null
@@ -85,10 +80,8 @@ func setup(main: Node) -> void:
 	if not PriorityManager.priority_changed.is_connected(_on_priority_changed_refresh_glows):
 		PriorityManager.priority_changed.connect(_on_priority_changed_refresh_glows)
 
-	# Signo Amarillo (2026-08-26): ventana de respuesta para triggers ETB de
-	# Oro/fuera del juego — separada de step_d_waiting (esa es para la Pila
-	# de habilidades activadas/cartas jugadas; los triggers automáticos
-	# tienen su propia señal en TriggerSystem).
+	# Signo Amarillo: ventana de respuesta para triggers de entrada de Oro / fuera del juego, separada
+	# de step_d_waiting (la Pila de habilidades activadas y cartas jugadas).
 	if not TriggerSystem.waiting_for_responses.is_connected(_response_window._on_trigger_waiting_for_responses):
 		TriggerSystem.waiting_for_responses.connect(_response_window._on_trigger_waiting_for_responses)
 
@@ -101,23 +94,15 @@ func _on_priority_changed_refresh_glows(_player_id: int) -> void:
 # INDICADOR PASIVO DE HABILIDAD ACTIVABLE (brillo celeste)
 # =============================================================================
 func refresh_activatable_glows() -> bool:
-	"""Prende/apaga el brillo celeste de 'tiene una habilidad activable
-	disponible ahora' en cada carta del jugador humano en juego — sin
-	necesidad de abrir el panel de inspección. Reutiliza exactamente la
-	misma detección y validación que _build_ability_buttons()/_validate_ability().
-	Retorna true si quedó AL MENOS una carta brillando (2026-09-19, §10.52 —
-	ver PhaseFlowController._on_priority_changed_glow(), que combina este
-	valor con _human_has_instant_response_talisman_in_hand() para decidir si
-	el auto-pase de Paso D espera los 5s reales o pasa casi al toque porque
-	no hay nada que decidir)."""
+	"""Prende/apaga el brillo celeste de "tiene una habilidad activable ahora" en cada carta del
+	humano en juego, sin abrir la inspección. Misma detección y validación que
+	_build_ability_buttons()/_validate_ability(). Devuelve true si quedó al menos una carta
+	brillando (§10.52)."""
 	if not _main:
 		return false
 
-	# 2026-09-19, arquitectura.md §10.11 caso 4 / §10.51: mismo criterio que
-	# _build_ability_buttons() — en turno rival, el brillo solo tiene sentido
-	# para Anular/Cancelar (única categoría ofrecida ahí durante una ventana
-	# de respuesta rival); el resto de las ACTIVATED no son respuesta
-	# instantánea real aunque técnicamente haya prioridad abierta.
+	# Mismo criterio que _build_ability_buttons() (§10.11 caso 4 / §10.51): en turno rival el brillo
+	# solo aplica a Anular/Cancelar.
 	var is_own_turn: bool = GameManager.active_player_id == 0
 	if not GameManager.is_game_active:
 		_clear_all_activatable_glows()
@@ -140,12 +125,8 @@ func refresh_activatable_glows() -> bool:
 	if _main.player_gold:
 		candidates.append_array(_main.player_gold.get_children())
 
-	# Armas equipadas (2026-09-02, a pedido del usuario): son hijas del
-	# Aliado portador, no de player_field/player_linea_ataque directo, así
-	# que nunca aparecían aquí — su propia habilidad podía activarse bien
-	# (vive en el nodo del Arma, ajeno al estado de silenciado del
-	# portador), pero nunca se le prendía el brillo celeste de "tiene una
-	# habilidad activable disponible ahora".
+	# Armas equipadas: son hijas del Aliado portador (no de player_field/player_linea_ataque), así que
+	# se recorren aparte. Su habilidad vive en el nodo del Arma, ajena al silencio del portador.
 	var weapon_candidates: Array = []
 	for ally in candidates:
 		if not is_instance_valid(ally):
@@ -180,11 +161,8 @@ func refresh_activatable_glows() -> bool:
 				var ability_lower := ability_raw_text.to_lower()
 				if "en tu turno" in ability_lower or not _button_support._is_annul_or_cancel_ability(ability_raw_text):
 					continue
-			# Estas cartas ya están EN JUEGO (candidates viene solo de
-			# player_field/player_linea_ataque/player_gold) — mismo filtro que
-			# _build_ability_buttons() (2026-08-31): una habilidad 'de tu
-			# mano'/'de tu Cementerio' sin 'en juego' no tiene sentido aquí,
-			# aunque esté en la lista chica de _ability_is_hand_usable().
+			# Estas cartas están en juego: una habilidad "de tu mano" / "de tu Cementerio" sin "en juego" no
+			# aplica aquí (mismo filtro que _build_ability_buttons()).
 			if _ability_is_hand_or_cementerio_only(ability_raw_text):
 				continue
 			if _button_support._validate_ability(ability, card).get("can", false):
@@ -214,13 +192,7 @@ func on_card_right_clicked(card: Node) -> void:
 
 
 func _open_card_inspection(card: Node) -> void:
-	# 2026-09-13, bug real reportado por el usuario: click derecho sobre un
-	# Aliado del rival "llega pero no hace nada" — el evento sí alcanzaba
-	# _on_card_right_clicked (confirmado con el print [DIAG] existente),
-	# pero esta función cortaba en silencio si ya había OTRA inspección
-	# abierta (p.ej. se había inspeccionado una carta de la mano un
-	# instante antes y no se cerró). Ahora cierra la anterior en vez de
-	# ignorar el click nuevo.
+	# Si ya hay otra inspección abierta, se cierra en vez de ignorar el click nuevo.
 	if inspected_card:
 		close_card_inspection()
 	_inspected_source_card = card
@@ -240,10 +212,8 @@ func _open_card_inspection(card: Node) -> void:
 	_main.inspection_container.add_child(inspected_card)
 	inspected_card.pivot_offset = inspected_card.custom_minimum_size / 2.0
 	inspected_card.rotation_degrees = 0.0
-	# El clon no tiene la zona/dueño reales de 'card', así que sus propios
-	# badges recién creados en _ready() quedan con el valor base — forzamos
-	# el recálculo usando el contexto de la carta REAL (2026-08-31, corrige
-	# a Manuel Bulnes mostrando 1 de Fuerza menos al inspeccionarlo).
+	# El clon no tiene la zona/dueño reales de 'card', así que sus badges quedan con el valor base: se
+	# recalculan con el contexto de la carta real (p.ej. Manuel Bulnes).
 	inspected_card.refresh_strength_badge(card)
 	inspected_card.refresh_cost_badge(card)
 	mark_inspection_layer_in_use()
@@ -260,10 +230,9 @@ func _open_card_inspection(card: Node) -> void:
 
 
 func _build_gained_abilities_panel(source_card: Node) -> void:
-	"""Habilidades ganadas de otras cartas (2026-10-17, Reina Nyssara: "gana
-	las habilidades de esa carta"), apiladas a la derecha de la carta
-	inspeccionada, una por carta de origen. Si alguna es una habilidad
-	activada que puedes usar ahora, lleva su botón "Usar"."""
+	"""Habilidades ganadas de otras cartas (Reina Nyssara: "gana las habilidades de esa carta"),
+	apiladas a la derecha de la carta inspeccionada, una por carta de origen. Si alguna es activada
+	y usable ahora, lleva su botón "Usar"."""
 	if not is_instance_valid(inspected_card) or not is_instance_valid(source_card):
 		return
 	var gained: Array = source_card.card_data.get("_gained_abilities", [])
@@ -301,6 +270,7 @@ func _build_gained_abilities_panel(source_card: Node) -> void:
 		block.add_child(col)
 		var title := Label.new()
 		title.text = "Habilidad de %s" % str(g.get("from", "otra carta"))
+		title.add_theme_font_override("font", FONT_TITLE)
 		title.add_theme_font_size_override("font_size", 5)
 		title.add_theme_color_override("font_color", Color(0.95, 0.78, 0.38))
 		col.add_child(title)
@@ -308,6 +278,7 @@ func _build_gained_abilities_panel(source_card: Node) -> void:
 		body.text = text
 		body.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		body.custom_minimum_size = Vector2(width - 6.0, 0.0)
+		body.add_theme_font_override("font", FONT_BODY)
 		body.add_theme_font_size_override("font_size", 4)
 		col.add_child(body)
 		var text_lower := text.to_lower()
@@ -319,6 +290,7 @@ func _build_gained_abilities_panel(source_card: Node) -> void:
 				continue
 			var btn := Button.new()
 			btn.text = "Usar"
+			btn.add_theme_font_override("font", FONT_TITLE)
 			btn.add_theme_font_size_override("font_size", 4)
 			btn.tooltip_text = str(ability.get("raw_text", ""))
 			var captured: Dictionary = ability.duplicate()
@@ -378,42 +350,21 @@ func inspect_card_by_name(card_name: String) -> bool:
 	return false
 
 
-
 func mark_inspection_layer_in_use() -> void:
-	"""Llamar SIEMPRE que algo agregue contenido visible a _main.inspection_layer
-	(una inspección nueva, el diálogo de elección de Bernardo en
-	BernardoAbilityHandler.gd, cualquier overlay futuro que la reutilice).
-	2026-09-13, bug real reportado por el usuario: el diálogo "Elige el
-	efecto" de Bernardo (hijo de inspection_layer) no aparecía hasta hacer
-	click derecho en otra carta — el cierre diferido de la inspección de
-	Bernardo (close_card_inspection(), que espera ~0.2s de tween antes de
-	apagar la capa) apagaba inspection_layer DESPUÉS de que el diálogo ya
-	se hubiera agregado, dejándolo presente pero invisible. Forzar
-	visible=true aquí cubre el caso en que el apagón YA pasó; el contador de
-	generación en close_card_inspection() cubre el caso en que el apagón
-	pasa DESPUÉS."""
+	"""Llamar siempre que algo agregue contenido visible a _main.inspection_layer (una inspección, el
+	diálogo de Bernardo en BernardoAbilityHandler.gd, cualquier overlay que la reuse). El cierre
+	diferido de close_card_inspection() (~0.2 s de tween) puede apagar la capa después de agregado
+	el diálogo: visible = true aquí cubre el apagón ya ocurrido y el contador de generación de
+	close_card_inspection() el posterior."""
 	_inspection_layer_generation += 1
 	_main.inspection_layer.visible = true
 
 
 func release_inspection_layer_if_unused() -> void:
-	"""Contraparte de mark_inspection_layer_in_use() — llamar cuando el
-	contenido que forzó visible=true (p.ej. el diálogo "Elige el efecto"
-	de Bernardo) YA se usó y no queda ninguna inspección real abierta.
-	2026-09-14, bug real reportado por el usuario: "al elegir Desterrar en
-	Bernardo, el juego queda borroso y no puedo hacer nada" — mark_
-	inspection_layer_in_use() dejaba inspection_layer (con su blur/backdrop
-	de pantalla completa, mouse_filter STOP) forzado visible=true para
-	mostrar el diálogo de elección, pero nada lo apagaba después: el único
-	lugar que hace inspection_layer.visible=false es el tween diferido de
-	close_card_inspection(), que ya había corrido ANTES de este diálogo
-	(mismo timing documentado en mark_inspection_layer_in_use()). El blur
-	seguía tapando la pantalla y tragándose todos los clicks (los mandaba a
-	_on_inspection_blur_input(), que no hacía nada porque inspected_card ya
-	era null) justo cuando BernardoAbilityHandler necesitaba que el jugador
-	pudiera clickear una carta real del tablero para Desterrar/Cancelar.
-	No apaga la capa si mientras tanto se abrió una inspección nueva de
-	verdad (inspected_card != null) — mismo criterio de guardia que ya usa
+	"""Contraparte de mark_inspection_layer_in_use(): llamar cuando el contenido que forzó visible =
+	true ya se usó y no queda una inspección real abierta. Si no, el blur de pantalla completa
+	(mouse_filter STOP) queda tapando y tragándose los clicks (p.ej. Bernardo al elegir Desterrar).
+	No apaga la capa si se abrió una inspección nueva (inspected_card != null), como
 	close_card_inspection()."""
 	if not inspected_card:
 		_main.inspection_layer.visible = false
@@ -446,9 +397,8 @@ func close_card_inspection() -> void:
 
 
 func _ability_is_hand_usable(full_text: String) -> bool:
-	"""Lista chica y explícita de habilidades usables DESDE LA MANO (2026-08-30)
-	— ver el comentario en _build_ability_buttons() sobre por qué no es un
-	permiso genérico por la sola presencia de 'tu mano' en el texto."""
+	"""Lista chica y explícita de habilidades usables desde la mano: la sola presencia de "tu mano" en
+	el texto no basta (ver _build_ability_buttons())."""
 	var lower := full_text.to_lower()
 	if "desterrarlo de tu mano o en juego" in lower:
 		return true  # Ramón Freire
@@ -457,7 +407,7 @@ func _ability_is_hand_usable(full_text: String) -> bool:
 	if "desterrarlo de tu mano o cementerio" in lower:
 		return true  # Drácula
 	if "desterrar esta carta de tu mano para anular" in lower:
-		return true  # Espada Vikinga (2026-10-14)
+		return true  # Espada Vikinga
 	if "barajar esta carta desde tu mano" in lower:
 		return true  # Sacrificio Solar
 	if "ponerlo en el fondo de tu castillo para reducir a cero el próximo daño" in lower:
@@ -470,20 +420,18 @@ func _ability_is_hand_usable(full_text: String) -> bool:
 
 
 func _ability_is_cementerio_usable(full_text: String) -> bool:
-	"""Lista chica y explícita de habilidades usables DESDE EL CEMENTERIO
-	(2026-08-30, p.ej. Espada del Juicio: 'Puedes Desterrarla de tu
-	Cementerio para que un Aliado gane o pierda 2 de Fuerza permanentemente')
-	— mismo criterio que _ability_is_hand_usable(), un permiso chico y
-	explícito en vez de genérico por la sola presencia de 'tu Cementerio'."""
+	"""Lista chica y explícita de habilidades usables desde el Cementerio (p.ej. Espada del Juicio:
+	"Puedes Desterrarla de tu Cementerio para que un Aliado gane o pierda 2 de Fuerza
+	permanentemente"). Mismo criterio que _ability_is_hand_usable()."""
 	var lower := full_text.to_lower()
 	if "desterrarla de tu cementerio" in lower or "desterrarlo de tu cementerio" in lower:
 		return true  # Espada del Juicio
 	if "si está en tu cementerio y si tienes menos cartas en tu mano que tu oponente" in lower:
-		return true  # Envidia (2026-10-14)
+		return true  # Envidia
 	if "en juego desde tu cementerio como un aliado sin habilidad" in lower:
-		return true  # Alto Prime, Belta (2026-10-17)
+		return true  # Alto Prime, Belta
 	if "si está en tu cementerio, puedes desterrarlo para que un aliado gane" in lower:
-		return true  # Ira (2026-10-17)
+		return true  # Ira
 	if "para subir esta carta de tu cementerio a tu mano" in lower:
 		return true  # vision heroica
 	if "desterrarlo de tu mano o cementerio" in lower:
@@ -493,41 +441,27 @@ func _ability_is_cementerio_usable(full_text: String) -> bool:
 	return false
 
 
-func _ability_is_hand_or_cementerio_only(full_text: String) -> bool:
-	"""true si esta habilidad está en la lista chica de _ability_is_hand_usable()/
-	_ability_is_cementerio_usable() (usable desde la mano y/o el Cementerio,
-	ANTES de jugar la carta) pero su propio texto NO incluye también 'en
-	juego' — o sea, no tiene sentido una vez la carta ya está en juego
-	(2026-08-31, p.ej. la primera habilidad de Tyet: 'esta y otra carta de
-	tu mano en el fondo de tu Castillo', solo tiene sentido con Tyet
-	literalmente en la mano; o la de cancelar ataque de Drácula: 'de tu
-	mano o Cementerio', sin 'en juego'). Ramón Freire SÍ dice 'de tu mano o
-	EN JUEGO' explícito, así que esa sigue disponible en ambos casos.
+func _ability_is_destierro_usable(full_text: String) -> bool:
+	"""Habilidades usables desde el Destierro propio (mismo criterio que _ability_is_cementerio_usable())."""
+	return "si está en tu destierro, puedes desterrar una carta de tu mano para barajarlo en tu castillo" in full_text.to_lower()  # sandraudiga
 
-	REVERTIDO (2026-09-09, a pedido explícito del usuario): entre el
-	2026-08-31 y el 2026-09-06 hubo un vaivén con la segunda habilidad de
-	Tyet ('esta y otra carta de tu mano en el fondo de tu Castillo') — se
-	restringió a solo-mano, después se abrió también a Reserva de Oro
-	razonando que 'esta' no implica zona. El usuario confirmó ahora que la
-	restricción original (solo-mano) es la correcta — Tyet YA EN JUEGO no
-	puede usar esta habilidad. Se sacó la excepción; vuelve a caer en la
-	regla general de abajo (está en _ability_is_hand_usable(), su texto no
-	dice 'en juego', así que da true = solo mano)."""
-	if not (_ability_is_hand_usable(full_text) or _ability_is_cementerio_usable(full_text)):
+
+func _ability_is_hand_or_cementerio_only(full_text: String) -> bool:
+	"""true si la habilidad está en _ability_is_hand_usable()/_ability_is_cementerio_usable() pero su
+	texto no dice también "en juego": no aplica con la carta ya en juego. P.ej. Tyet ("esta y otra
+	carta de tu mano en el fondo de tu Castillo": solo desde la mano) o la de cancelar ataque de
+	Drácula ("de tu mano o Cementerio"). Ramón Freire dice "de tu mano o en juego", así que vale en
+	ambas."""
+	if not (_ability_is_hand_usable(full_text) or _ability_is_cementerio_usable(full_text) or _ability_is_destierro_usable(full_text)):
 		return false
 	return not ("en juego" in full_text.to_lower())
 
 
 func activate_ability_for(source_card: Node, ability: Dictionary, controller_id: int) -> void:
-	"""Activa una habilidad con EXACTAMENTE la misma lógica que su botón en
-	la inspección de carta (2026-10-12, a pedido del usuario: "todos los
-	cambios siempre tienen que ser para el Remoto igual") — los 65 patrones
-	especiales de AbilityButtonPatternsA-D (p.ej. Miguel) y, si ninguno
-	aplica, la Pila genérica. Lo usa RemotePlayerController para que el
-	Remoto no vaya por un camino distinto (antes iba directo a
-	ActionPipeline y se salteaba esos patrones). Los patrones conectan su
-	lógica al 'pressed' de un botón: aquí se arma un botón sin mostrar y se
-	llama y espera (await) esa misma función."""
+	"""Activa una habilidad con la misma lógica que su botón en la inspección: los patrones especiales
+	de AbilityButtonPatternsA-D (p.ej. Miguel) y, si ninguno aplica, la Pila genérica. Lo usa
+	RemotePlayerController para que el Remoto vaya por el mismo camino. Los patrones conectan su
+	lógica al 'pressed' de un botón: aquí se arma un botón sin mostrar y se espera esa función."""
 	if not is_instance_valid(source_card):
 		return
 	if not (source_card.get("current_zone") in Constants.ZONES_IN_PLAY):
@@ -554,8 +488,8 @@ func _is_response_only_ability(raw_text: String) -> bool:
 	var lower := raw_text.to_lower()
 	var at := lower.find(" para ")
 	var effect: String = lower.substr(at + 6) if at >= 0 else lower
-	# Cancelar un ATAQUE (Drácula, 2026-10-18): no responde a nada de la
-	# pila — se usa en Guerra de Talismanes, mientras los Aliados atacan.
+	# Cancelar un ataque (Drácula): no responde a nada de la pila, se usa en Guerra de Talismanes
+	# mientras los Aliados atacan.
 	if "cancelar el ataque" in effect:
 		return false
 	if not ("anular" in effect or "cancelar" in effect or "prevenir" in effect or "prevén" in effect):
@@ -571,67 +505,42 @@ func _responding_to_opponent(player_id: int) -> bool:
 
 
 func usable_abilities_for(source_card: Node, player_id: int) -> Array:
-	"""Habilidades ACTIVADAS de esta carta que 'player_id' puede usar AHORA:
-	[{ability, validation}]. Mismo filtro que los botones de la
-	inspección (turno, prioridad, zona, Anular/Cancelar en turno rival,
-	costo, una vez por turno) — 2026-10-12: extraído de
-	_build_ability_buttons() y parametrizado por jugador para que el
-	Remoto vea exactamente las mismas opciones que el Anfitrión."""
+	"""Habilidades activadas de esta carta que player_id puede usar ahora: [{ability, validation}].
+	Mismo filtro que los botones de la inspección (turno, prioridad, zona, Anular/Cancelar en turno
+	rival, costo, una vez por turno), parametrizado por jugador para que el Remoto vea las mismas
+	opciones que el Anfitrión."""
 	if not is_instance_valid(source_card):
 		return []
 	if not GameManager.is_game_active:
 		return []
-	# 2026-09-19, arquitectura.md §10.11 caso 4: en tu propio turno, cualquier
-	# ACTIVATED puede mostrarse (el resto de la función/validate_ability sigue
-	# filtrando fase/costo). En el turno RIVAL, solo tiene sentido ofrecer el
-	# botón si además hay una ventana de prioridad real donde el humano puede
-	# actuar (PriorityManager.can_act(player_id)) — si no, ni vale la pena parsear
-	# habilidades. Cuál habilidad puntual se filtra más abajo (solo
-	# Anular/Cancelar durante el turno rival, ver is_own_turn en el loop).
+	# §10.11 caso 4: en tu turno cualquier habilidad activada puede mostrarse (validate_ability filtra
+	# fase/costo). En turno rival, solo si hay una ventana de prioridad donde puedes actuar
+	# (PriorityManager.can_act(player_id)); qué habilidad se filtra en el loop (is_own_turn).
 	var is_own_turn: bool = GameManager.active_player_id == player_id
 	if not is_own_turn and not (PriorityManager.priority_window_active and PriorityManager.can_act(player_id)):
 		return []
-	# controller_id, no owner_id (2026-08-29, a pedido del usuario): quién
-	# puede activar la habilidad de una carta es quién la CONTROLA, no
-	# necesariamente su dueño — importa para poder usar habilidades de una
-	# carta ajena que controlas (p.ej. jugada por Miguel desde el Cementerio
-	# rival). controller_id sigue a owner_id por defecto, así que para toda
-	# carta normal esto se comporta igual que antes.
+	# controller_id, no owner_id: activa quien controla la carta (p.ej. una jugada por Miguel desde el
+	# Cementerio rival).
 	var source_controller_id: int = source_card.controller_id if source_card.get("controller_id") != null else -1
 	if source_controller_id != player_id:
 		return []
 
-	# Solo cartas EN JUEGO pueden activar habilidades (DAR) — sin esto,
-	# zoomear una carta en la mano con una habilidad "Una vez por turno"
-	# también mostraba el botón, aunque no tenía forma real de resolverse
-	# desde ahí (2026-08-28, reportado por el usuario). Excepción chica y
-	# explícita (2026-08-30, no un permiso genérico): algunas habilidades
-	# se pueden usar DESDE LA MANO o EL CEMENTERIO, antes de jugar la carta
-	# — p.ej. Ramón Freire ("Desterrarlo de tu mano o en juego..."), Tyet
-	# ("poner esta y otra carta de tu mano en el fondo de tu Castillo...")
-	# o Espada del Juicio ("Desterrarla de tu Cementerio..."). El chequeo
-	# real es POR HABILIDAD (más abajo, con el raw_text de CADA una), no
-	# aquí por carta entera — 2026-08-30, bug real encontrado con Tyet: solo
-	# UNA de sus dos habilidades es usable desde la mano (la otra necesita
-	# estar en Reserva de Oro), pero como el gate viejo era "toda la carta
-	# o nada", estando en la mano ofrecía IGUAL el botón de la que no
-	# correspondía — clickearlo fallaba con 'ya no está en tu Reserva'.
-	# Aquí solo se decide si la ZONA en sí es una de las permitidas; cuál
-	# habilidad puntual aplica se filtra en el loop de usable_abilities.
+	# Solo cartas en juego activan habilidades (DAR), con excepciones explícitas por habilidad desde la
+	# mano o el Cementerio (Ramón Freire, Tyet, Espada del Juicio). Aquí solo se decide si la zona es
+	# una de las permitidas; cuál habilidad aplica se filtra en el loop con el raw_text de cada una
+	# (Tyet tiene una usable desde la mano y otra solo desde la Reserva).
 	var source_zone = source_card.get("current_zone")
 	if source_zone == null:
 		return []
 	var in_play: bool = source_zone in Constants.ZONES_IN_PLAY
-	if not in_play and source_zone != Constants.Zone.MANO and source_zone != Constants.Zone.CEMENTERIO:
+	if not in_play and not (source_zone in [Constants.Zone.MANO, Constants.Zone.CEMENTERIO, Constants.Zone.DESTIERRO]):
 		return []
-	# Terminal P-12 (2026-10-18): hasta dos habilidades de cartas fuera del
-	# juego por turno.
+	# Terminal P-12: hasta dos habilidades de cartas fuera del juego por turno.
 	if not in_play and not TurnLimits.outside_ability_allowed(player_id):
 		return []
-	# Silencio de Cementerio (2026-08-30, Sable de Napoleón) — 'pierde su
-	# habilidad' bloquea también las habilidades usables DESDE el
-	# Cementerio (p.ej. Espada del Juicio). No aplica a Mano/en juego, solo
-	# a cartas efectivamente marcadas mientras están en el Cementerio.
+	# Silencio de Cementerio (Sable de Napoleón): "pierde su habilidad" bloquea también las habilidades
+	# usables desde el Cementerio (p.ej. Espada del Juicio). Solo a cartas marcadas mientras están en
+	# el Cementerio.
 	if source_zone == Constants.Zone.CEMENTERIO and source_card.get("card_data") != null \
 			and CardManager.is_cemetery_card_silenced(source_card.card_data):
 		return []
@@ -652,7 +561,7 @@ func usable_abilities_for(source_card: Node, player_id: int) -> Array:
 	# Solo se muestran las habilidades usables ahora mismo — las bloqueadas
 	# (sin oro, ya usadas este turno, etc.) se ocultan en vez de listarse en gris.
 	var usable_abilities: Array = []
-	# Escritura Sagrada (2026-10-18): jugar desde las dos primeras del Castillo.
+	# Escritura Sagrada: jugar desde las dos primeras del Castillo.
 	var escritura: Dictionary = load("res://scripts/core/effects/mechanics/CastleTopPlay.gd").escritura_synthetic_ability(
 		source_card, player_id, all_parsed)
 	if not escritura.is_empty():
@@ -662,47 +571,31 @@ func usable_abilities_for(source_card: Node, player_id: int) -> Array:
 		return usable_abilities
 	for ability in abilities:
 		var ability_raw_text: String = str(ability.get("raw_text", ""))
-		# Turno rival (§10.11 caso 4): solo Anular/Cancelar son respuesta
-		# instantánea real — el resto de las ACTIVATED (p.ej. 'Paga 1 Oro:
-		# roba una carta') no tiene sentido como reacción aunque técnicamente
-		# haya prioridad abierta, y su validate_ability() de todos modos no
-		# las filtraría por sí solo (no tienen restricción de fase propia).
-		# Excepción explícita dentro de la excepción: 'en tu turno, puedes...'
-		# (Tótem Dragón Ancestral) es Anular/Cancelar pero además restringido
-		# a tu propio turno por su propio texto — UniversalCardParser solo
-		# tagea once_per_turn_own_turn_only con la frase 'UNA VEZ en tu
-		# turno', así que sin este chequeo extra local (no se tocó el parser
-		# compartido a propósito, cambio más chico) _validate_ability() no lo
-		# habría filtrado.
-		# Guerra de Talismanes (2026-10-14, a pedido del usuario: Tyet,
-		# Estaca): los DOS jugadores juegan Talismanes y usan habilidades,
-		# no solo Anular/Cancelar — mientras la palabra sea de la propia
-		# Guerra (no una ventana de respuesta a algo puntual).
+		# Turno rival (§10.11 caso 4): solo Anular/Cancelar son respuesta instantánea; el resto (p.ej.
+		# "Paga 1 Oro: roba una carta") no tiene sentido como reacción. Excepción: "en tu turno,
+		# puedes..." (Tótem Dragón Ancestral) es Anular/Cancelar pero solo en tu turno; el parser solo
+		# marca once_per_turn_own_turn_only con "UNA VEZ en tu turno", así que se chequea aquí.
+		# Guerra de Talismanes: los dos jugadores juegan Talismanes y usan habilidades (p.ej. Tyet,
+		# Estaca), mientras la palabra sea de la Guerra y no de una ventana de respuesta puntual.
 		var in_guerra: bool = GameManager.current_phase == Constants.Phase.GUERRA_TALISMANES and PriorityManager.current_priority_context == PriorityManager.PriorityContext.GUERRA_TALISMANES
 		if not is_own_turn:
 			var ability_lower := ability_raw_text.to_lower()
 			if "en tu turno" in ability_lower or not (in_guerra or _button_support._is_annul_or_cancel_ability(ability_raw_text)):
 				continue
-		# Solo de respuesta (2026-10-17, a pedido del usuario: Almirante
-		# Akari "no podría usar su habilidad cuando quiera"): si TODO lo que
-		# hace es Anular/Cancelar/prevenir, el botón aparece solo mientras
-		# respondes a algo del oponente (la prevención ya la ofrece el juego
-		# sola cuando corresponde).
+		# Solo de respuesta (p.ej. Almirante Akari): si todo lo que hace es Anular/Cancelar/prevenir, el
+		# botón aparece solo mientras respondes a algo del oponente (la prevención la ofrece el juego solo
+		# cuando corresponde).
 		if _is_response_only_ability(ability_raw_text) and not _responding_to_opponent(player_id):
 			continue
 		if not in_play:
 			var zone_ok: bool = (source_zone == Constants.Zone.MANO and _ability_is_hand_usable(ability_raw_text)) \
-				or (source_zone == Constants.Zone.CEMENTERIO and _ability_is_cementerio_usable(ability_raw_text))
+				or (source_zone == Constants.Zone.CEMENTERIO and _ability_is_cementerio_usable(ability_raw_text)) \
+				or (source_zone == Constants.Zone.DESTIERRO and _ability_is_destierro_usable(ability_raw_text))
 			if not zone_ok:
 				continue
 		elif _ability_is_hand_or_cementerio_only(ability_raw_text):
-			# 2026-08-31, corrección a pedido del usuario: el chequeo de zona
-			# de arriba solo corría cuando la carta NO estaba en juego — una
-			# vez en juego, CUALQUIER habilidad ACTIVATED pasaba sin más,
-			# aunque su propio texto dijera 'de tu mano'/'de tu Cementerio'
-			# SIN 'o en juego' (p.ej. la primera de Tyet o la de cancelar
-			# ataque de Drácula) — esas solo tienen sentido con la carta
-			# literalmente en esa zona, no ya jugada.
+			# Con la carta ya en juego, una habilidad que dice "de tu mano" / "de tu Cementerio" sin "o en
+			# juego" (la primera de Tyet, cancelar ataque de Drácula) no aplica.
 			continue
 		var validation = _button_support._validate_ability(ability, source_card, player_id)
 		if validation.get("can", false):
@@ -927,13 +820,9 @@ func _build_ability_buttons(source_card: Node) -> void:
 			btn.pressed.connect(func(): TurnLimits.note_outside_ability(0))
 
 		var ability_lower: String = str(captured.get("raw_text", "")).to_lower()
-		# Patrones especiales de habilidades activadas — extraídos a 4 archivos
-		# hermanos por posición en el archivo original (2026-09-06, "módulos
-		# gordos", Fase 2 — ver iterative-booping-abelson.md): cada grupo
-		# revisa el mismo tramo de condiciones que tenía aquí, en el MISMO
-		# ORDEN relativo (A, luego B, luego C, luego D), así que el primer
-		# match sigue ganando exactamente igual que antes de la extracción.
-		# Ver AbilityButtonPatternsA.gd/_B.gd/_C.gd/_D.gd.
+		# Patrones especiales de habilidades activadas, en 4 archivos
+		# (AbilityButtonPatternsA.gd/_B.gd/_C.gd/_D.gd) que se revisan en orden A, B, C, D: el primer
+		# match gana.
 		if _pattern_group_a.try_build(ability_lower, btn, panel, card_for_glow, captured):
 			continue
 		if _pattern_group_b.try_build(ability_lower, btn, panel, card_for_glow, captured):
@@ -950,16 +839,12 @@ func _build_ability_buttons(source_card: Node) -> void:
 		)
 		panel.add_child(btn)
 
-# Validación de habilidades ACTIVADAS + ciclo de vida del botón superpuesto
-# (creación visual, activación vía ActionPipeline, brillo de "habilidad en
-# la pila") se movieron a AbilityButtonSupport.gd (2026-09-06, "módulos
-# gordos", Fase 2) — ver _button_support, montado en setup().
+# Validación de habilidades activadas y ciclo de vida del botón superpuesto (creación, activación
+# vía ActionPipeline, brillo de "habilidad en la pila"): AbilityButtonSupport.gd (_button_support,
+# montado en setup()).
 
-# El caso especial de Bernardo O'Higgins (coste alternativo + elección de
-# efecto con objetivo) se movió a BernardoAbilityHandler.gd (2026-08-28,
-# "módulos gordos") — ver _bernardo, montado en setup().
+# Bernardo O'Higgins (coste alternativo + elección de efecto con objetivo):
+# BernardoAbilityHandler.gd (_bernardo, montado en setup()).
 
-# Ventanas de respuesta (Paso D genérico + Signo Amarillo) y
-# _show_puedes_confirm() (sin llamadores, código muerto) se movieron a
-# ResponseWindowHandler.gd (2026-08-28, "módulos gordos") — ver
-# _response_window, montado en setup().
+# Ventanas de respuesta (Paso D genérico + Signo Amarillo): ResponseWindowHandler.gd
+# (_response_window, montado en setup()).

@@ -1,17 +1,11 @@
 extends RefCounted
-## CemeteryRevealPopup — popup liviano con cartas del Cementerio como Nodos
-## temporales clickeables, en una esquina de la pantalla y SIN oscurecer el
-## resto (la mano y el campo siguen clickeables al mismo tiempo). Los Nodos
-## se usan como candidatos de CardInteractionModule.await_target()/
-## await_multi_target() junto con las cartas de la mano.
-##
-## 2026-10-13 (§62): era un bloque de ~44 líneas copiado casi idéntico en 6
-## lugares (Golpe Solar, Shiji, la búsqueda Aliado/Tótem del Cementerio,
-## Lobo Sagrado, GoldManagerTax y Prevención con Oro). La posición usa el
-## arreglo de Lobo Sagrado (2026-09-25, "el popup del Cementerio ni
-## aparece"): coordenadas absolutas del viewport, no anchors, que con el
-## panel todavía sin tamaño podían dejarlo fuera de pantalla.
-## Se usa con preload (sin class_name global), ver §54.
+## CemeteryRevealPopup — popup liviano con cartas del Cementerio como Nodos temporales clickeables,
+## en una esquina y SIN oscurecer el resto (mano y campo siguen clickeables). Los Nodos son
+## candidatos de CardInteractionModule.await_target()/await_multi_target() junto con las cartas de
+## la mano (Golpe Solar, Shiji, Lobo Sagrado, GoldManagerTax, Prevención con Oro...; §62). La
+## posición usa coordenadas absolutas del viewport, no anchors (con el panel sin tamaño todavía, los
+## anchors podían dejarlo fuera de pantalla).
+## Se usa con preload (sin class_name global; ver §54).
 
 const CardScene := preload("res://scenes/cards/Card.tscn")
 
@@ -49,6 +43,9 @@ static func open(main: Node, cards_data: Array, owner_id: int, visible: bool = t
 	var lbl := Label.new()
 	lbl.text = title
 	lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	lbl.add_theme_font_override("font", preload("res://assets/fonts/Cinzel-Bold.ttf"))
+	lbl.add_theme_font_size_override("font_size", 16)
+	lbl.add_theme_color_override("font_color", Color(1.0, 0.90, 0.60))
 	vbox.add_child(lbl)
 	var scroll := ScrollContainer.new()
 	scroll.custom_minimum_size = Vector2(0, 190)

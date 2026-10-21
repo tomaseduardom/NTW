@@ -1,31 +1,23 @@
 extends RefCounted
-## CastleLookWindow — ventana única para "mira N cartas del tope/fondo de un
-## Castillo" (2026-10-13, a pedido del usuario, arquitectura.md §69): en la
-## MISMA ventana se reparten las cartas miradas a sus destinos (mano,
-## Cementerio, Reserva...) y se ordenan las que vuelven al Castillo. Nada se
-## mueve hasta confirmar — ver CastleLook.gd (el motor) para el resto.
-##
-## Corre igual en la pantalla del Anfitrión y en la del Remoto (el Remoto la
-## abre con el prompt "castle_look" y devuelve el resultado por red), así que
-## todo lo que recibe es serializable: cartas como Dictionary y, por zona, qué
-## cartas son elegibles (no Callables).
-##
-## config = {
-##   title: String,
-##   cards: [card_data...],
-##   boxes: [{key, label, min, max (-1 = sin tope), ordered: bool,
-##            eligible: [bool por carta]}],
-##   start: key de la zona donde empiezan todas (una zona ordenada),
-## }
-## Devuelve {key: [índices de cards en orden]} (en una zona ordenada, el
-## primero es el que queda más arriba).
-##
-## Se usa con preload (sin class_name global), ver §54.
+## CastleLookWindow — ventana única para "mira N cartas del tope/fondo de un Castillo"
+## (arquitectura.md §69): en la misma ventana se reparten las cartas a sus destinos (mano,
+## Cementerio, Reserva...) y se ordenan las que vuelven al Castillo. Nada se mueve hasta confirmar;
+## el motor es CastleLook.gd.
+## Corre igual en el Anfitrión y en el Remoto (prompt "castle_look", resultado por red), así que
+## todo lo que recibe es serializable: cartas como Dictionary y elegibilidad por zona (no
+## Callables).
+## config = {title: String, cards: [card_data...], boxes: [{key, label, min, max (-1 = sin tope),
+## ordered: bool, eligible: [bool por carta]}], start: key de la zona (ordenada) donde empiezan
+## todas}
+## Devuelve {key: [índices de cards en orden]} (en una zona ordenada, el primero queda más arriba).
+## Se usa con preload (sin class_name global; ver §54).
 
 const CardScene := preload("res://scenes/cards/Card.tscn")
 const CARD_SCALE := 0.85
 const CARD_W := 150.0 * CARD_SCALE
 const CARD_H := 210.0 * CARD_SCALE
+const FONT_TITLE := preload("res://assets/fonts/Cinzel-Bold.ttf")
+const FONT_BODY := preload("res://assets/fonts/Marcellus-Regular.ttf")
 
 var _main: Node
 var _cfg: Dictionary
@@ -148,22 +140,26 @@ func _build() -> void:
 	var title := Label.new()
 	title.text = str(_cfg.title)
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.add_theme_font_override("font", FONT_TITLE)
 	title.add_theme_font_size_override("font_size", 18)
 	title.add_theme_color_override("font_color", Color(1.0, 0.90, 0.60))
 	vbox.add_child(title)
 
 	_hint = Label.new()
 	_hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	# Sin autowrap (2026-10-14, bug real: Tesoro de los Césares mostraba "un
-	# recuadro enorme sin nada" — un Label con autowrap dentro del VBox pedía
-	# un alto gigante y el panel quedaba casi todo fuera de la pantalla).
+	# Sin autowrap: un Label con autowrap dentro del VBox pedía un alto enorme y el panel quedaba fuera
+	# de pantalla.
 	_hint.clip_text = true
+	_hint.add_theme_font_override("font", FONT_BODY)
 	_hint.add_theme_font_size_override("font_size", 13)
+	_hint.add_theme_color_override("font_color", Color(0.85, 0.85, 0.85))
 	vbox.add_child(_hint)
 
 	for box in _cfg.boxes:
 		var header := Button.new()
 		header.alignment = HORIZONTAL_ALIGNMENT_LEFT
+		header.add_theme_font_override("font", FONT_TITLE)
+		header.add_theme_font_size_override("font_size", 14)
 		header.pressed.connect(_on_header_pressed.bind(box.key))
 		vbox.add_child(header)
 		_headers[box.key] = header
@@ -180,6 +176,8 @@ func _build() -> void:
 	_confirm.text = "Confirmar"
 	_confirm.custom_minimum_size = Vector2(220, 40)
 	_confirm.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	_confirm.add_theme_font_override("font", FONT_TITLE)
+	_confirm.add_theme_font_size_override("font_size", 15)
 	_confirm.pressed.connect(func(): _done = true)
 	vbox.add_child(_confirm)
 

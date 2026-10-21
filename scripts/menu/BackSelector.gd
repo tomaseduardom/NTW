@@ -31,6 +31,13 @@ var back_cards: Dictionary = {}  # id -> Control
 
 
 func _ready() -> void:
+	if title_label:
+		title_label.add_theme_font_override("font", preload("res://assets/fonts/Cinzel-Bold.ttf"))
+		title_label.add_theme_font_size_override("font_size", 24)
+	if back_button:
+		back_button.add_theme_font_override("font", preload("res://assets/fonts/Cinzel-Bold.ttf"))
+		back_button.add_theme_font_size_override("font_size", 14)
+
 	# Conectar botones
 	back_button.pressed.connect(_on_back_pressed)
 
@@ -116,6 +123,7 @@ func _create_back_card(back_data: Dictionary) -> Control:
 	# Nombre del dorso
 	var name_label = Label.new()
 	name_label.text = back_data["name"]
+	name_label.add_theme_font_override("font", preload("res://assets/fonts/Cinzel-Bold.ttf"))
 	name_label.add_theme_font_size_override("font_size", 18)
 	name_label.add_theme_color_override("font_color", Color(1, 0.95, 0.8, 1))
 	name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER

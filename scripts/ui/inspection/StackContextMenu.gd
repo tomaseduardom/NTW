@@ -5,6 +5,9 @@ class_name StackContextMenu
 ## Opera sobre el StackVisualizer via _main. Extraído de StackVisualizer.gd
 ## (Fase 4 de reestructuración).
 
+const FONT_TITLE := preload("res://assets/fonts/Cinzel-Bold.ttf")
+const FONT_BODY := preload("res://assets/fonts/Marcellus-Regular.ttf")
+
 var _main: Control
 
 ## Popup de contexto para interacción
@@ -46,6 +49,8 @@ func _show_context_menu(stack_id: int, position: Vector2) -> void:
 	if _context_popup == null:
 		_context_popup = PopupMenu.new()
 		_context_popup.name = "StackContextMenu"
+		_context_popup.add_theme_font_override("font", FONT_TITLE)
+		_context_popup.add_theme_font_size_override("font_size", 13)
 		_main.add_child(_context_popup)
 		_context_popup.id_pressed.connect(_on_context_menu_selected)
 
@@ -151,6 +156,7 @@ func _create_card_preview_content() -> Control:
 	# Nombre de carta
 	var name_label = Label.new()
 	name_label.name = "CardName"
+	name_label.add_theme_font_override("font", FONT_TITLE)
 	name_label.add_theme_font_size_override("font_size", 18)
 	name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	vbox.add_child(name_label)
@@ -158,6 +164,7 @@ func _create_card_preview_content() -> Control:
 	# Tipo
 	var type_label = Label.new()
 	type_label.name = "CardType"
+	type_label.add_theme_font_override("font", FONT_TITLE)
 	type_label.add_theme_font_size_override("font_size", 12)
 	type_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	type_label.add_theme_color_override("font_color", Color(0.7, 0.7, 0.7))
@@ -175,6 +182,7 @@ func _create_card_preview_content() -> Control:
 
 	var cost_label = Label.new()
 	cost_label.name = "CostLabel"
+	cost_label.add_theme_font_override("font", FONT_TITLE)
 	cost_label.add_theme_font_size_override("font_size", 14)
 	stats_hbox.add_child(cost_label)
 
@@ -184,6 +192,7 @@ func _create_card_preview_content() -> Control:
 
 	var strength_label = Label.new()
 	strength_label.name = "StrengthLabel"
+	strength_label.add_theme_font_override("font", FONT_TITLE)
 	strength_label.add_theme_font_size_override("font_size", 14)
 	stats_hbox.add_child(strength_label)
 
@@ -193,6 +202,8 @@ func _create_card_preview_content() -> Control:
 	ability_label.bbcode_enabled = true
 	ability_label.fit_content = true
 	ability_label.custom_minimum_size.y = 150
+	ability_label.add_theme_font_override("normal_font", FONT_BODY)
+	ability_label.add_theme_font_size_override("normal_font_size", 13)
 	vbox.add_child(ability_label)
 
 	# Info de pila
@@ -201,7 +212,8 @@ func _create_card_preview_content() -> Control:
 
 	var stack_info = Label.new()
 	stack_info.name = "StackInfo"
-	stack_info.add_theme_font_size_override("font_size", 11)
+	stack_info.add_theme_font_override("font", FONT_BODY)
+	stack_info.add_theme_font_size_override("font_size", 12)
 	stack_info.add_theme_color_override("font_color", Color(0.6, 0.8, 1.0))
 	stack_info.autowrap_mode = TextServer.AUTOWRAP_WORD
 	vbox.add_child(stack_info)
@@ -210,6 +222,8 @@ func _create_card_preview_content() -> Control:
 	var close_btn = Button.new()
 	close_btn.name = "CloseButton"
 	close_btn.text = "Cerrar"
+	close_btn.add_theme_font_override("font", FONT_TITLE)
+	close_btn.add_theme_font_size_override("font_size", 13)
 	close_btn.pressed.connect(_close_card_preview)
 	vbox.add_child(close_btn)
 

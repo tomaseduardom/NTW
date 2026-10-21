@@ -95,7 +95,8 @@ func open_and_wait(prompt: String = "Escribe el nombre de una carta", chooser_id
 	var label := Label.new()
 	label.text = "Escribe el nombre de una carta"
 	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	var font_cinzel: Font = load("res://assets/fonts/Cinzel-Bold.ttf")
+	var font_cinzel: Font = preload("res://assets/fonts/Cinzel-Bold.ttf")
+	var font_marcellus: Font = preload("res://assets/fonts/Marcellus-Regular.ttf")
 	if font_cinzel:
 		label.add_theme_font_override("font", font_cinzel)
 	label.add_theme_font_size_override("font_size", 18)
@@ -108,6 +109,9 @@ func open_and_wait(prompt: String = "Escribe el nombre de una carta", chooser_id
 	# 2. Caja de texto para búsqueda interactiva
 	var input := LineEdit.new()
 	input.placeholder_text = "Escribe el nombre de la carta..."
+	if font_marcellus:
+		input.add_theme_font_override("font", font_marcellus)
+	input.add_theme_font_size_override("font_size", 14)
 	input.custom_minimum_size = Vector2(450, 38)
 	input.clear_button_enabled = true
 	var input_style := StyleBoxFlat.new()
@@ -141,11 +145,13 @@ func open_and_wait(prompt: String = "Escribe el nombre de una carta", chooser_id
 
 	# 4. Pie de estado y botón Cancelar
 	var footer_hbox := HBoxContainer.new()
-	footer_hbox.alignment = BoxContainer.ALIGNMENT_SPACE_BETWEEN
 	vbox.add_child(footer_hbox)
 
 	var status_label := Label.new()
+	status_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	status_label.text = "Escribe al menos %d letras para buscar..." % MIN_QUERY_LENGTH
+	if font_marcellus:
+		status_label.add_theme_font_override("font", font_marcellus)
 	status_label.add_theme_font_size_override("font_size", 12)
 	status_label.add_theme_color_override("font_color", Color(0.72, 0.72, 0.75, 1.0))
 	footer_hbox.add_child(status_label)
@@ -154,14 +160,19 @@ func open_and_wait(prompt: String = "Escribe el nombre de una carta", chooser_id
 	cancel_btn.text = "Cancelar"
 	cancel_btn.custom_minimum_size = Vector2(100, 32)
 	cancel_btn.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	if font_cinzel:
+		cancel_btn.add_theme_font_override("font", font_cinzel)
+	cancel_btn.add_theme_font_size_override("font_size", 13)
+	cancel_btn.add_theme_color_override("font_color", Color(0.9, 0.88, 0.82))
+	cancel_btn.add_theme_color_override("font_hover_color", Color(1.0, 1.0, 1.0))
 	var cancel_normal := StyleBoxFlat.new()
 	cancel_normal.bg_color = Color(0.15, 0.15, 0.18, 0.9)
-	cancel_normal.border_color = Color(0.4, 0.4, 0.45, 0.7)
+	cancel_normal.border_color = Color(0.55, 0.50, 0.35, 0.7)
 	cancel_normal.set_border_width_all(1)
 	cancel_normal.set_corner_radius_all(6)
 	cancel_btn.add_theme_stylebox_override("normal", cancel_normal)
 	var cancel_hover := cancel_normal.duplicate()
-	cancel_hover.border_color = Color(0.7, 0.7, 0.75, 1.0)
+	cancel_hover.border_color = Color(0.85, 0.75, 0.45, 1.0)
 	cancel_btn.add_theme_stylebox_override("hover", cancel_hover)
 	footer_hbox.add_child(cancel_btn)
 

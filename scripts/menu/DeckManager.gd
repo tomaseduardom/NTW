@@ -10,6 +10,8 @@ signal deck_selected(deck_data: Dictionary)
 # CONSTANTES
 # =============================================================================
 const DECKS_PER_PAGE = 12
+const FONT_TITLE := preload("res://assets/fonts/Cinzel-Bold.ttf")
+const FONT_BODY := preload("res://assets/fonts/Marcellus-Regular.ttf")
 
 # =============================================================================
 # REFERENCIAS UI
@@ -30,6 +32,19 @@ var _pending_deck_summary: Dictionary = {}
 
 
 func _ready() -> void:
+	if title_label:
+		title_label.add_theme_font_override("font", FONT_TITLE)
+		title_label.add_theme_font_size_override("font_size", 24)
+	if back_button:
+		back_button.add_theme_font_override("font", FONT_TITLE)
+		back_button.add_theme_font_size_override("font_size", 14)
+	if loading_label:
+		loading_label.add_theme_font_override("font", FONT_BODY)
+		loading_label.add_theme_font_size_override("font_size", 16)
+	if error_label:
+		error_label.add_theme_font_override("font", FONT_BODY)
+		error_label.add_theme_font_size_override("font_size", 14)
+
 	# Conectar botón atrás
 	back_button.pressed.connect(_on_back_pressed)
 
@@ -38,13 +53,8 @@ func _ready() -> void:
 
 
 func _fetch_decks() -> void:
-	"""Obtiene mazos públicos reales de ShadowForge (2026-09-22, bug real
-	reportado por el usuario: 'DeckManager fetching from localhost:3000...
-	Request failed with result: 2' — esta pantalla nunca se actualizó cuando
-	se construyó la integración real con ShadowForge, ExternalApiClient.gd
-	(ver arquitectura.md §13); seguía apuntando a la API vieja muerta.
-	Mismo endpoint confirmado real que usa DeckSelector.gd:
-	GET /api/decks/public/ → {results, count}."""
+	"""Mazos públicos de ShadowForge vía ExternalApiClient.gd (arquitectura.md §13): GET
+	/api/decks/public/ → {results, count}, el mismo endpoint que DeckSelector.gd."""
 	if is_loading:
 		return
 
@@ -156,6 +166,7 @@ func _create_deck_card(deck: Dictionary) -> Control:
 
 	var archetype_label = Label.new()
 	archetype_label.text = arquetipo.to_upper()
+	archetype_label.add_theme_font_override("font", FONT_TITLE)
 	archetype_label.add_theme_font_size_override("font_size", 12)
 	archetype_label.add_theme_color_override("font_color", Color(0.83, 0.69, 0.22, 1.0))
 	archetype_hbox.add_child(archetype_label)
@@ -179,7 +190,8 @@ func _create_deck_card(deck: Dictionary) -> Control:
 	# "nombre" (API vieja muerta).
 	var title_label = Label.new()
 	title_label.text = deck.get("name", "Sin nombre")
-	title_label.add_theme_font_size_override("font_size", 24)
+	title_label.add_theme_font_override("font", FONT_TITLE)
+	title_label.add_theme_font_size_override("font_size", 22)
 	title_label.add_theme_color_override("font_color", Color(1, 1, 1, 1))
 	title_label.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.8))
 	title_label.add_theme_constant_override("shadow_offset_x", 2)
@@ -192,6 +204,7 @@ func _create_deck_card(deck: Dictionary) -> Control:
 	var author_label = Label.new()
 	var autor = str(deck.get("owner_username", "")) if not str(deck.get("owner_username", "")).is_empty() else "Anónimo"
 	author_label.text = "por %s" % autor
+	author_label.add_theme_font_override("font", FONT_BODY)
 	author_label.add_theme_font_size_override("font_size", 14)
 	author_label.add_theme_color_override("font_color", Color(0.8, 0.8, 0.8, 1))
 	center_vbox.add_child(author_label)
@@ -218,9 +231,8 @@ func _create_deck_card(deck: Dictionary) -> Control:
 	separator.modulate = Color(1, 1, 1, 0.2)
 	footer_vbox.add_child(separator)
 
-	# Curva de coste (2026-08-28, a pedido del usuario — mostrar el mazo más
-	# visual): mini histograma de cuántas cartas hay por coste, para juzgar
-	# de un vistazo si el mazo es agresivo (curva baja) o de control (alta).
+	# Curva de coste — mostrar el mazo más visual): mini histograma de cuántas cartas hay por coste,
+	# para juzgar de un vistazo si el mazo es agresivo (curva baja) o de control (alta 
 	var curve_costs := _compute_cost_curve(deck)
 	if not curve_costs.is_empty():
 		footer_vbox.add_child(_build_mana_curve_row(curve_costs))
@@ -238,12 +250,14 @@ func _create_deck_card(deck: Dictionary) -> Control:
 
 	var cards_icon = Label.new()
 	cards_icon.text = "Cartas:"
+	cards_icon.add_theme_font_override("font", FONT_BODY)
 	cards_icon.add_theme_font_size_override("font_size", 13)
 	cards_icon.add_theme_color_override("font_color", Color(0.83, 0.69, 0.22, 1.0))
 	cards_hbox.add_child(cards_icon)
 
 	var cards_count = Label.new()
 	cards_count.text = str(deck.get("card_count", 0))
+	cards_count.add_theme_font_override("font", FONT_TITLE)
 	cards_count.add_theme_font_size_override("font_size", 14)
 	cards_count.add_theme_color_override("font_color", Color(1, 1, 1, 1))
 	cards_hbox.add_child(cards_count)
@@ -256,12 +270,14 @@ func _create_deck_card(deck: Dictionary) -> Control:
 
 	var likes_icon = Label.new()
 	likes_icon.text = "Votos:"
+	likes_icon.add_theme_font_override("font", FONT_BODY)
 	likes_icon.add_theme_font_size_override("font_size", 13)
 	likes_icon.add_theme_color_override("font_color", Color(0.83, 0.69, 0.22, 1.0))
 	likes_hbox.add_child(likes_icon)
 
 	var likes_count = Label.new()
 	likes_count.text = str(deck.get("like_count", 0))
+	likes_count.add_theme_font_override("font", FONT_TITLE)
 	likes_count.add_theme_font_size_override("font_size", 14)
 	likes_count.add_theme_color_override("font_color", Color(1, 1, 1, 1))
 	likes_hbox.add_child(likes_count)
@@ -407,7 +423,8 @@ func _build_mana_curve_row(costs: Array) -> Control:
 		var lbl = Label.new()
 		lbl.text = cost_labels[i]
 		lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		lbl.add_theme_font_size_override("font_size", 9)
+		lbl.add_theme_font_override("font", FONT_BODY)
+		lbl.add_theme_font_size_override("font_size", 10)
 		lbl.add_theme_color_override("font_color", Color(0.75, 0.75, 0.75, 0.8))
 		col.add_child(lbl)
 
@@ -453,21 +470,15 @@ func _load_cover_image(container: Control, url: String) -> void:
 
 
 func _build_image_url(url: String) -> String:
-	"""Devuelve la URL de la imagen tal cual. 2026-09-22: 'image_url' de la
-	API real de ShadowForge ya viene como URL absoluta (Cloudinary, ver
-	arquitectura.md §13) — se sacó el prefijo de CDN relativo que usaba la
-	API vieja muerta (CDN_BASE_URL, 'grimorio-cards.b-cdn.net', ya no
-	aplica a esta fuente de datos)."""
+	"""Devuelve la URL de la imagen tal cual: 'image_url' de ShadowForge ya viene absoluta
+	(Cloudinary; arquitectura.md §13)."""
 	return url
 
 
 func _on_deck_selected(deck: Dictionary) -> void:
-	"""Cuando el usuario selecciona un mazo. 2026-09-22, bug real corregido
-	junto con _fetch_decks(): los mazos públicos reales de ShadowForge no
-	tienen 'slug' (eso era de la API vieja muerta) — tienen 'id' numérico, y
-	la lista solo trae datos resumidos, sin las cartas ('entries'). Hay que
-	bajarlas aparte antes de poder jugar con este mazo, mismo camino real ya
-	usado por DeckSelector.gd (ExternalApiClient.fetch_public_deck_entries())."""
+	"""Al seleccionar un mazo. Los mazos públicos tienen 'id' numérico y la lista no trae las cartas
+	('entries'): se bajan antes de jugar con ExternalApiClient.fetch_public_deck_entries(), como
+	DeckSelector.gd."""
 	var deck_name = str(deck.get("name", ""))
 	var deck_id = int(deck.get("id", 0))
 	print("[DeckManager] Mazo elegido: %s (id: %d)" % [deck_name, deck_id])

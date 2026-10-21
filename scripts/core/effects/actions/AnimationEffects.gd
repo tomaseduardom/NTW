@@ -6,8 +6,9 @@ class_name AnimationEffects
 ## delays, create_tween/get_tree — RefCounted no los tiene propios).
 ## Extraído de AnimationQueue.gd (Fase 4 de reestructuración).
 
-var _main: Node
+const FONT_TITLE = preload("res://assets/fonts/Cinzel-Bold.ttf")
 
+var _main: Node
 
 func setup(main: Node) -> void:
 	_main = main
@@ -89,12 +90,8 @@ func _update_card_zone_properties(card: Node, new_zone: int, new_controller: int
 
 	# Timestamp de cuando entró a la zona (para "enfermedad de invocación")
 	if "zone_entered_turn" in card and GameManager:
-		card.zone_entered_turn = GameManager.current_turn
+		card.zone_entered_turn = GameManager.turn_serial
 
-	# (2026-08-28, "módulos gordos" punto 1): aquí había un intento de emitir
-	# 'card_left_zone'/'card_entered_zone' en TriggerSystem — ninguna de las
-	# dos señales existe ni existió nunca ahí, el has_signal() que las
-	# envolvía siempre daba falso. Se sacó.
 
 	# Log para debugging
 	var card_name = card.card_name if card.get("card_name") else "Carta"
@@ -287,7 +284,10 @@ func _show_buff_number(target: Node, amount: int, is_buff: bool) -> void:
 	"""Muestra número flotante de buff/debuff"""
 	var label = Label.new()
 	label.text = "%s%d" % ["+" if is_buff else "", amount]
-	label.add_theme_font_size_override("font_size", 20)
+	label.add_theme_font_override("font", FONT_TITLE)
+	label.add_theme_font_size_override("font_size", 22)
+	label.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.9))
+	label.add_theme_constant_override("shadow_offset_y", 1)
 	label.modulate = Color(0.3, 1.0, 0.3, 1) if is_buff else Color(1.0, 0.3, 0.3, 1)
 
 	if target.get("global_position"):
@@ -320,7 +320,10 @@ func animate_heal(target: Node, amount: int) -> void:
 	# Mostrar número de curación
 	var label = Label.new()
 	label.text = "+%d" % amount
-	label.add_theme_font_size_override("font_size", 22)
+	label.add_theme_font_override("font", FONT_TITLE)
+	label.add_theme_font_size_override("font_size", 24)
+	label.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.9))
+	label.add_theme_constant_override("shadow_offset_y", 1)
 	label.modulate = Color(0.3, 1.0, 0.5, 1)
 
 	if target.get("global_position"):

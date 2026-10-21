@@ -191,6 +191,7 @@ func _build_ui() -> void:
 	# Info label (seleccionadas X de Y)
 	_info_label = Label.new()
 	_info_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_info_label.add_theme_font_override("font", preload("res://assets/fonts/Marcellus-Regular.ttf"))
 	_info_label.add_theme_font_size_override("font_size", 14)
 	_info_label.add_theme_color_override("font_color", Color(0.88, 0.88, 0.90, 1.0))
 	_info_label.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.95))
@@ -217,6 +218,7 @@ func _build_ui() -> void:
 	_drag_hint_label = Label.new()
 	_drag_hint_label.text = "Arrastra una carta al campo para exhumarla"
 	_drag_hint_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_drag_hint_label.add_theme_font_override("font", preload("res://assets/fonts/Marcellus-Regular.ttf"))
 	_drag_hint_label.add_theme_font_size_override("font_size", 13)
 	_drag_hint_label.add_theme_color_override("font_color", Color(0.6, 0.8, 0.6, 0.9))
 	_drag_hint_label.visible = false
@@ -248,6 +250,7 @@ func _create_exhume_drop_indicator() -> void:
 	drop_label.text = "SOLTAR AQUÍ PARA EXHUMAR"
 	drop_label.set_anchors_preset(Control.PRESET_CENTER)
 	drop_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	drop_label.add_theme_font_override("font", preload("res://assets/fonts/Cinzel-Bold.ttf"))
 	drop_label.add_theme_font_size_override("font_size", 18)
 	drop_label.add_theme_color_override("font_color", Color(0.5, 0.8, 0.5, 0.9))
 	_exhume_drop_indicator.add_child(drop_label)
@@ -315,26 +318,15 @@ func open(card_data_list: Array, mode_str: String, config: Dictionary = {}) -> v
 
 
 func open_selection(card_data_list: Array, mode: int, config: Dictionary = {}, chooser_id: int = 0) -> void:
-	"""Abre el panel de selección con las cartas especificadas
-
+	"""Abre el panel de selección con las cartas indicadas.
+	
 	Args:
-		card_data_list: Array de diccionarios con datos de cartas
-		mode: SelectionMode (REVEAL, EXHUMAR, SEARCH, etc.) o int
-		config: {
-			title: String,
-			max_selections: int,
-			min_selections: int,
-			filter: Callable,  # (card_data) -> bool
-			can_cancel: bool
-		}
-		chooser_id: quién debe elegir (0 = jugador local/Anfitrión, el único
-			caso que existía antes de esto; 1 = jugador 1). 2026-09-30, Fase 3
-			del plan de paridad remota (docs/plans/2026-09-20-remote-
-			multiplayer-parity.md) — default 0 a propósito: ningún llamador
-			existente (~100 sitios reales) necesita cambiar, solo los que se
-			conviertan a propósito para que el Remoto decida sus propias
-			cartas pasan chooser_id=1 explícito.
-	"""
+	card_data_list: Array de diccionarios con datos de cartas
+	mode: SelectionMode (REVEAL, EXHUMAR, SEARCH, etc.) o int
+	config: {title: String, max_selections: int, min_selections: int, filter: Callable (card_data)
+	-> bool, can_cancel: bool}
+	chooser_id: quién elige (0 = Anfitrión, por defecto; 1 = jugador 1, que con un Remoto conectado
+	se delega por red; docs/plans/2026-09-20-remote-multiplayer-parity.md)."""
 	EffectContextScript.check_chooser(chooser_id, str(config.get("title", "selección")))
 	if is_open:
 		push_warning("[SelectionManager] Ya hay una selección abierta")
@@ -382,10 +374,8 @@ func open_selection(card_data_list: Array, mode: int, config: Dictionary = {}, c
 	for card_data in card_data_list:
 		_create_selection_card(card_data, mode)
 
-	# Solo aquí 'displayed_cards' ya tiene las cartas instanciadas — antes se
-	# llamaba ANTES del loop de arriba y el label de modo REVEAL siempre
-	# decía "Mostrando 0 carta(s)" sin importar cuántas se pasaran
-	# (2026-08-26, visto con Tangata Manu mostrando 6 cartas).
+	# 'displayed_cards' ya tiene las cartas instanciadas recién aquí, después del loop: el label de
+	# REVEAL cuenta bien.
 	_update_info_label()
 
 	# Mostrar hint de arrastre para modo EXHUMAR
@@ -428,17 +418,6 @@ func open_exhumar(cemetery_cards: Array, max_select: int = 1) -> void:
 		"min_selections": 1,
 		"filter": func(data): return data.get("tipo", -1) == Constants.CardType.ALIADO
 	})
-
-
-func open_search(deck_cards: Array, max_select: int = 1, filter: Callable = Callable(), chooser_id: int = 0) -> void:
-	"""Atajo para buscar cartas en el mazo"""
-	open_selection(deck_cards, SelectionMode.SEARCH, {
-		"title": "Buscar en el Mazo",
-		"max_selections": max_select,
-		"min_selections": 0,
-		"filter": filter,
-		"can_cancel": true
-	}, chooser_id)
 
 
 func _delegate_selection_to_remote(card_data_list: Array, mode: int, config: Dictionary) -> void:
@@ -588,15 +567,10 @@ func _create_selection_card(card_data: Dictionary, mode: int) -> void:
 	card.card_hovered.connect(_on_card_hovered)
 	card.card_unhovered.connect(_on_card_unhovered)
 
-	# Inspección con click derecho (2026-08-30, a pedido del usuario: poder
-	# leer de cerca las cartas de un pool de selección — p.ej. elegir cuáles
-	# desterrar de los Cementerios con Espada de O'Higgins — antes no
-	# conectaba nada, así que el click derecho no hacía nada aquí). current_zone
-	# por defecto es Constants.Zone.MANO (Card.gd) y esta instancia nunca pasa
-	# por set_zone(): sin corregirlo, _build_ability_buttons() la trataría
-	# como si estuviera en la mano y podría ofrecer botones de habilidades
-	# 'usables desde la mano' (Ramón Freire/Tyet) que no deberían aparecer
-	# para una carta que solo se está mostrando en un pool de elección.
+	# Inspección con click derecho, para leer de cerca las cartas del pool (p.ej. elegir qué desterrar
+	# con Espada de O'Higgins). Se fija la zona: current_zone por defecto es MANO y
+	# _build_ability_buttons() ofrecería botones de habilidades "usables desde la mano" (Ramón
+	# Freire/Tyet) en una carta que solo se está mostrando.
 	card.set_zone(Constants.Zone.CEMENTERIO)
 	var main := get_node_or_null("/root/Main")
 	if main and main.get("_card_inspector"):
@@ -672,15 +646,9 @@ func _clear_cards() -> void:
 	"""Limpia todas las cartas instanciadas"""
 	for card in displayed_cards:
 		if is_instance_valid(card):
-			# Desconectar señales de interacción ANTES de liberar (2026-08-29,
-			# mismo bug que CardManager.destroy_card()/exile_card()) — estas
-			# cartas del panel se conectan a card_clicked/card_hovered/
-			# card_unhovered (ver _display_card() más arriba) y sin
-			# desconectar, un hover que sigue apuntando al nodo después de
-			# queue_free() tira "Invalid access... on a base object of type
-			# previously freed" al tocar .modulate en el próximo evento de
-			# mouse (reportado: pasaba justo al elegir un Oro del Castillo
-			# en la búsqueda de Don de Amma, que cierra este panel).
+			# Desconectar las señales de interacción ANTES de liberar (como
+			# CardManager.destroy_card()/exile_card()): un hover que apunta al nodo después de queue_free()
+			# falla con "previously freed" al tocar .modulate.
 			CardManager._disconnect_card_interaction_signals(card)
 			card.queue_free()
 	displayed_cards.clear()
@@ -740,11 +708,8 @@ func _on_card_clicked(card: Node) -> void:
 		if max_selections > 0 and selected_cards.size() >= max_selections:
 			return  # Límite alcanzado
 		_select_card(card)
-		# Al llegar al máximo ya no queda ninguna elección posible (2026-08-28,
-		# a pedido del usuario: clickear la carta que quiero elegir alcanza,
-		# sin tener que apretar Confirmar aparte) — confirma solo. Si
-		# min_selections < max_selections (p.ej. "hasta 2") el botón
-		# Confirmar sigue disponible para cerrar con MENOS del máximo.
+		# Al llegar al máximo se confirma solo (clickear la carta alcanza). Si min_selections <
+		# max_selections ("hasta 2"), Confirmar sigue disponible para cerrar con menos.
 		if max_selections > 0 and selected_cards.size() >= max_selections:
 			_on_confirm_pressed()
 			return

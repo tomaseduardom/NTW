@@ -1,25 +1,17 @@
 extends Node
 class_name ZoneBrowsePicker
-## ZoneBrowsePicker — selector de cartas en zonas apiladas (Castillo,
-## Cementerio, Destierro) directamente sobre el tablero (2026-10-11, a pedido
-## del usuario: "el mazo y el castillo también tiene que ser un selector y no
-## un popup, además si la opción es en el castillo y/o cementerio la idea es
-## poder ver el castillo, luego hacer click afuera, ver el cementerio y
-## después confirmar toda la acción" — ejemplo: Arturo de Bretaña).
-##
-## Las zonas que participan brillan en el tablero; clic en una abre un visor
-## con TODAS sus cartas (las elegibles destacadas, el resto atenuadas), clic
-## en una carta la marca/desmarca, clic afuera cierra el visor SIN perder lo
-## elegido, y el botón de paso del HUD (o el del visor) confirma la acción
-## completa. Corre siempre en la pantalla de quien elige: el Anfitrión lo usa
-## directo (ActionSearch) y el Remoto lo corre al recibir el prompt
-## "zone_pick" (RemoteMirrorController) — en ambos casos "own" es relativo a
-## esa pantalla.
+## ZoneBrowsePicker — selector de cartas en zonas apiladas (Castillo, Cementerio, Destierro)
+## directamente sobre el tablero, sin popup (p.ej. Arturo de Bretaña: mirar el Castillo, cerrar,
+## mirar el Cementerio y confirmar todo junto).
+## Las zonas que participan brillan; clic en una abre un visor con todas sus cartas (elegibles
+## destacadas, el resto atenuadas); clic en una carta la marca/desmarca; clic afuera cierra el visor
+## sin perder lo elegido; el botón de paso del HUD (o el del visor) confirma. Corre en la pantalla
+## de quien elige: el Anfitrión directo (ActionSearch) y el Remoto al recibir el prompt "zone_pick"
+## (RemoteMirrorController); "own" es relativo a esa pantalla.
 
 const CardScene = preload("res://scenes/cards/Card.tscn")
-## Escala de las cartas del visor: se calcula con el alto de la pantalla
-## (2026-10-14, a pedido del usuario: "te muestra casi todo el mazo con las
-## cartas muy pequeñas"), entre estos dos topes.
+## Escala de las cartas del visor: se calcula con el alto de la pantalla: "te muestra casi todo el
+## mazo con las cartas muy pequeñas"), entre estos dos topes.
 const VIEWER_SCALE_MIN := 0.7
 const VIEWER_SCALE_MAX := 1.05
 const TYPE_FILTERS := [
@@ -51,14 +43,11 @@ var _viewer_pool: int = -1
 var _viewer_markers: Dictionary = {}  # card_idx -> Panel (borde de "elegida") del visor abierto
 var _viewer_count_label: Label = null
 var _viewer_confirm_btn: Button = null
-## Cartas de la mano que también son candidatas (2026-10-12, Miguel: "juega
-## una carta de tu mano o de un Cementerio"). Brillan en la mano y un clic
-## en una la elige de inmediato (devuelve [-1, índice]).
+## Cartas de la mano que también son candidatas (Miguel: "juega una carta de tu mano o de un
+## Cementerio"). Brillan en la mano y un clic en una la elige de inmediato (devuelve [-1, índice]).
 var _hand_nodes: Array = []
-## Un solo Castillo (2026-10-14, a pedido del usuario — Duelo Espacial /
-## voragh el devorador: "en caso de escoger un castillo ya no puedo cambiar
-## el castillo... pero sí puedo volver a ver los cementerios"): con más de un
-## Castillo en juego, el primero que se abre es el único que se puede mirar.
+## Un solo Castillo (p.ej. Duelo Espacial, voragh el devorador): con más de un Castillo, el primero
+## que se abre es el único que se puede mirar; los Cementerios se pueden seguir viendo.
 var _locked_castle: int = -1
 var _opened_castles: Array = []  # pools de Castillo abiertos (quien llama los baraja)
 var _panel_pulses: Dictionary = {}  # pool_idx -> {panel, tween}
@@ -88,14 +77,12 @@ static func zone_label(is_own: bool, zone: int) -> String:
 
 func pick(title: String, pools: Array, min_count: int, max_count: int, distinct_names: bool = false,
 		hand_nodes: Array = []) -> Array:
-	"""Abre el selector y espera la confirmación. 'pools': [{is_own, zone,
-	cards: [{data, eligible}]}]. Devuelve [[pool_idx, card_idx], ...] en el
-	orden en que se eligieron (vacío si se confirmó sin elegir nada).
-	'hand_nodes' (opcional, 2026-10-12): cartas de la mano que también son
-	elegibles — brillan y un clic en una termina la selección con
-	[[-1, índice_en_hand_nodes]] (pensado para elegir UNA carta, p.ej.
-	Miguel). El clic llega por try_hand_click(); en el Remoto los Nodos son
-	los de su mano espejo (ver ActionSearch.pick_in_zones())."""
+	"""Abre el selector y espera la confirmación. 'pools': [{is_own, zone, cards: [{data,
+	eligible}]}]. Devuelve [[pool_idx, card_idx],...] en el orden en que se eligieron (vacío si se
+	confirmó sin elegir nada). 'hand_nodes' (opcional): cartas de la mano que también son elegibles
+	— brillan y un clic en una termina la selección con [[-1, índice_en_hand_nodes]] (pensado para
+	elegir UNA carta, p.ej. Miguel). El clic llega por try_hand_click; en el Remoto los Nodos son
+	los de su mano espejo (ver ActionSearch.pick_in_zones)."""
 	if _active:
 		push_warning("[ZoneBrowsePicker] Ya hay una selección en curso")
 		return []
@@ -177,9 +164,8 @@ func _unglow_hand() -> void:
 
 
 func skip_optional() -> bool:
-	"""Tecla N (2026-10-17, a pedido del usuario): fallar la búsqueda — se
-	cierra sin elegir ninguna carta, aunque haya alguna válida. Solo si la
-	búsqueda puede fallar (mínimo 0)."""
+	"""Tecla N: fallar la búsqueda — se cierra sin elegir ninguna carta, aunque haya alguna válida.
+	Solo si la búsqueda puede fallar (mínimo 0)."""
 	if not _active or _done or _min > 0:
 		return false
 	_selected = []
@@ -344,6 +330,9 @@ func _open_viewer(pool_idx: int) -> void:
 	if pool.cards.is_empty():
 		var empty := Label.new()
 		empty.text = "No hay cartas en esta zona."
+		empty.add_theme_font_override("font", preload("res://assets/fonts/Marcellus-Regular.ttf"))
+		empty.add_theme_font_size_override("font_size", 16)
+		empty.add_theme_color_override("font_color", Color(0.8, 0.8, 0.8))
 		grid.add_child(empty)
 
 	var footer := HBoxContainer.new()
@@ -351,12 +340,18 @@ func _open_viewer(pool_idx: int) -> void:
 	vbox.add_child(footer)
 	_viewer_count_label = Label.new()
 	_viewer_count_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_viewer_count_label.add_theme_font_override("font", preload("res://assets/fonts/Marcellus-Regular.ttf"))
+	_viewer_count_label.add_theme_font_size_override("font_size", 14)
 	footer.add_child(_viewer_count_label)
 	var close_btn := Button.new()
 	close_btn.text = "Cerrar"
+	close_btn.add_theme_font_override("font", preload("res://assets/fonts/Cinzel-Bold.ttf"))
+	close_btn.add_theme_font_size_override("font_size", 14)
 	close_btn.pressed.connect(_close_viewer)
 	footer.add_child(close_btn)
 	_viewer_confirm_btn = Button.new()
+	_viewer_confirm_btn.add_theme_font_override("font", preload("res://assets/fonts/Cinzel-Bold.ttf"))
+	_viewer_confirm_btn.add_theme_font_size_override("font_size", 14)
 	_viewer_confirm_btn.pressed.connect(_try_confirm)
 	footer.add_child(_viewer_confirm_btn)
 	_refresh_paso()
@@ -383,42 +378,6 @@ func _display_order(pool: Dictionary) -> Array:
 	return order
 
 
-func _build_filter_bar(pool: Dictionary) -> Control:
-	"""Botones por tipo (con cuántas hay de cada uno) y búsqueda por nombre."""
-	var bar := HBoxContainer.new()
-	bar.alignment = BoxContainer.ALIGNMENT_CENTER
-	bar.add_theme_constant_override("separation", 6)
-	var counts: Dictionary = {}
-	for c in pool.cards:
-		var t := int(c.data.get("tipo", -1))
-		counts[t] = int(counts.get(t, 0)) + 1
-	var group := ButtonGroup.new()
-	for f in TYPE_FILTERS:
-		var n: int = pool.cards.size() if f[1] == -1 else int(counts.get(f[1], 0))
-		if n == 0 and f[1] != -1:
-			continue
-		var b := Button.new()
-		b.text = "%s (%d)" % [f[0], n]
-		b.toggle_mode = true
-		b.button_group = group
-		b.button_pressed = f[1] == _filter_type
-		var t: int = f[1]
-		b.pressed.connect(func() -> void:
-			_filter_type = t
-			_apply_filter())
-		bar.add_child(b)
-	var search := LineEdit.new()
-	search.placeholder_text = "Buscar por nombre"
-	search.custom_minimum_size = Vector2(220, 0)
-	search.text = _filter_text
-	search.clear_button_enabled = true
-	search.text_changed.connect(func(txt: String) -> void:
-		_filter_text = txt
-		_apply_filter())
-	bar.add_child(search)
-	return bar
-
-
 func _apply_filter() -> void:
 	var needle := _filter_text.strip_edges().to_lower()
 	for w in _viewer_wrappers:
@@ -440,9 +399,8 @@ func _build_viewer_card(pool_idx: int, card_idx: int, card_scale: float) -> Cont
 	var shown: Dictionary = entry.data.duplicate()
 	shown["esta_oculta"] = false
 	card.load_from_data(shown)
-	# Zona real ANTES del dueño (2026-10-14, bug real: las cartas del
-	# Castillo rival salían giradas 180° — current_zone arranca en MANO y
-	# Card gira toda carta rival "en la mano o en juego").
+	# Zona real ANTES del dueño: current_zone arranca en MANO y Card gira 180° toda carta rival "en la
+	# mano o en juego" (las del Castillo rival salían giradas).
 	card.current_zone = pool.zone
 	card.owner_id = 0 if pool.is_own else 1
 	card.can_interact = false
@@ -524,7 +482,7 @@ func _toggle(pool_idx: int, card_idx: int, card: Node) -> void:
 					return
 		if not _selected.is_empty() and _selected[0][0] != pool_idx \
 				and (_pools[pool_idx].get("exclusive", false) or _pools[_selected[0][0]].get("exclusive", false)):
-			# "de un Cementerio" (2026-10-14, Lanza Argenta): todas de la misma zona.
+			# "de un Cementerio" (Lanza Argenta): todas de la misma zona.
 			_main._update_debug("Todas tienen que ser de %s" % zone_label(_pools[_selected[0][0]].is_own,
 				_pools[_selected[0][0]].zone))
 			return
@@ -536,9 +494,8 @@ func _toggle(pool_idx: int, card_idx: int, card: Node) -> void:
 	if is_instance_valid(card):
 		card.set_activatable(not is_selected, CardBadges.GLOW_COLOR_CELESTE, &"zone_pick")
 	_refresh_paso()
-	# Con la última carta que se puede elegir se cierra solo, sin Confirmar
-	# (2026-10-14, a pedido del usuario: "si me piden 2 cartas, al hacerle
-	# clic a la segunda que se cierre la ventana").
+	# Con la última carta que se puede elegir se cierra solo, sin Confirmar: "si me piden 2 cartas, al
+	# hacerle clic a la segunda que se cierre la ventana"
 	if is_selected and _selected.size() >= mini(_max, _eligible_total()):
 		_try_confirm()
 

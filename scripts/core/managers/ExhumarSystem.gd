@@ -5,6 +5,11 @@ class_name ExhumarSystem
 ## únicas, oro disponible, popup de pago). Extraído de PaymentManager.gd
 ## (Fase 4 de reestructuración).
 
+const KeywordParser = preload("res://scripts/core/cards/KeywordParser.gd")
+const KeywordConditions = preload("res://scripts/core/cards/KeywordConditions.gd")
+const FONT_TITLE := preload("res://assets/fonts/Cinzel-Bold.ttf")
+const FONT_BODY := preload("res://assets/fonts/Marcellus-Regular.ttf")
+
 var _main: Node
 
 ## Cartas con Exhumar detectadas por jugador: {player_id: [card_data, ...]}
@@ -16,8 +21,7 @@ var _exhumar_popup: Window = null
 
 func setup(main: Node) -> void:
 	_main = main
-	# Exhumar condicional por turno (Cuervo Nocturno, 2026-10-14): el cache
-	# vence al cambiar de turno.
+	# Exhumar condicional por turno (Cuervo Nocturno): el cache vence al cambiar de turno.
 	if not GameManager.turn_started.is_connected(_on_turn_started_invalidate):
 		GameManager.turn_started.connect(_on_turn_started_invalidate)
 
@@ -48,25 +52,25 @@ func scan_cemetery_for_exhumar(player_id: int) -> Array[Dictionary]:
 	var playable_cards: Array[Dictionary] = []
 	var cemetery = _main._validation._get_player_cemetery(player_id)
 
+	# Exhumar condicional (macu: "Si controlas Aliados Caballero..."): puede cambiar en medio del turno,
+	# así que con una de esas en el Cementerio no se guarda el resultado.
+	var cacheable := true
+
 	for card in cemetery:
-		if _card_has_exhumar(card):
-			# "Si atacaste en tu turno anterior, tiene Exhumar en tu Cementerio"
-			# (Cuervo Nocturno, 2026-10-14).
-			if "si atacaste en tu turno anterior, tiene exhumar" in str(card.get("habilidad", "")).to_lower() \
-					and not BattleManager.attacked_in_previous_own_turn(player_id):
-				continue
+		if not _conditional_exhumar(card).is_empty():
+			cacheable = false
+		if _card_has_exhumar(card, player_id):
 			var card_info = _create_exhumar_card_info(card, player_id)
 			if card_info.can_play:
 				playable_cards.append(card_info)
 
-	# Guardar en cache
-	_exhumar_cache[player_id] = playable_cards
-	_cache_dirty = false
+	if cacheable:
+		_exhumar_cache[player_id] = playable_cards
+		_cache_dirty = false
 
-	# 2026-09-25, a pedido del usuario ("elimina logs redundantes"): este
-	# chequeo corre en CADA ventana de prioridad — con 0 cartas (el caso
-	# normal la mayor parte de la partida) no dice nada nuevo. Con 1+ sí es
-	# información real (hay algo jugable esperando).
+	# ("elimina logs redundantes"): este chequeo corre en CADA ventana de prioridad — con 0 cartas (el
+	# caso normal la mayor parte de la partida) no dice nada nuevo. Con 1+ sí es información real (hay
+	# algo jugable esperando).
 	if playable_cards.size() > 0 or Constants.VERBOSE_DIAG_LOGS:
 		print("[PaymentManager] Cementerio J%d: %d cartas con Exhumar disponibles" % [
 			player_id + 1, playable_cards.size()
@@ -89,8 +93,10 @@ func get_all_exhumar_cards() -> Dictionary:
 	return result
 
 
-func _card_has_exhumar(card_data: Dictionary) -> bool:
-	"""Verifica si una carta tiene la habilidad Exhumar"""
+func _card_has_exhumar(card_data: Dictionary, player_id: int = -1) -> bool:
+	"""Verifica si una carta tiene la habilidad Exhumar: la impresa, la ganada por un efecto (array
+	"keywords") o una condicional que se cumple ahora para 'player_id' (dueño del Cementerio; -1 = se
+	busca). Cuervo Nocturno: "Si atacaste en tu turno anterior, tiene Exhumar en tu Cementerio"."""
 	# Verificar trait directo
 	var traits = card_data.get("traits", {})
 	if traits.get("has_exhumar", false):
@@ -104,12 +110,27 @@ func _card_has_exhumar(card_data: Dictionary) -> bool:
 		if kw is int and kw == Constants.Keyword.EXHUMAR:
 			return true
 
-	# Verificar texto de habilidad
-	var ability = str(card_data.get("habilidad", card_data.get("ability", "")))
-	if "exhumar" in ability.to_lower():
-		return true
+	# Datos sin array "keywords": las impresas en el texto.
+	if not card_data.has("keywords"):
+		var ability = str(card_data.get("habilidad", card_data.get("ability", "")))
+		if KeywordParser.has_own(ability, Constants.Keyword.EXHUMAR):
+			return true
 
+	var conditional := _conditional_exhumar(card_data)
+	if conditional.is_empty():
+		return false
+	if player_id < 0:
+		player_id = 0 if card_data in CardManager.get_cemetery(0) else 1
+	for entry in conditional:
+		if KeywordConditions.holds(entry.cond, null, player_id):
+			return true
 	return false
+
+
+func _conditional_exhumar(card_data: Dictionary) -> Array:
+	var ability = str(card_data.get("habilidad", card_data.get("ability", "")))
+	return KeywordParser.conditional_keywords(ability).filter(
+		func(e): return e.keyword == Constants.Keyword.EXHUMAR and e.who == "self")
 
 
 func _create_exhumar_card_info(card_data: Dictionary, player_id: int) -> Dictionary:
@@ -282,7 +303,9 @@ func _create_exhumar_popup(cards: Array) -> void:
 	# Título
 	var title = Label.new()
 	title.text = "Cartas jugables desde el Cementerio:"
-	title.add_theme_font_size_override("font_size", 14)
+	title.add_theme_font_override("font", FONT_TITLE)
+	title.add_theme_font_size_override("font_size", 15)
+	title.add_theme_color_override("font_color", Color(1.0, 0.90, 0.60))
 	vbox.add_child(title)
 
 	# Scroll para cartas
@@ -305,6 +328,8 @@ func _create_exhumar_popup(cards: Array) -> void:
 
 	var close_btn = Button.new()
 	close_btn.text = "Cerrar"
+	close_btn.add_theme_font_override("font", FONT_TITLE)
+	close_btn.add_theme_font_size_override("font_size", 13)
 	close_btn.pressed.connect(_close_exhumar_popup)
 	vbox.add_child(close_btn)
 
@@ -315,6 +340,8 @@ func _create_exhumar_card_button(card_info: Dictionary, index: int) -> Button:
 	"""Crea botón para una carta con Exhumar"""
 	var btn = Button.new()
 	btn.custom_minimum_size.y = 50
+	btn.add_theme_font_override("font", FONT_TITLE)
+	btn.add_theme_font_size_override("font_size", 13)
 
 	var name = card_info.get("name", "???")
 	var cost = card_info.get("exhumar_cost", 0)

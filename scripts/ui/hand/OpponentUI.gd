@@ -27,6 +27,9 @@ var auto_hide_timer: float = 0.0
 @onready var acknowledge_button: Button = $RevealPanel/AcknowledgeButton
 
 
+const FONT_TITLE := preload("res://assets/fonts/Cinzel-Bold.ttf")
+const FONT_BODY := preload("res://assets/fonts/Marcellus-Regular.ttf")
+
 func _ready() -> void:
 	# Añadir al grupo para que SelectionCanvas pueda encontrarlo
 	add_to_group("opponent_ui")
@@ -35,8 +38,18 @@ func _ready() -> void:
 	visible = false
 	is_showing = false
 
+	if title_label:
+		title_label.add_theme_font_override("font", FONT_TITLE)
+		title_label.add_theme_font_size_override("font_size", 20)
+		title_label.add_theme_color_override("font_color", Color(1.0, 0.90, 0.60))
+	if info_label:
+		info_label.add_theme_font_override("font", FONT_BODY)
+		info_label.add_theme_font_size_override("font_size", 13)
+
 	# Conectar botón
 	if acknowledge_button:
+		acknowledge_button.add_theme_font_override("font", FONT_TITLE)
+		acknowledge_button.add_theme_font_size_override("font_size", 14)
 		acknowledge_button.pressed.connect(_on_acknowledge_pressed)
 
 	# Conectar a SelectionCanvas si existe
@@ -180,6 +193,7 @@ func _create_card_display(card: Node) -> Control:
 	var name_label = Label.new()
 	name_label.text = card.card_name if card.get("card_name") else "Carta"
 	name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	name_label.add_theme_font_override("font", FONT_TITLE)
 	name_label.add_theme_font_size_override("font_size", 11)
 	name_label.autowrap_mode = TextServer.AUTOWRAP_WORD
 	vbox.add_child(name_label)
@@ -198,7 +212,8 @@ func _create_card_display(card: Node) -> Control:
 		var type_label = Label.new()
 		type_label.text = Constants.CARD_TYPE_NAMES.get(card.card_type, "")
 		type_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		type_label.add_theme_font_size_override("font_size", 9)
+		type_label.add_theme_font_override("font", FONT_TITLE)
+		type_label.add_theme_font_size_override("font_size", 10)
 		type_label.modulate = Color(0.7, 0.7, 0.7, 1)
 		vbox.add_child(type_label)
 
@@ -303,7 +318,9 @@ func _create_default_ui() -> void:
 	title_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	title_label.position = Vector2(20, 10)
 	title_label.size = Vector2(660, 30)
+	title_label.add_theme_font_override("font", FONT_TITLE)
 	title_label.add_theme_font_size_override("font_size", 20)
+	title_label.add_theme_color_override("font_color", Color(1.0, 0.90, 0.60))
 	reveal_panel.add_child(title_label)
 
 	# Contenedor de cartas
@@ -322,7 +339,8 @@ func _create_default_ui() -> void:
 	info_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	info_label.position = Vector2(20, 220)
 	info_label.size = Vector2(660, 25)
-	info_label.add_theme_font_size_override("font_size", 12)
+	info_label.add_theme_font_override("font", FONT_BODY)
+	info_label.add_theme_font_size_override("font_size", 13)
 	reveal_panel.add_child(info_label)
 
 	# Botón acknowledge
@@ -331,6 +349,8 @@ func _create_default_ui() -> void:
 	acknowledge_button.text = "Continuar"
 	acknowledge_button.position = Vector2(280, 255)
 	acknowledge_button.size = Vector2(140, 35)
+	acknowledge_button.add_theme_font_override("font", FONT_TITLE)
+	acknowledge_button.add_theme_font_size_override("font_size", 14)
 	acknowledge_button.pressed.connect(_on_acknowledge_pressed)
 	reveal_panel.add_child(acknowledge_button)
 

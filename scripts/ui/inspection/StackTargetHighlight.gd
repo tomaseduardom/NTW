@@ -5,6 +5,9 @@ class_name StackTargetHighlight
 ## hover de los items. Opera sobre el StackVisualizer via _main.
 ## Extraído de StackVisualizer.gd (Fase 4 de reestructuración).
 
+const FONT_TITLE := preload("res://assets/fonts/Cinzel-Bold.ttf")
+const FONT_BODY := preload("res://assets/fonts/Marcellus-Regular.ttf")
+
 var _main: Control
 
 var _highlight_tweens: Dictionary = {}  # {stack_id: Tween}
@@ -68,7 +71,8 @@ func _show_hover_tooltip(item: Control, stack_id: int) -> void:
 
 		var label = Label.new()
 		label.name = "TooltipLabel"
-		label.add_theme_font_size_override("font_size", 10)
+		label.add_theme_font_override("font", FONT_BODY)
+		label.add_theme_font_size_override("font_size", 11)
 		_hover_tooltip.add_child(label)
 
 		_main.add_child(_hover_tooltip)
@@ -190,7 +194,8 @@ func _show_target_indicator(item: Control, is_valid: bool) -> void:
 		# Crear indicador si no existe
 		indicator = Label.new()
 		indicator.name = "TargetIndicator"
-		indicator.add_theme_font_size_override("font_size", 14)
+		indicator.add_theme_font_override("font", FONT_TITLE)
+		indicator.add_theme_font_size_override("font_size", 13)
 		indicator.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 
 		var content = item.find_child("Content", true, false)

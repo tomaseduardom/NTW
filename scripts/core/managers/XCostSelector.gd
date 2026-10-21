@@ -18,6 +18,8 @@ var _x_value_selector: Control = null  # Escena XValueSelector.tscn
 
 ## Escena del selector de X
 const X_VALUE_SELECTOR_SCENE = preload("res://scenes/ui/XValueSelector.tscn")
+const FONT_TITLE := preload("res://assets/fonts/Cinzel-Bold.ttf")
+const FONT_BODY := preload("res://assets/fonts/Marcellus-Regular.ttf")
 
 
 func setup(main: Node) -> void:
@@ -218,13 +220,16 @@ func _create_x_value_popup(card_data: Dictionary, x_info: Dictionary) -> void:
 	# Título de la carta
 	var title = Label.new()
 	title.text = card_data.get("nombre", card_data.get("name", "???"))
+	title.add_theme_font_override("font", FONT_TITLE)
 	title.add_theme_font_size_override("font_size", 16)
+	title.add_theme_color_override("font_color", Color(1.0, 0.90, 0.60))
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	vbox.add_child(title)
 
 	# Fórmula del coste
 	var formula_label = Label.new()
 	formula_label.text = "Coste: %s" % x_info.formula
+	formula_label.add_theme_font_override("font", FONT_BODY)
 	formula_label.add_theme_font_size_override("font_size", 14)
 	formula_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	formula_label.add_theme_color_override("font_color", Color(1.0, 0.8, 0.2))
@@ -233,7 +238,9 @@ func _create_x_value_popup(card_data: Dictionary, x_info: Dictionary) -> void:
 	# Oro disponible
 	var gold_label = Label.new()
 	gold_label.text = "Oro disponible: %d" % _main._validation._get_player_available_gold(_main._current_player_id)
-	gold_label.add_theme_font_size_override("font_size", 12)
+	gold_label.add_theme_font_override("font", FONT_BODY)
+	gold_label.add_theme_font_size_override("font_size", 13)
+	gold_label.add_theme_color_override("font_color", Color(0.85, 0.85, 0.85))
 	gold_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	vbox.add_child(gold_label)
 
@@ -250,6 +257,8 @@ func _create_x_value_popup(card_data: Dictionary, x_info: Dictionary) -> void:
 	var minus_btn = Button.new()
 	minus_btn.text = "-"
 	minus_btn.custom_minimum_size = Vector2(40, 40)
+	minus_btn.add_theme_font_override("font", FONT_TITLE)
+	minus_btn.add_theme_font_size_override("font_size", 18)
 	minus_btn.pressed.connect(_on_x_decrement)
 	counter_hbox.add_child(minus_btn)
 
@@ -257,7 +266,9 @@ func _create_x_value_popup(card_data: Dictionary, x_info: Dictionary) -> void:
 	var value_label = Label.new()
 	value_label.name = "XValueLabel"
 	value_label.text = "X = 0"
+	value_label.add_theme_font_override("font", FONT_TITLE)
 	value_label.add_theme_font_size_override("font_size", 24)
+	value_label.add_theme_color_override("font_color", Color(1.0, 0.92, 0.70))
 	value_label.custom_minimum_size.x = 80
 	value_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	counter_hbox.add_child(value_label)
@@ -266,6 +277,8 @@ func _create_x_value_popup(card_data: Dictionary, x_info: Dictionary) -> void:
 	var plus_btn = Button.new()
 	plus_btn.text = "+"
 	plus_btn.custom_minimum_size = Vector2(40, 40)
+	plus_btn.add_theme_font_override("font", FONT_TITLE)
+	plus_btn.add_theme_font_size_override("font_size", 18)
 	plus_btn.pressed.connect(_on_x_increment)
 	counter_hbox.add_child(plus_btn)
 
@@ -273,6 +286,7 @@ func _create_x_value_popup(card_data: Dictionary, x_info: Dictionary) -> void:
 	var total_label = Label.new()
 	total_label.name = "TotalCostLabel"
 	total_label.text = "Coste total: %d Oro" % x_info.base_cost
+	total_label.add_theme_font_override("font", FONT_TITLE)
 	total_label.add_theme_font_size_override("font_size", 14)
 	total_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	total_label.add_theme_color_override("font_color", Color(0.5, 1.0, 0.5))
@@ -300,11 +314,15 @@ func _create_x_value_popup(card_data: Dictionary, x_info: Dictionary) -> void:
 
 	var confirm_btn = Button.new()
 	confirm_btn.text = "Confirmar"
+	confirm_btn.add_theme_font_override("font", FONT_TITLE)
+	confirm_btn.add_theme_font_size_override("font_size", 14)
 	confirm_btn.pressed.connect(_on_x_value_confirmed)
 	btn_hbox.add_child(confirm_btn)
 
 	var cancel_btn = Button.new()
 	cancel_btn.text = "Cancelar"
+	cancel_btn.add_theme_font_override("font", FONT_TITLE)
+	cancel_btn.add_theme_font_size_override("font_size", 14)
 	cancel_btn.pressed.connect(_on_x_value_cancelled)
 	btn_hbox.add_child(cancel_btn)
 

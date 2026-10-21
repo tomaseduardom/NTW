@@ -1655,17 +1655,23 @@ func _disconnect_public_browser_signals() -> void:
 	_public_search_edit = LineEdit.new()
 	_public_search_edit.placeholder_text = "Buscar por nombre..."
 	_public_search_edit.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_public_search_edit.add_theme_font_override("font", FONT_MEDIEVAL)
+	_public_search_edit.add_theme_font_size_override("font_size", 14)
 	_public_search_edit.text_submitted.connect(func(_t): _search_public_decks(1))
 	search_row.add_child(_public_search_edit)
 
 	var search_btn = Button.new()
 	search_btn.text = "Buscar"
 	search_btn.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	search_btn.add_theme_font_override("font", FONT_TITLE)
+	search_btn.add_theme_font_size_override("font_size", 13)
 	search_btn.pressed.connect(func(): _search_public_decks(1))
 	search_row.add_child(search_btn)
 
 	_public_status_label = Label.new()
 	_public_status_label.text = "Buscando mazos públicos..."
+	_public_status_label.add_theme_font_override("font", FONT_MEDIEVAL)
+	_public_status_label.add_theme_font_size_override("font_size", 13)
 	_public_status_label.add_theme_color_override("font_color", RUNIC_CYAN)
 	_public_status_label.autowrap_mode = TextServer.AUTOWRAP_WORD
 	vbox.add_child(_public_status_label)
@@ -1688,6 +1694,8 @@ func _disconnect_public_browser_signals() -> void:
 	var prev_btn = Button.new()
 	prev_btn.text = "◄ Anterior"
 	prev_btn.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	prev_btn.add_theme_font_override("font", FONT_TITLE)
+	prev_btn.add_theme_font_size_override("font_size", 13)
 	prev_btn.pressed.connect(func():
 		if _public_page > 1:
 			_search_public_decks(_public_page - 1)
@@ -1696,17 +1704,23 @@ func _disconnect_public_browser_signals() -> void:
 
 	_public_page_label = Label.new()
 	_public_page_label.text = "Página 1"
+	_public_page_label.add_theme_font_override("font", FONT_TITLE)
+	_public_page_label.add_theme_font_size_override("font_size", 13)
 	page_row.add_child(_public_page_label)
 
 	var next_btn = Button.new()
 	next_btn.text = "Siguiente ►"
 	next_btn.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	next_btn.add_theme_font_override("font", FONT_TITLE)
+	next_btn.add_theme_font_size_override("font_size", 13)
 	next_btn.pressed.connect(func(): _search_public_decks(_public_page + 1))
 	page_row.add_child(next_btn)
 
 	var close_btn = Button.new()
 	close_btn.text = "Cerrar"
 	close_btn.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	close_btn.add_theme_font_override("font", FONT_TITLE)
+	close_btn.add_theme_font_size_override("font_size", 13)
 	close_btn.pressed.connect(func():
 		if _public_browser_overlay and is_instance_valid(_public_browser_overlay):
 			_public_browser_overlay.queue_free()
@@ -1752,6 +1766,8 @@ func _build_public_deck_row(deck: Dictionary) -> Control:
 	var row_btn = Button.new()
 	row_btn.alignment = HORIZONTAL_ALIGNMENT_LEFT
 	row_btn.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	row_btn.add_theme_font_override("font", FONT_MEDIEVAL)
+	row_btn.add_theme_font_size_override("font_size", 14)
 	var nombre := str(deck.get("name", "Mazo sin nombre"))
 	var raza := str(deck.get("race", ""))
 	var owner := str(deck.get("owner_username", "?"))

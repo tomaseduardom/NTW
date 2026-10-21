@@ -51,6 +51,9 @@ const ITEM_SPACING: int = 8
 const MAX_VISIBLE_ITEMS: int = 6
 const ANIMATION_DURATION: float = 0.2
 
+const FONT_TITLE := preload("res://assets/fonts/Cinzel-Bold.ttf")
+const FONT_BODY := preload("res://assets/fonts/Marcellus-Regular.ttf")
+
 ## Tipos de objeto en pila (espejo de ActionPipeline.StackObjectType)
 enum StackObjectType {
 	CARD_PLAYED = 0,
@@ -90,6 +93,8 @@ func _ready() -> void:
 	# Ocultar label de vacío inicialmente
 	if empty_label:
 		empty_label.visible = true
+		empty_label.add_theme_font_override("font", FONT_BODY)
+		empty_label.add_theme_font_size_override("font_size", 13)
 
 	call_deferred("_connect_to_pipeline")
 	call_deferred("_setup_ui")
@@ -101,6 +106,8 @@ func _setup_ui() -> void:
 	"""Configura la UI inicial"""
 	if header_label:
 		header_label.text = "PILA DE EFECTOS"
+		header_label.add_theme_font_override("font", FONT_TITLE)
+		header_label.add_theme_font_size_override("font_size", 14)
 
 	# Crear escena de item dinámicamente si no existe
 	if StackItemScene == null:
@@ -375,6 +382,7 @@ func _create_stack_item_node(stack_obj: Dictionary) -> Control:
 	var type_label = Label.new()
 	type_label.name = "TypeIcon"
 	type_label.text = _get_type_icon(stack_obj.get("type", 0))
+	type_label.add_theme_font_override("font", FONT_TITLE)
 	type_label.add_theme_font_size_override("font_size", 16)
 	header_hbox.add_child(type_label)
 
@@ -382,6 +390,7 @@ func _create_stack_item_node(stack_obj: Dictionary) -> Control:
 	var name_label = Label.new()
 	name_label.name = "NameLabel"
 	name_label.text = stack_obj.get("name", "???")
+	name_label.add_theme_font_override("font", FONT_TITLE)
 	name_label.add_theme_font_size_override("font_size", 14)
 	name_label.add_theme_color_override("font_color", Color.WHITE)
 	name_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -392,7 +401,8 @@ func _create_stack_item_node(stack_obj: Dictionary) -> Control:
 	var state_label = Label.new()
 	state_label.name = "StateLabel"
 	state_label.text = _get_state_text(stack_obj.get("step", 4))
-	state_label.add_theme_font_size_override("font_size", 10)
+	state_label.add_theme_font_override("font", FONT_TITLE)
+	state_label.add_theme_font_size_override("font_size", 11)
 	state_label.add_theme_color_override("font_color", Color(0.8, 0.8, 0.8, 0.8))
 	header_hbox.add_child(state_label)
 
@@ -400,7 +410,8 @@ func _create_stack_item_node(stack_obj: Dictionary) -> Control:
 	var desc_label = Label.new()
 	desc_label.name = "DescLabel"
 	desc_label.text = _get_effect_description(stack_obj)
-	desc_label.add_theme_font_size_override("font_size", 11)
+	desc_label.add_theme_font_override("font", FONT_BODY)
+	desc_label.add_theme_font_size_override("font_size", 12)
 	desc_label.add_theme_color_override("font_color", Color(0.9, 0.9, 0.9, 0.9))
 	desc_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	desc_label.clip_text = true
@@ -414,7 +425,8 @@ func _create_stack_item_node(stack_obj: Dictionary) -> Control:
 		var source_name = stack_obj.context.get("source_name", "")
 		if not source_name.is_empty():
 			source_label.text = "← %s" % source_name
-			source_label.add_theme_font_size_override("font_size", 10)
+			source_label.add_theme_font_override("font", FONT_BODY)
+			source_label.add_theme_font_size_override("font_size", 11)
 			source_label.add_theme_color_override("font_color", Color(0.7, 0.7, 0.7, 0.8))
 			inner_vbox.add_child(source_label)
 
@@ -423,7 +435,8 @@ func _create_stack_item_node(stack_obj: Dictionary) -> Control:
 	wait_indicator.name = "WaitIndicator"
 	wait_indicator.text = ""
 	wait_indicator.visible = false
-	wait_indicator.add_theme_font_size_override("font_size", 10)
+	wait_indicator.add_theme_font_override("font", FONT_TITLE)
+	wait_indicator.add_theme_font_size_override("font_size", 11)
 	wait_indicator.add_theme_color_override("font_color", Color.YELLOW)
 	inner_vbox.add_child(wait_indicator)
 
@@ -658,11 +671,8 @@ func _can_be_cancelled(stack_obj: Dictionary) -> bool:
 	if stack_obj.get("was_cancelled", false):
 		return false
 
-	# Protección explícita en el propio texto de la carta (2026-08-29, p.ej.
-	# Miguel: "Cuando entra en juego... Esta habilidad no puede ser
-	# cancelada.") — antes esta función solo miraba estado estructural de
-	# la pila, nunca el texto de la carta, así que esta protección nunca se
-	# aplicaba de verdad.
+	# Protección explícita en el texto de la carta (p.ej. Miguel: "Esta habilidad no puede ser
+	# cancelada."), además del estado de la pila.
 	var ability_text: String = str(stack_obj.get("card_data", {}).get("habilidad", "")).to_lower()
 	if "no puede ser cancelad" in ability_text:
 		return false
@@ -718,15 +728,3 @@ func clear_all_highlights() -> void:
 	_target_highlight.clear_all_highlights()
 
 
-func refresh() -> void:
-	"""Refresca la visualización desde el pipeline"""
-	_clear_all_items()
-
-	if not _action_pipeline:
-		return
-
-	var stack = _action_pipeline.get_stack()
-	for obj in stack:
-		_add_stack_item(obj)
-
-	_update_empty_state()

@@ -39,14 +39,32 @@ func _setup_styles() -> void:
 	var topbar_style = StyleBoxEmpty.new()
 	_main.get_node("TopBar").add_theme_stylebox_override("panel", topbar_style)
 
-	var topbar_title = _main.get_node_or_null("TopBar/TurnLabel")
-	if topbar_title:
-		topbar_title.add_theme_font_override("font", font_medieval)
-		topbar_title.add_theme_font_size_override("font_size", 16)
-		topbar_title.add_theme_color_override("font_color", Color(1.0, 0.92, 0.70, 1.0))
-		topbar_title.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.95))
-		topbar_title.add_theme_constant_override("shadow_offset_x", 1)
-		topbar_title.add_theme_constant_override("shadow_offset_y", 2)
+	var topbar_turn = _main.get_node_or_null("TopBar/TurnLabel")
+	if topbar_turn:
+		topbar_turn.add_theme_font_override("font", font_bold)
+		topbar_turn.add_theme_font_size_override("font_size", 16)
+		topbar_turn.add_theme_color_override("font_color", Color(1.0, 0.92, 0.70, 1.0))
+		topbar_turn.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.95))
+		topbar_turn.add_theme_constant_override("shadow_offset_x", 1)
+		topbar_turn.add_theme_constant_override("shadow_offset_y", 2)
+
+	var topbar_phase = _main.get_node_or_null("TopBar/PhaseLabel")
+	if topbar_phase:
+		topbar_phase.add_theme_font_override("font", font_bold)
+		topbar_phase.add_theme_font_size_override("font_size", 16)
+		topbar_phase.add_theme_color_override("font_color", Color(0.60, 0.85, 1.0, 1.0))
+		topbar_phase.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.95))
+		topbar_phase.add_theme_constant_override("shadow_offset_x", 1)
+		topbar_phase.add_theme_constant_override("shadow_offset_y", 2)
+
+	var topbar_player = _main.get_node_or_null("TopBar/PlayerInfo")
+	if topbar_player:
+		topbar_player.add_theme_font_override("font", font_bold)
+		topbar_player.add_theme_font_size_override("font_size", 15)
+		topbar_player.add_theme_color_override("font_color", Color(1.0, 0.90, 0.65, 1.0))
+		topbar_player.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.95))
+		topbar_player.add_theme_constant_override("shadow_offset_x", 1)
+		topbar_player.add_theme_constant_override("shadow_offset_y", 2)
 
 	var debug_style = StyleBoxFlat.new()
 	debug_style.bg_color = Color(0, 0, 0, 0.7)

@@ -12,6 +12,8 @@ const FONT_TITLE := preload("res://assets/fonts/Cinzel-Bold.ttf")
 const FONT_BODY := preload("res://assets/fonts/Marcellus-Regular.ttf")
 
 const EffectContextScript = preload("res://scripts/core/effects/EffectContext.gd")  # detector de paridad (§56)
+const CastleTopPlay = preload("res://scripts/core/effects/mechanics/CastleTopPlay.gd")
+const PlayerSideScript = preload("res://scripts/core/game/PlayerSide.gd")
 
 var _main: Node = null
 
@@ -197,8 +199,8 @@ func setup_public_zone_viewers() -> void:
 
 		panel.gui_input.connect(func(ev):
 			if ev is InputEventMouseButton and ev.button_index == MOUSE_BUTTON_LEFT and ev.pressed:
-				# Con el selector de zonas activo (ZoneBrowsePicker), el clic en
-				# el panel abre SU visor, no este (2026-10-11).
+				# Con el selector de zonas activo (ZoneBrowsePicker), el clic en el panel abre SU visor, no
+				# este.
 				if _main._zone_browse_picker and _main._zone_browse_picker.is_active():
 					return
 				_show_zone_popup(label, pid, ztype)
@@ -211,13 +213,10 @@ func setup_public_zone_viewers() -> void:
 	# Cuando CardDatabase termina de descargar una imagen, refrescar las zonas
 	CardDatabase.card_image_loaded.connect(_on_zone_card_image_loaded)
 
-	# Revelado del tope del Castillo (La Ouija, 2026-08-31) — a diferencia de
-	# Cementerio/Destierro (siempre públicos), el Castillo es zona OCULTA por
-	# defecto: el TopCardPreview de PlayerCastillo solo se muestra mientras
-	# haya una carta propia en Reserva con 'Juega mostrando la primera carta
-	# de tu Castillo' (ver refresh_castillo_top_reveal()), y se apaga solo si
-	# esa carta sale de juego. No hay popup de todo el mazo (a diferencia de
-	# Cementerio/Destierro) — el efecto solo revela el TOPE, nunca el resto.
+	# Revelado del tope del Castillo (La Ouija): el Castillo es zona oculta; el TopCardPreview de
+	# PlayerCastillo solo se muestra mientras haya una carta propia en la Reserva con "Juega mostrando
+	# la primera carta de tu Castillo" (refresh_castillo_top_reveal()). Solo se revela el TOPE, sin
+	# popup del mazo.
 	var castillo_tr = TextureRect.new()
 	castillo_tr.name = "TopCardPreview"
 	castillo_tr.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -228,26 +227,32 @@ func setup_public_zone_viewers() -> void:
 	castillo_tr.visible = false
 	_main._panel_player_castillo.add_child(castillo_tr)
 
+	# Escritura Sagrada: al tocar tu Castillo se abren las dos primeras cartas, como el Cementerio.
+	_main._panel_player_castillo.gui_input.connect(func(ev):
+		if not (ev is InputEventMouseButton and ev.button_index == MOUSE_BUTTON_LEFT and ev.pressed):
+			return
+		if SelectionManager._dialogs.get("_castillo_pick_active"):
+			return  # está eligiendo un Castillo para otro efecto
+		if CastleTopPlay.escritura_active(0):
+			_show_zone_popup("Castillo", 0, "castillo_top")
+	)
+
 	CardManager.card_destroyed.connect(func(_pid, _c): refresh_castillo_top_reveal())
 	CardManager.card_exiled.connect(func(_pid, _c): refresh_castillo_top_reveal())
 	if not PriorityManager.priority_changed.is_connected(_on_priority_changed_refresh_castillo_top):
 		PriorityManager.priority_changed.connect(_on_priority_changed_refresh_castillo_top)
-	# 2026-09-14, a pedido del usuario (La Ouija): CardManager.take_damage()
-	# (alias mill_cards(), usado por daño de combate normal Y por 'Botar N
-	# cartas') saca del TOPE real (pop_front()) pero solo emitía
-	# deck_count_changed — nadie escuchaba esa señal para refrescar el
-	# revelado del tope, solo UIManager.update_castillo_count() (el número).
-	# Conectar aquí cubre de una ese caso Y cualquier otro sitio que ya siga
-	# la convención de CardManager (_emit_deck_changed()/take_damage()) sin
-	# tener que parchear cada uno a mano (a diferencia de ActionSearch.gd/
-	# ActionModule.shuffle_deck(), que tocan el mazo SIN pasar por esa señal
-	# — esos se arreglaron aparte, llamando _update_castillo_counts() directo).
+	# Refrescar el revelado del tope con deck_count_changed: cubre
+	# CardManager.take_damage()/mill_cards() (daño de combate y "Botar N cartas", que sacan del tope) y
+	# cualquier sitio que use _emit_deck_changed(). ActionSearch.gd/ActionModule.shuffle_deck() tocan
+	# el mazo sin esa señal y llaman _update_castillo_counts() directo.
 	if not CardManager.deck_count_changed.is_connected(_on_deck_count_changed_refresh_castillo_top):
 		CardManager.deck_count_changed.connect(_on_deck_count_changed_refresh_castillo_top)
 
 
 func _show_zone_popup(title: String, player_id: int, zone_type: String) -> void:
 	var cards_data: Array = CardManager.get_cemetery(player_id) if zone_type == "cemetery" else CardManager.get_exile(player_id)
+	if zone_type == "castillo_top":
+		cards_data = CastleTopPlay.escritura_top(player_id)
 
 	# Limpiar popup anterior
 	var existing = _main.get_node_or_null("ZoneViewerPopup")
@@ -359,6 +364,8 @@ func _show_zone_popup(title: String, player_id: int, zone_type: String) -> void:
 
 	var title_lbl = Label.new()
 	title_lbl.text = "CEMENTERIO" if is_cemetery else "DESTIERRO"
+	if zone_type == "castillo_top":
+		title_lbl.text = "CASTILLO — DOS PRIMERAS"
 	title_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	title_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	title_lbl.add_theme_font_override("font", FONT_TITLE)
@@ -472,6 +479,8 @@ func _create_popup_card(card_data: Dictionary, player_id: int, zone_type: String
 	var card = CardScene.instantiate()
 	card.load_from_data(card_data)
 	card.set_zone(Constants.Zone.CEMENTERIO if zone_type == "cemetery" else Constants.Zone.DESTIERRO)
+	if zone_type == "castillo_top":
+		card.set_zone(Constants.Zone.CASTILLO)
 	card.owner_id = player_id
 	card.can_interact = false
 	card.drag_enabled = false
@@ -487,10 +496,11 @@ func _create_popup_card(card_data: Dictionary, player_id: int, zone_type: String
 			_main._card_inspector.on_card_right_clicked(card)
 	)
 
-	var is_exhumable := is_own_zone and zone_type == "cemetery" and PaymentManager.card_has_exhumar(card_data)
+	var is_exhumable := is_own_zone and zone_type == "cemetery" and PaymentManager.card_has_exhumar(card_data, player_id)
 	var is_exile_playable := is_own_zone and zone_type == "exile" and PaymentManager.card_playable_from_exile(card_data)
+	var is_top_playable := is_own_zone and zone_type == "castillo_top" and CastleTopPlay.escritura_can_play(card_data, player_id)
 
-	if is_exhumable or is_exile_playable:
+	if is_exhumable or is_exile_playable or is_top_playable:
 		card.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 
 		# Borde pulsante esmeralda de acción legal disponible
@@ -550,24 +560,28 @@ func _create_popup_card(card_data: Dictionary, player_id: int, zone_type: String
 				if ev is InputEventMouseButton and ev.button_index == MOUSE_BUTTON_LEFT and ev.pressed:
 					_on_exile_card_clicked(card_data, popup_canvas)
 			)
+		elif is_top_playable:
+			card.gui_input.connect(func(ev):
+				if ev is InputEventMouseButton and ev.button_index == MOUSE_BUTTON_LEFT and ev.pressed:
+					if popup_canvas and is_instance_valid(popup_canvas):
+						popup_canvas.queue_free()
+					await CastleTopPlay.escritura_play_data(card_data, player_id)
+			)
 
 	wrapper.add_child(card)
 	container.add_child(wrapper)
 
 
 func _on_exhumar_card_clicked(card_data: Dictionary, popup_canvas: CanvasLayer) -> void:
-	"""Click en una carta con Exhumar dentro del popup del Cementerio propio
-	(2026-08-23): valida Oro disponible, cierra el popup y la juega vía
-	GoldManager.play_card_from_cemetery() — mismo camino real que jugar
-	desde la mano, no el ActionPipeline/ExhumarSystem huérfanos."""
+	"""Click en una carta con Exhumar dentro del popup del Cementerio propio: valida Oro disponible,
+	cierra el popup y la juega vía GoldManager.play_card_from_cemetery — mismo camino real que
+	jugar desde la mano, no el ActionPipeline/ExhumarSystem huérfanos."""
 	if not _main._gold_manager:
 		return
-	# 2026-09-25, bug real reportado por el usuario ("con lobo sagrado no me
-	# permite jugar armas del cementerio"): si hay una selección de objetivo
-	# real esperando esta misma carta (p.ej. Lobo Sagrado eligiendo un Arma
-	# del Cementerio), resolverla ahí en vez de intentar Exhumar — el
-	# jugador clickea el visor de Cementerio de siempre, no un popup nuevo
-	# que no conoce. Ver CardInteractionModule.try_resolve_cemetery_click().
+	# ("con lobo sagrado no me permite jugar armas del cementerio"): si hay una selección de objetivo
+	# real esperando esta misma carta (p.ej. Lobo Sagrado eligiendo un Arma del Cementerio), resolverla
+	# ahí en vez de intentar Exhumar — el jugador clickea el visor de Cementerio de siempre, no un
+	# popup nuevo que no conoce. Ver CardInteractionModule.try_resolve_cemetery_click.
 	if _main._card_interaction and _main._card_interaction.try_resolve_cemetery_click(card_data):
 		if popup_canvas and is_instance_valid(popup_canvas):
 			popup_canvas.queue_free()
@@ -583,12 +597,10 @@ func _on_exhumar_card_clicked(card_data: Dictionary, popup_canvas: CanvasLayer) 
 
 
 func _on_exile_card_clicked(card_data: Dictionary, popup_canvas: CanvasLayer) -> void:
-	"""Click en una carta jugable desde el Destierro propio dentro de su
-	popup (2026-09-04) — cierra el popup y la juega vía GoldManager.
-	play_card_from_exile() (paga el coste real, no un pago especial como
-	Exhumar). GoldManager.play_card_from_exile() ya valida fase/prioridad/
-	Oro disponible y avisa por _update_debug() si algo falla, así que aquí
-	no hace falta duplicar esos chequeos."""
+	"""Click en una carta jugable desde el Destierro propio dentro de su popup — cierra el popup y la
+	juega vía GoldManager. play_card_from_exile (paga el coste real, no un pago especial como
+	Exhumar). GoldManager.play_card_from_exile ya valida fase/prioridad/Oro disponible y avisa por
+	_update_debug si algo falla, así que aquí no hace falta duplicar esos chequeos."""
 	if not _main._gold_manager:
 		return
 	if popup_canvas and is_instance_valid(popup_canvas):
@@ -597,34 +609,45 @@ func _on_exile_card_clicked(card_data: Dictionary, popup_canvas: CanvasLayer) ->
 	await _main._gold_manager.play_card_from_exile(card_data, discount)
 
 
+func _bot_cemetery_pick(prompt: String, filter: Callable, max_count: int, lock_to_one_side: bool,
+		own_data: Array, opp_data: Array, chooser_id: int) -> Array:
+	"""El bot local elige solo (sin popup en la pantalla del Anfitrión): las del rival primero si el
+	efecto perjudica (Desterrar, Barajar...), las propias primero si no. Mismo criterio que
+	CardInteractionModule._bot_pick()."""
+	var sides: Array = [[own_data, 0], [opp_data, 1]]
+	var picked: Array = []
+	for side in sides:
+		for entry in side[0]:
+			var probe: Node = _main._create_card(entry.data, false)
+			probe.owner_id = side[1]
+			var ok: bool = filter.call(probe)
+			probe.free()
+			if ok:
+				picked.append({"data": entry.data, "owner_id": side[1], "zone_type": entry.zone_type})
+	var harmful := false
+	for w in _main._card_interaction._BOT_HARMFUL:
+		if w in prompt.to_lower():
+			harmful = true
+	var rival: Array = picked.filter(func(p): return p.owner_id != chooser_id)
+	var own: Array = picked.filter(func(p): return p.owner_id == chooser_id)
+	var ordered: Array = (rival + own) if harmful else (own + rival)
+	if lock_to_one_side and not ordered.is_empty():
+		var side_id: int = ordered[0].owner_id
+		ordered = ordered.filter(func(p): return p.owner_id == side_id)
+	return ordered.slice(0, max_count) if max_count >= 0 else ordered
+
+
 func open_cemetery_target_picker(prompt: String, filter: Callable, max_count: int = 1, zone_type: String = "cemetery", lock_to_one_side: bool = false, show_select_all: bool = false, chooser_id: int = 0) -> Array:
-	"""Popup de selección de objetivo mostrando AMBOS Cementerios (o
-	Destierros, o ambas zonas combinadas) lado a lado, con click directo
-	sobre las cartas reales — reemplaza el patrón viejo de 'modal
-	preguntando primero de cuál Cementerio, después otro modal con la
-	lista de cartas' (2026-09-13, a pedido del usuario: Espada de
-	O'Higgins, Hanta el Samurai — 'poder ver los cementerios por mi cuenta
-	y hacer objetivos, para mejor visibilidad y control del efecto').
-	Reutiliza CardInteractionModule.await_multi_target() para la mecánica
-	de click + brillo celeste — las cartas aquí son Nodos TEMPORALES que
-	solo existen mientras el popup está abierto (a diferencia de player_
-	field/mano), su card_data es la fuente de verdad real; 'filter' recibe
-	estos Nodos temporales, no los permanentes del campo.
-	'zone_type': "cemetery", "exile", o "cemetery_and_exile" (2026-09-13,
-	Abrazo de Maipú: 'Baraja cualquier cantidad de cartas de tu Cementerio
-	Y Destierro' — ambas zonas en el MISMO pool, no una elección aparte).
-	'filter' decide qué cartas son objetivo válido (recibe el Card Node
-	temporal — usar card.get('card_type')/card.get('card_data'), etc.).
-	'show_select_all' (2026-09-13, mismo pedido: 'que no tenga que elegir
-	una a una si tuviera 20 cartas') agrega un botón que llama a
-	CardInteractionModule.request_select_all() — toma TODO lo que quede
-	elegible de una sola vez. Ver la advertencia sobre 'lock_to_one_side +
-	select_all antes del primer click' en el docstring de await_multi_
-	target() antes de combinar ambas opciones en un caso nuevo.
-	Devuelve un Array de {data: Dictionary, owner_id: int, zone_type:
-	"cemetery"/"exile"} en el orden en que se clickearon o, con select-all,
-	en el orden en que estaban listadas (vacío si no había candidatos o se
-	canceló sin elegir ninguna)."""
+	"""Popup de selección con AMBOS Cementerios (o Destierros, o las dos zonas) lado a lado y click
+	directo sobre las cartas (p.ej. Espada de O'Higgins, Hanta el Samurai). Usa
+	CardInteractionModule.await_multi_target(); las cartas son Nodos temporales mientras el popup
+	está abierto y su card_data es la fuente de verdad ('filter' recibe esos Nodos).
+	'zone_type': "cemetery", "exile" o "cemetery_and_exile" (las dos zonas en el mismo pool; Abrazo
+	de Maipú).
+	'show_select_all': botón que llama a CardInteractionModule.request_select_all() (ver la
+	advertencia sobre lock_to_one_side + select_all en await_multi_target()).
+	Devuelve un Array de {data, owner_id, zone_type: "cemetery"/"exile"} en orden de click (o de
+	lista con select-all); vacío si no había candidatos o se canceló."""
 	var combine_zones: bool = zone_type == "cemetery_and_exile"
 	var own_data: Array = []
 	var opp_data: Array = []
@@ -647,15 +670,14 @@ func open_cemetery_target_picker(prompt: String, filter: Callable, max_count: in
 	if own_data.is_empty() and opp_data.is_empty():
 		return []
 
-	# Fase 3 del plan de paridad remota (docs/plans/2026-09-20-remote-
-	# multiplayer-parity.md), mismo criterio que SelectionManager._delegate_
-	# selection_to_remote(): si quien elige es el jugador 1 y hay un Remoto
-	# real conectado, no se abre esta UI local (que igual asume SIEMPRE
-	# "jugador 0 = propio, jugador 1 = rival", sin mirar chooser_id) — se
-	# delega por red.
+	# Paridad remota (docs/plans/2026-09-20-remote-multiplayer-parity.md), como
+	# SelectionManager._delegate_selection_to_remote(): si elige el jugador 1 con un Remoto conectado,
+	# se delega por red (esta UI asume jugador 0 = propio).
 	EffectContextScript.check_chooser(chooser_id, prompt)
 	if chooser_id == 1 and NetworkClient.room_code != "" and NetworkClient.is_host:
 		return await _delegate_cemetery_picker_to_remote(prompt, filter, max_count, own_data, opp_data)
+	if PlayerSideScript.is_bot(chooser_id):
+		return _bot_cemetery_pick(prompt, filter, max_count, lock_to_one_side, own_data, opp_data, chooser_id)
 
 	if not _main._card_interaction:
 		return []
@@ -739,6 +761,8 @@ func open_cemetery_target_picker(prompt: String, filter: Callable, max_count: in
 			var empty_lbl = Label.new()
 			empty_lbl.text = "(vacío)"
 			empty_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+			empty_lbl.add_theme_font_override("font", FONT_BODY)
+			empty_lbl.add_theme_font_size_override("font_size", 12)
 			empty_lbl.add_theme_color_override("font_color", Color(0.55, 0.55, 0.55, 1.0))
 			col.add_child(empty_lbl)
 			continue
@@ -762,6 +786,8 @@ func open_cemetery_target_picker(prompt: String, filter: Callable, max_count: in
 		select_all_btn.text = "Seleccionar todo"
 		select_all_btn.focus_mode = Control.FOCUS_NONE
 		select_all_btn.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+		select_all_btn.add_theme_font_override("font", FONT_TITLE)
+		select_all_btn.add_theme_font_size_override("font_size", 13)
 		select_all_btn.pressed.connect(func(): _main._card_interaction.request_select_all())
 		vbox.add_child(select_all_btn)
 
@@ -858,23 +884,12 @@ func _create_selectable_popup_card(card_data: Dictionary, player_id: int, zone_t
 
 
 func open_reveal_picker(prompt: String, data_list: Array, owner_id: int, filter: Callable = Callable(), max_count: int = 1, cancellable: bool = true, chooser_id: int = -1) -> Array:
-	"""Popup de una sola fila mostrando cartas YA REVELADAS (miradas del
-	tope del Castillo con 'Mira'/'Muestra' — Dictionaries sueltos, sin
-	Nodo ni zona real hasta este popup) con click directo — reemplaza el
-	patrón viejo de SelectionManager.open_selection()/await_single_pick()/
-	await_multi_pick() sobre una lista de card_data (2026-09-14,
-	continuación del barrido de pickers modales → click directo, ver
-	docs/plans/2026-09-09-pila-respuesta-universal-design.md). Mismo
-	mecanismo que open_cemetery_target_picker() pero de un solo pool (no
-	hay 'lado rival' para cartas reveladas del propio Castillo).
-	'filter' (opcional): Callable(Node) -> bool, recibe el Nodo temporal —
-	mismo criterio que open_cemetery_target_picker().
-	'max_count'==1 usa await_target() (single pick); >1 o -1 usa
-	await_multi_target() (mismo criterio 'hasta N'/'exacto N' que ya
-	documenta esa función — pasar cancellable=false para forzar exacto
-	max_count, igual que el viejo min=max=N/can_cancel=false).
-	Devuelve un Array de card_data (Dictionary) elegidos, en orden de
-	click (vacío si no había candidatos o se canceló sin elegir ninguno)."""
+	"""Popup de una fila con cartas ya reveladas (Dictionaries sueltos de "Mira"/"Muestra" del tope) y
+	click directo. Mismo mecanismo que open_cemetery_target_picker(), con un solo pool.
+	'filter' (opcional): Callable(Node) -> bool sobre el Nodo temporal.
+	'max_count' == 1 usa await_target(); >1 o -1 usa await_multi_target() (cancellable = false para
+	forzar exactamente max_count).
+	Devuelve un Array de card_data en orden de click (vacío si no había candidatos o se canceló)."""
 	if data_list.is_empty():
 		return []
 
@@ -969,18 +984,9 @@ func open_reveal_picker(prompt: String, data_list: Array, owner_id: int, filter:
 		if is_eligible:
 			candidates.append(card)
 		else:
-			# 2026-09-19, a pedido del usuario ("restringir las cartas que no
-			# puedo jugar, como Oros o cartas de coste 3 o más" — Tangata
-			# Manu): el filtro YA excluía estas cartas de poder elegirse
-			# (candidates más abajo), pero visualmente quedaban idénticas a
-			# las elegibles — el jugador solo se enteraba de que una era
-			# inválida al clickearla y leer "Objetivo no válido". Mismo
-			# tratamiento que SelectionManager._create_selection_card() ya
-			# usaba para 'cartas no seleccionables' antes del barrido de
-			# pickers modales → click directo (2026-09-14, §10.14) — se
-			# perdió al migrar a este popup nuevo. can_interact=false evita
-			# también el hover/hand-cursor en cartas que de todos modos
-			# nunca se pueden elegir.
+			# Las cartas que el filtro excluye se ven atenuadas y con can_interact = false (sin hover ni
+			# cursor de mano), para que se note cuáles no se pueden elegir (p.ej. Oros o coste 3+ con Tangata
+			# Manu).
 			card.can_interact = false
 			card.modulate = Color(0.5, 0.5, 0.5, 0.7)
 
@@ -1115,22 +1121,36 @@ func _on_deck_count_changed_refresh_castillo_top(_player_id: int, _new_count: in
 	refresh_castillo_top_reveal()
 
 
+func _refresh_castillo_clickable() -> void:
+	"""Escritura Sagrada: tu Castillo se puede tocar mientras dure su efecto.
+	No toca nada mientras se está eligiendo un Castillo para otro efecto
+	(SelectionDialogs guarda y restaura el mouse_filter por su cuenta)."""
+	var panel: Control = _main._panel_player_castillo
+	if SelectionManager._dialogs.get("_castillo_pick_active"):
+		return
+	if not panel.has_meta("base_mouse_filter"):
+		panel.set_meta("base_mouse_filter", panel.mouse_filter)
+		panel.set_meta("base_cursor", panel.mouse_default_cursor_shape)
+	if CastleTopPlay.escritura_active(0):
+		panel.mouse_filter = Control.MOUSE_FILTER_STOP
+		panel.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	else:
+		panel.mouse_filter = panel.get_meta("base_mouse_filter")
+		panel.mouse_default_cursor_shape = panel.get_meta("base_cursor")
+
+
 func refresh_castillo_top_reveal() -> void:
-	"""Muestra la carta del tope del Castillo propio (índice 0, ver
-	convención real documentada en CardManager.add_to_deck_top()) en vez del
-	dorso, mientras haya una carta propia en Reserva de Oro con 'Juega
-	mostrando la primera carta de tu Castillo' (La Ouija, 2026-08-31 —
-	detección por texto, mismo patrón que _max_weapons_per_ally() en
-	GoldManager.gd). Llamar tras cualquier cambio al Castillo (robo, la
-	propia habilidad de La Ouija) y cuando una carta puede haber salido de
-	Reserva. Solo jugador 0 — el resto de estos efectos puntuales tampoco
-	corren para el rival todavía."""
+	"""Muestra la carta del tope del Castillo propio (índice 0, ver CardManager.add_to_deck_top()) en
+	vez del dorso, mientras haya en la Reserva una carta propia con "Juega mostrando la primera
+	carta de tu Castillo" (La Ouija). Llamar tras cualquier cambio al Castillo y cuando una carta
+	puede haber salido de la Reserva. Solo jugador 0."""
 	if not _main or not _main._panel_player_castillo:
 		return
 	var tr: TextureRect = _main._panel_player_castillo.get_node_or_null("TopCardPreview")
 	var dorso = _main._panel_player_castillo.get_node_or_null("DorsoImage")
 	if not tr:
 		return
+	_refresh_castillo_clickable()
 
 	var revealed: bool = false
 	if _main.player_gold:

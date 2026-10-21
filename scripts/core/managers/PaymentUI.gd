@@ -1,19 +1,15 @@
 extends RefCounted
 class_name PaymentUI
-## PaymentUI — Popup de selección de método de pago y su procesamiento
-## (Normal/Exhumar/Sacrificio/Descarte/Vida/Alternativo/X). El estado
-## compartido (_current_card/_current_player_id/_current_cost_info/
-## _selected_method/_payment_popup/_state) se queda en PaymentManager —
-## ExhumarSystem.gd y XCostSelector.gd lo leen/escriben directo sobre
-## PaymentManager como blackboard compartido, así que moverlo hubiera
-## significado reescribir ese acceso en los 3 archivos para nada (esta
-## clase igual lo lee/escribe vía _main, sin ganar nada con relocarlo).
-## Opera sobre PaymentManager via _main.
-## Extraído de PaymentManager.gd (2026-08-28, "módulos gordos" — mismo corte
-## que ya separó ExhumarSystem/CostModifiers/XCostSelector/PaymentValidation).
+## PaymentUI — popup de método de pago y su procesamiento
+## (Normal/Exhumar/Sacrificio/Descarte/Vida/Alternativo/X). El estado compartido
+## (_current_card/_current_player_id/_current_cost_info/_selected_method/_payment_popup/_state)
+## queda en PaymentManager, que ExhumarSystem.gd y XCostSelector.gd usan como blackboard. Opera
+## sobre PaymentManager vía _main.
+
+const FONT_TITLE := preload("res://assets/fonts/Cinzel-Bold.ttf")
+const FONT_BODY := preload("res://assets/fonts/Marcellus-Regular.ttf")
 
 var _main: Node
-
 
 func setup(main: Node) -> void:
 	_main = main
@@ -232,7 +228,9 @@ func _create_payment_popup(card_data: Dictionary, options: Array) -> void:
 	# Título de la carta
 	var title = Label.new()
 	title.text = card_data.get("nombre", card_data.get("name", "???"))
+	title.add_theme_font_override("font", FONT_TITLE)
 	title.add_theme_font_size_override("font_size", 16)
+	title.add_theme_color_override("font_color", Color(1.0, 0.90, 0.60))
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	vbox.add_child(title)
 
@@ -242,8 +240,9 @@ func _create_payment_popup(card_data: Dictionary, options: Array) -> void:
 	# Info de coste base
 	var cost_label = Label.new()
 	cost_label.text = "Coste base: %d Oro" % card_data.get("coste", 0)
-	cost_label.add_theme_font_size_override("font_size", 12)
-	cost_label.add_theme_color_override("font_color", Color(0.8, 0.8, 0.8))
+	cost_label.add_theme_font_override("font", FONT_BODY)
+	cost_label.add_theme_font_size_override("font_size", 13)
+	cost_label.add_theme_color_override("font_color", Color(0.85, 0.85, 0.85))
 	vbox.add_child(cost_label)
 
 	# Opciones de pago
@@ -253,6 +252,8 @@ func _create_payment_popup(card_data: Dictionary, options: Array) -> void:
 		btn.text = option.label
 		btn.disabled = not option.available
 		btn.tooltip_text = option.description
+		btn.add_theme_font_override("font", FONT_TITLE)
+		btn.add_theme_font_size_override("font_size", 14)
 		btn.pressed.connect(_on_payment_option_selected.bind(i))
 
 		if option.available:
@@ -268,6 +269,8 @@ func _create_payment_popup(card_data: Dictionary, options: Array) -> void:
 	# Botón cancelar
 	var cancel_btn = Button.new()
 	cancel_btn.text = "Cancelar"
+	cancel_btn.add_theme_font_override("font", FONT_TITLE)
+	cancel_btn.add_theme_font_size_override("font_size", 13)
 	cancel_btn.pressed.connect(_on_payment_cancelled)
 	vbox.add_child(cancel_btn)
 
@@ -374,16 +377,16 @@ func _pay_with_gold(amount: int) -> bool:
 
 
 func _pay_with_sacrifice_async(payment_option: Dictionary) -> bool:
-	"""Pago mediante sacrificio de cartas (async para UI de selección)"""
-	# TODO: Implementar selección de cartas a sacrificar
+	"""Pago mediante sacrificio de cartas. Inalcanzable: ninguna carta de data/cards.json trae
+	'alternative_cost'/'coste_alternativo' (los costes alternativos reales, p.ej. "puedes Descartar
+	una carta para reducir su coste", están en GoldManagerTax)."""
 	print("[PaymentManager] Pago por sacrificio no implementado aún")
 	await _main.get_tree().process_frame  # Placeholder para async
 	return false
 
 
 func _pay_with_discard_async(payment_option: Dictionary) -> bool:
-	"""Pago mediante descarte de cartas (async para UI de selección)"""
-	# TODO: Implementar selección de cartas a descartar
+	"""Pago mediante descarte de cartas. Inalcanzable, ver _pay_with_sacrifice_async()."""
 	print("[PaymentManager] Pago por descarte no implementado aún")
 	await _main.get_tree().process_frame  # Placeholder para async
 	return false
