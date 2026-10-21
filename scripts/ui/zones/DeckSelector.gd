@@ -180,15 +180,15 @@ func _build_ui(parent: Node) -> void:
 	_overlay.add_child(bg_texture)
 
 	# 2. Contenedor del Carrusel sobre la meseta de piedra del altar
-	# Los libros reposan directamente sobre la repisa de piedra con amplio margen para elevación
+	# Dimensionado exacto para 6 grimorios completos (196px + 20px margen/separación = 1316px) sin corte
 	var carousel_wrapper = Control.new()
 	carousel_wrapper.name = "AltarCarouselWrapper"
 	carousel_wrapper.set_anchor(SIDE_LEFT, 0.5)
 	carousel_wrapper.set_anchor(SIDE_RIGHT, 0.5)
 	carousel_wrapper.set_anchor(SIDE_TOP, 0.5)
 	carousel_wrapper.set_anchor(SIDE_BOTTOM, 0.5)
-	carousel_wrapper.set_offset(SIDE_LEFT, -570)
-	carousel_wrapper.set_offset(SIDE_RIGHT, 570)
+	carousel_wrapper.set_offset(SIDE_LEFT, -658)
+	carousel_wrapper.set_offset(SIDE_RIGHT, 658)
 	carousel_wrapper.set_offset(SIDE_TOP, -255)
 	carousel_wrapper.set_offset(SIDE_BOTTOM, 85)
 	carousel_wrapper.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -206,13 +206,13 @@ func _build_ui(parent: Node) -> void:
 	_scroll_container.gui_input.connect(_on_scroll_gui_input)
 	carousel_wrapper.add_child(_scroll_container)
 
-	# Margen de seguridad para que los libros no se corten al elevarse, escalar o brillar
+	# Margen simétrico de 20px para que encaje exactamente con la separación entre libros
 	var scroll_margin = MarginContainer.new()
 	scroll_margin.name = "ScrollMargin"
 	scroll_margin.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	scroll_margin.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	scroll_margin.add_theme_constant_override("margin_left", 40)
-	scroll_margin.add_theme_constant_override("margin_right", 40)
+	scroll_margin.add_theme_constant_override("margin_left", 20)
+	scroll_margin.add_theme_constant_override("margin_right", 20)
 	scroll_margin.add_theme_constant_override("margin_top", 28)
 	scroll_margin.add_theme_constant_override("margin_bottom", 16)
 	_scroll_container.add_child(scroll_margin)
@@ -230,12 +230,12 @@ func _build_ui(parent: Node) -> void:
 	_loading_box = _build_loading_placeholder()
 	_player_row.add_child(_loading_box)
 
-	# 3. Botones Rúnicos Circulares de Navegación Lateral (◄ y ►)
-	_btn_prev = _build_circular_nav_button("◄", Vector2(-630, -50))
+	# 3. Botones Rúnicos Circulares de Navegación Lateral (◄ y ►) simétricos al carrusel
+	_btn_prev = _build_circular_nav_button("◄", Vector2(-714, -50))
 	_btn_prev.pressed.connect(_scroll_left)
 	_overlay.add_child(_btn_prev)
 
-	_btn_next = _build_circular_nav_button("►", Vector2(582, -50))
+	_btn_next = _build_circular_nav_button("►", Vector2(666, -50))
 	_btn_next.pressed.connect(_scroll_right)
 	_overlay.add_child(_btn_next)
 
@@ -322,24 +322,34 @@ func _build_center_banner() -> void:
 	banner_box.set_anchor(SIDE_RIGHT, 0.5)
 	banner_box.set_anchor(SIDE_TOP, 0.5)
 	banner_box.set_anchor(SIDE_BOTTOM, 0.5)
-	banner_box.set_offset(SIDE_LEFT, -320)
-	banner_box.set_offset(SIDE_RIGHT, 320)
+	banner_box.set_offset(SIDE_LEFT, -360)
+	banner_box.set_offset(SIDE_RIGHT, 360)
 	banner_box.set_offset(SIDE_TOP, 90)
-	banner_box.set_offset(SIDE_BOTTOM, 142)
+	banner_box.set_offset(SIDE_BOTTOM, 148)
 	banner_box.alignment = BoxContainer.ALIGNMENT_CENTER
 	banner_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_overlay.add_child(banner_box)
 
 	var plate = PanelContainer.new()
 	plate.name = "BannerPlate"
-	var plate_style = StyleBoxFlat.new()
-	plate_style.bg_color = Color(0.06, 0.08, 0.10, 0.72)
-	plate_style.border_color = Color(0.83, 0.69, 0.22, 0.35)
-	plate_style.set_border_width_all(1)
-	plate_style.set_corner_radius_all(6)
-	plate_style.set_expand_margin_all(5)
-	plate.add_theme_stylebox_override("panel", plate_style)
+	plate.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	plate.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	plate.custom_minimum_size = Vector2(460, 52)
 	plate.mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+	var plate_style = StyleBoxFlat.new()
+	plate_style.bg_color = Color(0.05, 0.06, 0.08, 0.88)
+	plate_style.border_color = Color(0.85, 0.72, 0.35, 0.80)
+	plate_style.set_border_width_all(2)
+	plate_style.set_corner_radius_all(8)
+	plate_style.shadow_color = Color(0, 0, 0, 0.75)
+	plate_style.shadow_size = 10
+	plate_style.shadow_offset = Vector2(0, 3)
+	plate_style.content_margin_left = 32
+	plate_style.content_margin_right = 32
+	plate_style.content_margin_top = 7
+	plate_style.content_margin_bottom = 7
+	plate.add_theme_stylebox_override("panel", plate_style)
 	banner_box.add_child(plate)
 
 	var text_vbox = VBoxContainer.new()
@@ -352,8 +362,8 @@ func _build_center_banner() -> void:
 	_deck_banner.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_deck_banner.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	_deck_banner.add_theme_font_override("font", FONT_TITLE)
-	_deck_banner.add_theme_font_size_override("font_size", 16)
-	_deck_banner.add_theme_color_override("font_color", Color(1.0, 0.88, 0.48, 1.0))
+	_deck_banner.add_theme_font_size_override("font_size", 18)
+	_deck_banner.add_theme_color_override("font_color", Color(1.0, 0.90, 0.55, 1.0))
 	_deck_banner.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.98))
 	_deck_banner.add_theme_constant_override("shadow_offset_x", 1)
 	_deck_banner.add_theme_constant_override("shadow_offset_y", 2)
@@ -364,8 +374,8 @@ func _build_center_banner() -> void:
 	_deck_sub_banner.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_deck_sub_banner.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	_deck_sub_banner.add_theme_font_override("font", FONT_MEDIEVAL)
-	_deck_sub_banner.add_theme_font_size_override("font_size", 12)
-	_deck_sub_banner.add_theme_color_override("font_color", Color(0.85, 0.78, 0.65, 0.9))
+	_deck_sub_banner.add_theme_font_size_override("font_size", 13)
+	_deck_sub_banner.add_theme_color_override("font_color", Color(0.88, 0.82, 0.70, 0.95))
 	_deck_sub_banner.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.95))
 	_deck_sub_banner.add_theme_constant_override("shadow_offset_x", 1)
 	_deck_sub_banner.add_theme_constant_override("shadow_offset_y", 1)
@@ -804,8 +814,8 @@ func _populate_options() -> void:
 		_player_row.add_child(p_card)
 		_player_cards.append(p_card)
 
-	# Mostrar flechas circulares si hay más de 5 mazos
-	var has_overflow = _mazos.size() > 5
+	# Mostrar flechas circulares si hay más de 6 elementos en el carrusel
+	var has_overflow = _player_cards.size() > 6 or _player_row.get_child_count() > 6
 	if _btn_prev: _btn_prev.visible = has_overflow
 	if _btn_next: _btn_next.visible = has_overflow
 
@@ -1188,14 +1198,18 @@ func _on_scroll_gui_input(event: InputEvent) -> void:
 
 func _scroll_left() -> void:
 	if not _scroll_container: return
-	var target_scroll = max(0, _scroll_container.scroll_horizontal - int(CARD_SIZE.x + 20))
+	var stride := int(CARD_SIZE.x + 20)
+	var current := _scroll_container.scroll_horizontal
+	var target_scroll = max(0, int(round(float(current - stride) / float(stride))) * stride)
 	var tw = create_tween()
 	tw.tween_property(_scroll_container, "scroll_horizontal", target_scroll, 0.22).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_CUBIC)
 
 
 func _scroll_right() -> void:
 	if not _scroll_container: return
-	var target_scroll = _scroll_container.scroll_horizontal + int(CARD_SIZE.x + 20)
+	var stride := int(CARD_SIZE.x + 20)
+	var current := _scroll_container.scroll_horizontal
+	var target_scroll = int(round(float(current + stride) / float(stride))) * stride
 	var tw = create_tween()
 	tw.tween_property(_scroll_container, "scroll_horizontal", target_scroll, 0.22).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_CUBIC)
 
@@ -1241,14 +1255,23 @@ func _on_card_pressed(idx: int) -> void:
 	_refresh_selection(_player_cards, idx)
 	_update_confirm_button()
 
-	# Centrar suavemente el grimorio seleccionado en el viewport del altar
+	# Desplazar suavemente solo si el grimorio seleccionado está fuera del área visible
 	if _scroll_container and idx >= 0 and idx < _player_cards.size():
 		var card_node = _player_cards[idx]
-		var card_center_x = card_node.position.x + 40.0 + card_node.size.x / 2.0
-		var visible_width = _scroll_container.size.x
-		var desired_scroll = max(0, int(card_center_x - visible_width / 2.0))
-		var tw = create_tween()
-		tw.tween_property(_scroll_container, "scroll_horizontal", desired_scroll, 0.25).set_ease(Tween.EASE_OUT)
+		var card_left: float = card_node.position.x + 20.0
+		var card_right: float = card_left + card_node.size.x
+		var current_scroll: float = float(_scroll_container.scroll_horizontal)
+		var view_w: float = _scroll_container.size.x if _scroll_container.size.x > 0 else 1316.0
+
+		var desired_scroll: int = -1
+		if card_left < current_scroll + 20.0:
+			desired_scroll = max(0, int(card_node.position.x))
+		elif card_right > current_scroll + view_w - 20.0:
+			desired_scroll = max(0, int(card_node.position.x + 20.0 + card_node.size.x + 20.0 - view_w))
+
+		if desired_scroll >= 0 and desired_scroll != int(current_scroll):
+			var tw = create_tween()
+			tw.tween_property(_scroll_container, "scroll_horizontal", desired_scroll, 0.22).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_CUBIC)
 
 
 func _update_confirm_button() -> void:
@@ -1293,16 +1316,64 @@ func _refresh_selection(cards: Array, selected_idx: int) -> void:
 		var mazo: Dictionary = _mazos[selected_idx]
 		var nombre_clean = _sanitize_utf8(str(mazo.get("nombre", mazo.get("name", "Mazo"))))
 		var is_preset: bool = str(mazo.get("slug", "")).begins_with("preset-")
-		var formato = _sanitize_utf8(str(mazo.get("formato", mazo.get("format", "Crónicas")))).capitalize()
-		var cant_cartas: int = mazo.get("cartas", mazo.get("cards", [])).size()
+		var is_public: bool = mazo.get("_shadowforge_kind", "") == "public" or nombre_clean.to_lower().contains("(publico)") or nombre_clean.to_lower().contains("(público)")
+
+		# Título limpio en mayúsculas sin paréntesis redundantes
+		var title_text := nombre_clean.to_upper()
+		title_text = title_text.replacen("(PUBLICO)", "").replacen("(PÚBLICO)", "").strip_edges()
+
+		# Formato estilizado
+		var fmt_str := str(mazo.get("formato", mazo.get("format", "Imperio"))).strip_edges().to_lower()
+		var fmt_display := "IMPERIO"
+		match fmt_str:
+			"imp", "imperio":
+				fmt_display = "IMPERIO"
+			"pb", "primer bloque", "primer_bloque":
+				fmt_display = "PRIMER BLOQUE"
+			"fur", "furia":
+				fmt_display = "FURIA"
+			"cronicas", "crónicas":
+				fmt_display = "CRÓNICAS"
+			"libre":
+				fmt_display = "LIBRE"
+			_:
+				fmt_display = fmt_str.to_upper() if not fmt_str.is_empty() else "ESTÁNDAR"
+
+		# Conteo de cartas exacto considerando 'entries', 'cartas' y 'cards'
+		var cant_cartas := 0
+		if mazo.has("entries") and mazo["entries"] is Array:
+			for e in mazo["entries"]:
+				cant_cartas += int(e.get("quantity", 1))
+		elif mazo.has("cartas") and mazo["cartas"] is Array:
+			cant_cartas = mazo["cartas"].size()
+		elif mazo.has("cards") and mazo["cards"] is Array:
+			cant_cartas = mazo["cards"].size()
+
+		# Raza / Arquetipo
+		var raza := str(mazo.get("arquetipo", mazo.get("raza", mazo.get("race", "")))).strip_edges().to_upper()
+
+		# Fila secundaria con glifos rúnicos
+		var sub_parts: Array[String] = []
+		sub_parts.append("FORMATO: %s" % fmt_display)
+		if cant_cartas > 0:
+			sub_parts.append("%d CARTAS" % cant_cartas)
+		if not raza.is_empty() and raza != "GENERIC" and raza != "GENÉRICO":
+			sub_parts.append("RAZA: %s" % raza)
+		if is_public:
+			sub_parts.append("PÚBLICO")
+		elif is_preset:
+			sub_parts.append("OFICIAL")
 
 		if _deck_banner:
-			_deck_banner.text = nombre_clean
+			_deck_banner.text = title_text
 		if _deck_sub_banner:
-			if cant_cartas > 0:
-				_deck_sub_banner.text = "Formato: %s  •  %d cartas" % [formato, cant_cartas]
-			else:
-				_deck_sub_banner.text = "Formato: %s" % formato
+			_deck_sub_banner.text = "   ✦   ".join(sub_parts)
+
+		if _deck_banner and _deck_banner.get_parent() and _deck_banner.get_parent().get_parent():
+			var plate_node = _deck_banner.get_parent().get_parent()
+			if is_instance_valid(plate_node):
+				var tw_plate = plate_node.create_tween()
+				tw_plate.tween_property(plate_node, "modulate:a", 1.0, 0.12).from(0.75)
 
 
 func _on_confirm_pressed() -> void:
