@@ -231,12 +231,12 @@ func _build_ui(parent: Node) -> void:
 	_loading_box = _build_loading_placeholder()
 	_player_row.add_child(_loading_box)
 
-	# 3. Botones Rúnicos Circulares de Navegación Lateral (◄ y ►) centrados verticalmente con los libros (Y=-118)
-	_btn_prev = _build_circular_nav_button("◄", Vector2(-712, -118))
+	# 3. Botones Rúnicos Circulares de Navegación Lateral (◄ y ►) centrados según los mazos (Y=-84)
+	_btn_prev = _build_circular_nav_button("◄", Vector2(-712, -84))
 	_btn_prev.pressed.connect(_scroll_left)
 	_overlay.add_child(_btn_prev)
 
-	_btn_next = _build_circular_nav_button("►", Vector2(664, -118))
+	_btn_next = _build_circular_nav_button("►", Vector2(664, -84))
 	_btn_next.pressed.connect(_scroll_right)
 	_overlay.add_child(_btn_next)
 
@@ -315,30 +315,30 @@ func _build_circular_nav_button(glyph: String, pos_offset: Vector2) -> Button:
 
 
 func _build_center_banner() -> void:
-	"""Muestra el nombre del mazo activo elegantemente centrado sobre el altar,
-	con placa diegética de piedra y oro rúnico, justo debajo de los grimorios y sin tapar ELIGE TU MAZO"""
+	"""Muestra la placa informativa del mazo activo cubriendo por completo la inscripción
+	'ELIGE TU MAZO' del fondo, utilizando el diseño del contenedor de piedra 'Mazos Disponibles'"""
 	var banner_box = Control.new()
 	banner_box.name = "ActiveDeckBanner"
 	banner_box.set_anchor(SIDE_LEFT, 0.5)
 	banner_box.set_anchor(SIDE_RIGHT, 0.5)
 	banner_box.set_anchor(SIDE_TOP, 0.5)
 	banner_box.set_anchor(SIDE_BOTTOM, 0.5)
-	banner_box.set_offset(SIDE_LEFT, -295)
-	banner_box.set_offset(SIDE_RIGHT, 295)
-	banner_box.set_offset(SIDE_TOP, 88)
-	banner_box.set_offset(SIDE_BOTTOM, 156)
+	banner_box.set_offset(SIDE_LEFT, -260)
+	banner_box.set_offset(SIDE_RIGHT, 260)
+	banner_box.set_offset(SIDE_TOP, 130)
+	banner_box.set_offset(SIDE_BOTTOM, 208)
 	banner_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_overlay.add_child(banner_box)
 
-	# Placa diegética de piedra y oro rúnico a juego con el altar y los pedestales
+	# Placa base de piedra idéntica al contenedor 'Mazos Disponibles'
 	var plate_bg = NinePatchRect.new()
 	plate_bg.name = "BannerPlateBg"
-	plate_bg.texture = TEX_DECK_INFO_PLATE
+	plate_bg.texture = TEX_BTN_PLAQUE_BLANK
 	plate_bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	plate_bg.patch_margin_left = 50
-	plate_bg.patch_margin_right = 50
-	plate_bg.patch_margin_top = 22
-	plate_bg.patch_margin_bottom = 22
+	plate_bg.patch_margin_left = 34
+	plate_bg.patch_margin_right = 34
+	plate_bg.patch_margin_top = 26
+	plate_bg.patch_margin_bottom = 26
 	plate_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	banner_box.add_child(plate_bg)
 
@@ -356,8 +356,8 @@ func _build_center_banner() -> void:
 	_deck_banner.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	_deck_banner.add_theme_font_override("font", FONT_TITLE)
 	_deck_banner.add_theme_font_size_override("font_size", 18)
-	_deck_banner.add_theme_color_override("font_color", Color(1.0, 0.90, 0.55, 1.0))
-	_deck_banner.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 1.0))
+	_deck_banner.add_theme_color_override("font_color", Color(0.95, 0.90, 0.75, 1.0))
+	_deck_banner.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.98))
 	_deck_banner.add_theme_constant_override("shadow_offset_x", 1)
 	_deck_banner.add_theme_constant_override("shadow_offset_y", 2)
 	text_vbox.add_child(_deck_banner)
@@ -368,7 +368,7 @@ func _build_center_banner() -> void:
 	_deck_sub_banner.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	_deck_sub_banner.add_theme_font_override("font", FONT_MEDIEVAL)
 	_deck_sub_banner.add_theme_font_size_override("font_size", 12)
-	_deck_sub_banner.add_theme_color_override("font_color", Color(0.88, 0.82, 0.70, 0.95))
+	_deck_sub_banner.add_theme_color_override("font_color", Color(0.85, 0.78, 0.65, 0.95))
 	_deck_sub_banner.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.95))
 	_deck_sub_banner.add_theme_constant_override("shadow_offset_x", 1)
 	_deck_sub_banner.add_theme_constant_override("shadow_offset_y", 1)
