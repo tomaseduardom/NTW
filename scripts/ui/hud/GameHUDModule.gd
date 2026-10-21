@@ -5,11 +5,18 @@ class_name GameHUDModule
 const FONT_MEDIEVAL := preload("res://assets/fonts/Cinzel-Bold.ttf")
 const FONT_TITLE := preload("res://assets/fonts/Cinzel-Bold.ttf")
 
+const TEX_BTN_NORMAL := preload("res://assets/ui/menu/btn_menu_normal.png")
+const TEX_BTN_HOVER := preload("res://assets/ui/menu/btn_menu_hover.png")
+const TEX_BTN_PRESSED := preload("res://assets/ui/menu/btn_menu_pressed.png")
+
 var _main: Node = null
 var _paso_button: Button = null
+var _style_normal: StyleBoxTexture = null
+var _style_hover: StyleBoxTexture = null
+var _style_pressed: StyleBoxTexture = null
 var _paso_glow_tween: Tween = null
-## Generación de la cuenta regresiva del botón (2026-10-11): sube en cada
-## start/stop para que un bucle viejo deje de escribir el texto.
+## Generación de la cuenta regresiva del botón: sube en cada start/stop para que un bucle viejo deje
+## de escribir el texto.
 var _countdown_generation: int = 0
 var _phase_announcer_label: Label = null
 var _phase_announcer_tween: Tween = null
@@ -73,55 +80,53 @@ func show_phase_announcement(phase_name: String) -> void:
 # =============================================================================
 # BOTÓN DE ACCIÓN / PASO FANTASÍA
 # =============================================================================
+func _create_paso_style(tex: Texture2D) -> StyleBoxTexture:
+	var sb = StyleBoxTexture.new()
+	sb.texture = tex
+	sb.texture_margin_left = 34.0
+	sb.texture_margin_right = 34.0
+	sb.texture_margin_top = 24.0
+	sb.texture_margin_bottom = 24.0
+	sb.content_margin_left = 14.0
+	sb.content_margin_right = 14.0
+	sb.content_margin_top = 6.0
+	sb.content_margin_bottom = 8.0
+	return sb
+
+
 func _setup_paso_button() -> void:
 	"""Crea el botón ornamental de acción a la izquierda del TurnTimer."""
+	_style_normal = _create_paso_style(TEX_BTN_NORMAL)
+	_style_hover = _create_paso_style(TEX_BTN_HOVER)
+	_style_pressed = _create_paso_style(TEX_BTN_PRESSED)
+
 	_paso_button = Button.new()
 	_paso_button.text = "Pasar [P]"
 	_paso_button.name = "PasoButton"
 	_paso_button.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
-	_paso_button.add_theme_font_override("font", FONT_MEDIEVAL)
-	_paso_button.add_theme_font_size_override("font_size", 19)
+	_paso_button.add_theme_font_override("font", FONT_TITLE)
+	_paso_button.add_theme_font_size_override("font_size", 17)
 
-	var style_normal = StyleBoxFlat.new()
-	style_normal.bg_color = Color(0.08, 0.12, 0.09, 0.95)
-	style_normal.border_color = Color(0.85, 0.72, 0.28, 1.0)
-	style_normal.set_border_width_all(2)
-	style_normal.set_corner_radius_all(10)
-	style_normal.shadow_color = Color(0, 0, 0, 0.8)
-	style_normal.shadow_size = 6
-
-	var style_hover = StyleBoxFlat.new()
-	style_hover.bg_color = Color(0.12, 0.20, 0.15, 1.0)
-	style_hover.border_color = Color(1.0, 0.90, 0.50, 1.0)
-	style_hover.set_border_width_all(2)
-	style_hover.set_corner_radius_all(10)
-	style_hover.shadow_color = Color(0.85, 0.72, 0.28, 0.5)
-	style_hover.shadow_size = 10
-
-	var style_pressed = StyleBoxFlat.new()
-	style_pressed.bg_color = Color(0.05, 0.08, 0.06, 0.98)
-	style_pressed.border_color = Color(0.70, 0.58, 0.22, 1.0)
-	style_pressed.set_border_width_all(2)
-	style_pressed.set_corner_radius_all(10)
-
-	_paso_button.add_theme_stylebox_override("normal", style_normal)
-	_paso_button.add_theme_stylebox_override("hover", style_hover)
-	_paso_button.add_theme_stylebox_override("pressed", style_pressed)
-	_paso_button.add_theme_color_override("font_color", Color(1.0, 0.95, 0.85, 1.0))
-	_paso_button.add_theme_color_override("font_hover_color", Color(1.0, 0.90, 0.50, 1.0))
+	_paso_button.add_theme_stylebox_override("normal", _style_normal)
+	_paso_button.add_theme_stylebox_override("hover", _style_hover)
+	_paso_button.add_theme_stylebox_override("pressed", _style_pressed)
+	_paso_button.add_theme_stylebox_override("focus", _style_hover)
+	_paso_button.add_theme_color_override("font_color", Color(1.0, 0.93, 0.78, 1.0))
+	_paso_button.add_theme_color_override("font_hover_color", Color(1.0, 1.0, 0.92, 1.0))
+	_paso_button.add_theme_color_override("font_pressed_color", Color(0.85, 0.78, 0.60, 1.0))
 	_paso_button.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.95))
 	_paso_button.add_theme_constant_override("shadow_offset_x", 1)
-	_paso_button.add_theme_constant_override("shadow_offset_y", 1)
+	_paso_button.add_theme_constant_override("shadow_offset_y", 2)
 
-	# Posición: a la izquierda del TurnTimer
+	# Posición: a la izquierda del TurnTimer (170x56 px diegético)
 	_paso_button.anchor_left = 1.0
 	_paso_button.anchor_top = 0.5
 	_paso_button.anchor_right = 1.0
 	_paso_button.anchor_bottom = 0.5
 	_paso_button.offset_right = -128
-	_paso_button.offset_left = -268
-	_paso_button.offset_top = -27
-	_paso_button.offset_bottom = 27
+	_paso_button.offset_left = -298
+	_paso_button.offset_top = -28
+	_paso_button.offset_bottom = 28
 	_paso_button.mouse_filter = Control.MOUSE_FILTER_STOP
 	_paso_button.visible = false
 
@@ -135,30 +140,16 @@ func update_paso_button_state() -> void:
 		return
 	var phase = GameManager.current_phase
 
-	# Con ventana de prioridad activa (Bloqueo, Guerra de Talismanes,
-	# cualquier ventana de respuesta) quien debe actuar es quien TIENE la
-	# prioridad ahora mismo, no necesariamente el dueño del turno (2026-
-	# 09-03, bug reportado: 'se queda estancado en guerra de talismanes' —
-	# cuando el humano defiende en el turno del oponente, DAR 5.C3 le da
-	# la prioridad primero en Guerra de Talismanes, pero la visibilidad
-	# dependía solo de active_player_id == 0, así que el botón nunca
-	# aparecía y no había forma de pasar).
+	# Con ventana de prioridad activa (Bloqueo, Guerra de Talismanes, respuesta) actúa quien TIENE la
+	# prioridad, no el dueño del turno (p.ej. el defensor recibe la prioridad primero en Guerra de
+	# Talismanes, DAR 5.C3).
 	if PriorityManager.priority_window_active:
-		# 2026-09-25, bug real reportado por el usuario ("el botón de pasar
-		# dice atacar aunque es para pasar"): el texto se decidía ANTES de
-		# este chequeo, mirando solo la fase — pero con una ventana de
-		# prioridad activa, _on_paso_pressed() SIEMPRE solo pasa prioridad
-		# (PriorityManager.pass_priority()), sin importar la fase, incluso
-		# si esa ventana se abrió durante tu propia Vigilia (p.ej.
-		# respondiendo al 'Cuando entra en juego' de una carta). El texto
-		# tiene que decir lo que el click realmente va a hacer.
+		# Con una ventana de prioridad activa, _on_paso_pressed() solo pasa prioridad
+		# (PriorityManager.pass_priority()) en cualquier fase, así que el texto dice eso aunque sea tu
+		# Vigilia: el botón dice lo que el click va a hacer.
 		_paso_button.text = "Pasar [P]"
 		_paso_button.visible = GameManager.is_game_active and PriorityManager.current_priority_player == 0
-		# 2026-09-15, diagnóstico temporal a pedido del usuario (bug real:
-		# "se traba en Guerra de Talismanes, no aparece ningún botón" —
-		# reaparición de un síntoma ya arreglado una vez, 2026-09-03, ver
-		# comentario de arriba): imprime el estado real detrás de la
-		# decisión de mostrar/ocultar, para ver en qué falla esta vez.
+		# Diagnóstico: imprime el estado detrás de mostrar/ocultar el botón.
 		if Constants.VERBOSE_DIAG_LOGS:
 			print("[DIAG] update_paso_button_state (con ventana activa): visible=%s is_game_active=%s priority_player=%d fase=%s" % [
 				str(_paso_button.visible), str(GameManager.is_game_active), PriorityManager.current_priority_player,
@@ -166,31 +157,20 @@ func update_paso_button_state() -> void:
 			])
 		return
 
-	# 2026-09-20, bug real reportado por el usuario ("el botón de paso
-	# desaparece" quedando pegado en Guerra de Talismanes): Guerra de
-	# Talismanes/Bloqueo SIN ventana activa es precisamente el estado
-	# "clobbereado" que _try_recover_stuck_phase_priority_window() ya sabe
-	# recuperar (ver PhaseFlowController.gd, bugs documentados 2026-09-04 y
-	# 2026-09-06) — pero antes de este fix el botón se ocultaba en ese
-	# mismo estado (ni VIGILIA/ATAQUE/FINAL, ni is_player_turn confiable
-	# mientras defiendes: active_player_id es el oponente aunque la
-	# prioridad de defensor te toque a ti primero, DAR 5.C3), dejando la
-	# recuperación sin ninguna forma de dispararse desde la UI. El botón
-	# ahora se mantiene visible en estas 2 fases sin importar de quién sea
-	# el turno; al presionarlo, PhaseFlowController._on_paso_pressed() ya
-	# llama _try_recover_stuck_phase_priority_window() en esta rama — si de
-	# verdad no hay nada que recuperar, esa función no hace nada y el
-	# jugador ve "Sin ventana de prioridad activa" en vez de quedar sin
-	# ningún botón con qué reaccionar.
-	# 2026-09-13, a pedido del usuario: el botón debe reflejar QUÉ pasa al
-	# presionarlo, no solo "hiciste una acción" — en Guerra de Talismanes
-	# (5.3.3), pasar es lo que hace avanzar a Asignación de Daño (5.3.4)
-	# cuando ambos jugadores pasan seguido, así que el botón dice "Daño" en
-	# vez del genérico "¿Paso?" aquí, igual que ya decía "Atacar" en Vigilia.
+	# En Guerra de Talismanes/Bloqueo el botón queda visible sea de quien sea el turno: sin ventana
+	# activa, _on_paso_pressed() llama _try_recover_stuck_phase_priority_window()
+	# (PhaseFlowController.gd); si no hay nada que recuperar, avisa "Sin ventana de prioridad activa".
+	# active_player_id no sirve aquí: al defender, la prioridad te toca primero (DAR 5.C3).
+	# En Guerra de Talismanes (5.3.3) el botón dice "Daño": que ambos pasen seguido lleva a Asignación
+	# de Daño (5.3.4), como en Vigilia dice "Atacar".
 	if phase == Constants.Phase.GUERRA_TALISMANES:
 		_paso_button.text = "Daño [P]"
 	else:
-		_paso_button.text = "Atacar [P]" if phase == Constants.Phase.VIGILIA else "Pasar [P]"
+		_paso_button.text = "Pasar [P]"
+		if phase == Constants.Phase.VIGILIA:
+			# Sin ningún Aliado que pueda atacar: "Fase Final".
+			_paso_button.text = "Atacar [P]" if TurnManager.player_can_attack(GameManager.active_player_id) \
+				else "Fase Final [P]"
 
 	var is_player_turn = (GameManager.active_player_id == 0)
 	var relevant_phase = phase in [
@@ -217,9 +197,8 @@ func hide_paso_button() -> void:
 
 
 func is_paso_button_ready() -> bool:
-	"""¿El botón ¿Paso?/Atacar está visible y puede clickearse ahora? (2026-09-11,
-	a pedido del usuario: atajo de teclado Q — simula el mismo click que el
-	mouse, así que solo debe actuar cuando el botón real haría algo)."""
+	"""¿El botón ¿Paso?/Atacar está visible y puede clickearse ahora?: atajo de teclado Q — simula el
+	mismo click que el mouse, así que solo debe actuar cuando el botón real haría algo"""
 	return _paso_button != null and _paso_button.visible
 
 
@@ -230,18 +209,11 @@ func start_paso_glow() -> void:
 	if _paso_glow_tween and _paso_glow_tween.is_valid():
 		_paso_glow_tween.kill()
 
-	var style_glow = StyleBoxFlat.new()
-	style_glow.bg_color = Color(0.24, 0.10, 0.06, 0.96)
-	style_glow.border_color = Color(1.0, 0.65, 0.20, 1.0)
-	style_glow.set_border_width_all(3)
-	style_glow.set_corner_radius_all(10)
-	style_glow.shadow_color = Color(1.0, 0.55, 0.15, 0.8)
-	style_glow.shadow_size = 14
-
-	_paso_button.add_theme_stylebox_override("normal", style_glow)
-	_paso_button.add_theme_color_override("font_color", Color(1.0, 0.90, 0.50, 1.0))
+	if _style_hover:
+		_paso_button.add_theme_stylebox_override("normal", _style_hover)
+	_paso_button.add_theme_color_override("font_color", Color(1.0, 0.95, 0.50, 1.0))
 	_paso_glow_tween = _paso_button.create_tween().set_loops()
-	_paso_glow_tween.tween_property(_paso_button, "modulate", Color(1.2, 1.2, 0.9, 1.0), 0.5).set_ease(Tween.EASE_IN_OUT)
+	_paso_glow_tween.tween_property(_paso_button, "modulate", Color(1.25, 1.15, 0.80, 1.0), 0.5).set_ease(Tween.EASE_IN_OUT)
 	_paso_glow_tween.tween_property(_paso_button, "modulate", Color(1.0, 1.0, 1.0, 1.0), 0.5).set_ease(Tween.EASE_IN_OUT)
 
 
@@ -254,20 +226,13 @@ func stop_paso_glow() -> void:
 		return
 	_paso_button.modulate = Color.WHITE
 
-	var style_normal = StyleBoxFlat.new()
-	style_normal.bg_color = Color(0.08, 0.12, 0.09, 0.95)
-	style_normal.border_color = Color(0.85, 0.72, 0.28, 1.0)
-	style_normal.set_border_width_all(2)
-	style_normal.set_corner_radius_all(10)
-	style_normal.shadow_color = Color(0, 0, 0, 0.8)
-	style_normal.shadow_size = 6
-
-	_paso_button.add_theme_stylebox_override("normal", style_normal)
-	_paso_button.add_theme_color_override("font_color", Color(1.0, 0.95, 0.85, 1.0))
+	if _style_normal:
+		_paso_button.add_theme_stylebox_override("normal", _style_normal)
+	_paso_button.add_theme_color_override("font_color", Color(1.0, 0.93, 0.78, 1.0))
 
 
 # =============================================================================
-# CUENTA REGRESIVA Y CONTROL EXTERNO DEL BOTÓN (2026-10-11, online)
+# CUENTA REGRESIVA Y CONTROL EXTERNO DEL BOTÓN (online)
 # =============================================================================
 func start_paso_countdown(seconds: int) -> void:
 	"""Muestra los segundos que quedan para responder en el texto del botón
