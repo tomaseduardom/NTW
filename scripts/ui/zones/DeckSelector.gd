@@ -107,14 +107,12 @@ var _scroll_container: ScrollContainer = null
 var _player_row: HBoxContainer = null
 var _btn_confirm: Control = null
 var _btn_confirm_clicker: Button = null
-# 2026-09-23, bug real reportado por el usuario ("no se pudo cargar este
-# mazo (revisa tu conexión)"): _on_confirm_pressed() no tenía ninguna
-# guarda contra re-entrada — el botón seguía clickeable mientras
-# _resolve_deck_entries() esperaba una respuesta lenta de ShadowForge, y el
-# log real mostró 3 llamadas simultáneas a _resolve_deck_entries() para el
-# mismo mazo (3 clicks de impaciencia sin feedback visible), saturando el
-# backend gratuito de PythonAnywhere (probablemente un solo worker) hasta
-# que las 3 quedaban sin respuesta. Ver arquitectura.md §13.15.
+# ("no se pudo cargar este mazo (revisa tu conexión)"): _on_confirm_pressed no tenía ninguna guarda
+# contra re-entrada — el botón seguía clickeable mientras _resolve_deck_entries esperaba una
+# respuesta lenta de ShadowForge, y el log real mostró 3 llamadas simultáneas a
+# _resolve_deck_entries para el mismo mazo (3 clicks de impaciencia sin feedback visible), saturando
+# el backend gratuito de PythonAnywhere (probablemente un solo worker) hasta que las 3 quedaban sin
+# respuesta. Ver arquitectura.md §13.15.
 var _confirming: bool = false
 var _confirm_flash: ColorRect = null
 var _btn_random: Control = null
@@ -134,17 +132,10 @@ var _selected_player_idx: int = -1
 var _player_cards: Array = []
 var _loading_box: Control = null
 
-# 2026-09-22, bug real reportado por el usuario: "se queda cargando y nunca
-# termina" — la cadena real de fetches (mazos privados -> mazos públicos ->
-# _populate_options()) tiene 3 pasos encadenados, cada uno con su propio
-# timeout de red, pero ningún límite GLOBAL sobre la cadena completa. Si
-# cualquier eslabón se cuelga (señal que nunca llega, conexión que nunca
-# resuelve), el "Invocando grimorios ancestrales..." queda ahí para siempre
-# y no hay ningún camino que lleve a mostrar presets o el aviso de "no se
-# encontraron mazos". _mazos_load_resolved corta esto: se marca en TODO
-# camino terminal real (_populate_options()/_populate_with_error()) y un
-# vigía de 25s (más que cualquier timeout HTTP individual, todos en 15-20s)
-# fuerza el fallback local si para entonces nada resolvió solo.
+# La carga de mazos es una cadena de 3 fetches (privados → públicos → _populate_options()), cada uno
+# con su timeout, pero sin límite global. _mazos_load_resolved se marca en todo camino terminal
+# (_populate_options()/_populate_with_error()) y un vigía de 25 s (más que cualquier timeout HTTP,
+# 15-20 s) fuerza el fallback local si nada resolvió.
 var _mazos_load_resolved: bool = false
 
 
@@ -382,11 +373,10 @@ func _build_center_banner() -> void:
 
 
 func _build_available_decks_pedestal() -> void:
-	"""Crea el botón-pedestal diegético de 'Mazos Disponibles' en la meseta izquierda del altar.
-	Cubre completamente el fondo original con una placa de piedra gótica en alto contraste,
-	sincronizada simétricamente con el botón de Mazos Aleatorios."""
+	"""Crea el pedestal diegético estático de 'Mazos Disponibles' en la meseta izquierda del altar.
+	Cubre el fondo original con una placa de piedra que muestra la cantidad de mazos cargados."""
 
-	# Pedestal Plaque Control (sincronizado con Mazos Aleatorios en tamaño y nivel vertical)
+	# Pedestal Plaque Control estático (sin interactividad de ratón)
 	_btn_available_decks = Control.new()
 	_btn_available_decks.name = "PedestalMazosDisponibles"
 	_btn_available_decks.set_anchor(SIDE_LEFT, 0.5)
@@ -401,15 +391,7 @@ func _build_available_decks_pedestal() -> void:
 	_btn_available_decks.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_overlay.add_child(_btn_available_decks)
 
-	# Contenedor para animación táctil
-	var plaque_fx = Control.new()
-	plaque_fx.name = "PlaqueFX"
-	plaque_fx.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	plaque_fx.pivot_offset = Vector2(160.0, 53.5)
-	plaque_fx.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_btn_available_decks.add_child(plaque_fx)
-
-	# Textura HD de piedra tallada idéntica a Mazos Aleatorios
+	# Placa base de piedra
 	var plaque_tex = TextureRect.new()
 	plaque_tex.name = "ButtonTexture"
 	plaque_tex.texture = TEX_BTN_PLAQUE_BLANK
@@ -417,21 +399,7 @@ func _build_available_decks_pedestal() -> void:
 	plaque_tex.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	plaque_tex.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
 	plaque_tex.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	plaque_fx.add_child(plaque_tex)
-
-	# Capa de efectos Shimmer confinado a la placa
-	var stone_fx = Control.new()
-	stone_fx.name = "StonePlaqueFX"
-	stone_fx.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	stone_fx.clip_contents = true
-	stone_fx.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	plaque_fx.add_child(stone_fx)
-
-	var shimmer_beam = ShimmerBeam.new()
-	shimmer_beam.name = "ShimmerBeam"
-	shimmer_beam.size = Vector2(36, 110)
-	shimmer_beam.position = Vector2(-70, 0)
-	stone_fx.add_child(shimmer_beam)
+	_btn_available_decks.add_child(plaque_tex)
 
 	# Etiqueta con tipografía grande, nítida y en alto contraste
 	_parchment_label = Label.new()
@@ -447,46 +415,7 @@ func _build_available_decks_pedestal() -> void:
 	_parchment_label.add_theme_constant_override("shadow_offset_x", 1)
 	_parchment_label.add_theme_constant_override("shadow_offset_y", 2)
 	_parchment_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	plaque_fx.add_child(_parchment_label)
-
-	# Clicker interactivo para sensación táctil y abrir explorador de mazos
-	_btn_available_decks_clicker = Button.new()
-	_btn_available_decks_clicker.name = "Clicker"
-	_btn_available_decks_clicker.flat = true
-	_btn_available_decks_clicker.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	_btn_available_decks_clicker.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
-	_btn_available_decks_clicker.pressed.connect(_on_available_decks_pressed)
-	_btn_available_decks.add_child(_btn_available_decks_clicker)
-
-	_btn_available_decks_clicker.mouse_entered.connect(func():
-		var tw = plaque_fx.create_tween()
-		tw.set_parallel(true)
-		tw.tween_property(plaque_fx, "scale", Vector2(1.008, 1.008), 0.12).set_ease(Tween.EASE_OUT)
-		tw.tween_property(plaque_fx, "position:y", -1.0, 0.12).set_ease(Tween.EASE_OUT)
-		_trigger_shimmer(shimmer_beam, 360.0)
-	)
-	_btn_available_decks_clicker.mouse_exited.connect(func():
-		var tw = plaque_fx.create_tween()
-		tw.set_parallel(true)
-		tw.tween_property(plaque_fx, "scale", Vector2(1.0, 1.0), 0.12).set_ease(Tween.EASE_OUT)
-		tw.tween_property(plaque_fx, "position:y", 0.0, 0.12).set_ease(Tween.EASE_OUT)
-	)
-	_btn_available_decks_clicker.button_down.connect(func():
-		var tw = plaque_fx.create_tween()
-		tw.set_parallel(true)
-		tw.tween_property(plaque_fx, "scale", Vector2(0.992, 0.992), 0.06).set_ease(Tween.EASE_OUT)
-		tw.tween_property(plaque_fx, "position:y", 1.0, 0.06).set_ease(Tween.EASE_OUT)
-	)
-	_btn_available_decks_clicker.button_up.connect(func():
-		var tw = plaque_fx.create_tween()
-		tw.set_parallel(true)
-		tw.tween_property(plaque_fx, "scale", Vector2(1.008, 1.008), 0.1).set_ease(Tween.EASE_OUT)
-		tw.tween_property(plaque_fx, "position:y", -1.0, 0.1).set_ease(Tween.EASE_OUT)
-	)
-
-
-func _on_available_decks_pressed() -> void:
-	_open_public_deck_browser()
+	_btn_available_decks.add_child(_parchment_label)
 
 
 func _build_clean_action_buttons() -> void:
@@ -612,94 +541,8 @@ func _build_clean_action_buttons() -> void:
 	)
 
 	# =========================================================================
-	# 2. PEDESTAL DERECHO: MAZOS ALEATORIOS (Calce 100% exacto sobre la lápida)
-	# =========================================================================
-	_btn_random = Control.new()
-	_btn_random.name = "PedestalMazosAleatorios"
-	_btn_random.set_anchor(SIDE_LEFT, 0.5)
-	_btn_random.set_anchor(SIDE_RIGHT, 0.5)
-	_btn_random.set_anchor(SIDE_TOP, 0.5)
-	_btn_random.set_anchor(SIDE_BOTTOM, 0.5)
-	_btn_random.set_offset(SIDE_LEFT, 328)
-	_btn_random.set_offset(SIDE_RIGHT, 648)
-	_btn_random.set_offset(SIDE_TOP, 224)
-	_btn_random.set_offset(SIDE_BOTTOM, 331)
-	_btn_random.pivot_offset = Vector2(160.0, 53.5)
-	_btn_random.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_overlay.add_child(_btn_random)
-
-	# Contenedor para animación táctil
-	var random_fx = Control.new()
-	random_fx.name = "RandomFX"
-	random_fx.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	random_fx.pivot_offset = Vector2(160.0, 53.5)
-	random_fx.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_btn_random.add_child(random_fx)
-
-	# Textura HD exacta que cubre ("tapa") la lápida del fondo original al píxel
-	var random_tex = TextureRect.new()
-	random_tex.name = "ButtonTexture"
-	random_tex.texture = TEX_BTN_RANDOM
-	random_tex.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	random_tex.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	random_tex.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
-	random_tex.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	random_fx.add_child(random_tex)
-
-	# Capa de efectos sobre la placa de piedra (sin brillos ni paneles azules artificiales)
-	var stone_fx = Control.new()
-	stone_fx.name = "StonePlaqueFX"
-	stone_fx.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	stone_fx.clip_contents = true
-	stone_fx.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	random_fx.add_child(stone_fx)
-
-	# Haz Shimmer confinado a la placa de piedra
-	var random_shimmer_beam = ShimmerBeam.new()
-	random_shimmer_beam.name = "ShimmerBeam"
-	random_shimmer_beam.size = Vector2(36, 110)
-	random_shimmer_beam.position = Vector2(-70, 0)
-	stone_fx.add_child(random_shimmer_beam)
-
-	_btn_random_clicker = Button.new()
-	_btn_random_clicker.name = "Clicker"
-	_btn_random_clicker.flat = true
-	_btn_random_clicker.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	_btn_random_clicker.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
-	_btn_random_clicker.pressed.connect(_on_random_pressed)
-	_btn_random.add_child(_btn_random_clicker)
-
-	_btn_random_clicker.mouse_entered.connect(func():
-		var tw = random_fx.create_tween()
-		tw.set_parallel(true)
-		tw.tween_property(random_fx, "scale", Vector2(1.008, 1.008), 0.12).set_ease(Tween.EASE_OUT)
-		tw.tween_property(random_fx, "position:y", -1.0, 0.12).set_ease(Tween.EASE_OUT)
-		_trigger_shimmer(random_shimmer_beam, 360.0)
-	)
-	_btn_random_clicker.mouse_exited.connect(func():
-		var tw = random_fx.create_tween()
-		tw.set_parallel(true)
-		tw.tween_property(random_fx, "scale", Vector2(1.0, 1.0), 0.12).set_ease(Tween.EASE_OUT)
-		tw.tween_property(random_fx, "position:y", 0.0, 0.12).set_ease(Tween.EASE_OUT)
-	)
-	_btn_random_clicker.button_down.connect(func():
-		var tw = random_fx.create_tween()
-		tw.set_parallel(true)
-		tw.tween_property(random_fx, "scale", Vector2(0.992, 0.992), 0.06).set_ease(Tween.EASE_OUT)
-		tw.tween_property(random_fx, "position:y", 1.0, 0.06).set_ease(Tween.EASE_OUT)
-	)
-	_btn_random_clicker.button_up.connect(func():
-		var tw = random_fx.create_tween()
-		tw.set_parallel(true)
-		tw.tween_property(random_fx, "scale", Vector2(1.008, 1.008), 0.1).set_ease(Tween.EASE_OUT)
-		tw.tween_property(random_fx, "position:y", -1.0, 0.1).set_ease(Tween.EASE_OUT)
-	)
-
-	# =========================================================================
-	# 4. BOTÓN "MAZOS PÚBLICOS" (2026-09-22, a pedido del usuario: buscar y
-	# jugar mazos públicos de otros jugadores de ShadowForge). Botón plano
-	# simple, sin pedestal a medida como los de arriba (no hay textura para
-	# esto) — abre un popup de búsqueda encima del altar.
+	# 3. BOTÓN "MAZOS PÚBLICOS": buscar y jugar mazos públicos de ShadowForge. Botón plano (no hay
+	# textura de pedestal); abre un popup de búsqueda encima del altar.
 	# =========================================================================
 	var public_decks_btn = Button.new()
 	public_decks_btn.name = "PublicDecksButton"
@@ -830,11 +673,8 @@ func _on_external_decks_failed(reason: String) -> void:
 
 
 # =============================================================================
-# FUSIÓN DE MAZOS PRIVADOS + PÚBLICOS (2026-09-22, a pedido del usuario:
-# "la idea es que el botón mis mazos te muestre los mazos privados y
-# públicos") — antes los públicos solo aparecían detrás del popup de
-# búsqueda aparte (_open_public_deck_browser más abajo, que sigue
-# disponible para buscar algo puntual más allá de esta primera página).
+# FUSIÓN DE MAZOS PRIVADOS + PÚBLICOS: "Mis mazos" muestra los privados y la primera página de
+# públicos. El popup de búsqueda (_open_public_deck_browser) sigue para buscar algo puntual.
 # =============================================================================
 func _fetch_and_merge_public_decks() -> void:
 	"""Trae una primera página de mazos públicos (orden 'popular') y la
@@ -886,18 +726,9 @@ func _on_initial_public_decks_failed(_reason: String) -> void:
 
 
 func _get_preset_decks() -> Array:
-	"""2026-09-23, bug real reportado por el usuario ("no encontró los
-	mazos" en 2 PCs distintas): esto usaba get_local_decks() — lee
-	user://decks/, una carpeta POR MÁQUINA que empieza VACÍA en cualquier
-	instalación nueva del .exe. En la máquina de desarrollo "funcionaba" de
-	casualidad porque ahí se acumularon 183 mazos de prueba durante toda la
-	sesión; en una PC recién instalada da 0, dejando el carrusel sin ningún
-	preset. Los presets reales van embebidos en el propio .exe
-	(res://data/decks/*.json, ver arquitectura.md §12.1/§12) y se leen con
-	get_bundled_decks() — SIEMPRE disponible, sin depender de nada por
-	máquina. Se combinan ambas fuentes (bundled primero, garantizado; local
-	como extra si la máquina tiene algo guardado) en vez de usar una sola,
-	deduplicando por slug."""
+	"""Presets: los embebidos en el .exe (res://data/decks/*.json, get_bundled_decks();
+	arquitectura.md §12.1/§12), siempre disponibles, más los locales de user://decks/ (por máquina,
+	vacíos en una instalación nueva) como extra. Se deduplican por slug."""
 	var result: Array = []
 	var seen_slugs: Dictionary = {}
 	var loader = _get_autoload("DeckLoader")
@@ -955,17 +786,10 @@ func _populate_options() -> void:
 		_player_row.remove_child(child)
 		child.queue_free()
 
-	# 2026-09-22, a pedido del usuario ("que estén separados los mazos
-	# públicos y privados, primero los míos, en otra columna los
-	# públicos"): el orden real de _mazos YA es privados+preset primero,
-	# públicos al final (ver _on_external_decks_received() ->
-	# _fetch_and_merge_public_decks()) — aquí solo se agrega el separador
-	# visual entre los dos grupos, detectando la transición por
-	# "_shadowforge_kind" (todo lo que NO sea "public" cuenta como "mío":
-	# mazos privados de ShadowForge y presets locales por igual). El
-	# separador es un Control aparte, nunca se agrega a _player_cards, así
-	# que los índices de selección (_selected_player_idx / _mazos) no se
-	# desalinean con los mazos reales.
+	# Mazos "míos" (privados de ShadowForge y presets) primero y públicos después, con un separador
+	# visual. El orden ya viene así de _on_external_decks_received() → _fetch_and_merge_public_decks();
+	# aquí se detecta la transición por "_shadowforge_kind". El separador es un Control aparte, fuera
+	# de _player_cards, así que los índices de selección no se desalinean.
 	var divider_shown := false
 	var any_mine := false
 	for i in range(_mazos.size()):
@@ -1013,11 +837,9 @@ func _populate_with_error() -> void:
 
 
 func _build_section_divider(label_text: String) -> Control:
-	"""Separador visual entre el grupo de mazos 'míos' (privados de
-	ShadowForge + presets locales) y el grupo de mazos públicos, dentro del
-	mismo carrusel horizontal (2026-09-22, a pedido del usuario). Un Control
-	angosto, no un mazo — nunca se agrega a _player_cards ni participa de la
-	selección."""
+	"""Separador visual entre los mazos "míos" (privados de ShadowForge + presets) y los públicos,
+	dentro del mismo carrusel. Un Control angosto, no un mazo: no está en _player_cards ni
+	participa de la selección."""
 	var holder := Control.new()
 	holder.name = "SectionDivider"
 	holder.custom_minimum_size = Vector2(46, CARD_SIZE.y)
@@ -1183,13 +1005,11 @@ func _build_deck_card(mazo: Dictionary, idx: int) -> Control:
 	tex_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	inlay_frame.add_child(tex_rect)
 
-	# 2026-09-22, a pedido del usuario ("que los mazos muestren la imagen
-	# como de portada"): para mazos de ShadowForge con "image_url" real
-	# (privados y públicos, ver arquitectura.md §13), se reemplaza la
-	# ilustración genérica de raza por la portada real del mazo en cuanto
-	# termina de bajar — mismo mecanismo ya usado en DeckManager.gd
-	# (_load_cover_image), sin duplicar: la genérica queda de placeholder
-	# mientras carga, no hay hueco en blanco.
+	# ("que los mazos muestren la imagen como de portada"): para mazos de ShadowForge con "image_url"
+	# real (privados y públicos, ver arquitectura.md §13), se reemplaza la ilustración genérica de raza
+	# por la portada real del mazo en cuanto termina de bajar — mismo mecanismo ya usado en
+	# DeckManager.gd (_load_cover_image), sin duplicar: la genérica queda de placeholder mientras
+	# carga, no hay hueco en blanco.
 	var cover_url := str(mazo.get("image_url", ""))
 	if not cover_url.is_empty():
 		_load_deck_cover_image(tex_rect, cover_url)
@@ -1254,19 +1074,10 @@ var _cover_image_active_requests: Array = []  # HTTPRequest en vuelo, para poder
 
 
 func _load_deck_cover_image(tex_rect: TextureRect, url: String) -> void:
-	"""Baja la portada real de un mazo de ShadowForge y reemplaza la
-	ilustración genérica de raza en cuanto termina. 2026-09-23, bug real
-	reportado por el usuario ("no se pudo cargar este mazo (revisa tu
-	conexión)" al confirmar): con el carrusel mostrando hasta ~20 mazos
-	públicos de golpe, esto disparaba hasta 20 HTTPRequest simultáneos hacia
-	Cloudinary — sospecha fuerte (no confirmada con certeza, pero es la
-	única diferencia real entre las pruebas sintéticas, que SIEMPRE
-	funcionaron, y la partida real, que SIEMPRE se cuelga 20s exactos) de
-	que eso satura algún límite de conexiones concurrentes y deja sin
-	respuesta al pedido de /decks/my/{id}/ que se dispara después, al
-	confirmar un mazo. Se pone en cola con un tope de
-	MAX_CONCURRENT_COVER_DOWNLOADS en vez de lanzar todas de una — las
-	portadas fuera de pantalla de todos modos no se ven todavía."""
+	"""Baja la portada real de un mazo de ShadowForge y reemplaza la ilustración genérica de raza al
+	terminar. En cola con tope MAX_CONCURRENT_COVER_DOWNLOADS: con ~20 mazos públicos, 20
+	HTTPRequest simultáneos a Cloudinary parecían saturar las conexiones y dejar sin respuesta el
+	pedido de /decks/my/{id}/ al confirmar."""
 	_cover_image_queue.append({"tex_rect": tex_rect, "url": url})
 	_process_cover_image_queue()
 
@@ -1305,11 +1116,9 @@ func _process_cover_image_queue() -> void:
 
 
 func _cancel_all_cover_image_downloads() -> void:
-	"""Cancela de verdad los HTTPRequest de portadas que ya estén en vuelo
-	(no solo los que siguen en cola) — 2026-09-23, se llama al confirmar un
-	mazo para liberar cualquier capacidad de red antes del pedido crítico
-	de /decks/my/{id}/. cancel_request() deja el nodo reusable, pero como no
-	se va a reusar, se libera directo."""
+	"""Cancela los HTTPRequest de portadas en vuelo (no solo los de la cola). Se llama al confirmar un
+	mazo, para liberar la red antes del pedido de /decks/my/{id}/. Los nodos no se reusan: se
+	liberan."""
 	_cover_image_queue.clear()
 	for http in _cover_image_active_requests.duplicate():
 		if is_instance_valid(http):
@@ -1400,18 +1209,12 @@ func _unhandled_input(event: InputEvent) -> void:
 	elif event.is_action_pressed("ui_right") or (event is InputEventKey and event.keycode == KEY_RIGHT):
 		_navigate_deck(1)
 	elif event.is_action_pressed("ui_accept") or (event is InputEventKey and (event.keycode == KEY_ENTER or event.keycode == KEY_KP_ENTER or event.keycode == KEY_SPACE)):
-		if _btn_random_clicker and is_instance_valid(_btn_random_clicker) and _btn_random_clicker.is_hovered():
-			_on_random_pressed()
-			return
 		if _selected_player_idx < 0 and _mazos.size() > 0:
 			_selected_player_idx = 0
 		_on_confirm_pressed()
 	elif event.is_action_pressed("ui_cancel") or (event is InputEventKey and event.keycode == KEY_ESCAPE):
-		# 2026-09-30, a pedido del usuario: antes no había forma de salir de
-		# esta pantalla sin elegir un mazo. Si el popup de búsqueda de mazos
-		# públicos está abierto, Escape lo cierra a ÉL primero (un nivel por
-		# vez) — recién si no hay nada más abierto cancela la selección
-		# completa y vuelve al menú principal.
+		# Escape: si el popup de mazos públicos está abierto, lo cierra primero (un nivel por vez); si no,
+		# cancela la selección y vuelve al menú principal.
 		if _public_browser_overlay and is_instance_valid(_public_browser_overlay):
 			_public_browser_overlay.queue_free()
 			_public_browser_overlay = null
@@ -1514,11 +1317,8 @@ func _on_confirm_pressed() -> void:
 	if _btn_confirm_clicker:
 		_btn_confirm_clicker.disabled = true
 
-	# 2026-09-23: cortar (de verdad, no solo la cola) las descargas de
-	# portada pendientes al confirmar — lo que no bajó todavía ya no hace
-	# falta (se sale de esta pantalla), y libera de inmediato cualquier
-	# capacidad de red para el pedido importante que sigue (bajar las
-	# cartas reales del mazo elegido).
+	# Cortar las descargas de portada pendientes al confirmar: ya no hacen falta y liberan la red para
+	# bajar las cartas del mazo elegido.
 	_cancel_all_cover_image_downloads()
 
 	# Destello esmeralda de confirmación
@@ -1529,10 +1329,8 @@ func _on_confirm_pressed() -> void:
 		await tw.finished
 
 	var player_deck: Dictionary = _mazos[_selected_player_idx]
-	# Mazo del bot (2026-10-17, bug real reportado por el usuario: salió con un
-	# mazo de 5 cartas — se elegía al azar entre TODOS los mazos, incluidos
-	# los personales incompletos). Ahora al azar entre los presets (los mazos
-	# públicos importados) completos; si no hubiera ninguno, como antes.
+	# Mazo del bot: al azar entre los presets completos (no entre todos, que incluyen mazos personales
+	# incompletos); si no hay ninguno, entre todos.
 	var bot_pool: Array = _mazos.filter(func(m: Dictionary) -> bool:
 		if not str(m.get("slug", "")).begins_with("preset-"):
 			return false
@@ -1546,12 +1344,8 @@ func _on_confirm_pressed() -> void:
 	elif not _mazos.is_empty():
 		opponent_deck = _mazos[randi() % _mazos.size()]
 
-	# 2026-09-22, a pedido del usuario (fusión de mazos privados/públicos en
-	# el carrusel principal, ver _fetch_and_merge_public_decks() arriba): los
-	# mazos de ShadowForge que vienen de la lista resumida (privados o
-	# públicos) no traen "entries" todavía — se resuelve solo aquí, cuando
-	# de verdad se confirma uno, para no bajar las cartas de mazos que el
-	# jugador ni siquiera eligió.
+	# Los mazos de ShadowForge de la lista resumida (privados o públicos) no traen "entries": se bajan
+	# solo al confirmar uno.
 	if _needs_entries_fetch(player_deck):
 		if _deck_sub_banner:
 			_deck_sub_banner.text = "Cargando cartas del mazo..."
@@ -1616,23 +1410,12 @@ func _needs_entries_fetch(mazo: Dictionary) -> bool:
 
 
 func _resolve_deck_entries(mazo: Dictionary) -> Dictionary:
-	"""Baja las 'entries' reales de un mazo de ShadowForge (privado o
-	público) que todavía no las tiene — ver _needs_entries_fetch(). Devuelve
-	el Dictionary completo con 'entries' pobladas, o {} si falló (HTTP,
-	desconexión, o ninguna señal llegó dentro del timeout de salvaguarda).
-
-	2026-09-23, CAUSA RAÍZ REAL encontrada tras reproducir el cuelgue en
-	este mismo equipo (headless y con ventana, ver arquitectura.md §13.17):
-	la petición HTTP SIEMPRE se completaba casi al instante — el problema
-	nunca fue de red ni de backend. Los lambdas de GDScript capturan las
-	variables locales POR VALOR, no por referencia: "done = true" dentro
-	de on_ok/on_fail modificaba una copia propia del lambda, nunca la
-	variable "done" de esta función, así que el bucle de espera de abajo
-	jamás se enteraba de que la señal ya había llegado y agotaba siempre
-	los 60s completos. Arreglado guardando el estado en un Dictionary
-	("_state"): un Dictionary SÍ se captura por referencia (la copia por
-	valor es una copia del puntero al mismo Dictionary), así que mutar sus
-	claves adentro del lambda es visible afuera."""
+	"""Baja las 'entries' de un mazo de ShadowForge (privado o público) que no las tiene (ver
+	_needs_entries_fetch()). Devuelve el Dictionary con 'entries', o {} si falló (HTTP, desconexión
+	o timeout).
+	Estado en un Dictionary ("_state"): los lambdas de GDScript capturan las variables locales por
+	valor, así que "done = true" dentro de on_ok/on_fail no se veía afuera y el bucle esperaba
+	siempre los 60 s (arquitectura.md §13.17)."""
 	var deck_id := int(mazo.get("id", -1))
 	if Constants.VERBOSE_DIAG_LOGS:
 		print("[DeckSelector] _resolve_deck_entries: nombre='%s' id=%d kind='%s'" % [
@@ -1689,17 +1472,10 @@ func _resolve_deck_entries(mazo: Dictionary) -> Dictionary:
 
 
 func _on_random_pressed() -> void:
-	# 2026-09-20, bug real reportado por el usuario: en una sala online,
-	# "Mazos aleatorios" emitía {}/{} incondicionalmente — GameBootstrap.
-	# _on_decks_selected() trata datos vacíos como "usar el flujo de prueba
-	# local" y se salta ENTERO el intercambio de mazos por red (nunca llega a
-	# preguntar NetworkClient.room_code), así que la partida arrancaba sola
-	# sin esperar al otro jugador. En sala online no tiene sentido "aleatorio
-	# para los dos lados" de todos modos — el mazo del jugador remoto tiene
-	# que ser el suyo real, elegido por él, no uno inventado aquí. Se
-	# interpreta como "elige un mazo al azar para mi lado" y se resuelve
-	# igual que un click de Confirmar, así pasa por el mismo camino de
-	# intercambio por red.
+	# En sala online, "Mazos aleatorios" = elegir un mazo al azar para mi lado y seguir como un
+	# Confirmar, para pasar por el intercambio de mazos por red. Emitir {}/{} hacía que
+	# GameBootstrap._on_decks_selected() usara el flujo de prueba local y arrancara sin esperar al otro
+	# jugador.
 	if NetworkClient.room_code != "" and not _mazos.is_empty():
 		_selected_player_idx = randi() % _mazos.size()
 		_on_confirm_pressed()
@@ -1718,14 +1494,12 @@ func _close() -> void:
 
 
 # =============================================================================
-# MAZOS PÚBLICOS DE SHADOWFORGE (2026-09-22, a pedido del usuario)
+# MAZOS PÚBLICOS DE SHADOWFORGE
 # =============================================================================
-# Popup simple (no un browser gráfico elaborado — alcanza con lista +
-# búsqueda + paginación) sobre el altar existente. Al elegir un mazo, se
-# arma un Dictionary con la MISMA forma que ya consume _populate_options()/
-# _build_deck_card() (nombre, arquetipo/raza, formato, entries, _is_external)
-# y se agrega a _mazos — reusa 100% el carrusel, la selección y
-# _on_confirm_pressed() ya existentes, no duplica ningún camino de carga.
+# Popup simple (lista + búsqueda + paginación) sobre el altar. Al elegir un mazo se arma un
+# Dictionary con la misma forma que consume _populate_options()/_build_deck_card() (nombre,
+# arquetipo/raza, formato, entries, _is_external) y se agrega a _mazos: reusa el carrusel, la
+# selección y _on_confirm_pressed().
 var _public_browser_overlay: Control = null
 var _public_search_edit: LineEdit = null
 var _public_results_box: VBoxContainer = null
