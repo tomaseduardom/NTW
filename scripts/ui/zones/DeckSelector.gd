@@ -38,6 +38,7 @@ const TEX_LEATHER := preload("res://assets/ui/deck_selector/card_base_leather.pn
 const TEX_BTN_CONFIRM := preload("res://assets/ui/deck_selector/pedestal_confirm_exact.png")
 const TEX_BTN_RANDOM := preload("res://assets/ui/deck_selector/pedestal_random_exact.png")
 const TEX_BTN_PLAQUE_BLANK := preload("res://assets/ui/deck_selector/pedestal_plaque_blank.png")
+const TEX_DECK_INFO_PLATE := preload("res://assets/ui/deck_selector/deck_info_plate.png")
 const TEX_SHIMMER_CURVED := preload("res://assets/ui/deck_selector/shimmer_curved_beam.png")
 
 
@@ -180,15 +181,15 @@ func _build_ui(parent: Node) -> void:
 	_overlay.add_child(bg_texture)
 
 	# 2. Contenedor del Carrusel sobre la meseta de piedra del altar
-	# Dimensionado exacto para 6 grimorios completos (196px + 20px margen/separación = 1316px) sin corte
+	# Ancho exacto de 1308px con márgenes de 16px para 6 grimorios enteros sin asomo del 7mo libro
 	var carousel_wrapper = Control.new()
 	carousel_wrapper.name = "AltarCarouselWrapper"
 	carousel_wrapper.set_anchor(SIDE_LEFT, 0.5)
 	carousel_wrapper.set_anchor(SIDE_RIGHT, 0.5)
 	carousel_wrapper.set_anchor(SIDE_TOP, 0.5)
 	carousel_wrapper.set_anchor(SIDE_BOTTOM, 0.5)
-	carousel_wrapper.set_offset(SIDE_LEFT, -658)
-	carousel_wrapper.set_offset(SIDE_RIGHT, 658)
+	carousel_wrapper.set_offset(SIDE_LEFT, -654)
+	carousel_wrapper.set_offset(SIDE_RIGHT, 654)
 	carousel_wrapper.set_offset(SIDE_TOP, -255)
 	carousel_wrapper.set_offset(SIDE_BOTTOM, 85)
 	carousel_wrapper.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -206,13 +207,13 @@ func _build_ui(parent: Node) -> void:
 	_scroll_container.gui_input.connect(_on_scroll_gui_input)
 	carousel_wrapper.add_child(_scroll_container)
 
-	# Margen simétrico de 20px para que encaje exactamente con la separación entre libros
+	# Margen simétrico de 16px para que Card 7 quede 4px afuera del límite y no se asome ni 1 pixel
 	var scroll_margin = MarginContainer.new()
 	scroll_margin.name = "ScrollMargin"
 	scroll_margin.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	scroll_margin.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	scroll_margin.add_theme_constant_override("margin_left", 20)
-	scroll_margin.add_theme_constant_override("margin_right", 20)
+	scroll_margin.add_theme_constant_override("margin_left", 16)
+	scroll_margin.add_theme_constant_override("margin_right", 16)
 	scroll_margin.add_theme_constant_override("margin_top", 28)
 	scroll_margin.add_theme_constant_override("margin_bottom", 16)
 	_scroll_container.add_child(scroll_margin)
@@ -230,12 +231,12 @@ func _build_ui(parent: Node) -> void:
 	_loading_box = _build_loading_placeholder()
 	_player_row.add_child(_loading_box)
 
-	# 3. Botones Rúnicos Circulares de Navegación Lateral (◄ y ►) simétricos al carrusel
-	_btn_prev = _build_circular_nav_button("◄", Vector2(-714, -50))
+	# 3. Botones Rúnicos Circulares de Navegación Lateral (◄ y ►) centrados verticalmente con los libros (Y=-118)
+	_btn_prev = _build_circular_nav_button("◄", Vector2(-712, -118))
 	_btn_prev.pressed.connect(_scroll_left)
 	_overlay.add_child(_btn_prev)
 
-	_btn_next = _build_circular_nav_button("►", Vector2(666, -50))
+	_btn_next = _build_circular_nav_button("►", Vector2(664, -118))
 	_btn_next.pressed.connect(_scroll_right)
 	_overlay.add_child(_btn_next)
 
@@ -315,47 +316,39 @@ func _build_circular_nav_button(glyph: String, pos_offset: Vector2) -> Button:
 
 func _build_center_banner() -> void:
 	"""Muestra el nombre del mazo activo elegantemente centrado sobre el altar,
-	justo debajo de los grimorios y sin tapar la inscripción ELIGE TU MAZO tallada en la roca"""
-	var banner_box = VBoxContainer.new()
+	con placa diegética de piedra y oro rúnico, justo debajo de los grimorios y sin tapar ELIGE TU MAZO"""
+	var banner_box = Control.new()
 	banner_box.name = "ActiveDeckBanner"
 	banner_box.set_anchor(SIDE_LEFT, 0.5)
 	banner_box.set_anchor(SIDE_RIGHT, 0.5)
 	banner_box.set_anchor(SIDE_TOP, 0.5)
 	banner_box.set_anchor(SIDE_BOTTOM, 0.5)
-	banner_box.set_offset(SIDE_LEFT, -360)
-	banner_box.set_offset(SIDE_RIGHT, 360)
-	banner_box.set_offset(SIDE_TOP, 90)
-	banner_box.set_offset(SIDE_BOTTOM, 148)
-	banner_box.alignment = BoxContainer.ALIGNMENT_CENTER
+	banner_box.set_offset(SIDE_LEFT, -295)
+	banner_box.set_offset(SIDE_RIGHT, 295)
+	banner_box.set_offset(SIDE_TOP, 88)
+	banner_box.set_offset(SIDE_BOTTOM, 156)
 	banner_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_overlay.add_child(banner_box)
 
-	var plate = PanelContainer.new()
-	plate.name = "BannerPlate"
-	plate.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	plate.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	plate.custom_minimum_size = Vector2(460, 52)
-	plate.mouse_filter = Control.MOUSE_FILTER_IGNORE
-
-	var plate_style = StyleBoxFlat.new()
-	plate_style.bg_color = Color(0.05, 0.06, 0.08, 0.88)
-	plate_style.border_color = Color(0.85, 0.72, 0.35, 0.80)
-	plate_style.set_border_width_all(2)
-	plate_style.set_corner_radius_all(8)
-	plate_style.shadow_color = Color(0, 0, 0, 0.75)
-	plate_style.shadow_size = 10
-	plate_style.shadow_offset = Vector2(0, 3)
-	plate_style.content_margin_left = 32
-	plate_style.content_margin_right = 32
-	plate_style.content_margin_top = 7
-	plate_style.content_margin_bottom = 7
-	plate.add_theme_stylebox_override("panel", plate_style)
-	banner_box.add_child(plate)
+	# Placa diegética de piedra y oro rúnico a juego con el altar y los pedestales
+	var plate_bg = NinePatchRect.new()
+	plate_bg.name = "BannerPlateBg"
+	plate_bg.texture = TEX_DECK_INFO_PLATE
+	plate_bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	plate_bg.patch_margin_left = 50
+	plate_bg.patch_margin_right = 50
+	plate_bg.patch_margin_top = 22
+	plate_bg.patch_margin_bottom = 22
+	plate_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	banner_box.add_child(plate_bg)
 
 	var text_vbox = VBoxContainer.new()
+	text_vbox.name = "TextVBox"
+	text_vbox.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	text_vbox.alignment = BoxContainer.ALIGNMENT_CENTER
 	text_vbox.add_theme_constant_override("separation", 2)
-	plate.add_child(text_vbox)
+	text_vbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	banner_box.add_child(text_vbox)
 
 	_deck_banner = Label.new()
 	_deck_banner.text = "ELIGE TU GRIMORIO"
@@ -364,7 +357,7 @@ func _build_center_banner() -> void:
 	_deck_banner.add_theme_font_override("font", FONT_TITLE)
 	_deck_banner.add_theme_font_size_override("font_size", 18)
 	_deck_banner.add_theme_color_override("font_color", Color(1.0, 0.90, 0.55, 1.0))
-	_deck_banner.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.98))
+	_deck_banner.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 1.0))
 	_deck_banner.add_theme_constant_override("shadow_offset_x", 1)
 	_deck_banner.add_theme_constant_override("shadow_offset_y", 2)
 	text_vbox.add_child(_deck_banner)
@@ -374,7 +367,7 @@ func _build_center_banner() -> void:
 	_deck_sub_banner.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_deck_sub_banner.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	_deck_sub_banner.add_theme_font_override("font", FONT_MEDIEVAL)
-	_deck_sub_banner.add_theme_font_size_override("font_size", 13)
+	_deck_sub_banner.add_theme_font_size_override("font_size", 12)
 	_deck_sub_banner.add_theme_color_override("font_color", Color(0.88, 0.82, 0.70, 0.95))
 	_deck_sub_banner.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.95))
 	_deck_sub_banner.add_theme_constant_override("shadow_offset_x", 1)
@@ -1258,16 +1251,16 @@ func _on_card_pressed(idx: int) -> void:
 	# Desplazar suavemente solo si el grimorio seleccionado está fuera del área visible
 	if _scroll_container and idx >= 0 and idx < _player_cards.size():
 		var card_node = _player_cards[idx]
-		var card_left: float = card_node.position.x + 20.0
+		var card_left: float = card_node.position.x + 16.0
 		var card_right: float = card_left + card_node.size.x
 		var current_scroll: float = float(_scroll_container.scroll_horizontal)
-		var view_w: float = _scroll_container.size.x if _scroll_container.size.x > 0 else 1316.0
+		var view_w: float = _scroll_container.size.x if _scroll_container.size.x > 0 else 1308.0
 
 		var desired_scroll: int = -1
-		if card_left < current_scroll + 20.0:
+		if card_left < current_scroll + 16.0:
 			desired_scroll = max(0, int(card_node.position.x))
-		elif card_right > current_scroll + view_w - 20.0:
-			desired_scroll = max(0, int(card_node.position.x + 20.0 + card_node.size.x + 20.0 - view_w))
+		elif card_right > current_scroll + view_w - 16.0:
+			desired_scroll = max(0, int(card_node.position.x + 16.0 + card_node.size.x + 16.0 - view_w))
 
 		if desired_scroll >= 0 and desired_scroll != int(current_scroll):
 			var tw = create_tween()
