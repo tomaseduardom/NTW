@@ -5,15 +5,17 @@ class_name GameHUDModule
 const FONT_MEDIEVAL := preload("res://assets/fonts/Cinzel-Bold.ttf")
 const FONT_TITLE := preload("res://assets/fonts/Cinzel-Bold.ttf")
 
-const TEX_BTN_NORMAL := preload("res://assets/ui/menu/btn_menu_normal.png")
-const TEX_BTN_HOVER := preload("res://assets/ui/menu/btn_menu_hover.png")
-const TEX_BTN_PRESSED := preload("res://assets/ui/menu/btn_menu_pressed.png")
+const TEX_BTN_NORMAL := preload("res://assets/ui/hud/btn_paso_normal.png")
+const TEX_BTN_HOVER := preload("res://assets/ui/hud/btn_paso_hover.png")
+const TEX_BTN_PRESSED := preload("res://assets/ui/hud/btn_paso_pressed.png")
+const TEX_BTN_DISABLED := preload("res://assets/ui/hud/btn_paso_disabled.png")
 
 var _main: Node = null
 var _paso_button: Button = null
 var _style_normal: StyleBoxTexture = null
 var _style_hover: StyleBoxTexture = null
 var _style_pressed: StyleBoxTexture = null
+var _style_disabled: StyleBoxTexture = null
 var _paso_glow_tween: Tween = null
 ## Generación de la cuenta regresiva del botón: sube en cada start/stop para que un bucle viejo deje
 ## de escribir el texto.
@@ -83,14 +85,14 @@ func show_phase_announcement(phase_name: String) -> void:
 func _create_paso_style(tex: Texture2D) -> StyleBoxTexture:
 	var sb = StyleBoxTexture.new()
 	sb.texture = tex
-	sb.texture_margin_left = 34.0
-	sb.texture_margin_right = 34.0
-	sb.texture_margin_top = 24.0
-	sb.texture_margin_bottom = 24.0
-	sb.content_margin_left = 14.0
-	sb.content_margin_right = 14.0
-	sb.content_margin_top = 6.0
-	sb.content_margin_bottom = 8.0
+	sb.texture_margin_left = 180.0
+	sb.texture_margin_right = 180.0
+	sb.texture_margin_top = 18.0
+	sb.texture_margin_bottom = 18.0
+	sb.content_margin_left = 32.0
+	sb.content_margin_right = 32.0
+	sb.content_margin_top = 4.0
+	sb.content_margin_bottom = 6.0
 	return sb
 
 
@@ -99,34 +101,37 @@ func _setup_paso_button() -> void:
 	_style_normal = _create_paso_style(TEX_BTN_NORMAL)
 	_style_hover = _create_paso_style(TEX_BTN_HOVER)
 	_style_pressed = _create_paso_style(TEX_BTN_PRESSED)
+	_style_disabled = _create_paso_style(TEX_BTN_DISABLED)
 
 	_paso_button = Button.new()
 	_paso_button.text = "Pasar [P]"
 	_paso_button.name = "PasoButton"
 	_paso_button.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 	_paso_button.add_theme_font_override("font", FONT_TITLE)
-	_paso_button.add_theme_font_size_override("font_size", 17)
+	_paso_button.add_theme_font_size_override("font_size", 16)
 
 	_paso_button.add_theme_stylebox_override("normal", _style_normal)
 	_paso_button.add_theme_stylebox_override("hover", _style_hover)
 	_paso_button.add_theme_stylebox_override("pressed", _style_pressed)
 	_paso_button.add_theme_stylebox_override("focus", _style_hover)
-	_paso_button.add_theme_color_override("font_color", Color(1.0, 0.93, 0.78, 1.0))
-	_paso_button.add_theme_color_override("font_hover_color", Color(1.0, 1.0, 0.92, 1.0))
+	_paso_button.add_theme_stylebox_override("disabled", _style_disabled)
+	_paso_button.add_theme_color_override("font_color", Color(1.0, 0.93, 0.75, 1.0))
+	_paso_button.add_theme_color_override("font_hover_color", Color(1.0, 1.0, 0.88, 1.0))
 	_paso_button.add_theme_color_override("font_pressed_color", Color(0.85, 0.78, 0.60, 1.0))
+	_paso_button.add_theme_color_override("font_disabled_color", Color(0.60, 0.58, 0.55, 0.80))
 	_paso_button.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.95))
 	_paso_button.add_theme_constant_override("shadow_offset_x", 1)
 	_paso_button.add_theme_constant_override("shadow_offset_y", 2)
 
-	# Posición: a la izquierda del TurnTimer (170x56 px diegético)
+	# Posición: a la izquierda del TurnTimer (260x46 px diegético de piedra rúnica)
 	_paso_button.anchor_left = 1.0
 	_paso_button.anchor_top = 0.5
 	_paso_button.anchor_right = 1.0
 	_paso_button.anchor_bottom = 0.5
 	_paso_button.offset_right = -128
-	_paso_button.offset_left = -298
-	_paso_button.offset_top = -28
-	_paso_button.offset_bottom = 28
+	_paso_button.offset_left = -388
+	_paso_button.offset_top = -23
+	_paso_button.offset_bottom = 23
 	_paso_button.mouse_filter = Control.MOUSE_FILTER_STOP
 	_paso_button.visible = false
 
@@ -228,7 +233,7 @@ func stop_paso_glow() -> void:
 
 	if _style_normal:
 		_paso_button.add_theme_stylebox_override("normal", _style_normal)
-	_paso_button.add_theme_color_override("font_color", Color(1.0, 0.93, 0.78, 1.0))
+	_paso_button.add_theme_color_override("font_color", Color(1.0, 0.93, 0.75, 1.0))
 
 
 # =============================================================================
