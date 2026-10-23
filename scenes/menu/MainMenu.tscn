@@ -4,31 +4,114 @@
 [ext_resource type="Texture2D" path="res://fondo_inicio.png" id="2_background"]
 [ext_resource type="FontFile" uid="uid://c4o8my2eqi3aj" path="res://assets/fonts/Cinzel-Bold.ttf" id="3_font_title"]
 [ext_resource type="FontFile" uid="uid://bamah0jf3ujug" path="res://assets/fonts/Marcellus-Regular.ttf" id="4_font_medieval"]
-[ext_resource type="Texture2D" path="res://assets/ui/menu/btn_menu_normal.png" id="5_btn_normal"]
-[ext_resource type="Texture2D" path="res://assets/ui/menu/btn_menu_hover.png" id="6_btn_hover"]
-[ext_resource type="Texture2D" path="res://assets/ui/menu/btn_menu_pressed.png" id="7_btn_pressed"]
-[ext_resource type="FontFile" path="res://assets/fonts/Palatino-Bold.ttf" id="8_font_btn"]
 
-[sub_resource type="StyleBoxTexture" id="StyleBoxTexture_btn_normal"]
-texture = ExtResource("5_btn_normal")
-content_margin_left = 34.0
-content_margin_top = 13.0
-content_margin_right = 34.0
-content_margin_bottom = 7.0
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_menu_panel"]
+bg_color = Color(0.07, 0.09, 0.13, 0.96)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0.78, 0.65, 0.32, 0.9)
+corner_radius_top_left = 14
+corner_radius_top_right = 14
+corner_radius_bottom_right = 14
+corner_radius_bottom_left = 14
+shadow_color = Color(0, 0, 0, 0.85)
+shadow_size = 28
 
-[sub_resource type="StyleBoxTexture" id="StyleBoxTexture_btn_hover"]
-texture = ExtResource("6_btn_hover")
-content_margin_left = 34.0
-content_margin_top = 13.0
-content_margin_right = 34.0
-content_margin_bottom = 7.0
+[sub_resource type="StyleBoxLine" id="StyleBoxLine_separator"]
+color = Color(0.78, 0.65, 0.32, 0.35)
+thickness = 1
 
-[sub_resource type="StyleBoxTexture" id="StyleBoxTexture_btn_pressed"]
-texture = ExtResource("7_btn_pressed")
-content_margin_left = 34.0
-content_margin_top = 13.0
-content_margin_right = 34.0
-content_margin_bottom = 7.0
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_btn_primary"]
+bg_color = Color(0.16, 0.14, 0.1, 0.96)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0.88, 0.74, 0.28, 0.95)
+corner_radius_top_left = 8
+corner_radius_top_right = 8
+corner_radius_bottom_right = 8
+corner_radius_bottom_left = 8
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_btn_primary_hover"]
+bg_color = Color(0.25, 0.21, 0.12, 1)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(1, 0.92, 0.55, 1)
+corner_radius_top_left = 8
+corner_radius_top_right = 8
+corner_radius_bottom_right = 8
+corner_radius_bottom_left = 8
+shadow_color = Color(0.88, 0.74, 0.28, 0.45)
+shadow_size = 10
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_btn_normal"]
+bg_color = Color(0.12, 0.15, 0.22, 0.95)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.5, 0.45, 0.35, 0.8)
+corner_radius_top_left = 8
+corner_radius_top_right = 8
+corner_radius_bottom_right = 8
+corner_radius_bottom_left = 8
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_btn_hover"]
+bg_color = Color(0.18, 0.24, 0.34, 1)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(1, 0.88, 0.48, 1)
+corner_radius_top_left = 8
+corner_radius_top_right = 8
+corner_radius_bottom_right = 8
+corner_radius_bottom_left = 8
+shadow_color = Color(0.88, 0.74, 0.28, 0.35)
+shadow_size = 8
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_btn_pressed"]
+bg_color = Color(0.2, 0.17, 0.1, 0.98)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0.88, 0.74, 0.28, 0.9)
+corner_radius_top_left = 8
+corner_radius_top_right = 8
+corner_radius_bottom_right = 8
+corner_radius_bottom_left = 8
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_btn_exit"]
+bg_color = Color(0.14, 0.11, 0.13, 0.95)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.65, 0.35, 0.35, 0.75)
+corner_radius_top_left = 8
+corner_radius_top_right = 8
+corner_radius_bottom_right = 8
+corner_radius_bottom_left = 8
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_btn_exit_hover"]
+bg_color = Color(0.22, 0.14, 0.16, 1)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0.95, 0.5, 0.5, 1)
+corner_radius_top_left = 8
+corner_radius_top_right = 8
+corner_radius_bottom_right = 8
+corner_radius_bottom_left = 8
+shadow_color = Color(0.8, 0.25, 0.25, 0.35)
+shadow_size = 8
 
 [node name="MainMenu" type="Control"]
 layout_mode = 3
@@ -56,7 +139,7 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
-color = Color(0, 0, 0, 0.25)
+color = Color(0, 0, 0, 0.3)
 
 [node name="TitleContainer" type="VBoxContainer" parent="."]
 layout_mode = 1
@@ -64,167 +147,199 @@ anchors_preset = 5
 anchor_left = 0.5
 anchor_right = 0.5
 offset_left = -450.0
-offset_top = 65.0
+offset_top = 45.0
 offset_right = 450.0
-offset_bottom = 185.0
+offset_bottom = 160.0
 grow_horizontal = 2
 theme_override_constants/separation = 4
 
 [node name="Title" type="Label" parent="TitleContainer"]
 layout_mode = 2
-theme_override_fonts/font = ExtResource("3_font_title")
 theme_override_colors/font_color = Color(1, 0.9, 0.6, 1)
 theme_override_colors/font_shadow_color = Color(0, 0, 0, 0.95)
 theme_override_constants/shadow_offset_x = 3
 theme_override_constants/shadow_offset_y = 3
-theme_override_font_sizes/font_size = 48
+theme_override_fonts/font = ExtResource("3_font_title")
+theme_override_font_sizes/font_size = 46
 text = "MITOS Y LEYENDAS"
 horizontal_alignment = 1
 vertical_alignment = 1
 
 [node name="Subtitle" type="Label" parent="TitleContainer"]
 layout_mode = 2
-theme_override_fonts/font = ExtResource("4_font_medieval")
 theme_override_colors/font_color = Color(0.88, 0.78, 0.52, 1)
 theme_override_colors/font_shadow_color = Color(0, 0, 0, 0.9)
 theme_override_constants/shadow_offset_x = 2
 theme_override_constants/shadow_offset_y = 2
-theme_override_font_sizes/font_size = 24
+theme_override_fonts/font = ExtResource("4_font_medieval")
+theme_override_font_sizes/font_size = 20
 text = "— ARENA DE LEYENDAS —"
 horizontal_alignment = 1
 vertical_alignment = 1
 
-[node name="VBoxContainer" type="VBoxContainer" parent="."]
+[node name="MenuPanel" type="PanelContainer" parent="."]
+unique_name_in_owner = true
 layout_mode = 1
 anchors_preset = 8
 anchor_left = 0.5
 anchor_top = 0.5
 anchor_right = 0.5
 anchor_bottom = 0.5
-offset_left = -210.0
-offset_top = -25.0
-offset_right = 210.0
-offset_bottom = 445.0
+offset_left = -230.0
+offset_top = -140.0
+offset_right = 230.0
+offset_bottom = 390.0
 grow_horizontal = 2
 grow_vertical = 2
-theme_override_constants/separation = 12
+theme_override_styles/panel = SubResource("StyleBoxFlat_menu_panel")
 
-[node name="PlayButton" type="Button" parent="VBoxContainer"]
-custom_minimum_size = Vector2(420, 62)
+[node name="MarginContainer" type="MarginContainer" parent="MenuPanel"]
+layout_mode = 2
+theme_override_constants/margin_left = 28
+theme_override_constants/margin_top = 22
+theme_override_constants/margin_right = 28
+theme_override_constants/margin_bottom = 22
+
+[node name="VBoxContainer" type="VBoxContainer" parent="MenuPanel/MarginContainer"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="CardTitle" type="Label" parent="MenuPanel/MarginContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.92, 0.8, 0.38, 1)
+theme_override_colors/font_shadow_color = Color(0, 0, 0, 0.9)
+theme_override_constants/shadow_offset_y = 2
+theme_override_fonts/font = ExtResource("3_font_title")
+theme_override_font_sizes/font_size = 18
+text = "CAMPAMENTO"
+horizontal_alignment = 1
+
+[node name="CardSubtitle" type="Label" parent="MenuPanel/MarginContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.65, 0.7, 0.8, 1)
+theme_override_fonts/font = ExtResource("4_font_medieval")
+theme_override_font_sizes/font_size = 12
+text = "Elige tu sendero hacia la gloria"
+horizontal_alignment = 1
+
+[node name="Separator" type="HSeparator" parent="MenuPanel/MarginContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_styles/separator = SubResource("StyleBoxLine_separator")
+
+[node name="ButtonsVBox" type="VBoxContainer" parent="MenuPanel/MarginContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="PlayButton" type="Button" parent="MenuPanel/MarginContainer/VBoxContainer/ButtonsVBox"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 48)
 layout_mode = 2
 mouse_default_cursor_shape = 2
-theme_override_fonts/font = ExtResource("8_font_btn")
-theme_override_colors/font_color = Color(0.96, 0.87, 0.6, 1)
-theme_override_colors/font_focus_color = Color(0.96, 0.87, 0.6, 1)
-theme_override_colors/font_hover_color = Color(1, 0.96, 0.82, 1)
-theme_override_colors/font_hover_pressed_color = Color(0.86, 0.75, 0.48, 1)
-theme_override_colors/font_pressed_color = Color(0.86, 0.75, 0.48, 1)
-theme_override_colors/font_shadow_color = Color(0, 0, 0, 0.9)
-theme_override_constants/shadow_offset_x = 2
-theme_override_constants/shadow_offset_y = 2
-theme_override_font_sizes/font_size = 20
-theme_override_styles/normal = SubResource("StyleBoxTexture_btn_normal")
-theme_override_styles/hover = SubResource("StyleBoxTexture_btn_hover")
-theme_override_styles/pressed = SubResource("StyleBoxTexture_btn_pressed")
-theme_override_styles/focus = SubResource("StyleBoxTexture_btn_normal")
+theme_override_colors/font_color = Color(1, 0.92, 0.65, 1)
+theme_override_colors/font_focus_color = Color(1, 0.95, 0.75, 1)
+theme_override_colors/font_hover_color = Color(1, 1, 1, 1)
+theme_override_colors/font_pressed_color = Color(0.88, 0.74, 0.28, 1)
+theme_override_fonts/font = ExtResource("3_font_title")
+theme_override_font_sizes/font_size = 16
+theme_override_styles/normal = SubResource("StyleBoxFlat_btn_primary")
+theme_override_styles/hover = SubResource("StyleBoxFlat_btn_primary_hover")
+theme_override_styles/pressed = SubResource("StyleBoxFlat_btn_primary_hover")
+theme_override_styles/focus = SubResource("StyleBoxFlat_btn_primary_hover")
 text = "JUGAR"
 
-[node name="ShadowForgeButton" type="Button" parent="VBoxContainer"]
-custom_minimum_size = Vector2(420, 62)
+[node name="ShadowForgeButton" type="Button" parent="MenuPanel/MarginContainer/VBoxContainer/ButtonsVBox"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 44)
 layout_mode = 2
 mouse_default_cursor_shape = 2
-theme_override_fonts/font = ExtResource("8_font_btn")
-theme_override_colors/font_color = Color(0.96, 0.87, 0.6, 1)
-theme_override_colors/font_focus_color = Color(0.96, 0.87, 0.6, 1)
-theme_override_colors/font_hover_color = Color(1, 0.96, 0.82, 1)
-theme_override_colors/font_hover_pressed_color = Color(0.86, 0.75, 0.48, 1)
-theme_override_colors/font_pressed_color = Color(0.86, 0.75, 0.48, 1)
-theme_override_colors/font_shadow_color = Color(0, 0, 0, 0.9)
-theme_override_constants/shadow_offset_x = 2
-theme_override_constants/shadow_offset_y = 2
-theme_override_font_sizes/font_size = 20
-theme_override_styles/normal = SubResource("StyleBoxTexture_btn_normal")
-theme_override_styles/hover = SubResource("StyleBoxTexture_btn_hover")
-theme_override_styles/pressed = SubResource("StyleBoxTexture_btn_pressed")
-theme_override_styles/focus = SubResource("StyleBoxTexture_btn_normal")
+theme_override_colors/font_color = Color(0.96, 0.89, 0.7, 1)
+theme_override_colors/font_focus_color = Color(1, 0.95, 0.8, 1)
+theme_override_colors/font_hover_color = Color(1, 1, 1, 1)
+theme_override_colors/font_pressed_color = Color(0.88, 0.74, 0.28, 1)
+theme_override_fonts/font = ExtResource("3_font_title")
+theme_override_font_sizes/font_size = 15
+theme_override_styles/normal = SubResource("StyleBoxFlat_btn_normal")
+theme_override_styles/hover = SubResource("StyleBoxFlat_btn_hover")
+theme_override_styles/pressed = SubResource("StyleBoxFlat_btn_pressed")
+theme_override_styles/focus = SubResource("StyleBoxFlat_btn_hover")
 text = "SHADOWFORGE"
 
-[node name="DecksButton" type="Button" parent="VBoxContainer"]
-custom_minimum_size = Vector2(420, 62)
+[node name="DecksButton" type="Button" parent="MenuPanel/MarginContainer/VBoxContainer/ButtonsVBox"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 44)
 layout_mode = 2
 mouse_default_cursor_shape = 2
-theme_override_fonts/font = ExtResource("8_font_btn")
-theme_override_colors/font_color = Color(0.96, 0.87, 0.6, 1)
-theme_override_colors/font_focus_color = Color(0.96, 0.87, 0.6, 1)
-theme_override_colors/font_hover_color = Color(1, 0.96, 0.82, 1)
-theme_override_colors/font_hover_pressed_color = Color(0.86, 0.75, 0.48, 1)
-theme_override_colors/font_pressed_color = Color(0.86, 0.75, 0.48, 1)
-theme_override_colors/font_shadow_color = Color(0, 0, 0, 0.9)
-theme_override_constants/shadow_offset_x = 2
-theme_override_constants/shadow_offset_y = 2
-theme_override_font_sizes/font_size = 20
-theme_override_styles/normal = SubResource("StyleBoxTexture_btn_normal")
-theme_override_styles/hover = SubResource("StyleBoxTexture_btn_hover")
-theme_override_styles/pressed = SubResource("StyleBoxTexture_btn_pressed")
-theme_override_styles/focus = SubResource("StyleBoxTexture_btn_normal")
+theme_override_colors/font_color = Color(0.96, 0.89, 0.7, 1)
+theme_override_colors/font_focus_color = Color(1, 0.95, 0.8, 1)
+theme_override_colors/font_hover_color = Color(1, 1, 1, 1)
+theme_override_colors/font_pressed_color = Color(0.88, 0.74, 0.28, 1)
+theme_override_fonts/font = ExtResource("3_font_title")
+theme_override_font_sizes/font_size = 15
+theme_override_styles/normal = SubResource("StyleBoxFlat_btn_normal")
+theme_override_styles/hover = SubResource("StyleBoxFlat_btn_hover")
+theme_override_styles/pressed = SubResource("StyleBoxFlat_btn_pressed")
+theme_override_styles/focus = SubResource("StyleBoxFlat_btn_hover")
 text = "MAZOS"
 
-[node name="BacksButton" type="Button" parent="VBoxContainer"]
-custom_minimum_size = Vector2(420, 62)
+[node name="BacksButton" type="Button" parent="MenuPanel/MarginContainer/VBoxContainer/ButtonsVBox"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 44)
 layout_mode = 2
 mouse_default_cursor_shape = 2
-theme_override_fonts/font = ExtResource("8_font_btn")
-theme_override_colors/font_color = Color(0.96, 0.87, 0.6, 1)
-theme_override_colors/font_focus_color = Color(0.96, 0.87, 0.6, 1)
-theme_override_colors/font_hover_color = Color(1, 0.96, 0.82, 1)
-theme_override_colors/font_hover_pressed_color = Color(0.86, 0.75, 0.48, 1)
-theme_override_colors/font_pressed_color = Color(0.86, 0.75, 0.48, 1)
-theme_override_colors/font_shadow_color = Color(0, 0, 0, 0.9)
-theme_override_constants/shadow_offset_x = 2
-theme_override_constants/shadow_offset_y = 2
-theme_override_font_sizes/font_size = 20
-theme_override_styles/normal = SubResource("StyleBoxTexture_btn_normal")
-theme_override_styles/hover = SubResource("StyleBoxTexture_btn_hover")
-theme_override_styles/pressed = SubResource("StyleBoxTexture_btn_pressed")
-theme_override_styles/focus = SubResource("StyleBoxTexture_btn_normal")
+theme_override_colors/font_color = Color(0.96, 0.89, 0.7, 1)
+theme_override_colors/font_focus_color = Color(1, 0.95, 0.8, 1)
+theme_override_colors/font_hover_color = Color(1, 1, 1, 1)
+theme_override_colors/font_pressed_color = Color(0.88, 0.74, 0.28, 1)
+theme_override_fonts/font = ExtResource("3_font_title")
+theme_override_font_sizes/font_size = 15
+theme_override_styles/normal = SubResource("StyleBoxFlat_btn_normal")
+theme_override_styles/hover = SubResource("StyleBoxFlat_btn_hover")
+theme_override_styles/pressed = SubResource("StyleBoxFlat_btn_pressed")
+theme_override_styles/focus = SubResource("StyleBoxFlat_btn_hover")
 text = "DORSOS"
 
-[node name="ControlsButton" type="Button" parent="VBoxContainer"]
-custom_minimum_size = Vector2(420, 62)
+[node name="ControlsButton" type="Button" parent="MenuPanel/MarginContainer/VBoxContainer/ButtonsVBox"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 44)
 layout_mode = 2
 mouse_default_cursor_shape = 2
-theme_override_fonts/font = ExtResource("8_font_btn")
-theme_override_colors/font_color = Color(0.96, 0.87, 0.6, 1)
-theme_override_colors/font_focus_color = Color(0.96, 0.87, 0.6, 1)
-theme_override_colors/font_hover_color = Color(1, 0.96, 0.82, 1)
-theme_override_colors/font_hover_pressed_color = Color(0.86, 0.75, 0.48, 1)
-theme_override_colors/font_pressed_color = Color(0.86, 0.75, 0.48, 1)
-theme_override_colors/font_shadow_color = Color(0, 0, 0, 0.9)
-theme_override_constants/shadow_offset_x = 2
-theme_override_constants/shadow_offset_y = 2
-theme_override_font_sizes/font_size = 20
-theme_override_styles/normal = SubResource("StyleBoxTexture_btn_normal")
-theme_override_styles/hover = SubResource("StyleBoxTexture_btn_hover")
-theme_override_styles/pressed = SubResource("StyleBoxTexture_btn_pressed")
-theme_override_styles/focus = SubResource("StyleBoxTexture_btn_normal")
+theme_override_colors/font_color = Color(0.96, 0.89, 0.7, 1)
+theme_override_colors/font_focus_color = Color(1, 0.95, 0.8, 1)
+theme_override_colors/font_hover_color = Color(1, 1, 1, 1)
+theme_override_colors/font_pressed_color = Color(0.88, 0.74, 0.28, 1)
+theme_override_fonts/font = ExtResource("3_font_title")
+theme_override_font_sizes/font_size = 15
+theme_override_styles/normal = SubResource("StyleBoxFlat_btn_normal")
+theme_override_styles/hover = SubResource("StyleBoxFlat_btn_hover")
+theme_override_styles/pressed = SubResource("StyleBoxFlat_btn_pressed")
+theme_override_styles/focus = SubResource("StyleBoxFlat_btn_hover")
 text = "CONTROLES"
 
-[node name="ExitButton" type="Button" parent="VBoxContainer"]
-custom_minimum_size = Vector2(420, 62)
+[node name="ExitButton" type="Button" parent="MenuPanel/MarginContainer/VBoxContainer/ButtonsVBox"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 44)
 layout_mode = 2
 mouse_default_cursor_shape = 2
-theme_override_fonts/font = ExtResource("8_font_btn")
-theme_override_colors/font_color = Color(0.96, 0.87, 0.6, 1)
-theme_override_colors/font_focus_color = Color(0.96, 0.87, 0.6, 1)
-theme_override_colors/font_hover_color = Color(1, 0.96, 0.82, 1)
-theme_override_colors/font_hover_pressed_color = Color(0.86, 0.75, 0.48, 1)
-theme_override_colors/font_pressed_color = Color(0.86, 0.75, 0.48, 1)
-theme_override_colors/font_shadow_color = Color(0, 0, 0, 0.9)
-theme_override_constants/shadow_offset_x = 2
-theme_override_constants/shadow_offset_y = 2
-theme_override_font_sizes/font_size = 20
-theme_override_styles/normal = SubResource("StyleBoxTexture_btn_normal")
-theme_override_styles/hover = SubResource("StyleBoxTexture_btn_hover")
-theme_override_styles/pressed = SubResource("StyleBoxTexture_btn_pressed")
-theme_override_styles/focus = SubResource("StyleBoxTexture_btn_normal")
+theme_override_colors/font_color = Color(0.95, 0.8, 0.8, 1)
+theme_override_colors/font_focus_color = Color(1, 0.88, 0.88, 1)
+theme_override_colors/font_hover_color = Color(1, 1, 1, 1)
+theme_override_colors/font_pressed_color = Color(0.85, 0.45, 0.45, 1)
+theme_override_fonts/font = ExtResource("3_font_title")
+theme_override_font_sizes/font_size = 15
+theme_override_styles/normal = SubResource("StyleBoxFlat_btn_exit")
+theme_override_styles/hover = SubResource("StyleBoxFlat_btn_exit_hover")
+theme_override_styles/pressed = SubResource("StyleBoxFlat_btn_exit_hover")
+theme_override_styles/focus = SubResource("StyleBoxFlat_btn_exit_hover")
 text = "SALIR"
+
+[node name="FooterSeparator" type="HSeparator" parent="MenuPanel/MarginContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_styles/separator = SubResource("StyleBoxLine_separator")
+
+[node name="FooterLabel" type="Label" parent="MenuPanel/MarginContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.55, 0.6, 0.7, 0.6)
+theme_override_fonts/font = ExtResource("4_font_medieval")
+theme_override_font_sizes/font_size = 11
+text = "MITOS Y LEYENDAS • IMPERIO 2026"
+horizontal_alignment = 1

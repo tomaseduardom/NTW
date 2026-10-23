@@ -5,12 +5,13 @@ extends Control
 # =============================================================================
 # REFERENCIAS UI
 # =============================================================================
-@onready var play_button: Button = $VBoxContainer/PlayButton
-@onready var shadowforge_button: Button = $VBoxContainer/ShadowForgeButton
-@onready var decks_button: Button = $VBoxContainer/DecksButton
-@onready var backs_button: Button = $VBoxContainer/BacksButton
-@onready var controls_button: Button = $VBoxContainer/ControlsButton
-@onready var exit_button: Button = $VBoxContainer/ExitButton
+@onready var menu_panel: PanelContainer = get_node_or_null("%MenuPanel")
+@onready var play_button: Button = get_node_or_null("%PlayButton") if has_node("%PlayButton") else $VBoxContainer/PlayButton
+@onready var shadowforge_button: Button = get_node_or_null("%ShadowForgeButton") if has_node("%ShadowForgeButton") else $VBoxContainer/ShadowForgeButton
+@onready var decks_button: Button = get_node_or_null("%DecksButton") if has_node("%DecksButton") else $VBoxContainer/DecksButton
+@onready var backs_button: Button = get_node_or_null("%BacksButton") if has_node("%BacksButton") else $VBoxContainer/BacksButton
+@onready var controls_button: Button = get_node_or_null("%ControlsButton") if has_node("%ControlsButton") else $VBoxContainer/ControlsButton
+@onready var exit_button: Button = get_node_or_null("%ExitButton") if has_node("%ExitButton") else $VBoxContainer/ExitButton
 
 var _controls_dialog: ControlsDialog = null
 
@@ -117,14 +118,14 @@ func _open_play_mode_popup() -> void:
 	overlay.add_child(backdrop)
 
 	var title_container = get_node_or_null("TitleContainer")
-	var menu_vbox = get_node_or_null("VBoxContainer")
+	var menu_box: Control = menu_panel if is_instance_valid(menu_panel) else get_node_or_null("VBoxContainer")
 	if title_container:
 		var tw_t := create_tween()
 		tw_t.tween_property(title_container, "modulate:a", 0.0, 0.16)
-	if menu_vbox:
+	if menu_box:
 		var tw_v := create_tween()
-		tw_v.tween_property(menu_vbox, "modulate:a", 0.0, 0.16)
-		menu_vbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		tw_v.tween_property(menu_box, "modulate:a", 0.0, 0.16)
+		menu_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
 	overlay.modulate.a = 0.0
 	var fade_tw := overlay.create_tween()
@@ -136,10 +137,10 @@ func _open_play_mode_popup() -> void:
 		if is_instance_valid(title_container):
 			var tw_t2 := create_tween()
 			tw_t2.tween_property(title_container, "modulate:a", 1.0, 0.20)
-		if is_instance_valid(menu_vbox):
-			menu_vbox.mouse_filter = Control.MOUSE_FILTER_STOP
+		if is_instance_valid(menu_box):
+			menu_box.mouse_filter = Control.MOUSE_FILTER_STOP
 			var tw_v2 := create_tween()
-			tw_v2.tween_property(menu_vbox, "modulate:a", 1.0, 0.20)
+			tw_v2.tween_property(menu_box, "modulate:a", 1.0, 0.20)
 		close_tw.tween_callback(func():
 			if is_instance_valid(overlay):
 				overlay.queue_free()
