@@ -1,15 +1,24 @@
 extends CanvasLayer
 class_name ControlsDialog
 ## ControlsDialog — Diálogo modal para reasignar atajos de teclado y controles.
-## Compatible tanto con el Menú Principal como con el Menú de Pausa en partida.
+## Diseñado con la estética medieval de tableta de piedra, pergamino envejecido
+## y botones de piedra cincelada basada fielmente en Configuracion.jpg.
 
 signal closed
 
 const FONT_TITLE := preload("res://assets/fonts/Cinzel-Bold.ttf")
 const FONT_TEXT := preload("res://assets/fonts/Marcellus-Regular.ttf")
 
+const TEX_BG := preload("res://assets/ui/controls/dialog_tablet_bg_1280.png")
+const TEX_STONE_NORMAL := preload("res://assets/ui/controls/btn_stone_normal_305.png")
+const TEX_STONE_HOVER := preload("res://assets/ui/controls/btn_stone_hover_305.png")
+const TEX_STONE_PRESSED := preload("res://assets/ui/controls/btn_stone_pressed_305.png")
+
+const MODAL_WIDTH: float = 1280.0
+const MODAL_HEIGHT: float = 794.0
+
 var _backdrop: ColorRect = null
-var _modal_panel: PanelContainer = null
+var _modal_panel: Control = null
 var _action_buttons: Dictionary = {}
 var _listening_action: String = ""
 var _listen_tween: Tween = null
@@ -34,13 +43,13 @@ func open_dialog() -> void:
 
 	# Animación de apertura suave
 	_backdrop.modulate.a = 0.0
-	_modal_panel.scale = Vector2(0.9, 0.9)
+	_modal_panel.scale = Vector2(0.92, 0.92)
 	_modal_panel.modulate.a = 0.0
 
 	var tween = create_tween().set_parallel(true)
-	tween.tween_property(_backdrop, "modulate:a", 1.0, 0.18).set_ease(Tween.EASE_OUT)
-	tween.tween_property(_modal_panel, "modulate:a", 1.0, 0.20)
-	tween.tween_property(_modal_panel, "scale", Vector2.ONE, 0.22).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_BACK)
+	tween.tween_property(_backdrop, "modulate:a", 1.0, 0.20).set_ease(Tween.EASE_OUT)
+	tween.tween_property(_modal_panel, "modulate:a", 1.0, 0.22)
+	tween.tween_property(_modal_panel, "scale", Vector2.ONE, 0.24).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_BACK)
 
 	call_deferred("_focus_first_element")
 
@@ -50,9 +59,9 @@ func close_dialog() -> void:
 		_cancel_listening()
 
 	var tween = create_tween().set_parallel(true)
-	tween.tween_property(_backdrop, "modulate:a", 0.0, 0.15).set_ease(Tween.EASE_IN)
-	tween.tween_property(_modal_panel, "modulate:a", 0.0, 0.15)
-	tween.tween_property(_modal_panel, "scale", Vector2(0.92, 0.92), 0.15).set_ease(Tween.EASE_IN)
+	tween.tween_property(_backdrop, "modulate:a", 0.0, 0.16).set_ease(Tween.EASE_IN)
+	tween.tween_property(_modal_panel, "modulate:a", 0.0, 0.16)
+	tween.tween_property(_modal_panel, "scale", Vector2(0.94, 0.94), 0.16).set_ease(Tween.EASE_IN)
 	tween.chain().tween_callback(func():
 		visible = false
 		closed.emit()
@@ -126,137 +135,130 @@ func _build_ui() -> void:
 	)
 	add_child(_backdrop)
 
-	# 2. Panel modal central
-	_modal_panel = PanelContainer.new()
+	# 2. Panel modal central (Contenedor de la tableta)
+	_modal_panel = Control.new()
 	_modal_panel.name = "ControlsModalPanel"
-	_modal_panel.custom_minimum_size = Vector2(560, 520)
+	_modal_panel.custom_minimum_size = Vector2(MODAL_WIDTH, MODAL_HEIGHT)
 	_modal_panel.anchors_preset = Control.PRESET_CENTER
 	_modal_panel.anchor_left = 0.5
 	_modal_panel.anchor_top = 0.5
 	_modal_panel.anchor_right = 0.5
 	_modal_panel.anchor_bottom = 0.5
-	_modal_panel.offset_left = -280
-	_modal_panel.offset_top = -260
-	_modal_panel.offset_right = 280
-	_modal_panel.offset_bottom = 260
-	_modal_panel.pivot_offset = Vector2(280, 260)
-
-	var panel_style = StyleBoxFlat.new()
-	panel_style.bg_color = Color(0.07, 0.09, 0.13, 0.98)
-	panel_style.border_color = Color(0.78, 0.65, 0.32, 0.90)
-	panel_style.set_border_width_all(2)
-	panel_style.set_corner_radius_all(12)
-	panel_style.shadow_color = Color(0, 0, 0, 0.85)
-	panel_style.shadow_size = 28
-	_modal_panel.add_theme_stylebox_override("panel", panel_style)
+	_modal_panel.offset_left = -MODAL_WIDTH * 0.5
+	_modal_panel.offset_top = -MODAL_HEIGHT * 0.5
+	_modal_panel.offset_right = MODAL_WIDTH * 0.5
+	_modal_panel.offset_bottom = MODAL_HEIGHT * 0.5
+	_modal_panel.pivot_offset = Vector2(MODAL_WIDTH * 0.5, MODAL_HEIGHT * 0.5)
 	add_child(_modal_panel)
 
-	var margin = MarginContainer.new()
-	margin.add_theme_constant_override("margin_top", 22)
-	margin.add_theme_constant_override("margin_left", 26)
-	margin.add_theme_constant_override("margin_right", 26)
-	margin.add_theme_constant_override("margin_bottom", 22)
-	_modal_panel.add_child(margin)
+	# 3. Fondo texturizado de la tableta de piedra con pergamino y bordes tallados
+	var bg_rect = TextureRect.new()
+	bg_rect.name = "TabletBackground"
+	bg_rect.texture = TEX_BG
+	bg_rect.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
+	bg_rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	bg_rect.stretch_mode = TextureRect.STRETCH_SCALE
+	bg_rect.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	bg_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_modal_panel.add_child(bg_rect)
 
-	var vbox = VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", 12)
-	margin.add_child(vbox)
-
-	# Encabezado
-	var title = Label.new()
-	title.text = "CONFIGURACIÓN DE CONTROLES"
-	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title.add_theme_font_override("font", FONT_TITLE)
-	title.add_theme_font_size_override("font_size", 21)
-	title.add_theme_color_override("font_color", Color(0.92, 0.80, 0.38, 1.0))
-	title.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.9))
-	title.add_theme_constant_override("shadow_offset_y", 2)
-	vbox.add_child(title)
-
-	var subtitle = Label.new()
-	subtitle.text = "Haz clic en una tecla para reasignarla. Presiona ESC para cancelar."
-	subtitle.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	subtitle.add_theme_font_override("font", FONT_TEXT)
-	subtitle.add_theme_font_size_override("font_size", 13)
-	subtitle.add_theme_color_override("font_color", Color(0.65, 0.70, 0.80, 1.0))
-	vbox.add_child(subtitle)
-
-	vbox.add_child(_create_separator())
-
-	# Lista de acciones
-	var rows_vbox = VBoxContainer.new()
-	rows_vbox.add_theme_constant_override("separation", 10)
-	vbox.add_child(rows_vbox)
+	# 4. Contenedor de las 5 filas de acciones sobre el pergamino
+	var rows_container = VBoxContainer.new()
+	rows_container.name = "ActionRowsContainer"
+	rows_container.offset_left = 145.0
+	rows_container.offset_top = 194.0
+	rows_container.offset_right = 1123.0
+	rows_container.offset_bottom = 600.0
+	rows_container.add_theme_constant_override("separation", 24)
+	_modal_panel.add_child(rows_container)
 
 	for action in GameSettings.DEFAULT_KEYBINDINGS.keys():
 		var row = _create_action_row(action)
-		rows_vbox.add_child(row)
+		rows_container.add_child(row)
 
-	vbox.add_child(_create_separator())
+	# 5. Botones interactivos inferiores (alineados sobre la barra de piedra inferior)
+	# Botón RESTAURAR DEFECTO
+	_btn_reset = _create_bottom_interactive_button(
+		Rect2(183.0, 678.0, 404.0, 78.0),
+		_on_reset_pressed,
+		"Restaurar controles por defecto",
+		8
+	)
+	_modal_panel.add_child(_btn_reset)
 
-	# Botones inferiores
-	var btn_hbox = HBoxContainer.new()
-	btn_hbox.add_theme_constant_override("separation", 12)
-	btn_hbox.alignment = BoxContainer.ALIGNMENT_CENTER
-	vbox.add_child(btn_hbox)
-
-	_btn_reset = _create_bottom_button("RESTAURAR DEFECTO", _on_reset_pressed, Color(0.85, 0.75, 0.55, 1.0))
-	_btn_reset.custom_minimum_size = Vector2(230, 40)
-	btn_hbox.add_child(_btn_reset)
-
-	_btn_close = _create_bottom_button("CERRAR", close_dialog, Color(1.0, 0.92, 0.65, 1.0))
-	_btn_close.custom_minimum_size = Vector2(180, 40)
-	btn_hbox.add_child(_btn_close)
+	# Botón CERRAR
+	_btn_close = _create_bottom_interactive_button(
+		Rect2(642.0, 676.0, 459.0, 82.0),
+		close_dialog,
+		"Cerrar menú de controles",
+		6
+	)
+	_modal_panel.add_child(_btn_close)
 
 
 func _create_action_row(action: String) -> HBoxContainer:
 	var hbox = HBoxContainer.new()
 	hbox.alignment = BoxContainer.ALIGNMENT_CENTER
+	hbox.custom_minimum_size = Vector2(0, 59)
 
+	# Columna izquierda: Título y descripción de la acción
 	var text_vbox = VBoxContainer.new()
 	text_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	text_vbox.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	text_vbox.add_theme_constant_override("separation", 2)
 	hbox.add_child(text_vbox)
 
 	var action_name = Label.new()
-	action_name.text = GameSettings.ACTION_LABELS.get(action, action.capitalize())
+	var raw_name: String = GameSettings.ACTION_LABELS.get(action, action.capitalize())
+	action_name.text = raw_name.to_upper()
 	action_name.add_theme_font_override("font", FONT_TITLE)
-	action_name.add_theme_font_size_override("font_size", 14)
-	action_name.add_theme_color_override("font_color", Color(0.95, 0.92, 0.84, 1.0))
+	action_name.add_theme_font_size_override("font_size", 18)
+	action_name.add_theme_color_override("font_color", Color(0.12, 0.10, 0.08, 1.0))
+	action_name.add_theme_color_override("font_shadow_color", Color(1.0, 0.95, 0.85, 0.50))
+	action_name.add_theme_constant_override("shadow_offset_y", 1)
 	text_vbox.add_child(action_name)
 
 	var action_desc = Label.new()
 	action_desc.text = GameSettings.ACTION_DESCRIPTIONS.get(action, "")
 	action_desc.add_theme_font_override("font", FONT_TEXT)
-	action_desc.add_theme_font_size_override("font_size", 11)
-	action_desc.add_theme_color_override("font_color", Color(0.60, 0.65, 0.75, 0.90))
+	action_desc.add_theme_font_size_override("font_size", 14)
+	action_desc.add_theme_color_override("font_color", Color(0.26, 0.22, 0.18, 0.95))
 	text_vbox.add_child(action_desc)
 
+	# Columna derecha: Botón de piedra cincelada
 	var key_btn = Button.new()
-	key_btn.custom_minimum_size = Vector2(170, 36)
+	key_btn.custom_minimum_size = Vector2(305, 59)
 	key_btn.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 	key_btn.add_theme_font_override("font", FONT_TITLE)
-	key_btn.add_theme_font_size_override("font_size", 13)
+	key_btn.add_theme_font_size_override("font_size", 17)
 
-	var style_n = StyleBoxFlat.new()
-	style_n.bg_color = Color(0.12, 0.16, 0.22, 0.96)
-	style_n.border_color = Color(0.72, 0.60, 0.32, 0.85)
-	style_n.set_border_width_all(1)
-	style_n.set_corner_radius_all(4)
+	var style_n = StyleBoxTexture.new()
+	style_n.texture = TEX_STONE_NORMAL
+	style_n.axis_stretch_horizontal = StyleBoxTexture.AXIS_STRETCH_MODE_STRETCH
+	style_n.axis_stretch_vertical = StyleBoxTexture.AXIS_STRETCH_MODE_STRETCH
 
-	var style_h = style_n.duplicate() as StyleBoxFlat
-	style_h.bg_color = Color(0.18, 0.25, 0.35, 1.0)
-	style_h.border_color = Color(1.0, 0.88, 0.45, 1.0)
-	style_h.set_border_width_all(2)
+	var style_h = StyleBoxTexture.new()
+	style_h.texture = TEX_STONE_HOVER
+	style_h.axis_stretch_horizontal = StyleBoxTexture.AXIS_STRETCH_MODE_STRETCH
+	style_h.axis_stretch_vertical = StyleBoxTexture.AXIS_STRETCH_MODE_STRETCH
+
+	var style_p = StyleBoxTexture.new()
+	style_p.texture = TEX_STONE_PRESSED
+	style_p.axis_stretch_horizontal = StyleBoxTexture.AXIS_STRETCH_MODE_STRETCH
+	style_p.axis_stretch_vertical = StyleBoxTexture.AXIS_STRETCH_MODE_STRETCH
 
 	key_btn.add_theme_stylebox_override("normal", style_n)
 	key_btn.add_theme_stylebox_override("hover", style_h)
-	key_btn.add_theme_stylebox_override("pressed", style_h)
+	key_btn.add_theme_stylebox_override("pressed", style_p)
 	key_btn.add_theme_stylebox_override("focus", style_h)
-	key_btn.add_theme_color_override("font_color", Color(1.0, 0.95, 0.82, 1.0))
-	key_btn.add_theme_color_override("font_hover_color", Color(1.0, 1.0, 0.95, 1.0))
-	key_btn.add_theme_color_override("font_outline_color", Color(0, 0, 0, 1.0))
-	key_btn.add_theme_constant_override("outline_size", 1)
+
+	# Letras talladas en piedra: carbón oscuro con bisel de luz superior
+	key_btn.add_theme_color_override("font_color", Color(0.12, 0.10, 0.08, 1.0))
+	key_btn.add_theme_color_override("font_hover_color", Color(1.0, 0.95, 0.82, 1.0))
+	key_btn.add_theme_color_override("font_pressed_color", Color(0.90, 0.75, 0.35, 1.0))
+	key_btn.add_theme_color_override("font_focus_color", Color(1.0, 0.95, 0.82, 1.0))
+	key_btn.add_theme_color_override("font_shadow_color", Color(1.0, 1.0, 1.0, 0.35))
+	key_btn.add_theme_constant_override("shadow_offset_y", 1)
 
 	key_btn.pressed.connect(_on_action_button_pressed.bind(action))
 	hbox.add_child(key_btn)
@@ -282,14 +284,15 @@ func _start_listening_visuals(action: String) -> void:
 		return
 	var btn: Button = _action_buttons[action]
 	btn.text = "[ PULSA TECLA ]"
-	btn.add_theme_color_override("font_color", Color(1.0, 0.85, 0.25, 1.0))
+	btn.add_theme_color_override("font_color", Color(1.0, 0.82, 0.25, 1.0))
+	btn.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.8))
 
 	if _listen_tween and _listen_tween.is_valid():
 		_listen_tween.kill()
 
 	_listen_tween = btn.create_tween().set_loops()
-	_listen_tween.tween_property(btn, "modulate:a", 0.5, 0.35).set_ease(Tween.EASE_IN_OUT)
-	_listen_tween.tween_property(btn, "modulate:a", 1.0, 0.35).set_ease(Tween.EASE_IN_OUT)
+	_listen_tween.tween_property(btn, "modulate:a", 0.45, 0.32).set_ease(Tween.EASE_IN_OUT)
+	_listen_tween.tween_property(btn, "modulate:a", 1.0, 0.32).set_ease(Tween.EASE_IN_OUT)
 
 
 func _refresh_buttons() -> void:
@@ -301,7 +304,8 @@ func _refresh_buttons() -> void:
 		var keycode: int = GameSettings.get_key(action)
 		var key_name: String = GameSettings.get_key_display_string(keycode)
 		btn.text = "[ %s ]" % key_name
-		btn.add_theme_color_override("font_color", Color(1.0, 0.95, 0.82, 1.0))
+		btn.add_theme_color_override("font_color", Color(0.12, 0.10, 0.08, 1.0))
+		btn.add_theme_color_override("font_shadow_color", Color(1.0, 1.0, 1.0, 0.35))
 
 
 func _on_reset_pressed() -> void:
@@ -312,41 +316,44 @@ func _on_reset_pressed() -> void:
 	_refresh_buttons()
 
 
-func _create_bottom_button(label_text: String, callback: Callable, accent_color: Color) -> Button:
+func _create_bottom_interactive_button(
+	rect: Rect2,
+	callback: Callable,
+	tooltip: String,
+	corner_rad: int
+) -> Button:
 	var btn = Button.new()
-	btn.text = label_text
+	btn.position = rect.position
+	btn.size = rect.size
 	btn.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
-	btn.add_theme_font_override("font", FONT_TITLE)
-	btn.add_theme_font_size_override("font_size", 13)
+	btn.tooltip_text = tooltip
+	btn.focus_mode = Control.FOCUS_ALL
 
-	var style_n = StyleBoxFlat.new()
-	style_n.bg_color = Color(0.12, 0.15, 0.22, 0.95)
-	style_n.border_color = accent_color * 0.8
-	style_n.set_border_width_all(1)
-	style_n.set_corner_radius_all(6)
+	# Normal: transparente para lucir el botón pintado con fidelidad 100%
+	var style_n = StyleBoxEmpty.new()
 
-	var style_h = style_n.duplicate() as StyleBoxFlat
-	style_h.bg_color = Color(0.18, 0.24, 0.34, 1.0)
-	style_h.border_color = accent_color
+	# Hover: borde dorado radiante y halo resplandeciente
+	var style_h = StyleBoxFlat.new()
+	style_h.draw_center = true
+	style_h.bg_color = Color(1.0, 0.90, 0.45, 0.08)
+	style_h.border_color = Color(1.0, 0.88, 0.45, 0.95)
 	style_h.set_border_width_all(2)
+	style_h.set_corner_radius_all(corner_rad)
+	style_h.shadow_color = Color(0.92, 0.78, 0.28, 0.45)
+	style_h.shadow_size = 12
+
+	# Pressed: tinte oscuro sutil para dar sensación táctil de hundimiento
+	var style_p = StyleBoxFlat.new()
+	style_p.draw_center = true
+	style_p.bg_color = Color(0.0, 0.0, 0.0, 0.25)
+	style_p.border_color = Color(0.85, 0.70, 0.25, 0.90)
+	style_p.set_border_width_all(2)
+	style_p.set_corner_radius_all(corner_rad)
 
 	btn.add_theme_stylebox_override("normal", style_n)
 	btn.add_theme_stylebox_override("hover", style_h)
-	btn.add_theme_stylebox_override("pressed", style_h)
+	btn.add_theme_stylebox_override("pressed", style_p)
 	btn.add_theme_stylebox_override("focus", style_h)
-	btn.add_theme_color_override("font_color", accent_color)
-	btn.add_theme_color_override("font_hover_color", Color.WHITE)
-	btn.add_theme_color_override("font_outline_color", Color(0, 0, 0, 1.0))
-	btn.add_theme_constant_override("outline_size", 1)
 
 	btn.pressed.connect(callback)
 	return btn
-
-
-func _create_separator() -> HSeparator:
-	var sep = HSeparator.new()
-	var sep_style = StyleBoxLine.new()
-	sep_style.color = Color(0.78, 0.65, 0.32, 0.35)
-	sep_style.thickness = 1
-	sep.add_theme_stylebox_override("separator", sep_style)
-	return sep
