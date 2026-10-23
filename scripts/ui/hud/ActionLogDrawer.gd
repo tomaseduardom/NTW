@@ -300,27 +300,44 @@ func _setup_toggle_button() -> void:
 
 	_toggle_button = Button.new()
 	_toggle_button.name = "ActionLogButton"
-	_toggle_button.text = "ESTADO DE JUEGO [L]"
+	_toggle_button.text = "HISTORIAL [L]"
+	_toggle_button.tooltip_text = "Abrir panel de Historial y Estado de Juego [L]"
 	_toggle_button.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 	_toggle_button.add_theme_font_override("font", FONT_TITLE)
 	_toggle_button.add_theme_font_size_override("font_size", 13)
 
 	# Ubicación entre PlayerInfo (X: 20..200) y TurnLabel (X: 810..1110)
-	_toggle_button.offset_left = 210.0
-	_toggle_button.offset_top = 7.0
-	_toggle_button.offset_right = 410.0
-	_toggle_button.offset_bottom = 43.0
+	_toggle_button.offset_left = 205.0
+	_toggle_button.offset_top = 8.0
+	_toggle_button.offset_right = 385.0
+	_toggle_button.offset_bottom = 42.0
 
-	var style_n = _create_plaque_style(TEX_BTN_NORMAL, 12.0, 4.0)
-	var style_h = _create_plaque_style(TEX_BTN_HOVER, 12.0, 4.0)
-	var style_p = _create_plaque_style(TEX_BTN_PRESSED, 12.0, 4.0)
+	var style_n = StyleBoxFlat.new()
+	style_n.bg_color = Color(0.08, 0.10, 0.14, 0.94)
+	style_n.border_color = Color(0.70, 0.58, 0.35, 0.85)
+	style_n.set_border_width_all(1)
+	style_n.set_corner_radius_all(4)
+	style_n.content_margin_left = 12.0
+	style_n.content_margin_right = 12.0
+	style_n.content_margin_top = 4.0
+	style_n.content_margin_bottom = 4.0
+
+	var style_h = style_n.duplicate() as StyleBoxFlat
+	style_h.bg_color = Color(0.14, 0.18, 0.24, 0.98)
+	style_h.border_color = Color(1.0, 0.88, 0.45, 1.0)
+
+	var style_p = style_n.duplicate() as StyleBoxFlat
+	style_p.bg_color = Color(0.05, 0.06, 0.08, 0.98)
+	style_p.border_color = Color(0.55, 0.45, 0.25, 0.85)
 
 	_toggle_button.add_theme_stylebox_override("normal", style_n)
 	_toggle_button.add_theme_stylebox_override("hover", style_h)
 	_toggle_button.add_theme_stylebox_override("pressed", style_p)
 	_toggle_button.add_theme_stylebox_override("focus", style_h)
-	_toggle_button.add_theme_color_override("font_color", Color(0.98, 0.92, 0.78, 1.0))
-	_toggle_button.add_theme_color_override("font_hover_color", Color(1.0, 1.0, 0.90, 1.0))
+	_toggle_button.add_theme_color_override("font_color", Color(1.0, 0.95, 0.80, 1.0))
+	_toggle_button.add_theme_color_override("font_hover_color", Color(1.0, 1.0, 0.92, 1.0))
+	_toggle_button.add_theme_color_override("font_outline_color", Color(0, 0, 0, 1.0))
+	_toggle_button.add_theme_constant_override("outline_size", 1)
 	_toggle_button.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.95))
 	_toggle_button.add_theme_constant_override("shadow_offset_x", 1)
 	_toggle_button.add_theme_constant_override("shadow_offset_y", 1)
@@ -409,10 +426,10 @@ func _update_toggle_button_text() -> void:
 	if not _toggle_button:
 		return
 	if _unread_count > 0:
-		_toggle_button.text = "ESTADO DE JUEGO [L] (%d)" % _unread_count
+		_toggle_button.text = "HISTORIAL [L] (%d)" % _unread_count
 		_toggle_button.add_theme_color_override("font_color", Color(1.0, 0.90, 0.40, 1.0))
 	else:
-		_toggle_button.text = "ESTADO DE JUEGO [L]"
+		_toggle_button.text = "HISTORIAL [L]"
 		_toggle_button.remove_theme_color_override("font_color")
 
 
@@ -625,19 +642,19 @@ func _render_active_game_state() -> String:
 							])
 
 		# Inmunidades de silencio activas
-		for src in km.get("_weapon_wielder_silence_immunity_sources", []):
+		for src in (km.get("_weapon_wielder_silence_immunity_sources") if km.get("_weapon_wielder_silence_immunity_sources") is Array else []):
 			if is_instance_valid(src) and src.is_inside_tree():
 				has_locks = true
 				var src_name = src.get("card_name") if "card_name" in src else "Carta"
 				out.append(" [color=#38BDF8]🛡️[/color] [b]%s[/b]: Aliados con Arma protegidos contra perder habilidad." % src_name)
 
-		for src in km.get("_all_allies_silence_immunity_sources", []):
+		for src in (km.get("_all_allies_silence_immunity_sources") if km.get("_all_allies_silence_immunity_sources") is Array else []):
 			if is_instance_valid(src) and src.is_inside_tree():
 				has_locks = true
 				var src_name = src.get("card_name") if "card_name" in src else "Carta"
 				out.append(" [color=#38BDF8]🛡️[/color] [b]%s[/b]: Aliados protegidos contra perder habilidad." % src_name)
 
-		for src in km.get("_reserva_conditional_full_silence_immunity_sources", []):
+		for src in (km.get("_reserva_conditional_full_silence_immunity_sources") if km.get("_reserva_conditional_full_silence_immunity_sources") is Array else []):
 			if is_instance_valid(src) and src.is_inside_tree():
 				has_locks = true
 				var src_name = src.get("card_name") if "card_name" in src else "Carta"

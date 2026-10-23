@@ -85,12 +85,12 @@ func show_phase_announcement(phase_name: String) -> void:
 func _create_paso_style(tex: Texture2D) -> StyleBoxTexture:
 	var sb = StyleBoxTexture.new()
 	sb.texture = tex
-	sb.texture_margin_left = 104.0
-	sb.texture_margin_right = 104.0
-	sb.texture_margin_top = 12.0
-	sb.texture_margin_bottom = 12.0
-	sb.content_margin_left = 34.0
-	sb.content_margin_right = 34.0
+	sb.texture_margin_left = 75.0
+	sb.texture_margin_right = 75.0
+	sb.texture_margin_top = 10.0
+	sb.texture_margin_bottom = 10.0
+	sb.content_margin_left = 12.0
+	sb.content_margin_right = 12.0
 	sb.content_margin_top = 4.0
 	sb.content_margin_bottom = 6.0
 	return sb
@@ -113,30 +113,32 @@ func _setup_paso_button() -> void:
 	_paso_button.name = "PasoButton"
 	_paso_button.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 	_paso_button.add_theme_font_override("font", FONT_TITLE)
-	_paso_button.add_theme_font_size_override("font_size", 16)
+	_paso_button.add_theme_font_size_override("font_size", 15)
 
 	_paso_button.add_theme_stylebox_override("normal", _style_normal)
 	_paso_button.add_theme_stylebox_override("hover", _style_hover)
 	_paso_button.add_theme_stylebox_override("pressed", _style_pressed)
 	_paso_button.add_theme_stylebox_override("focus", _style_hover)
 	_paso_button.add_theme_stylebox_override("disabled", _style_disabled)
-	_paso_button.add_theme_color_override("font_color", Color(1.0, 0.94, 0.75, 1.0))
-	_paso_button.add_theme_color_override("font_hover_color", Color(1.0, 1.0, 0.90, 1.0))
+	_paso_button.add_theme_color_override("font_color", Color(1.0, 0.96, 0.84, 1.0))
+	_paso_button.add_theme_color_override("font_hover_color", Color(1.0, 1.0, 0.95, 1.0))
 	_paso_button.add_theme_color_override("font_pressed_color", Color(0.85, 0.76, 0.55, 1.0))
 	_paso_button.add_theme_color_override("font_disabled_color", Color(0.55, 0.52, 0.48, 0.75))
+	_paso_button.add_theme_color_override("font_outline_color", Color(0, 0, 0, 1.0))
+	_paso_button.add_theme_constant_override("outline_size", 2)
 	_paso_button.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.98))
 	_paso_button.add_theme_constant_override("shadow_offset_x", 1)
 	_paso_button.add_theme_constant_override("shadow_offset_y", 2)
 
-	# Posición: alineado al margen derecho de la pantalla (270x48 px diegético de hierro forjado y bronce)
+	# Posición: alineado al margen derecho de la pantalla (290x46 px diegético de hierro forjado y bronce)
 	_paso_button.anchor_left = 1.0
 	_paso_button.anchor_top = 0.5
 	_paso_button.anchor_right = 1.0
 	_paso_button.anchor_bottom = 0.5
-	_paso_button.offset_right = -24
-	_paso_button.offset_left = -294
-	_paso_button.offset_top = -24
-	_paso_button.offset_bottom = 24
+	_paso_button.offset_right = -20
+	_paso_button.offset_left = -310
+	_paso_button.offset_top = -23
+	_paso_button.offset_bottom = 23
 	_paso_button.mouse_filter = Control.MOUSE_FILTER_STOP
 	_paso_button.visible = false
 
@@ -213,22 +215,21 @@ func is_paso_button_ready() -> bool:
 
 
 func start_paso_glow() -> void:
-	"""Efecto de pulso/brillo ámbar en el botón para indicar ventana de respuesta activa."""
+	"""Activa el estilo hover para indicar ventana de respuesta activa sin destellos ni cambios de color molestos."""
 	if not _paso_button:
 		return
 	if _paso_glow_tween and _paso_glow_tween.is_valid():
 		_paso_glow_tween.kill()
+	_paso_glow_tween = null
+	_paso_button.modulate = Color.WHITE
 
 	if _style_hover:
 		_paso_button.add_theme_stylebox_override("normal", _style_hover)
-	_paso_button.add_theme_color_override("font_color", Color(1.0, 0.95, 0.50, 1.0))
-	_paso_glow_tween = _paso_button.create_tween().set_loops()
-	_paso_glow_tween.tween_property(_paso_button, "modulate", Color(1.25, 1.15, 0.80, 1.0), 0.5).set_ease(Tween.EASE_IN_OUT)
-	_paso_glow_tween.tween_property(_paso_button, "modulate", Color(1.0, 1.0, 1.0, 1.0), 0.5).set_ease(Tween.EASE_IN_OUT)
+	_paso_button.add_theme_color_override("font_color", Color(1.0, 1.0, 0.95, 1.0))
 
 
 func stop_paso_glow() -> void:
-	"""Detiene el efecto de pulso y restaura el estilo normal del botón."""
+	"""Restaura el estilo normal del botón."""
 	if _paso_glow_tween and _paso_glow_tween.is_valid():
 		_paso_glow_tween.kill()
 	_paso_glow_tween = null
@@ -238,7 +239,7 @@ func stop_paso_glow() -> void:
 
 	if _style_normal:
 		_paso_button.add_theme_stylebox_override("normal", _style_normal)
-	_paso_button.add_theme_color_override("font_color", Color(1.0, 0.93, 0.75, 1.0))
+	_paso_button.add_theme_color_override("font_color", Color(1.0, 0.96, 0.84, 1.0))
 
 
 # =============================================================================
