@@ -848,6 +848,7 @@ text = "Jugador 1"
 vertical_alignment = 1
 
 [node name="TurnTimer" type="PanelContainer" parent="." unique_id=505323634]
+visible = false
 layout_mode = 1
 anchors_preset = 6
 anchor_left = 1.0
