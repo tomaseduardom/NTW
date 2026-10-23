@@ -9,32 +9,30 @@ extends Control
 @onready var shadowforge_button: Button = $VBoxContainer/ShadowForgeButton
 @onready var decks_button: Button = $VBoxContainer/DecksButton
 @onready var backs_button: Button = $VBoxContainer/BacksButton
+@onready var controls_button: Button = $VBoxContainer/ControlsButton
 @onready var exit_button: Button = $VBoxContainer/ExitButton
 
+var _controls_dialog: ControlsDialog = null
 
 const GAME_SCENE := "res://scenes/game/Main.tscn"
 
 
 func _ready() -> void:
-	# Carga de la partida en segundo plano (2026-10-17, a pedido del usuario:
-	# "Jugar contra el bot" tardaba 5-7 s — load() de Main.tscn son ~4,5 s,
-	# casi todo compilar los scripts). Mientras se mira el menú ya se va
-	# cargando; al elegir, está lista.
+	# Carga de la partida en segundo plano: load() de Main.tscn tarda unos 4,5 s (casi todo compilar
+	# scripts); mientras se mira el menú ya se va cargando.
 	if ResourceLoader.load_threaded_get_status(GAME_SCENE) == ResourceLoader.THREAD_LOAD_INVALID_RESOURCE:
 		ResourceLoader.load_threaded_request(GAME_SCENE)
 	# Conectar botones y aplicar estilos interactivos
-	var buttons = [play_button, shadowforge_button, decks_button, backs_button, exit_button]
+	var buttons = [play_button, shadowforge_button, decks_button, backs_button, controls_button, exit_button]
 	for btn in buttons:
 		if btn:
 			btn.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 			_setup_button_hover(btn)
 
-	# 2026-10-12, bug real reportado por el usuario ("intenté jugar contra el
-	# bot y no me cargó el mazo"): al salir de una partida online la sala de
-	# red quedaba abierta (NetworkClient.room_code seguía seteado), así que
-	# "Jugar" contra el bot entraba al flujo online y esperaba para siempre
-	# el mazo del otro jugador. Volver al menú = no hay partida online en
-	# curso; OnlineConnect va directo a Main sin pasar por aquí.
+	# ("intenté jugar contra el bot y no me cargó el mazo"): al salir de una partida online la sala de
+	# red quedaba abierta (NetworkClient.room_code seguía seteado), así que "Jugar" contra el bot
+	# entraba al flujo online y esperaba para siempre el mazo del otro jugador. Volver al menú = no hay
+	# partida online en curso; OnlineConnect va directo a Main sin pasar por aquí.
 	if NetworkClient.room_code != "":
 		NetworkClient.disconnect_from_relay()
 
@@ -42,9 +40,10 @@ func _ready() -> void:
 	shadowforge_button.pressed.connect(_on_shadowforge_pressed)
 	decks_button.pressed.connect(_on_decks_pressed)
 	backs_button.pressed.connect(_on_backs_pressed)
+	controls_button.pressed.connect(_on_controls_pressed)
 	exit_button.pressed.connect(_on_exit_pressed)
 
-	# 2026-09-22: el botón muestra si ya hay una sesión de ShadowForge
+	# El botón muestra si ya hay una sesión de ShadowForge
 	if ExternalApiClient.is_authenticated():
 		shadowforge_button.text = "SHADOWFORGE (CONECTADO)"
 	else:
@@ -57,6 +56,12 @@ func _ready() -> void:
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo:
 		if event.keycode == KEY_ESCAPE:
+			if _controls_dialog and _controls_dialog.visible:
+				_controls_dialog.close_dialog()
+				var vp := get_viewport()
+				if vp:
+					vp.set_input_as_handled()
+				return
 			var overlay = get_node_or_null("PlayModeSelection")
 			if overlay:
 				var vp := get_viewport()
@@ -306,9 +311,8 @@ func _build_interactive_mode_card(
 
 
 func _on_shadowforge_pressed() -> void:
-	"""Abre la pantalla de login real de ShadowForge (2026-09-22, a pedido
-	del usuario: conectar tu cuenta para ver tus mazos privados en el
-	selector, en vez de editar un archivo a mano)."""
+	"""Abre la pantalla de login real de ShadowForge: conectar tu cuenta para ver tus mazos privados
+	en el selector, en vez de editar un archivo a mano"""
 	print("[MainMenu] Abriendo ShadowForge...")
 	get_tree().change_scene_to_file("res://scenes/menu/ShadowForgeLogin.tscn")
 
@@ -323,6 +327,18 @@ func _on_backs_pressed() -> void:
 	"""Abre el selector de dorsos"""
 	print("[MainMenu] Abriendo dorsos...")
 	get_tree().change_scene_to_file("res://scenes/menu/BackSelector.tscn")
+
+
+func _on_controls_pressed() -> void:
+	"""Abre el diálogo modal de configuración de controles"""
+	if not _controls_dialog:
+		_controls_dialog = ControlsDialog.new()
+		add_child(_controls_dialog)
+		_controls_dialog.closed.connect(func():
+			if controls_button and is_instance_valid(controls_button):
+				controls_button.grab_focus()
+		)
+	_controls_dialog.open_dialog()
 
 
 func _on_exit_pressed() -> void:

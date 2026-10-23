@@ -33,6 +33,12 @@ func _ready() -> void:
 	_setup_count_badge()
 	if not child_exiting_tree.is_connected(_on_child_exiting_tree):
 		child_exiting_tree.connect(_on_child_exiting_tree)
+	if not GameSettings.keybindings_changed.is_connected(_on_keybindings_changed):
+		GameSettings.keybindings_changed.connect(_on_keybindings_changed)
+
+
+func _on_keybindings_changed() -> void:
+	_update_count_badge(false)
 
 
 func _on_child_exiting_tree(node: Node) -> void:
@@ -85,10 +91,12 @@ func _process(delta: float) -> void:
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo:
-		if event.keycode == KEY_SPACE:
+		var key_toggle: int = GameSettings.get_key("toggle_mano")
+		var key_hide: int = GameSettings.get_key("ocultar_mano")
+		if event.keycode == key_toggle:
 			toggle_space_lock()
 			get_viewport().set_input_as_handled()
-		elif event.keycode == KEY_Q or event.keycode == KEY_H:
+		elif event.keycode == key_hide or event.keycode == KEY_Q:
 			toggle_hidden()
 			get_viewport().set_input_as_handled()
 
@@ -478,7 +486,9 @@ func _update_count_badge(animated: bool = true) -> void:
 
 	_count_badge.visible = true
 	_count_label.text = str(cards.size())
-	_count_badge.tooltip_text = "Mano: %d cartas\n[Espacio] Fijar / Reposar mano\n[Q/H] Ocultar mano" % cards.size()
+	var k_toggle = GameSettings.get_key_display_string(GameSettings.get_key("toggle_mano"))
+	var k_hide = GameSettings.get_key_display_string(GameSettings.get_key("ocultar_mano"))
+	_count_badge.tooltip_text = "Mano: %d cartas\n[%s] Fijar / Reposar mano\n[%s/Q] Ocultar mano" % [cards.size(), k_toggle, k_hide]
 
 	var last_card = cards[cards.size() - 1]
 	var last_pos: Vector2 = get_card_target_position(last_card)

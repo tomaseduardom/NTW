@@ -26,9 +26,11 @@ var _sfx_val_label: Label = null
 var _speed_buttons: Dictionary = {}
 
 var _btn_resume: Button = null
+var _btn_controls: Button = null
 var _btn_concede: Button = null
 var _btn_menu: Button = null
 var _btn_quit: Button = null
+var _controls_dialog: ControlsDialog = null
 
 # Diálogo de confirmación
 var _confirm_overlay: Control = null
@@ -124,17 +126,17 @@ func _build_ui() -> void:
 	# 2. Panel central
 	_modal_panel = PanelContainer.new()
 	_modal_panel.name = "PauseModalPanel"
-	_modal_panel.custom_minimum_size = Vector2(490, 580)
+	_modal_panel.custom_minimum_size = Vector2(490, 630)
 	_modal_panel.anchors_preset = Control.PRESET_CENTER
 	_modal_panel.anchor_left = 0.5
 	_modal_panel.anchor_top = 0.5
 	_modal_panel.anchor_right = 0.5
 	_modal_panel.anchor_bottom = 0.5
 	_modal_panel.offset_left = -245
-	_modal_panel.offset_top = -290
+	_modal_panel.offset_top = -315
 	_modal_panel.offset_right = 245
-	_modal_panel.offset_bottom = 290
-	_modal_panel.pivot_offset = Vector2(245, 290)
+	_modal_panel.offset_bottom = 315
+	_modal_panel.pivot_offset = Vector2(245, 315)
 
 	var panel_style = StyleBoxFlat.new()
 	panel_style.bg_color = Color(0.07, 0.09, 0.13, 0.98)
@@ -234,6 +236,9 @@ func _build_ui() -> void:
 
 	_btn_resume = _create_action_button("REANUDAR PARTIDA", _on_resume_pressed, Color(1.0, 0.92, 0.65, 1.0), true)
 	btn_vbox.add_child(_btn_resume)
+
+	_btn_controls = _create_action_button("CONTROLES / ATAJOS", _on_controls_pressed, Color(0.92, 0.86, 0.68, 1.0))
+	btn_vbox.add_child(_btn_controls)
 
 	_btn_concede = _create_action_button("CONCEDER PARTIDA", _on_concede_pressed, Color(1.0, 0.70, 0.50, 1.0))
 	btn_vbox.add_child(_btn_concede)
@@ -458,8 +463,10 @@ func _on_backdrop_input(event: InputEvent) -> void:
 
 
 func handle_escape() -> void:
-	"""Procesa la tecla Escape de forma segura cerrando confirmación o el menú de pausa."""
-	if _confirm_overlay and _confirm_overlay.visible:
+	"""Procesa la tecla Escape de forma segura cerrando confirmación, controles o el menú de pausa."""
+	if _controls_dialog and _controls_dialog.visible:
+		_controls_dialog.close_dialog()
+	elif _confirm_overlay and _confirm_overlay.visible:
 		_hide_confirm()
 	else:
 		close_menu()
@@ -472,6 +479,17 @@ func _unhandled_input(event: InputEvent) -> void:
 		if event.keycode == KEY_ESCAPE:
 			handle_escape()
 			get_viewport().set_input_as_handled()
+
+
+func _on_controls_pressed() -> void:
+	if not _controls_dialog:
+		_controls_dialog = ControlsDialog.new()
+		add_child(_controls_dialog)
+		_controls_dialog.closed.connect(func():
+			if _btn_controls and is_instance_valid(_btn_controls):
+				_btn_controls.grab_focus()
+		)
+	_controls_dialog.open_dialog()
 
 
 func _on_master_slider_changed(val: float) -> void:

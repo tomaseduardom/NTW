@@ -7,6 +7,7 @@ extends Node
 signal card_back_changed(back_id: String)
 signal audio_volume_changed(bus_name: String, volume_linear: float)
 signal animation_speed_changed(speed: float)
+signal keybindings_changed
 
 # =============================================================================
 # CONSTANTES
@@ -18,6 +19,30 @@ const BACK_FILES = {
 	"dorso_1": "dorso_1.png",
 	"dorso_2": "dorso_2.png",
 	"dorso_3": "dorso_3.png",
+}
+
+const DEFAULT_KEYBINDINGS: Dictionary = {
+	"pasar": KEY_P,              # Pasar Prioridad / Turno / Confirmar Ataque
+	"toggle_mano": KEY_SPACE,    # Fijar / Reposar Mano
+	"ocultar_mano": KEY_H,       # Ocultar / Mostrar Mano
+	"historial": KEY_L,          # Abrir / Cerrar Historial y Estado
+	"cancelar": KEY_N,           # Cancelar / Saltar Selección Opcional
+}
+
+const ACTION_LABELS: Dictionary = {
+	"pasar": "Pasar Turno / Prioridad",
+	"toggle_mano": "Fijar / Reposar Mano",
+	"ocultar_mano": "Ocultar / Mostrar Mano",
+	"historial": "Historial y Estado",
+	"cancelar": "Cancelar / Saltar Selección",
+}
+
+const ACTION_DESCRIPTIONS: Dictionary = {
+	"pasar": "Pasa prioridad, confirma ataque o fase de daño",
+	"toggle_mano": "Fija la mano arriba o la baja a reposo",
+	"ocultar_mano": "Oculta la mano completamente para ver la mesa",
+	"historial": "Abre o cierra el panel lateral de historial",
+	"cancelar": "Cancela la selección de objetivo o salta una acción opcional",
 }
 
 # =============================================================================
@@ -35,6 +60,9 @@ var sfx_volume: float = 1.0
 
 ## Velocidad de Animación (1.0, 1.5, 2.0)
 var animation_speed: float = 1.0
+
+## Atajos de Teclado
+var keybindings: Dictionary = DEFAULT_KEYBINDINGS.duplicate()
 
 var _player_back_texture: Texture2D = null
 var _opponent_back_texture: Texture2D = null
@@ -59,6 +87,8 @@ func _load_config() -> void:
 		master_volume = config.get_value("audio", "master_volume", 1.0)
 		music_volume = config.get_value("audio", "music_volume", 0.8)
 		sfx_volume = config.get_value("audio", "sfx_volume", 1.0)
+		for action in DEFAULT_KEYBINDINGS.keys():
+			keybindings[action] = int(config.get_value("controls", action, DEFAULT_KEYBINDINGS[action]))
 
 
 func _save_config() -> void:
@@ -71,7 +101,61 @@ func _save_config() -> void:
 	config.set_value("audio", "master_volume", master_volume)
 	config.set_value("audio", "music_volume", music_volume)
 	config.set_value("audio", "sfx_volume", sfx_volume)
+	for action in keybindings.keys():
+		config.set_value("controls", action, keybindings[action])
 	config.save(CONFIG_PATH)
+
+
+# =============================================================================
+# GESTIÓN DE ATAJOS Y CONTROLES
+# =============================================================================
+func get_key(action: String) -> int:
+	"""Retorna el KeyCode configurado para una acción."""
+	return keybindings.get(action, DEFAULT_KEYBINDINGS.get(action, KEY_NONE))
+
+
+func set_key(action: String, keycode: int) -> void:
+	"""Asigna un nuevo KeyCode a una acción y persiste la configuración."""
+	if not DEFAULT_KEYBINDINGS.has(action):
+		return
+	keybindings[action] = keycode
+	_save_config()
+	keybindings_changed.emit()
+
+
+func reset_keybindings_to_default() -> void:
+	"""Restaura todos los atajos a sus valores predeterminados."""
+	keybindings = DEFAULT_KEYBINDINGS.duplicate()
+	_save_config()
+	keybindings_changed.emit()
+
+
+func get_key_display_string(keycode: int) -> String:
+	"""Devuelve una representación de texto legible y limpia para una tecla."""
+	match keycode:
+		KEY_SPACE:
+			return "ESPACIO"
+		KEY_ENTER, KEY_KP_ENTER:
+			return "ENTER"
+		KEY_ESCAPE:
+			return "ESC"
+		KEY_TAB:
+			return "TAB"
+		KEY_BACKSPACE:
+			return "RETROCESO"
+		KEY_UP:
+			return "ARRIBA"
+		KEY_DOWN:
+			return "ABAJO"
+		KEY_LEFT:
+			return "IZQUIERDA"
+		KEY_RIGHT:
+			return "DERECHA"
+		KEY_CAPSLOCK:
+			return "BLOQ MAYÚS"
+		_:
+			var s: String = OS.get_keycode_string(keycode).to_upper()
+			return s if not s.is_empty() else "TECLA %d" % keycode
 
 
 func _apply_all_audio_settings() -> void:

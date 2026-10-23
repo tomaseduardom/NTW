@@ -102,9 +102,9 @@ anchor_top = 0.5
 anchor_right = 0.5
 anchor_bottom = 0.5
 offset_left = -210.0
-offset_top = 4.0
+offset_top = -25.0
 offset_right = 210.0
-offset_bottom = 392.0
+offset_bottom = 445.0
 grow_horizontal = 2
 grow_vertical = 2
 theme_override_constants/separation = 12
@@ -188,6 +188,26 @@ theme_override_styles/hover = SubResource("StyleBoxTexture_btn_hover")
 theme_override_styles/pressed = SubResource("StyleBoxTexture_btn_pressed")
 theme_override_styles/focus = SubResource("StyleBoxTexture_btn_normal")
 text = "DORSOS"
+
+[node name="ControlsButton" type="Button" parent="VBoxContainer"]
+custom_minimum_size = Vector2(420, 62)
+layout_mode = 2
+mouse_default_cursor_shape = 2
+theme_override_fonts/font = ExtResource("8_font_btn")
+theme_override_colors/font_color = Color(0.96, 0.87, 0.6, 1)
+theme_override_colors/font_focus_color = Color(0.96, 0.87, 0.6, 1)
+theme_override_colors/font_hover_color = Color(1, 0.96, 0.82, 1)
+theme_override_colors/font_hover_pressed_color = Color(0.86, 0.75, 0.48, 1)
+theme_override_colors/font_pressed_color = Color(0.86, 0.75, 0.48, 1)
+theme_override_colors/font_shadow_color = Color(0, 0, 0, 0.9)
+theme_override_constants/shadow_offset_x = 2
+theme_override_constants/shadow_offset_y = 2
+theme_override_font_sizes/font_size = 20
+theme_override_styles/normal = SubResource("StyleBoxTexture_btn_normal")
+theme_override_styles/hover = SubResource("StyleBoxTexture_btn_hover")
+theme_override_styles/pressed = SubResource("StyleBoxTexture_btn_pressed")
+theme_override_styles/focus = SubResource("StyleBoxTexture_btn_normal")
+text = "CONTROLES"
 
 [node name="ExitButton" type="Button" parent="VBoxContainer"]
 custom_minimum_size = Vector2(420, 62)

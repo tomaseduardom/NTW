@@ -344,6 +344,9 @@ func _setup_toggle_button() -> void:
 
 	_toggle_button.pressed.connect(toggle_drawer)
 	top_bar.add_child(_toggle_button)
+	if not GameSettings.keybindings_changed.is_connected(_update_toggle_button_text):
+		GameSettings.keybindings_changed.connect(_update_toggle_button_text)
+	_update_toggle_button_text()
 
 
 func _get_combat_log() -> Node:
@@ -425,11 +428,14 @@ func _on_log_cleared() -> void:
 func _update_toggle_button_text() -> void:
 	if not _toggle_button:
 		return
+	var key_code = GameSettings.get_key("historial")
+	var key_str = GameSettings.get_key_display_string(key_code)
+	_toggle_button.tooltip_text = "Abrir panel de Historial y Estado de Juego [%s]" % key_str
 	if _unread_count > 0:
-		_toggle_button.text = "HISTORIAL [L] (%d)" % _unread_count
+		_toggle_button.text = "HISTORIAL [%s] (%d)" % [key_str, _unread_count]
 		_toggle_button.add_theme_color_override("font_color", Color(1.0, 0.90, 0.40, 1.0))
 	else:
-		_toggle_button.text = "HISTORIAL [L]"
+		_toggle_button.text = "HISTORIAL [%s]" % key_str
 		_toggle_button.remove_theme_color_override("font_color")
 
 

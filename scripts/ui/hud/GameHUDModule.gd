@@ -109,7 +109,7 @@ func _setup_paso_button() -> void:
 	_style_disabled = _create_paso_style(TEX_BTN_DISABLED)
 
 	_paso_button = Button.new()
-	_paso_button.text = "Pasar [P]"
+	_paso_button.text = _get_paso_label("Pasar")
 	_paso_button.name = "PasoButton"
 	_paso_button.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 	_paso_button.add_theme_font_override("font", FONT_TITLE)
@@ -145,6 +145,19 @@ func _setup_paso_button() -> void:
 	_main.add_child(_paso_button)
 	_paso_button.pressed.connect(func(): _main._phase_flow._on_paso_pressed())
 
+	if not GameSettings.keybindings_changed.is_connected(_on_keybindings_changed):
+		GameSettings.keybindings_changed.connect(_on_keybindings_changed)
+
+
+func _get_paso_label(prefix: String) -> String:
+	var key_code: int = GameSettings.get_key("pasar")
+	var key_str: String = GameSettings.get_key_display_string(key_code)
+	return "%s [%s]" % [prefix, key_str]
+
+
+func _on_keybindings_changed() -> void:
+	update_paso_button_state()
+
 
 func update_paso_button_state() -> void:
 	"""Muestra/oculta el botón según si es el turno del jugador en una fase accionable."""
@@ -159,7 +172,7 @@ func update_paso_button_state() -> void:
 		# Con una ventana de prioridad activa, _on_paso_pressed() solo pasa prioridad
 		# (PriorityManager.pass_priority()) en cualquier fase, así que el texto dice eso aunque sea tu
 		# Vigilia: el botón dice lo que el click va a hacer.
-		_paso_button.text = "Pasar [P]"
+		_paso_button.text = _get_paso_label("Pasar")
 		_paso_button.visible = GameManager.is_game_active and PriorityManager.current_priority_player == 0
 		# Diagnóstico: imprime el estado detrás de mostrar/ocultar el botón.
 		if Constants.VERBOSE_DIAG_LOGS:
@@ -176,13 +189,13 @@ func update_paso_button_state() -> void:
 	# En Guerra de Talismanes (5.3.3) el botón dice "Daño": que ambos pasen seguido lleva a Asignación
 	# de Daño (5.3.4), como en Vigilia dice "Atacar".
 	if phase == Constants.Phase.GUERRA_TALISMANES:
-		_paso_button.text = "Daño [P]"
+		_paso_button.text = _get_paso_label("Daño")
 	else:
-		_paso_button.text = "Pasar [P]"
+		_paso_button.text = _get_paso_label("Pasar")
 		if phase == Constants.Phase.VIGILIA:
 			# Sin ningún Aliado que pueda atacar: "Fase Final".
-			_paso_button.text = "Atacar [P]" if TurnManager.player_can_attack(GameManager.active_player_id) \
-				else "Fase Final [P]"
+			_paso_button.text = _get_paso_label("Atacar") if TurnManager.player_can_attack(GameManager.active_player_id) \
+				else _get_paso_label("Fase Final")
 
 	var is_player_turn = (GameManager.active_player_id == 0)
 	var relevant_phase = phase in [

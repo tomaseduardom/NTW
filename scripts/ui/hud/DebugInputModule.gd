@@ -1,9 +1,7 @@
 extends Node
 class_name DebugInputModule
-## DebugInputModule — Atajos de teclado de debug (F1-F9) y ESC (cerrar
-## inspección/cancelar selección/pausa). Extraído de Main.gd (2026-08-28, a
-## pedido del usuario: "el main es para arrancar la app", esto es tooling de
-## runtime, no arranque). Se instancia como hijo de Main en _ready().
+## DebugInputModule — atajos de teclado de debug (F1-F9) y ESC (cerrar inspección / cancelar
+## selección / pausa). Hijo de Main, instanciado en _ready().
 
 var _main: Node = null
 
@@ -60,35 +58,35 @@ func _input(event: InputEvent) -> void:
 				# veces (una acá, otra en GameOverOverlay).
 				if not (_main._game_over_overlay and is_instance_valid(_main._game_over_overlay) and _main._game_over_overlay.visible):
 					_handle_enter_press()
-			KEY_P:
-				# 2026-10-01 (a pedido del usuario): atajo 'P' para el botón Pasar/Atacar/Daño del HUD
-				if _main._game_hud and _main._game_hud.is_paso_button_ready():
-					_main._phase_flow._on_paso_pressed()
-					get_viewport().set_input_as_handled()
-			KEY_N:
-				# 2026-10-17, a pedido del usuario: N = no hacer la acción
-				# opcional ("hasta una", "puedes") o terminar una selección
-				# múltiple con lo ya elegido. El resto del efecto sigue (p.ej.
-				# "Destierra hasta una carta y Roba una": Robas igual). Las
-				# selecciones obligatorias no se pueden saltar.
-				if _main._zone_browse_picker and _main._zone_browse_picker.skip_optional():
-					get_viewport().set_input_as_handled()
-				elif _main._card_interaction and _main._card_interaction.is_selecting_target:
-					_main._card_interaction.cancel_target_selection()
-					get_viewport().set_input_as_handled()
-				elif _main._remote_mirror and _main._remote_mirror.skip_optional():
-					get_viewport().set_input_as_handled()
 			KEY_F12:
 				var dp = _main.get_node_or_null("UI/DebugPanel")
 				if dp: dp.visible = !dp.visible
-			KEY_L, KEY_H:
-				# H también está ligada en DynamicHand a ocultar/mostrar la
-				# mano — se marca el evento como manejado acá para que, si
-				# de verdad hay drawer para abrir/cerrar, no dispare TAMBIÉN
-				# el toggle de la mano con la misma tecla.
-				if _main._action_log_drawer:
-					_main._action_log_drawer.toggle_drawer()
-					get_viewport().set_input_as_handled()
+			_:
+				# Atajos configurables por el usuario vía GameSettings
+				var key_pasar: int = GameSettings.get_key("pasar")
+				var key_cancelar: int = GameSettings.get_key("cancelar")
+				var key_historial: int = GameSettings.get_key("historial")
+
+				if event.keycode == key_pasar:
+					# Atajo para el botón Pasar/Atacar/Daño del HUD
+					if _main._game_hud and _main._game_hud.is_paso_button_ready():
+						_main._phase_flow._on_paso_pressed()
+						get_viewport().set_input_as_handled()
+				elif event.keycode == key_cancelar:
+					# Cancelar selección de objetivo o terminar/saltar acción opcional
+					if _main._zone_browse_picker and _main._zone_browse_picker.skip_optional():
+						get_viewport().set_input_as_handled()
+					elif _main._card_interaction and _main._card_interaction.is_selecting_target:
+						_main._card_interaction.cancel_target_selection()
+						get_viewport().set_input_as_handled()
+					elif _main._remote_mirror and _main._remote_mirror.skip_optional():
+						_main._remote_mirror.skip_optional()
+						get_viewport().set_input_as_handled()
+				elif event.keycode == key_historial:
+					# Abrir/cerrar drawer de Historial y Estado de juego
+					if _main._action_log_drawer:
+						_main._action_log_drawer.toggle_drawer()
+						get_viewport().set_input_as_handled()
 			KEY_ESCAPE:
 				# Igual que con Enter arriba: si la pantalla de fin de partida
 				# está visible, que sea ella la que decida qué hacer con
@@ -162,12 +160,8 @@ func _handle_enter_press() -> void:
 			_main._mulligan_ctrl.on_keep_hand_pressed()
 			return
 
-	# 6. Panel de selección de cartas activo (SelectionCanvas - Buscar, Descartar, etc.)
-	# 2026-09-13, bug real reportado por el usuario: "Invalid access to property
-	# or key 'is_active' on a base object of type 'Node (SelectionModule)'" —
-	# _main._selection (SelectionModule) nunca tuvo is_active/confirm_button; el
-	# panel real de selección vive en el autoload SelectionManager (is_open/
-	# _confirm_button, con guion bajo).
+	# 6. Panel de selección de cartas activo (Buscar, Descartar, etc.): vive en el autoload
+	# SelectionManager (is_open/_confirm_button), no en _main._selection (SelectionModule).
 	if SelectionManager.is_open:
 		var sel_confirm = SelectionManager.get("_confirm_button")
 		if sel_confirm and is_instance_valid(sel_confirm) and sel_confirm.is_visible_in_tree() and not sel_confirm.disabled:
