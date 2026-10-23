@@ -3,6 +3,7 @@ extends Node
 
 const CardScene = preload("res://scenes/cards/Card.tscn")
 const TurnLimits = preload("res://scripts/core/effects/mechanics/TurnLimits.gd")
+const TriggerTollScript = preload("res://scripts/core/effects/triggers/TriggerTollPatterns.gd")  # jose miguel carrera, capitan daisuke
 
 # Manejadores de patrones especiales separados de este archivo (como
 # BernardoAbilityHandler/ResponseWindowHandler). preload() en vez del class_name global: un editor
@@ -33,6 +34,7 @@ var _main: Node = null
 
 var inspected_card: Node = null
 var _ability_buttons_panel: Control = null
+var _gained_abilities_panel: Control = null
 var _inspected_source_card: Node = null
 ## Se incrementa cada vez que algo agrega contenido visible a _main.inspection_layer
 ## (una inspección nueva, el diálogo de elección de Bernardo, etc.) — ver
@@ -230,57 +232,99 @@ func _open_card_inspection(card: Node) -> void:
 
 
 func _build_gained_abilities_panel(source_card: Node) -> void:
-	"""Habilidades ganadas de otras cartas (Reina Nyssara: "gana las habilidades de esa carta"),
-	apiladas a la derecha de la carta inspeccionada, una por carta de origen. Si alguna es activada
-	y usable ahora, lleva su botón "Usar"."""
+	"""Habilidades ganadas de otras cartas (Reina Nyssara: 'gana las habilidades de esa carta'),
+	mostradas a la derecha de la carta inspeccionada con resolución nativa HD y diseño medieval diegético."""
 	if not is_instance_valid(inspected_card) or not is_instance_valid(source_card):
 		return
+	if _gained_abilities_panel and is_instance_valid(_gained_abilities_panel):
+		_gained_abilities_panel.queue_free()
+		_gained_abilities_panel = null
+
 	var gained: Array = source_card.card_data.get("_gained_abilities", [])
 	if gained.is_empty():
 		return
-	var card_size: Vector2 = inspected_card.custom_minimum_size
-	var width: float = card_size.x * 0.95
-	var box := VBoxContainer.new()
-	box.name = "GainedAbilitiesPanel"
-	box.position = Vector2(card_size.x + 4.0, 0.0)
-	box.custom_minimum_size = Vector2(width, 0.0)
-	box.add_theme_constant_override("separation", 3)
-	box.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	inspected_card.add_child(box)
+
+	# Calcular posición en coordenadas de pantalla relativas a la carta inspeccionada
+	var center: Vector2 = inspected_card.global_position + inspected_card.pivot_offset
+	var visual_right: float = center.x + (inspected_card.size.x * inspected_card.scale.x) * 0.5
+	var visual_top: float = center.y - (inspected_card.size.y * inspected_card.scale.y) * 0.5
+
+	var viewport_w: float = 1920.0
+	if _main and _main.inspection_layer and _main.inspection_layer.get_viewport():
+		viewport_w = _main.inspection_layer.get_viewport().get_visible_rect().size.x
+
+	var target_x: float = visual_right + 24.0
+	var panel_w: float = minf(460.0, maxf(280.0, viewport_w - target_x - 30.0))
+
+	var container := VBoxContainer.new()
+	container.name = "GainedAbilitiesContainer"
+	container.position = Vector2(target_x + 16.0, visual_top)
+	container.custom_minimum_size = Vector2(panel_w, 0.0)
+	container.add_theme_constant_override("separation", 14)
+	container.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	container.modulate.a = 0.0
+
+	_main.inspection_layer.add_child(container)
+	_gained_abilities_panel = container
 
 	var base_lower: String = str(source_card.card_data.get("_base_habilidad", "")).to_lower()
 	var usable: Array = usable_abilities_for(source_card, 0)
+
 	for g in gained:
 		var text: String = str(g.get("text", "")).strip_edges()
+		var card_source_name: String = str(g.get("from", "otra carta")).strip_edges()
+
 		var block := PanelContainer.new()
+		block.mouse_filter = Control.MOUSE_FILTER_STOP
+
 		var sb := StyleBoxFlat.new()
-		sb.bg_color = Color(0.07, 0.06, 0.11, 0.94)
-		sb.border_color = Color(0.85, 0.68, 0.32)
-		sb.set_border_width_all(1)
-		sb.set_corner_radius_all(2)
-		sb.content_margin_left = 3.0
-		sb.content_margin_right = 3.0
-		sb.content_margin_top = 2.0
-		sb.content_margin_bottom = 2.0
+		sb.bg_color = Color(0.06, 0.08, 0.12, 0.96)
+		sb.border_color = Color(0.85, 0.72, 0.36, 0.95)
+		sb.set_border_width_all(2)
+		sb.set_corner_radius_all(6)
+		sb.shadow_color = Color(0, 0, 0, 0.8)
+		sb.shadow_size = 20
+		sb.content_margin_left = 18.0
+		sb.content_margin_right = 18.0
+		sb.content_margin_top = 16.0
+		sb.content_margin_bottom = 16.0
 		block.add_theme_stylebox_override("panel", sb)
-		block.mouse_filter = Control.MOUSE_FILTER_STOP  # clic aquí no cierra la inspección
-		box.add_child(block)
+		container.add_child(block)
+
 		var col := VBoxContainer.new()
-		col.add_theme_constant_override("separation", 1)
+		col.add_theme_constant_override("separation", 10)
 		block.add_child(col)
+
 		var title := Label.new()
-		title.text = "Habilidad de %s" % str(g.get("from", "otra carta"))
+		title.text = "HABILIDAD DE %s" % card_source_name.to_upper()
 		title.add_theme_font_override("font", FONT_TITLE)
-		title.add_theme_font_size_override("font_size", 5)
-		title.add_theme_color_override("font_color", Color(0.95, 0.78, 0.38))
+		title.add_theme_font_size_override("font_size", 16)
+		title.add_theme_color_override("font_color", Color(1.0, 0.88, 0.45, 1.0))
+		title.add_theme_color_override("font_outline_color", Color(0, 0, 0, 1.0))
+		title.add_theme_constant_override("outline_size", 2)
+		title.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.95))
+		title.add_theme_constant_override("shadow_offset_x", 1)
+		title.add_theme_constant_override("shadow_offset_y", 2)
 		col.add_child(title)
+
+		var divider := ColorRect.new()
+		divider.custom_minimum_size = Vector2(0.0, 1.5)
+		divider.color = Color(0.85, 0.72, 0.36, 0.4)
+		col.add_child(divider)
+
 		var body := Label.new()
 		body.text = text
 		body.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		body.custom_minimum_size = Vector2(width - 6.0, 0.0)
+		body.custom_minimum_size = Vector2(panel_w - 36.0, 0.0)
 		body.add_theme_font_override("font", FONT_BODY)
-		body.add_theme_font_size_override("font_size", 4)
+		body.add_theme_font_size_override("font_size", 15)
+		body.add_theme_color_override("font_color", Color(0.96, 0.94, 0.90, 1.0))
+		body.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.9))
+		body.add_theme_constant_override("shadow_offset_x", 1)
+		body.add_theme_constant_override("shadow_offset_y", 1)
+		body.add_theme_constant_override("line_spacing", 4)
 		col.add_child(body)
+
 		var text_lower := text.to_lower()
 		for entry in usable:
 			var ability: Dictionary = entry.ability
@@ -289,16 +333,54 @@ func _build_gained_abilities_panel(source_card: Node) -> void:
 			if probe.is_empty() or not (probe in text_lower) or probe in base_lower:
 				continue
 			var btn := Button.new()
-			btn.text = "Usar"
+			btn.text = "USAR HABILIDAD"
+			btn.custom_minimum_size = Vector2(0.0, 36.0)
+			btn.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 			btn.add_theme_font_override("font", FONT_TITLE)
-			btn.add_theme_font_size_override("font_size", 4)
+			btn.add_theme_font_size_override("font_size", 13)
+
+			var btn_n := StyleBoxFlat.new()
+			btn_n.bg_color = Color(0.12, 0.16, 0.22, 0.96)
+			btn_n.border_color = Color(0.75, 0.62, 0.35, 0.90)
+			btn_n.set_border_width_all(1)
+			btn_n.set_corner_radius_all(4)
+			btn_n.content_margin_left = 12.0
+			btn_n.content_margin_right = 12.0
+			btn_n.content_margin_top = 4.0
+			btn_n.content_margin_bottom = 4.0
+
+			var btn_h := btn_n.duplicate() as StyleBoxFlat
+			btn_h.bg_color = Color(0.18, 0.25, 0.35, 1.0)
+			btn_h.border_color = Color(1.0, 0.88, 0.45, 1.0)
+			btn_h.set_border_width_all(2)
+
+			var btn_p := btn_n.duplicate() as StyleBoxFlat
+			btn_p.bg_color = Color(0.08, 0.10, 0.14, 1.0)
+			btn_p.border_color = Color(0.60, 0.50, 0.25, 1.0)
+
+			btn.add_theme_stylebox_override("normal", btn_n)
+			btn.add_theme_stylebox_override("hover", btn_h)
+			btn.add_theme_stylebox_override("pressed", btn_p)
+			btn.add_theme_stylebox_override("focus", btn_h)
+			btn.add_theme_color_override("font_color", Color(1.0, 0.95, 0.82, 1.0))
+			btn.add_theme_color_override("font_hover_color", Color(1.0, 1.0, 0.95, 1.0))
+			btn.add_theme_color_override("font_outline_color", Color(0, 0, 0, 1.0))
+			btn.add_theme_constant_override("outline_size", 1)
 			btn.tooltip_text = str(ability.get("raw_text", ""))
+
 			var captured: Dictionary = ability.duplicate()
 			btn.pressed.connect(func():
 				close_card_inspection()
+				if not await TriggerTollScript.pay_toll(source_card, 0, TriggerTollScript.ability_toll(source_card, 0)):
+					return
+				RuleState.add("abilities_used", 0)  # anillo de tierra
 				await _button_support._activate_ability_via_pipeline(source_card, source_card.card_data.duplicate(), captured,
 					{"controller_id": 0, "source_card_node": source_card}))
 			col.add_child(btn)
+
+	var tw = container.create_tween().set_parallel(true)
+	tw.tween_property(container, "modulate:a", 1.0, 0.25).set_ease(Tween.EASE_OUT)
+	tw.tween_property(container, "position:x", target_x, 0.25).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 
 
 func _on_inspection_blur_input(event: InputEvent) -> void:
@@ -376,6 +458,12 @@ func close_card_inspection() -> void:
 	if _ability_buttons_panel and is_instance_valid(_ability_buttons_panel):
 		_ability_buttons_panel.queue_free()
 		_ability_buttons_panel = null
+	if _gained_abilities_panel and is_instance_valid(_gained_abilities_panel):
+		var panel_to_remove = _gained_abilities_panel
+		_gained_abilities_panel = null
+		var p_tween = create_tween()
+		p_tween.tween_property(panel_to_remove, "modulate:a", 0.0, 0.15)
+		p_tween.tween_callback(panel_to_remove.queue_free)
 	_inspected_source_card = null
 	var card_to_remove = inspected_card
 	inspected_card = null
@@ -416,6 +504,11 @@ func _ability_is_hand_usable(full_text: String) -> bool:
 		return true  # skofnung
 	if "puedes pagar un oro para desterrar este y otro aliado sacerdote de tu mano" in lower:
 		return true  # sandraudiga
+	# Coste = descartar esta carta / desterrarla de la mano (basan, lurulu, Jafet, pablo pincheira):
+	# EffectCompiler.COST_PIECES self_discard / self_banish.
+	if "puedes descartarlo para" in lower or "puedes descartarla para" in lower \
+			or "desterrarlo de tu mano" in lower or "desterrarla de tu mano" in lower:
+		return true
 	return false
 
 
@@ -424,8 +517,9 @@ func _ability_is_cementerio_usable(full_text: String) -> bool:
 	"Puedes Desterrarla de tu Cementerio para que un Aliado gane o pierda 2 de Fuerza
 	permanentemente"). Mismo criterio que _ability_is_hand_usable()."""
 	var lower := full_text.to_lower()
-	if "desterrarla de tu cementerio" in lower or "desterrarlo de tu cementerio" in lower:
-		return true  # Espada del Juicio
+	if "desterrarla de tu cementerio" in lower or "desterrarlo de tu cementerio" in lower \
+			or "desterrarlo desde tu cementerio" in lower or "desterrarla desde tu cementerio" in lower:
+		return true  # Espada del Juicio, wani
 	if "si está en tu cementerio y si tienes menos cartas en tu mano que tu oponente" in lower:
 		return true  # Envidia
 	if "en juego desde tu cementerio como un aliado sin habilidad" in lower:
@@ -434,6 +528,9 @@ func _ability_is_cementerio_usable(full_text: String) -> bool:
 		return true  # Ira
 	if "para subir esta carta de tu cementerio a tu mano" in lower:
 		return true  # vision heroica
+	if "para subirlo de tu cementerio a tu mano" in lower or "para subirla de tu cementerio a tu mano" in lower \
+			or "para subir esta arma de tu cementerio a tu mano" in lower:
+		return true  # Belial, voces de hielo, sai (EffectCompiler self_raise)
 	if "desterrarlo de tu mano o cementerio" in lower:
 		return true  # Drácula
 	if "en tu cementerio" in lower and "gana la habilidad" in lower:
@@ -462,6 +559,12 @@ func activate_ability_for(source_card: Node, ability: Dictionary, controller_id:
 	de AbilityButtonPatternsA-D (p.ej. Miguel) y, si ninguno aplica, la Pila genérica. Lo usa
 	RemotePlayerController para que el Remoto vaya por el mismo camino. Los patrones conectan su
 	lógica al 'pressed' de un botón: aquí se arma un botón sin mostrar y se espera esa función."""
+	if not is_instance_valid(source_card):
+		return
+	# Recargo por utilizar la habilidad (jose miguel carrera, capitan daisuke): se paga antes.
+	if not await TriggerTollScript.pay_toll(source_card, controller_id, TriggerTollScript.ability_toll(source_card, controller_id)):
+		return
+	RuleState.add("abilities_used", controller_id)  # anillo de tierra
 	if not is_instance_valid(source_card):
 		return
 	if not (source_card.get("current_zone") in Constants.ZONES_IN_PLAY):
@@ -820,6 +923,15 @@ func _build_ability_buttons(source_card: Node) -> void:
 			btn.pressed.connect(func(): TurnLimits.note_outside_ability(0))
 
 		var ability_lower: String = str(captured.get("raw_text", "")).to_lower()
+		# Con recargo por utilizarla (jose miguel carrera, capitan daisuke): por activate_ability_for(),
+		# que lo cobra y después sigue el mismo camino que este botón.
+		if TriggerTollScript.ability_toll(source_card, 0) > 0:
+			btn.pressed.connect(func():
+				close_card_inspection()
+				await activate_ability_for(card_for_glow, captured, 0))
+			panel.add_child(btn)
+			continue
+		btn.pressed.connect(func(): RuleState.add("abilities_used", 0))  # anillo de tierra
 		# Patrones especiales de habilidades activadas, en 4 archivos
 		# (AbilityButtonPatternsA.gd/_B.gd/_C.gd/_D.gd) que se revisan en orden A, B, C, D: el primer
 		# match gana.
