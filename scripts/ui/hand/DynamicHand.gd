@@ -13,11 +13,16 @@ signal card_double_clicked(card: Node)
 @export var animation_duration: float = 0.22
 @export var max_fan_angle: float = 9.5  ## Ángulo máximo de apertura del abanico en grados
 @export var max_arc_height: float = 22.0  ## Elevación vertical máxima del centro del arco
-@export var hover_lift: float = 0.0  ## Inmovilidad en hover (0 movimiento a pedido del usuario)
+@export var hover_lift: float = 0.0  ## Inmovilidad en hover (0 = la carta no se mueve)
 
 var cards: Array[Node] = []
 var _tweens: Dictionary = {}
 var _is_hidden: bool = false
+var _is_docked: bool = true          ## Por defecto en reposo para despejar tótems
+var _is_locked_open: bool = false   ## Fijada arriba mediante la tecla Espacio
+var _undock_grace_timer: float = 0.0
+const UNDOCK_GRACE_DELAY: float = 0.22  ## Retardo suave para evitar sacudidas al salir el cursor
+
 var _count_badge: PanelContainer = null
 var _count_label: Label = null
 var _badge_tween: Tween = null
@@ -41,29 +46,100 @@ func _on_child_exiting_tree(node: Node) -> void:
 		_arrange_cards(true)
 
 
+func _process(delta: float) -> void:
+	if _is_hidden or cards.is_empty():
+		return
+
+	# Si la mano está fijada con la tecla Espacio, no alternar automáticamente por hover
+	if _is_locked_open:
+		return
+
+	# No replegar mientras se esté arrastrando una carta
+	if _is_any_card_dragging():
+		_undock_grace_timer = UNDOCK_GRACE_DELAY
+		return
+
+	var mouse_pos: Vector2 = get_global_mouse_position()
+	var hand_rect: Rect2 = get_global_rect()
+
+	var in_h_bounds: bool = mouse_pos.x >= (hand_rect.position.x - 20.0) and mouse_pos.x <= (hand_rect.end.x + 20.0)
+
+	if _is_docked:
+		# En reposo: se eleva si el ratón entra en la franja inferior donde asoman los cabezales
+		var in_dock_v_bounds: bool = mouse_pos.y >= (hand_rect.end.y - 85.0) and mouse_pos.y <= (hand_rect.end.y + 10.0)
+		if in_h_bounds and in_dock_v_bounds:
+			expand_hand()
+	else:
+		# Desplegada: se mantiene abierta mientras el cursor esté sobre el área de la mano
+		var in_expanded_v_bounds: bool = mouse_pos.y >= (hand_rect.position.y - 20.0) and mouse_pos.y <= (hand_rect.end.y + 20.0)
+		var is_mouse_over_hand: bool = in_h_bounds and in_expanded_v_bounds
+
+		if is_mouse_over_hand or _has_any_card_hovered():
+			_undock_grace_timer = UNDOCK_GRACE_DELAY
+		else:
+			if _undock_grace_timer > 0.0:
+				_undock_grace_timer -= delta
+			else:
+				dock_hand()
+
+
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo:
-		if event.keycode == KEY_Q or event.keycode == KEY_H:
+		if event.keycode == KEY_SPACE:
+			toggle_space_lock()
+			get_viewport().set_input_as_handled()
+		elif event.keycode == KEY_Q or event.keycode == KEY_H:
 			toggle_hidden()
 			get_viewport().set_input_as_handled()
 
 
+func toggle_space_lock() -> void:
+	"""Alterna y fija la mano entre reposo (abajo) y desplegada (arriba) con la tecla Espacio."""
+	if _is_hidden:
+		_is_hidden = false
+	if _is_locked_open:
+		_is_locked_open = false
+		dock_hand()
+	else:
+		_is_locked_open = true
+		expand_hand()
+
+
 func toggle_hidden() -> void:
-	"""Alterna entre ocultar la mano para ver el campo y mostrarla para jugar cartas."""
+	"""Alterna entre ocultar la mano completamente fuera de pantalla y restaurarla."""
 	_is_hidden = not _is_hidden
+	_is_locked_open = false
 	_arrange_cards(true)
 
 
-func show_hand() -> void:
-	if _is_hidden:
-		_is_hidden = false
-		_arrange_cards(true)
+func expand_hand() -> void:
+	"""Despliega la mano hacia arriba en abanico completo."""
+	if _is_hidden or not _is_docked:
+		return
+	_is_docked = false
+	_arrange_cards(true)
 
 
-func hide_hand() -> void:
-	if not _is_hidden:
-		_is_hidden = true
-		_arrange_cards(true)
+func dock_hand() -> void:
+	"""Baja la mano a reposo inferior para despejar el campo y los tótems."""
+	if _is_hidden or _is_docked:
+		return
+	_is_docked = true
+	_arrange_cards(true)
+
+
+func _is_any_card_dragging() -> bool:
+	for c in cards:
+		if is_instance_valid(c) and c.get("is_dragging") == true:
+			return true
+	return false
+
+
+func _has_any_card_hovered() -> bool:
+	for c in cards:
+		if is_instance_valid(c) and c.get("is_hovered") == true:
+			return true
+	return false
 
 
 func add_card(card: Node) -> void:
@@ -121,6 +197,12 @@ func remove_card(card: Node, destroy: bool = true) -> void:
 	_arrange_cards(true)
 
 
+## Mismo nombre que OpponentFan.get_cards(): varios patrones lo llaman sobre "la mano del oponente" sin
+## saber cuál de las dos es (fallaba cuando el oponente era el Anfitrión).
+func get_cards() -> Array[Node]:
+	return cards
+
+
 func get_card_count() -> int:
 	return cards.size()
 
@@ -147,7 +229,11 @@ func get_card_target_rotation(card: Node) -> float:
 	var center_idx = (n - 1) / 2.0
 	var d = float(idx) - center_idx
 	var t = d / maxf(center_idx, 1.0)
-	var dynamic_max_tilt = clampf((n - 1) * 2.2, 0.0, max_fan_angle)
+	var max_tilt = max_fan_angle
+	if _is_docked:
+		# En reposo: inclinación casi nula (máx 2.5°) para lectura horizontal limpia de cabezales
+		max_tilt = minf(max_fan_angle * 0.3, 2.5)
+	var dynamic_max_tilt = clampf((n - 1) * 2.2, 0.0, max_tilt)
 	return t * dynamic_max_tilt
 
 
@@ -177,23 +263,31 @@ func get_card_target_position(card: Node) -> Vector2:
 
 	var base_y = _get_vertical_target_y(center_y)
 	var target_y = base_y
-	if not _is_hidden and n > 1:
+	if not _is_hidden and not _is_docked and n > 1:
 		var center_idx = (n - 1) / 2.0
 		var d = float(idx) - center_idx
 		var t = d / maxf(center_idx, 1.0)
 		var dynamic_arc = clampf((n - 1) * 3.5, 0.0, max_arc_height)
 		var curve_lift = (1.0 - (t * t)) * dynamic_arc
 		target_y = base_y - curve_lift
+	elif not _is_hidden and _is_docked and n > 1:
+		var center_idx = (n - 1) / 2.0
+		var d = float(idx) - center_idx
+		var t = d / maxf(center_idx, 1.0)
+		var curve_lift = (1.0 - (t * t)) * 5.0
+		target_y = base_y - curve_lift
 
 	return Vector2(target_x, target_y)
 
 
 func _get_vertical_target_y(center_y: float) -> float:
-	"""Calcula la posición Y base según si la mano está desplegada u oculta."""
-	if not _is_hidden:
-		return center_y - 75.0
+	"""Calcula la posición Y base según si la mano está desplegada, en reposo u oculta."""
+	if _is_hidden:
+		return center_y + 160.0  # Oculta completamente bajo la pantalla
+	elif _is_docked:
+		return center_y + 60.0   # En reposo: asoma ~50 px superiores de las cartas
 	else:
-		return center_y + 155.0  # Oculta bajo la pantalla
+		return center_y - 75.0   # Desplegada completa (abanico interactivo)
 
 
 func _arrange_cards(animated: bool = true) -> void:
@@ -279,13 +373,16 @@ func _arrange_cards(animated: bool = true) -> void:
 
 
 func _on_card_hovered(card: Node) -> void:
-	"""Al hacer hover: la carta no se mueve ni rota (a pedido del usuario),
-	solo se trae al frente (z_index = 100) y se libera el recorte para interacción completa."""
+	"""Al hacer hover: si está en reposo se eleva automáticamente, y la carta gana prioridad z_index."""
 	if not is_instance_valid(card) or card.get_parent() != self:
 		return
 	if _is_hidden or card.get("is_dragging") == true:
 		return
 
+	if _is_docked and not _is_locked_open:
+		expand_hand()
+
+	_undock_grace_timer = UNDOCK_GRACE_DELAY
 	card.z_index = 100
 	if card.has_method("set_click_clip_right"):
 		card.set_click_clip_right(-1.0)
@@ -330,7 +427,7 @@ func _setup_count_badge() -> void:
 		return
 	_count_badge = PanelContainer.new()
 	_count_badge.name = "HandCountBadge"
-	_count_badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_count_badge.mouse_filter = Control.MOUSE_FILTER_PASS
 	_count_badge.z_index = 50
 	_count_badge.custom_minimum_size = Vector2(26, 26)
 
@@ -381,6 +478,7 @@ func _update_count_badge(animated: bool = true) -> void:
 
 	_count_badge.visible = true
 	_count_label.text = str(cards.size())
+	_count_badge.tooltip_text = "Mano: %d cartas\n[Espacio] Fijar / Reposar mano\n[Q/H] Ocultar mano" % cards.size()
 
 	var last_card = cards[cards.size() - 1]
 	var last_pos: Vector2 = get_card_target_position(last_card)
