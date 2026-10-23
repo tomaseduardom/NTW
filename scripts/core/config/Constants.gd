@@ -5,15 +5,9 @@ extends Node
 # =============================================================================
 # LOGGING
 # =============================================================================
-## 2026-09-23, a pedido del usuario ("eliminar tanto log innecesario, quiero
-## entender lo que está pasando"): varios prints "[DIAG]" (gui_input de cada
-## click, estado del botón ¿Paso? en cada cambio de prioridad, etc.) se
-## agregaron para cazar bugs puntuales de la fase de Guerra de Talismanes
-## (ver arquitectura.md §12/§13.4/§13.6) y quedaron encendidos siempre,
-## inundando la consola en cualquier partida normal. En vez de borrarlos (esa
-## visibilidad ya sirvió para arreglar varios bugs reales), se apagan por
-## defecto aquí — si vuelve a hacer falta cazar algo similar, alcanza con
-## poner esto en `true`, sin tener que reescribir el logging desde cero.
+# Los prints "[DIAG]" (gui_input de cada click, estado del botón ¿Paso? en cada cambio de prioridad,
+# etc.) sirvieron para cazar bugs de la Guerra de Talismanes (arquitectura.md §12/§13.4/§13.6).
+# Están apagados por defecto; poner esto en `true` para volver a verlos.
 const VERBOSE_DIAG_LOGS: bool = false
 
 # =============================================================================
@@ -35,6 +29,9 @@ const CARDS_DRAWN_PER_TURN: int = 1
 
 ## Escala de las cartas de Oro en Reserva y Oro Pagado (0.88 = más presencia y legibilidad)
 const GOLD_CARD_SCALE: Vector2 = Vector2(0.88, 0.88)
+
+## Escala de los Tótems en la Línea de Apoyo (0.88 = más presencia y legibilidad que el 0.80 previo)
+const TOTEM_CARD_SCALE: Vector2 = Vector2(0.88, 0.88)
 
 ## Desplazamiento vertical para Armas equipadas a un Aliado (asoman discretamente por abajo)
 const WEAPON_OFFSET_Y: float = 48.0
@@ -147,9 +144,7 @@ const BattleStep = Phase
 # HABILIDADES KEYWORD (DAR Sección 7-8)
 # =============================================================================
 enum Keyword {
-	# Confirmadas como reales en Mitos y Leyendas (2026-08-20, corrección del
-	# usuario — el set anterior mezclaba keywords de otros CCG que no existen
-	# en este juego; ver docs/audit-2026-08-13.html para el historial).
+	# Keywords reales de Mitos y Leyendas.
 	FURIA,              # Puede atacar sin esperar Agrupación
 	IMBLOQUEABLE,       # No puede ser bloqueado (sin excepción por keyword —
 	                    # si algo puede bloquearlo, lo dice su propio texto)
@@ -184,11 +179,10 @@ const KEYWORD_DESCRIPTIONS: Dictionary = {
 	Keyword.RETADOR: "El controlador de este Aliado elige qué Aliado enemigo debe bloquearlo.",
 }
 
-# NOTA (2026-08-20): "Inmune a X" y "portar múltiples armas" NO son keywords
-# fijas en Mitos y Leyendas — son texto libre de cada carta ("no puede ser
-# afectada por talismanes", "tus aliados pueden portar un arma adicional").
-# Se detectan por texto donde hace falta (ver TriggerSystem._target_text_denies
-# y GoldManager._player_has_ally_in_play/lógica de Armas), no como Keyword.
+# NOTA: "Inmune a X" y "portar múltiples armas" NO son keywords fijas en Mitos y Leyendas — son
+# texto libre de cada carta ("no puede ser afectada por talismanes", "tus aliados pueden portar un
+# arma adicional"). Se detectan por texto donde hace falta (ver TriggerSystem._target_text_denies y
+# GoldManager._player_has_ally_in_play/lógica de Armas), no como Keyword.
 
 # =============================================================================
 # TIPOS DE HABILIDAD

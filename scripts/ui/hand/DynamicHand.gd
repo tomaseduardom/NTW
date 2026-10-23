@@ -29,6 +29,8 @@ var _badge_tween: Tween = null
 
 
 func _ready() -> void:
+	z_as_relative = false
+	z_index = 120
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_setup_count_badge()
 	if not child_exiting_tree.is_connected(_on_child_exiting_tree):
@@ -339,7 +341,7 @@ func _arrange_cards(animated: bool = true) -> void:
 
 		var is_card_hovered: bool = card.get("is_hovered") == true
 		if is_card_hovered:
-			card.z_index = 100
+			card.z_index = 80
 		else:
 			card.z_index = i
 		card.set("original_z_index", i)
@@ -391,7 +393,7 @@ func _on_card_hovered(card: Node) -> void:
 		expand_hand()
 
 	_undock_grace_timer = UNDOCK_GRACE_DELAY
-	card.z_index = 100
+	card.z_index = 80
 	if card.has_method("set_click_clip_right"):
 		card.set_click_clip_right(-1.0)
 

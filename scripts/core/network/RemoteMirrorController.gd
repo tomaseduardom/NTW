@@ -1,30 +1,14 @@
 extends Node
 class_name RemoteMirrorController
-## RemoteMirrorController — instanciado siempre en Main.gd (Anfitrión y
-## Remoto por igual), pero SOLO hace algo si esta instancia concreta es el
-## Remoto de una sala de red activa (NetworkClient.room_code != "" and not
-## NetworkClient.is_host). En ese caso, GameBootstrap ya se detiene solo
-## después de mandar el mazo propio (ver GameBootstrap._send_own_deck_and_
-## wait_for_host()) — no hay doble simulación corriendo (el Remoto nunca
-## llega a GameManager.setup_game()/start_game() de forma local), pero
-## tampoco hay nada más que pase: esta clase es lo que hace que después de
-## esa espera, la persona real pueda seguir jugando.
-##
-## Escucha los mensajes {"op":"prompt","kind":...} que manda
-## RemotePlayerController (scripts/core/ai/RemotePlayerController.gd) desde
-## el lado del Anfitrión y muestra una UI mínima para que la persona elija,
-## devolviendo {"op":"intent","kind":...} — mismo protocolo documentado ahí.
-##
-## Alcance de este incremento (2026-09-11, Fase B): cubre los 4 tipos de
-## prompt que RemotePlayerController ya manda (mulligan/vigilia/ataque/
-## response_window), CON diálogos de texto (nombre/coste, sin arte). Además
-## aplica las instrucciones "move_card"/"remove_card" que manda
-## GameStateBroadcaster desde el lado del Anfitrión — esto SÍ crea Nodos
-## Card reales (con arte) en los contenedores correctos del tablero, para
-## las 5 zonas públicas "en juego" (Reserva de Oro/Oro Pagado/Línea de
-## Defensa/Ataque/Apoyo). Mano/Castillo (privados) y Cementerio/Destierro
-## (públicos pero sin Nodos visibles, solo contador) quedan fuera de este
-## streaming por ahora — ver GameStateBroadcaster.gd.
+## RemoteMirrorController — instanciado siempre en Main.gd, pero solo actúa si esta instancia es el
+## Remoto de una sala activa (NetworkClient.room_code != "" and not NetworkClient.is_host). El
+## Remoto no corre GameManager.setup_game()/start_game(): GameBootstrap se detiene tras mandar el
+## mazo propio (_send_own_deck_and_wait_for_host()) y esta clase es la que permite seguir jugando.
+## Escucha los {"op":"prompt","kind":...} de RemotePlayerController (lado Anfitrión), muestra la UI
+## para que la persona elija y responde {"op":"intent","kind":...} (mismo protocolo documentado
+## ahí). Además aplica los "move_card"/"remove_card" de GameStateBroadcaster, creando Nodos Card
+## reales en las 5 zonas públicas en juego (Reserva/Oro Pagado/Línea de Defensa/Ataque/Apoyo). Ver
+## GameStateBroadcaster.gd para la mano y los contadores de Castillo/Cementerio/Destierro.
 
 var _main: Node = null
 var _active: bool = false
@@ -35,13 +19,12 @@ var _card_nodes: Dictionary = {}  # card_id (String) -> Node local (ghost)
 var _hand_card_nodes: Dictionary = {}  # card_id (String) -> Node local en player_hand (§45)
 ## card_ids sin habilidad según el Anfitrión (op "disabled_cards", §63).
 var _disabled_ids: Dictionary = {}
-## Botón de paso del Remoto (2026-10-11): qué hace el botón del HUD (y el
-## atajo P) según el prompt activo, y el window_id de la ventana de
-## prioridad que se está respondiendo (-1 si no hay ninguna).
+## Botón de paso del Remoto: qué hace el botón del HUD (y el atajo P) según el prompt activo, y el
+## window_id de la ventana de prioridad que se está respondiendo (-1 si no hay ninguna).
 var _paso_action: Callable = Callable()
 var _priority_window_id: int = -1
-## Tecla N (2026-10-17): qué hace "no hacerlo / terminar" en el prompt de
-## objetivo activo (solo selecciones opcionales). Vacío si no hay ninguno.
+## Tecla N: qué hace "no hacerlo / terminar" en el prompt de objetivo activo (solo selecciones
+## opcionales). Vacío si no hay ninguno.
 var _skip_action: Callable = Callable()
 
 
@@ -62,18 +45,19 @@ var _pending_vigilia: Dictionary = {}
 ## (Vigilia: poner Oro/jugar carta; ventana de prioridad: Talismán de
 ## respuesta). Vacío = ninguna carta de la mano se puede jugar ahora.
 var _hand_actions: Dictionary = {}
-## card_id de un Aliado propio en juego que puede atacar -> si está marcado
-## como atacante (Fase de Ataque del Remoto, 2026-10-11).
+## card_id de un Aliado propio en juego que puede atacar -> si está marcado como atacante (Fase de
+## Ataque del Remoto).
 var _attack_candidates: Dictionary = {}
-## Bloqueo en el tablero (2026-10-11): blocker_id -> [attacker_id válidos],
-## blocker_id -> attacker_id asignado, y el bloqueador que espera que se
+## Bloqueo en el tablero: blocker_id -> [attacker_id válidos], blocker_id -> [attacker_id asignados],
+## blocker_id -> a cuántos puede bloquear a la vez (Elías: 2), y el bloqueador que espera que se
 ## elija su atacante ("" si ninguno).
 var _block_options: Dictionary = {}
 var _block_pairs: Dictionary = {}
+var _block_max: Dictionary = {}
 var _block_pending_blocker: String = ""
-## Selección genérica sobre el tablero/mano (2026-10-11): card_id -> qué hacer
-## al clickearla (portador de Arma, objetivo de un efecto, habilidad de
-## respuesta). _pick_multi guarda las marcadas en una selección múltiple.
+## Selección genérica sobre el tablero/mano: card_id -> qué hacer al clickearla (portador de Arma,
+## objetivo de un efecto, habilidad de respuesta). _pick_multi guarda las marcadas en una selección
+## múltiple.
 var _pick_targets: Dictionary = {}
 var _pick_multi: Dictionary = {}
 
@@ -99,13 +83,8 @@ func _on_message(data: Dictionary) -> void:
 			_clear_attack_candidates()
 			_clear_board_blocking()
 			_clear_board_pick()
-			# 2026-09-23, bug real reportado por el usuario: cualquier prompt
-			# real que llegue (mulligan/vigilia/ataque/etc.) tiene que tapar
-			# la pantalla "ESPERANDO JUGADOR" que dejó el duelo de dados — sin
-			# esto, el diálogo real se construía IGUAL, pero por debajo de esa
-			# pantalla de carga (otra capa, nunca se ocultaba sola), dejando
-			# al jugador Remoto viéndola para siempre sin ninguna forma de
-			# llegar al prompt real ni de que este vuelva a intentarlo.
+			# Cualquier prompt real tapa la pantalla "ESPERANDO JUGADOR" del duelo de dados; si no, el
+			# diálogo quedaba debajo de esa capa y el Remoto no podía responder.
 			var loading_overlay := _main.get_node_or_null("/root/MatchLoadingOverlay")
 			if loading_overlay:
 				loading_overlay.hide_loading()
@@ -170,6 +149,10 @@ func _on_message(data: Dictionary) -> void:
 				waiting.hide_loading()
 		"dice_roll":
 			_show_dice_roll_mirror(data)
+		"idle_attack_cards":
+			_apply_idle_attack_cards(data.get("card_ids", []))
+		"hand_shown":
+			_show_hand_shown(data)
 		"disabled_cards":
 			_disabled_ids.clear()
 			for id in data.get("card_ids", []):
@@ -182,10 +165,8 @@ func _on_message(data: Dictionary) -> void:
 
 
 # =============================================================================
-# DUELO DE DADOS — reproduce del lado Remoto la MISMA tirada que el
-# Anfitrión ya resolvió (2026-09-20, a pedido del usuario: antes cada
-# pantalla tiraba sus propios dados por separado, sin relación entre sí —
-# ver GameBootstrap._show_dice_roll()/DiceDuel3D.forced_result1/2).
+# DUELO DE DADOS — el Remoto reproduce la misma tirada que ya resolvió el Anfitrión
+# (GameBootstrap._show_dice_roll()/DiceDuel3D.forced_result1/2).
 # =============================================================================
 func _show_dice_roll_mirror(data: Dictionary) -> void:
 	var r1: int = int(data.get("result1", 0))
@@ -206,17 +187,9 @@ func _show_dice_roll_mirror(data: Dictionary) -> void:
 	dice_duel.winner_text_p0 = "¡EMPIEZA EL ANFITRIÓN!"
 	dice_duel.winner_text_p1 = "¡EMPIEZAS TÚ!"
 	_main.add_child(dice_duel)
-	# 2026-09-23, bug real reportado por el usuario (Anfitrión): el Remoto se
-	# quedaba pegado para siempre en "ESPERANDO JUGADOR" — causa real: si el
-	# mensaje "prompt"/"mulligan" (el Anfitrión llama a RemotePlayerController.
-	# run_mulligan() apenas termina SU PROPIO mulligan) llegaba DURANTE esta
-	# animación (tarda unos segundos), _show_mulligan_prompt() ya construía
-	# el diálogo real sobre inspection_layer — pero este callback, un
-	# instante después, tapaba ese diálogo con la pantalla de carga
-	# (MatchLoadingOverlay, otra capa por encima), dejando el prompt real
-	# invisible/inaccesible sin ningún mensaje nuevo en camino que lo
-	# destapara. Ahora solo se muestra la espera si ningún prompt real llegó
-	# todavía mientras corría la animación.
+	# Solo muestra la espera si no llegó ningún prompt real mientras corría la animación: el mulligan
+	# puede llegar durante los dados y la pantalla de carga (MatchLoadingOverlay, una capa encima) lo
+	# dejaba tapado.
 	dice_duel.duel_completed.connect(func(_winner_id: int):
 		if loading_overlay and not (_current_overlay and is_instance_valid(_current_overlay)):
 			loading_overlay.show_loading(_main, "ESPERANDO JUGADOR",
@@ -228,6 +201,25 @@ func _show_dice_roll_mirror(data: Dictionary) -> void:
 # TABLERO — aplica move_card/remove_card creando/moviendo/liberando Nodos
 # Card reales en los contenedores player_*/opponent_* correctos
 # =============================================================================
+## Aliados en la Línea de Ataque que no atacan, según el Anfitrión: tono azul hielo
+## (CardInteractionModule.IDLE_ATTACK_TINT).
+var _idle_attack_ids: Dictionary = {}
+
+
+func _apply_idle_attack_cards(card_ids: Array) -> void:
+	var tint: Color = _main._card_interaction.IDLE_ATTACK_TINT
+	for card_id in _idle_attack_ids:
+		var old: Node = _card_nodes.get(card_id, null)
+		if not (card_id in card_ids) and is_instance_valid(old) and old.modulate == tint:
+			old.modulate = Color.WHITE
+	_idle_attack_ids.clear()
+	for id in card_ids:
+		_idle_attack_ids[str(id)] = true
+		var node: Node = _card_nodes.get(str(id), null)
+		if is_instance_valid(node):
+			node.modulate = tint
+
+
 func _apply_move_card(data: Dictionary) -> void:
 	var card_id: String = str(data.get("card_id", ""))
 	var zone: int = int(data.get("zone", -1))
@@ -243,10 +235,8 @@ func _apply_move_card(data: Dictionary) -> void:
 			old_parent.remove_child(node)
 	else:
 		node = _main._create_card(card_data, false)
-		# can_interact queda en false a propósito (2026-09-11): la
-		# inspección/targeting de cartas mirroreadas es Fase C (todavía no
-		# hay forma de que un click aquí dispare nada por red) — mostrarlas
-		# como no-interactivas evita clicks muertos confusos.
+		# can_interact = false: las cartas reflejadas no se inspeccionan ni se targetean por aquí, y así
+		# no hay clicks muertos.
 		node.can_interact = false
 		node.drag_enabled = false
 		node.owner_id = 0 if own else 1
@@ -264,13 +254,15 @@ func _apply_move_card(data: Dictionary) -> void:
 	node.top_level = false
 	node.set_zone(zone)
 	node.remote_ability_disabled = _disabled_ids.has(card_id)
+	if _idle_attack_ids.has(card_id) and zone == Constants.Zone.LINEA_ATAQUE:
+		node.modulate = _main._card_interaction.IDLE_ATTACK_TINT
 
 	var card_type: int = int(card_data.get("tipo", -1))
 	var target_scale: Vector2 = Vector2.ONE
 	if zone in [Constants.Zone.RESERVA_ORO, Constants.Zone.ORO_PAGADO]:
 		target_scale = Constants.GOLD_CARD_SCALE
 	elif zone == Constants.Zone.LINEA_APOYO and card_type == Constants.CardType.TOTEM:
-		target_scale = Vector2(0.8, 0.8)
+		target_scale = Constants.TOTEM_CARD_SCALE
 	node.scale = target_scale
 	node.base_scale = target_scale
 
@@ -289,15 +281,12 @@ func _apply_remove_card(data: Dictionary) -> void:
 
 
 # =============================================================================
-# MANO PROPIA PERSISTENTE (GameStateBroadcaster._on_hand_card_added()/
-# _on_hand_card_removed(), 2026-10-08, arquitectura.md §45) — a diferencia
-# de _apply_move_card()/_apply_remove_card() (las 5 zonas públicas en
-# juego), esto puebla player_hand de verdad, con Nodos que se quedan ahí
-# durante TODA la partida, no solo mientras un prompt puntual está abierto.
-# 2026-10-11: can_interact = true — la mano física es ahora la ÚNICA forma de
-# jugar cartas desde la mano. CardInteractionModule desvía los clicks del
-# cliente Remoto a on_card_double_clicked() (nunca llegan a GoldManager.
-# play_card() local, que rompería todo al no pasar por el protocolo de intents).
+# MANO PROPIA PERSISTENTE (GameStateBroadcaster._on_hand_card_added()/_on_hand_card_removed();
+# arquitectura.md §45): a diferencia de _apply_move_card()/_apply_remove_card(), puebla player_hand
+# con Nodos que quedan toda la partida.
+# can_interact = true: la mano física es la forma de jugar desde la mano. CardInteractionModule
+# desvía los clicks del Remoto a on_card_double_clicked() (nunca a GoldManager.play_card() local,
+# que se saltaría el protocolo de intents).
 # =============================================================================
 func _apply_hand_card_added(data: Dictionary) -> void:
 	var card_data: Dictionary = data.get("data", {})
@@ -359,14 +348,8 @@ func _build_overlay(title: String) -> VBoxContainer:
 	overlay.color = Color(0, 0, 0, 0.6)
 	overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	overlay.mouse_filter = Control.MOUSE_FILTER_STOP
-	# 2026-10-07, bug real reportado por el usuario (probando online por
-	# primera vez): CardInspectionLayer.tscn arranca con visible=false (solo
-	# CardInspectionLayer.gd lo prende/apaga al inspeccionar una carta) — sin
-	# esto, el diálogo se construía bien pero quedaba invisible, el Remoto
-	# nunca veía ningún prompt (mulligan incluido) y la partida se quedaba
-	# congelada esperando una respuesta que nunca podía mandar. Mismo
-	# mecanismo ya usado por BernardoAbilityHandler.gd para su propio diálogo
-	# ajeno a una inspección real — ver mark_inspection_layer_in_use().
+	# CardInspectionLayer.tscn arranca con visible = false: hay que prenderla o el diálogo queda
+	# invisible (mismo mecanismo que BernardoAbilityHandler.gd, ver mark_inspection_layer_in_use()).
 	if _main._card_inspector:
 		_main._card_inspector.mark_inspection_layer_in_use()
 	else:
@@ -410,14 +393,10 @@ func _add_row_button(container: Container, text: String, on_pressed: Callable) -
 
 
 # =============================================================================
-# CARTAS REALES EN LOS PROMPTS (2026-10-07, a pedido del usuario: "no sale
-# mi mulligan bonito, el abanico de cartas está todo escrito") — mismo
-# patrón ya usado en popups livianos del lado del Anfitrión (p.ej.
-# GoldManagerTax._open_cemetery_reveal_popup()): Nodos Card.tscn reales con
-# arte, no interactivos (el click que de verdad decide pasa por los botones
-# de abajo, ya armados con card_id/índice — esto solo reemplaza las listas
-# de puro texto por la carta de verdad). Requiere que RemotePlayerController.
-# _card_public_data() mande el card_data COMPLETO, no solo nombre/coste.
+# CARTAS REALES EN LOS PROMPTS: Nodos Card.tscn con arte, no interactivos, en vez de listas de texto
+# (como GoldManagerTax._open_cemetery_reveal_popup()). La decisión pasa por los botones de abajo
+# (card_id/índice). Requiere que RemotePlayerController._card_public_data() mande el card_data
+# completo.
 # =============================================================================
 const _CardScene = preload("res://scenes/cards/Card.tscn")
 
@@ -471,21 +450,42 @@ func _send_intent_and_close(intent: Dictionary) -> void:
 # =============================================================================
 # MULLIGAN
 # =============================================================================
+## Mulligan gratis del Anfitrión: te muestra su mano; al cerrarla se avisa (el Anfitrión no cambia su
+## mano ni deja mostrar otra hasta entonces, MulliganController._acquire_reveal()).
+## Pantalla de espera del mulligan que tapa la ventana: "" / "waiting" (mantuviste tu mano) / "showing"
+## (estás mostrando la tuya).
+var _mulligan_loading: String = ""
+
+
+func _show_mulligan_loading() -> void:
+	var loading := _main.get_node_or_null("/root/MatchLoadingOverlay")
+	if not loading:
+		return
+	if _mulligan_loading == "waiting":
+		loading.show_loading(_main, "ESPERANDO JUGADOR",
+			"Tu mano ya está lista — esperando a que el otro jugador elija la suya...")
+	elif _mulligan_loading == "showing":
+		loading.show_loading(_main, "MOSTRANDO TU MANO", "Tu oponente está viendo tu mano...")
+
+
+func _show_hand_shown(data: Dictionary) -> void:
+	var loading := _main.get_node_or_null("/root/MatchLoadingOverlay")
+	if loading and _mulligan_loading != "":
+		loading.hide_loading()
+	SelectionManager.open_reveal(data.get("cards", []), str(data.get("title", "Tu oponente muestra su mano")), 0)
+	await SelectionManager.selection_completed
+	NetworkClient.send_message({"op": "intent", "kind": "hand_shown_closed"})
+	_show_mulligan_loading()
+
+
 func _show_mulligan_prompt(data: Dictionary) -> void:
-	"""2026-10-08, a pedido del usuario ("construir el abanico visual real
-	como el del Anfitrión" — ver arquitectura.md §44): a diferencia del
-	resto de los prompts (que usan _build_overlay()/_build_card_row(), una
-	fila de solo lectura + botones de texto aparte), el mulligan reusa los
-	Nodos REALES que Main.tscn ya tiene para esto — mulligan_overlay/
-	mulligan_hand (MulliganHand, el mismo abanico con curva/hover que ve el
-	Anfitrión)/keep_hand_button/mulligan_button — en vez de construir un
-	popup aparte. Esos botones ya vienen conectados a MulliganController.
-	on_keep_hand_pressed()/on_mulligan_pressed() (para el flujo LOCAL del
-	Anfitrión) — hay que desconectarlos antes de reusarlos, porque esos
-	handlers terminan en GameManager.start_game() asumiendo una partida
-	local que el Remoto nunca corrió (_dice_winner nunca seteado de este
-	lado) — dispararían eso por error si se dejaran conectados."""
+	"""El mulligan reusa los Nodos de Main.tscn (mulligan_overlay, mulligan_hand —el mismo abanico que
+	ve el Anfitrión—, keep_hand_button, mulligan_button) en vez de un popup aparte (arquitectura.md
+	§44). Esos botones vienen conectados a
+	MulliganController.on_keep_hand_pressed()/on_mulligan_pressed(), que terminan en
+	GameManager.start_game() de una partida local: hay que desconectarlos antes de reusarlos."""
 	var hand: Array = data.get("hand", [])
+	_mulligan_loading = ""
 	_main.mulligan_hand.clear_cards_instant()
 	for card_data in hand:
 		var card_node = _main._create_card(card_data, false)
@@ -506,34 +506,54 @@ func _show_mulligan_prompt(data: Dictionary) -> void:
 		_main.keep_hand_button.pressed.disconnect(_main._mulligan_ctrl.on_keep_hand_pressed)
 	if _main.mulligan_button.pressed.is_connected(_main._mulligan_ctrl.on_mulligan_pressed):
 		_main.mulligan_button.pressed.disconnect(_main._mulligan_ctrl.on_mulligan_pressed)
+	var free_btn: Button = _main._mulligan_ctrl.free_mulligan_button
+	if free_btn and free_btn.pressed.is_connected(_main._mulligan_ctrl.on_free_mulligan_pressed):
+		free_btn.pressed.disconnect(_main._mulligan_ctrl.on_free_mulligan_pressed)
+	_main._mulligan_ctrl.set_free_button(data.get("free_available", false), int(data.get("golds", 0)))
+	# Un solo clic cuenta: cada opción suelta las tres, así no quedan conexiones colgando para el próximo prompt.
+	var conns: Array = []  # [Button, Callable]
+	var release := func():
+		for pair in conns:
+			if pair[0] and pair[0].pressed.is_connected(pair[1]):
+				pair[0].pressed.disconnect(pair[1])
 	var on_keep := func():
+		release.call()
+		_mulligan_loading = "waiting"
 		_main.mulligan_overlay.visible = false
 		_main.mulligan_hand.clear_cards_instant()
 		NetworkClient.send_message({"op": "intent", "kind": "mulligan_choice", "keep": true})
-		# Mulligan simultáneo (2026-10-12): si el Anfitrión todavía está
-		# eligiendo, se espera aquí; lo tapa el primer mensaje de partida
-		# iniciada (castillo_counts, ver _on_message()).
+		# Mulligan simultáneo: si el Anfitrión todavía está eligiendo, se espera aquí; lo tapa el primer
+		# mensaje de partida iniciada (castillo_counts, ver _on_message).
 		var loading := _main.get_node_or_null("/root/MatchLoadingOverlay")
 		if loading:
 			loading.show_loading(_main, "ESPERANDO JUGADOR",
 				"Tu mano ya está lista — esperando a que el otro jugador elija la suya...")
 	var on_mull := func():
+		release.call()
 		_main.mulligan_overlay.visible = false
 		_main.mulligan_hand.clear_cards_instant()
 		NetworkClient.send_message({"op": "intent", "kind": "mulligan_choice", "keep": false})
-	_main.keep_hand_button.pressed.connect(on_keep, CONNECT_ONE_SHOT)
-	_main.mulligan_button.pressed.connect(on_mull, CONNECT_ONE_SHOT)
+	var on_free := func():
+		release.call()
+		_main.mulligan_overlay.visible = false
+		_main.mulligan_hand.clear_cards_instant()
+		NetworkClient.send_message({"op": "intent", "kind": "mulligan_choice", "keep": false, "free": true})
+		# Hasta que el Anfitrión cierre tu mano (o termine de mostrar la suya), llega el próximo prompt.
+		_mulligan_loading = "showing"
+		_show_mulligan_loading()
+	conns.append_array([[_main.keep_hand_button, on_keep], [_main.mulligan_button, on_mull], [free_btn, on_free]])
+	for pair in conns:
+		if pair[0]:
+			pair[0].pressed.connect(pair[1])
 
 
 # =============================================================================
 # VIGILIA
 # =============================================================================
 func _show_vigilia_prompt(data: Dictionary) -> void:
-	# 2026-10-11 (a pedido del usuario: "sigue saliendo el texto de la mano y
-	# al mismo tiempo la mano, la idea es siempre solo usar la mano física"):
-	# sin popup. Las cartas jugables de la mano real (player_hand, §45)
-	# brillan y se juegan con doble clic, igual que el Anfitrión; el botón de
-	# paso del HUD ("Atacar") termina la Vigilia. Ver on_card_double_clicked().
+	# Sin popup. Las cartas jugables de la mano real (player_hand, §45) brillan y se juegan con doble
+	# clic, igual que el Anfitrión; el botón de paso del HUD ("Atacar") termina la Vigilia. Ver
+	# on_card_double_clicked.
 	_pending_vigilia = data
 	var actions: Dictionary = {}
 	for card in data.get("gold_candidates", []):
@@ -544,9 +564,8 @@ func _show_vigilia_prompt(data: Dictionary) -> void:
 			var card_id: String = str(card.get("card_id", ""))
 			actions[card_id] = {"op": "intent", "kind": "play_card", "card_id": card_id}
 	_set_hand_actions(actions)
-	# Habilidades activadas de sus cartas en juego (2026-10-12): brillan en
-	# dorado; clic en la carta para usarla (misma UI que en las ventanas de
-	# respuesta).
+	# Habilidades activadas de sus cartas en juego: brillan en dorado; clic en la carta para usarla
+	# (misma UI que en las ventanas de respuesta).
 	var abilities: Array = []
 	for a in data.get("abilities", []):
 		# Una carta de la mano que también se puede jugar (doble clic) no se
@@ -560,18 +579,17 @@ func _show_vigilia_prompt(data: Dictionary) -> void:
 				"card_id": str(choice.get("card_id", "")), "ability_index": int(choice.get("ability_index", 0))}))
 	_main._update_debug("Tu Vigilia — Oro disponible: %d. Doble clic en una carta brillante para jugarla%s." % [
 		int(data.get("gold_reserva", 0)), "; clic en una carta dorada para usar su habilidad" if not abilities.is_empty() else ""])
-	_set_remote_paso("Atacar [P]", false, func():
+	_set_remote_paso("Atacar [P]" if data.get("can_attack", true) else "Fase Final [P]", false, func():
 		_send_intent_and_close({"op": "intent", "kind": "end_vigilia"}))
 
 # =============================================================================
 # ATAQUE
 # =============================================================================
 func _show_ataque_prompt(data: Dictionary) -> void:
-	# 2026-10-11 (a pedido del usuario): sin popup — los Aliados que pueden
-	# atacar brillan en tu Línea de Defensa (los Nodos espejados de
-	# _card_nodes, mismo card_id que manda el Anfitrión). Un clic los marca/
-	# desmarca como atacantes (tinte naranja, como en la pantalla del
-	# Anfitrión) y el botón de paso del HUD confirma. Ver on_card_clicked().
+	# Sin popup — los Aliados que pueden atacar brillan en tu Línea de Defensa (los Nodos espejados de
+	# _card_nodes, mismo card_id que manda el Anfitrión). Un clic los marca/desmarca como atacantes
+	# (tinte naranja, como en la pantalla del Anfitrión) y el botón de paso del HUD confirma. Ver
+	# on_card_clicked.
 	var attackable: Array = data.get("attackable", [])
 	if attackable.is_empty():
 		_main._update_debug("No tienes ningún Aliado que pueda atacar.")
@@ -882,10 +900,8 @@ func _show_await_multi_target_prompt(data: Dictionary) -> void:
 
 
 # =============================================================================
-# CARRERA "OBJETIVO O CASTILLO" (CardInteractionModule.await_target_or_
-# castillo_pick(), 2026-10-07, arquitectura.md §41) — junta cartas
-# candidatas + Castillo propio/rival en un solo prompt, ya que del lado del
-# Remoto no hay carrera real entre dos interacciones simultáneas de UI.
+# CARRERA "OBJETIVO O CASTILLO" (CardInteractionModule.await_target_or_castillo_pick();
+# arquitectura.md §41): cartas candidatas + Castillo propio/rival en un solo prompt.
 # =============================================================================
 func _show_await_target_or_castillo_prompt(data: Dictionary) -> void:
 	var title: String = str(data.get("title", "Elige un objetivo"))
@@ -941,14 +957,10 @@ func _show_choose_option_prompt(data: Dictionary) -> void:
 
 
 # =============================================================================
-# NOMBRAR UNA CARTA (CardNameSearchDialog.open_and_wait(), 2026-10-07,
-# arquitectura.md §42) — a diferencia de los otros 6 puentes, este no manda
-# ninguna lista de candidatas: el Remoto ya tiene su propia CardDatabase
-# cargada (mismo catálogo que el Anfitrión), así que corre el MISMO
-# buscador en vivo con arte real, enteramente local a su pantalla — solo
-# el resultado final viaja por red. No usa _build_overlay()/_current_
-# overlay (CardNameSearchDialog ya administra su propio CanvasLayer y se
-# autodestruye sola al resolverse).
+# NOMBRAR UNA CARTA (CardNameSearchDialog.open_and_wait(); arquitectura.md §42): no viaja una lista
+# de candidatas; el Remoto tiene su propia CardDatabase y corre el mismo buscador local; solo el
+# resultado va por red. CardNameSearchDialog administra su propio CanvasLayer (no usa
+# _build_overlay()).
 # =============================================================================
 func _show_name_card_prompt(data: Dictionary) -> void:
 	var title: String = str(data.get("title", "Nombra una carta"))
@@ -957,11 +969,9 @@ func _show_name_card_prompt(data: Dictionary) -> void:
 
 
 # =============================================================================
-# BOTÓN DE PASO DEL REMOTO (2026-10-11, a pedido del usuario: "el botón de
-# paso tiene que funcionar para el jugador 1 y el jugador 2") — el mismo
-# botón del HUD que usa el Anfitrión. Como este cliente no corre GameManager
-# propio, el texto/visibilidad los decide el prompt activo y el click (o la
-# tecla P, vía PhaseFlowController._on_paso_pressed()) ejecuta _paso_action.
+# BOTÓN DE PASO DEL REMOTO: el mismo botón del HUD que usa el Anfitrión. Como el Remoto no corre
+# GameManager, el texto/visibilidad los decide el prompt activo y el click (o la tecla P, vía
+# PhaseFlowController._on_paso_pressed()) ejecuta _paso_action.
 # =============================================================================
 func on_paso_pressed() -> void:
 	if _paso_action.is_valid():
@@ -1063,7 +1073,7 @@ func _countdown_button_text(btn: Button, base_text: String, seconds: int) -> voi
 
 
 # =============================================================================
-# MANO FÍSICA COMO ÚNICA FORMA DE JUGAR (2026-10-11)
+# MANO FÍSICA COMO ÚNICA FORMA DE JUGAR
 # =============================================================================
 func on_card_double_clicked(card: Node) -> void:
 	"""Llamado por CardInteractionModule en el cliente Remoto en vez de su
@@ -1135,11 +1145,11 @@ func _clear_attack_candidates() -> void:
 
 
 # =============================================================================
-# BLOQUEO EN EL TABLERO (2026-10-11, a pedido del usuario) — mismo gesto que
-# el Anfitrión (CardInteractionModule._declare_blocker()): clic en tu Aliado
-# brillante; si puede bloquear a un solo atacante libre se asigna directo,
-# si no los atacantes posibles brillan en rojo y eliges con otro clic. Clic
-# en un bloqueador ya asignado lo libera. El botón de paso confirma.
+# BLOQUEO EN EL TABLERO — mismo gesto que el Anfitrión (CardInteractionModule._declare_blocker):
+# clic en tu Aliado brillante; si puede bloquear a un solo atacante libre se asigna directo, si no
+# los atacantes posibles brillan en rojo y eliges con otro clic. Clic en un bloqueador ya asignado
+# lo libera, salvo que pueda bloquear a otro atacante libre (Elías): entonces suma ese bloqueo. El
+# botón de paso confirma.
 # =============================================================================
 func _start_board_blocking(attackers: Array, blockers: Array, respond: Callable) -> Callable:
 	for b in blockers:
@@ -1151,20 +1161,28 @@ func _start_board_blocking(attackers: Array, blockers: Array, respond: Callable)
 		for attacker_id in b.get("can_block", []):
 			valid.append(str(attacker_id))
 		_block_options[blocker_id] = valid
+		_block_max[blocker_id] = int(b.get("max_blocks", 1))
 	_refresh_block_glows()
 	_main._update_debug("Te atacan %d Aliado(s). Clic en tus Aliados brillantes para bloquear, luego Confirmar." % (
 		attackers.size()))
 	return func():
 		var pairs: Array = []
 		for blocker_id in _block_pairs:
-			pairs.append({"blocker_id": blocker_id, "attacker_id": _block_pairs[blocker_id]})
+			for attacker_id in _block_pairs[blocker_id]:
+				pairs.append({"blocker_id": blocker_id, "attacker_id": attacker_id})
 		respond.call({"action": "blocks", "pairs": pairs})
+
+
+func _can_add_block(blocker_id: String) -> bool:
+	return _block_pairs.get(blocker_id, []).size() < int(_block_max.get(blocker_id, 1)) \
+		and not _free_attackers_for(blocker_id).is_empty()
 
 
 func _on_board_block_click(card_id: String) -> void:
 	if _block_options.has(card_id):
+		var was_pending := _block_pending_blocker == card_id
 		_block_pending_blocker = ""
-		if _block_pairs.has(card_id):
+		if _block_pairs.has(card_id) and (was_pending or not _can_add_block(card_id)):
 			_block_pairs.erase(card_id)
 			_main._update_debug("%s ya no bloquea" % _mirror_name(card_id))
 			_refresh_block_glows()
@@ -1187,14 +1205,19 @@ func _on_board_block_click(card_id: String) -> void:
 
 func _free_attackers_for(blocker_id: String) -> Array:
 	var free: Array = []
+	var taken: Array = []
+	for assigned in _block_pairs.values():
+		taken.append_array(assigned)
 	for attacker_id in _block_options.get(blocker_id, []):
-		if not (attacker_id in _block_pairs.values()):
+		if not (attacker_id in taken):
 			free.append(attacker_id)
 	return free
 
 
 func _assign_block(blocker_id: String, attacker_id: String) -> void:
-	_block_pairs[blocker_id] = attacker_id
+	if not _block_pairs.has(blocker_id):
+		_block_pairs[blocker_id] = []
+	_block_pairs[blocker_id].append(attacker_id)
 	_main._update_debug("%s bloquea a %s" % [_mirror_name(blocker_id), _mirror_name(attacker_id)])
 
 
@@ -1216,7 +1239,7 @@ func _refresh_block_glows() -> void:
 		node.can_interact = true
 		var assigned: bool = _block_pairs.has(blocker_id)
 		node.modulate = Color(0.4, 0.7, 1.0, 1.0) if assigned else Color.WHITE
-		node.set_activatable(not assigned, CardBadges.GLOW_COLOR_CELESTE, &"remote_blocker")
+		node.set_activatable(not assigned or _can_add_block(blocker_id), CardBadges.GLOW_COLOR_CELESTE, &"remote_blocker")
 		for attacker_id in _block_options[blocker_id]:
 			var a_node: Node = _card_nodes.get(attacker_id, null)
 			if not a_node or not is_instance_valid(a_node):
@@ -1240,16 +1263,15 @@ func _clear_board_blocking() -> void:
 				a_node.can_interact = false
 	_block_options = {}
 	_block_pairs = {}
+	_block_max = {}
 	_block_pending_blocker = ""
 
 
 # =============================================================================
-# SELECCIÓN SOBRE EL TABLERO/MANO (2026-10-11, a pedido del usuario: "sigamos
-# con los demás popups") — portador de Arma, objetivos de efectos y
-# habilidades de respuesta se eligen con clic sobre la carta real (brillo
-# celeste si es tuya, rojo si es del rival). Si algún candidato no tiene
-# Nodo visible en esta pantalla (p.ej. una carta de la mano del Anfitrión),
-# se cae al popup de siempre para no esconder una opción válida.
+# SELECCIÓN SOBRE EL TABLERO/MANO: portador de Arma, objetivos de efectos y habilidades de respuesta
+# se eligen con clic sobre la carta real (celeste si es tuya, rojo si es del rival). Si algún
+# candidato no tiene Nodo en esta pantalla (p.ej. una carta de la mano del Anfitrión), se usa el
+# popup para no esconder una opción válida.
 # =============================================================================
 func _visible_id_of(card: Node) -> String:
 	for id in _card_nodes:
@@ -1363,9 +1385,9 @@ func _clear_board_pick() -> void:
 
 
 # =============================================================================
-# SELECTOR DE ZONAS (ActionSearch._delegate_zone_pick_to_remote(), 2026-10-11)
-# — el Remoto corre el mismo ZoneBrowsePicker que el Anfitrión, en su propia
-# pantalla ('is_own' ya viene relativo a él), y devuelve los índices elegidos.
+# SELECTOR DE ZONAS (ActionSearch._delegate_zone_pick_to_remote) — el Remoto corre el mismo
+# ZoneBrowsePicker que el Anfitrión, en su propia pantalla ('is_own' ya viene relativo a él), y
+# devuelve los índices elegidos.
 # =============================================================================
 func _show_zone_pick_prompt(data: Dictionary) -> void:
 	var pools: Array = []
@@ -1379,9 +1401,9 @@ func _show_zone_pick_prompt(data: Dictionary) -> void:
 	if not _main._zone_browse_picker:
 		NetworkClient.send_message({"op": "intent", "kind": "zone_pick_choice", "picks": []})
 		return
-	# Cartas de la mano candidatas (2026-10-12, p.ej. Miguel): los ids son los
-	# de la mano espejo (_hand_card_nodes). Se guarda el índice original para
-	# devolverle al Anfitrión la posición en SU lista.
+	# Cartas de la mano candidatas (p.ej. Miguel): los ids son los de la mano espejo
+	# (_hand_card_nodes). Se guarda el índice original para devolverle al Anfitrión la posición en SU
+	# lista.
 	var hand_ids: Array = data.get("hand_card_ids", [])
 	var hand_nodes: Array = []
 	var hand_index_map: Array = []

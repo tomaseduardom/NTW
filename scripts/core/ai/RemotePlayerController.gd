@@ -1,55 +1,24 @@
 extends EasyBotController
 class_name RemotePlayerController
-## RemotePlayerController — reemplaza a EasyBotController cuando el jugador 1
-## es una PERSONA real conectada por red (NetworkClient), no una IA sin
-## estrategia. Extiende EasyBotController y sobreescribe cada punto de
-## DECISIÓN (Vigilia, Ataque, respuesta con habilidad activada) para que en
-## vez de elegir al azar, le pregunte al Remoto por red y espere su
-## respuesta — misma superficie pública que la clase base, así que ningún
-## llamador existente (PhaseFlowController, ActionPipeline,
-## ResponseWindowHandler, LookRevealPatternsA.gd — todos invocan
-## `_main._easy_bot.<método>` sin saber qué hay del otro lado) necesitó
-## cambiar una sola línea. Ver docs/plans/2026-09-09-multiplayer-remoto-
-## design.md e iterative-booping-abelson.md (Fase B).
-##
-## Alcance de ESTE incremento (Fase B, "bucle de turno básico" — mismo techo
-## que el bot hoy, pero una persona real detrás): poner Oro, jugar Aliados de
-## la mano, declarar atacantes, responder ventanas con habilidades activadas
-## sin costo de Descarte, y el mulligan inicial real (que hoy ni siquiera
-## existe como decisión para el jugador 1). La paridad completa (cualquier
-## carta, cualquier elección de SelectionManager) es Fase C, todavía no
-## empezada — reset_gold()/_pay_oro_for_bot()/play_free_ally_from_data()/
-## put_free_gold_in_pagado_from_data() se heredan tal cual de la clase base
-## (no hay decisión real que preguntar en Agrupación, y los triggers "juega
-## gratis" siguen sin alcanzar al jugador 1 por network hasta Fase C).
-##
-## Protocolo: cada método manda al Remoto un mensaje {"op":"prompt",
-## "kind":...} con los datos que la persona necesita ver — su propia mano/
-## campo NO está oculta para ella (aunque en la pantalla del Anfitrión se
-## vea como 'oponente' con esta_oculta=true, eso es solo la vista LOCAL del
-## Anfitrión) — y espera un {"op":"intent","kind":...} de vuelta. Las
-## cartas se identifican por get_instance_id() (mismo criterio ya usado por
-## turn_registry en otras partes del proyecto para distinguir copias
-## físicas durante la sesión) — estable mientras el Node exista, no
-## persiste entre partidas ni hace falta que persista.
-##
-## Decisión de alcance (2026-09-11, sin protocolo de instrucciones
-## incremental completo todavía): en vez de streaming continuo de
-## move_card/reveal_card por cada transición de zona (la forma "completa"
-## descrita en el diseño), cada prompt de este archivo embebe un snapshot
-## de los datos que el Remoto necesita en ESE momento (su propia mano/
-## campo, más lo público). Esto respeta la niebla de guerra (nunca se
-## manda la mano/mazo ocultos del Anfitrión) y alcanza para que el Remoto
-## tome decisiones legales, pero significa que el Remoto no ve en tiempo
-## real lo que el Anfitrión hace en SU PROPIO turno (solo se entera en el
-## próximo prompt que le toque). El streaming incremental completo (fidelidad
-## visual total) queda pendiente — ver nota en el plan.
+
+const PhaseStartWindowScript = preload("res://scripts/core/game/PhaseStartWindow.gd")
+const BlockScript = preload("res://scripts/core/effects/triggers/BlockPatterns.gd")  # bloquear a varios (Elías)
+## RemotePlayerController — reemplaza a EasyBotController cuando el jugador 1 es una persona
+## conectada por red (NetworkClient). Extiende EasyBotController y sobreescribe cada punto de
+## DECISIÓN para preguntarle al Remoto por red en vez de elegir al azar. Misma superficie pública
+## que la clase base: los llamadores (`_main._easy_bot.<método>`) no saben qué hay del otro lado.
+## Ver docs/plans/2026-09-09-multiplayer-remoto-design.md y
+## docs/plans/2026-09-20-remote-multiplayer-parity.md.
+## Protocolo: cada método manda {"op":"prompt","kind":...} con lo que la persona necesita ver (su
+## propia mano/campo no está oculta para ella, aunque el Anfitrión la vea con esta_oculta = true) y
+## espera {"op":"intent","kind":...}. Las cartas se identifican por get_instance_id() (estable
+## mientras exista el Node). Nunca se manda la mano/mazo ocultos del Anfitrión. El tablero se
+## refleja aparte con GameStateBroadcaster/RemoteMirrorController.
 
 func _await_intent(expected_kinds: Array) -> Dictionary:
-	"""2026-09-30: lógica movida a NetworkClient.await_intent() (la necesita
-	también SelectionManager.gd para la Fase 3 del plan de paridad) — este
-	wrapper se deja tal cual para no tocar los 5 llamadores existentes de
-	este archivo."""
+	"""Lógica movida a NetworkClient.await_intent (la necesita también SelectionManager.gd para la
+	Fase 3 del plan de paridad) — este wrapper se deja tal cual para no tocar los 5 llamadores
+	existentes de este archivo."""
 	return await NetworkClient.await_intent(expected_kinds)
 
 
@@ -67,18 +36,9 @@ func _find_card_by_id(id_str: String) -> Node:
 
 
 func _card_public_data(card: Node) -> Dictionary:
-	"""Datos de UNA carta propia del Remoto para mandarle por red — no está
-	oculta para su propio dueño, aunque en la pantalla del Anfitrión se vea
-	con esta_oculta=true (eso es solo la vista LOCAL del Anfitrión, no un
-	límite real de información para la persona a la que pertenece).
-	2026-10-07, a pedido del usuario ("no sale mi mulligan bonito, el
-	abanico de cartas está todo escrito"): antes mandaba solo 5 campos
-	curados (nombre/coste/tipo/habilidad), suficientes para los prompts de
-	puro texto pero no para dibujar la carta real — ahora manda el
-	card_data COMPLETO (mismo dict que usa Card.load_from_data() en
-	cualquier otro popup del proyecto, p.ej. GoldManagerTax._open_cemetery_
-	reveal_popup()), con card_id agregado encima para las respuestas por
-	red (no es un campo nativo de card_data)."""
+	"""Datos de UNA carta propia del Remoto para mandarle por red (no está oculta para su dueño).
+	card_data completo (el mismo dict de Card.load_from_data()), para dibujar la carta real, más
+	card_id para las respuestas."""
 	if not is_instance_valid(card):
 		return {}
 	var data: Dictionary = card.card_data.duplicate(true) if card.get("card_data") != null else {}
@@ -111,15 +71,16 @@ func _affordable_cards_in_hand(allowed_types: Array) -> Array:
 
 
 # =============================================================================
-# MULLIGAN (2026-09-11 — no existe llamador base: MulliganController._end_
-# mulligan_phase() llama aquí directo, con chequeo de tipo, solo si hay un
-# Remoto conectado; si no, sigue con draw_initial_hand() como siempre)
+# MULLIGAN: MulliganController._end_mulligan_phase() llama aquí directo si hay un Remoto conectado;
+# si no, sigue con draw_initial_hand().
 # =============================================================================
 func run_mulligan(initial_count: int) -> void:
 	"""Mulligan real para el jugador 1: dibuja la mano, le pregunta al Remoto
 	si la mantiene o la vuelve a barajar (con una carta menos, como cualquier
-	mulligan DAR), hasta que mantenga o llegue a 0."""
+	mulligan DAR), hasta que mantenga o llegue a 0. Mulligan gratis (DAR abril 2026): una vez, con
+	uno o menos Oros en la mano, la muestra al Anfitrión y Roba la misma cantidad."""
 	var count := initial_count
+	var free_used := false
 	while true:
 		for i in range(count):
 			await _main._zone_manager.draw_card(1, false)
@@ -128,11 +89,19 @@ func run_mulligan(initial_count: int) -> void:
 		for c in hand_cards:
 			if is_instance_valid(c):
 				hand_data.append(_card_public_data(c))
+		var golds: int = MulliganController.gold_count(hand_data)
+		var free_ok: bool = not free_used and golds <= 1 and not hand_data.is_empty()
 
-		NetworkClient.send_message({"op": "prompt", "kind": "mulligan", "hand": hand_data})
+		NetworkClient.send_message({"op": "prompt", "kind": "mulligan", "hand": hand_data,
+			"free_available": free_ok, "golds": golds})
 		var intent: Dictionary = await _await_intent(["mulligan_choice"])
 
-		if intent.get("keep", true) or count - 1 <= 0:
+		var free: bool = intent.get("free", false) and free_ok
+		if free:
+			free_used = true
+			await _main._mulligan_ctrl.remote_reveal_to_host(hand_data)
+			_main._update_debug("Tu oponente hace el mulligan gratis: muestra su mano (%d Oro%s)" % [golds, "" if golds == 1 else "s"])
+		elif intent.get("keep", true) or count - 1 <= 0:
 			return
 
 		for c in hand_cards:
@@ -142,14 +111,13 @@ func run_mulligan(initial_count: int) -> void:
 				_main._opponent_fan.remove_card(c, true)
 				_main.opponent_deck.append(data)
 		_main._zone_manager.shuffle_deck(1)
-		count -= 1
+		if not free:
+			count -= 1
 
 
 # =============================================================================
-# JUGAR ARMA/TALISMÁN/TÓTEM — mismo criterio que EasyBotController._play_ally()
-# (heredado tal cual, arriba en este archivo no — vive en la clase base), pero
-# para los 3 tipos de carta que el bot todavía no juega. Task 1.1-1.4,
-# docs/plans/2026-09-20-remote-multiplayer-parity.md, Fase 1.
+# JUGAR ARMA/TALISMÁN/TÓTEM — mismo criterio que EasyBotController._play_ally() (clase base), para
+# los 3 tipos que el bot no juega (docs/plans/2026-09-20-remote-multiplayer-parity.md, Fase 1).
 # =============================================================================
 func _play_totem_remote(card: Node) -> void:
 	if not is_instance_valid(card):
@@ -166,8 +134,8 @@ func _play_totem_remote(card: Node) -> void:
 	_main.opponent_linea_apoyo.add_child(card)
 	card.top_level = false
 	card.set_zone(Constants.Zone.LINEA_APOYO)
-	card.scale = Vector2(0.8, 0.8)
-	card.base_scale = Vector2(0.8, 0.8)
+	card.scale = Constants.TOTEM_CARD_SCALE
+	card.base_scale = Constants.TOTEM_CARD_SCALE
 	if _main._zone_manager:
 		_main._zone_manager.pin_card_to_field_slot(card, _main.opponent_linea_apoyo)
 
@@ -253,9 +221,8 @@ func _play_talisman_remote(card: Node) -> void:
 	_main._opponent_fan.remove_card(card, false)
 	card.esta_oculta = false
 	_pay_oro_for_bot(coste)
-	# GoldManager._play_talisman() (2026-10-13, §64): el mismo camino que el
-	# Anfitrión — antes este resolvía el efecto pero el Talismán se quedaba
-	# en la Línea de Apoyo (nunca iba al Cementerio/Destierro/Castillo).
+	# GoldManager._play_talisman() (§64): el mismo camino que el Anfitrión, que manda el Talismán a su
+	# destino al resolver.
 	PriorityManager.begin_guerra_action(1)
 	await _main._gold_manager._play_talisman(card)
 	PriorityManager.end_guerra_action()
@@ -305,9 +272,7 @@ func take_vigilia_actions() -> void:
 		for c in _main._opponent_fan.get_cards():
 			if is_instance_valid(c):
 				hand_data.append(_card_public_data(c))
-		# Habilidades activadas en su propia Vigilia (2026-10-12): antes el
-		# Remoto solo podía activarlas en ventanas de respuesta, así que las
-		# de "una vez en tu turno" (p.ej. Miguel) nunca le aparecían.
+		# Habilidades activadas en su propia Vigilia, también las de "una vez en tu turno" (p.ej. Miguel).
 		var ability_candidates: Array = _collect_activatable_abilities()
 
 		if Constants.VERBOSE_DIAG_LOGS:
@@ -325,6 +290,7 @@ func take_vigilia_actions() -> void:
 			"totem_candidates": totem_candidates,
 			"abilities": _abilities_payload(ability_candidates),
 			"gold_reserva": GameState.get_oro_reserva(1),
+			"can_attack": TurnManager.player_can_attack(1),
 		})
 		var intent: Dictionary = await _await_intent(["place_gold", "play_card", "end_vigilia", "activate_ability"])
 
@@ -351,8 +317,12 @@ func take_vigilia_actions() -> void:
 			"end_vigilia":
 				if GameManager.is_game_active and GameManager.active_player_id == 1 \
 						and GameManager.current_phase == Constants.Phase.VIGILIA:
-					_main._update_debug("Oponente ataca")
-					GameManager.proceed_to_battle()
+					if not TurnManager.player_can_attack(1):
+						_main._update_debug("Oponente pasa a la Fase Final")
+						GameManager._end_batalla()
+					else:
+						_main._update_debug("Oponente ataca")
+						GameManager.proceed_to_battle()
 				return
 			_:
 				return
@@ -399,10 +369,9 @@ func take_ataque_actions() -> void:
 # activada, elegida por el Remoto en vez de al azar
 # =============================================================================
 func try_respond_with_activated_ability() -> bool:
-	"""Camino viejo de respuesta (prompt 'response_window'). Desde 2026-10-11
-	ya no lo usa ResponseWindowHandler contra un Remoto (ver
-	on_priority_received()), pero se conserva por si algún otro llamador de
-	la clase base lo invoca."""
+	"""Camino viejo de respuesta (prompt 'response_window'). ResponseWindowHandler ya no lo usa contra
+	un Remoto (ver on_priority_received()); se conserva por si otro llamador de la clase base lo
+	invoca."""
 	var candidates: Array = _collect_activatable_abilities()
 	var candidate_payload: Array = _abilities_payload(candidates)
 	NetworkClient.send_message({"op": "prompt", "kind": "response_window", "candidates": candidate_payload})
@@ -413,11 +382,9 @@ func try_respond_with_activated_ability() -> bool:
 
 
 func _collect_activatable_abilities() -> Array:
-	"""Habilidades activadas que el Remoto puede usar ahora mismo: [{card, ability}].
-	2026-10-12: mismo filtro que los botones del Anfitrión
-	(CardInspectionLayer.usable_abilities_for(card, 1)) — turno, prioridad,
-	zona, costo, una vez por turno, Anular/Cancelar en turno rival. Incluye
-	cartas de su mano con habilidades usables desde ahí."""
+	"""Habilidades activadas que el Remoto puede usar ahora: [{card, ability}]. Mismo filtro que los
+	botones del Anfitrión (CardInspectionLayer.usable_abilities_for(card, 1)), incluidas las cartas
+	de su mano con habilidades usables desde ahí."""
 	var candidates: Array = []
 	if not _main._card_inspector:
 		return candidates
@@ -433,6 +400,7 @@ func _collect_activatable_abilities() -> Array:
 	if _main._opponent_fan:
 		cards.append_array(_main._opponent_fan.get_cards())
 	cards.append_array(_cemetery_proxies())
+	cards.append_array(_exile_proxies())
 	for card in cards:
 		# usable_abilities_for() ya descarta las que no controla el jugador 1
 		# (controller_id), así que las del lado del Anfitrión solo entran si
@@ -442,11 +410,10 @@ func _collect_activatable_abilities() -> Array:
 	return candidates
 
 
-## Cartas del Cementerio del Remoto con habilidad usable desde ahí
-## (2026-10-13, Duelo Espacial; también Espada del Juicio, Visión Heroica,
-## Drácula): el Cementerio no tiene Nodos, así que se crean Nodos temporales
-## (fuera del árbol, igual que el visor del Cementerio del Anfitrión). Viven
-## hasta la próxima consulta para que el intent pueda ubicarlos por card_id.
+## Cartas del Cementerio del Remoto con habilidad usable desde ahí (Duelo Espacial; también Espada
+## del Juicio, Visión Heroica, Drácula): el Cementerio no tiene Nodos, así que se crean Nodos
+## temporales (fuera del árbol, igual que el visor del Cementerio del Anfitrión). Viven hasta la
+## próxima consulta para que el intent pueda ubicarlos por card_id.
 var _cemetery_proxy_nodes: Array = []
 
 func _cemetery_proxies() -> Array:
@@ -467,12 +434,32 @@ func _cemetery_proxies() -> Array:
 	return _cemetery_proxy_nodes.duplicate()
 
 
+## Igual que _cemetery_proxies(), para el Destierro (sandraudiga).
+var _exile_proxy_nodes: Array = []
+
+func _exile_proxies() -> Array:
+	for n in _exile_proxy_nodes:
+		if is_instance_valid(n) and not n.is_inside_tree():
+			n.queue_free()
+	_exile_proxy_nodes.clear()
+	if not _main._card_inspector:
+		return []
+	for data in CardManager.get_exile(1):
+		if not _main._card_inspector._ability_is_destierro_usable(str(data.get("habilidad", ""))):
+			continue
+		var node = _main._create_card(data, false)
+		node.owner_id = 1
+		node.controller_id = 1
+		node.set_zone(Constants.Zone.DESTIERRO)
+		_exile_proxy_nodes.append(node)
+	return _exile_proxy_nodes.duplicate()
+
+
 func _abilities_payload(candidates: Array) -> Array:
 	var payload: Array = []
 	for c in candidates:
-		# 2026-10-07: card_data completo (no solo nombre/coste curados) para
-		# que RemoteMirrorController pueda mostrar la carta real, mismo
-		# criterio que el resto de los prompts (ver _card_public_data()).
+		# card_data completo (no solo nombre/coste curados) para que RemoteMirrorController pueda mostrar
+		# la carta real, mismo criterio que el resto de los prompts (ver _card_public_data).
 		var entry: Dictionary = c.card.card_data.duplicate(true) if c.card.get("card_data") != null else {}
 		entry["card_id"] = _card_ref(c.card)
 		entry["ability_index"] = c.ability.get("ability_index", 0)
@@ -493,8 +480,7 @@ func _activate_chosen_ability(card_id: String, ability_index: int, candidates: A
 			break
 	if chosen_ability.is_empty():
 		return false
-	# Misma lógica que el botón del Anfitrión (patrones especiales incluidos,
-	# p.ej. Miguel) — 2026-10-12.
+	# Misma lógica que el botón del Anfitrión (patrones especiales incluidos, p.ej. Miguel).
 	if _main._card_inspector:
 		await _main._card_inspector.activate_ability_for(chosen_card, chosen_ability, 1)
 		return true
@@ -504,21 +490,18 @@ func _activate_chosen_ability(card_id: String, ability_index: int, candidates: A
 
 
 # =============================================================================
-# BOTÓN DE PASO SIMÉTRICO ONLINE (2026-10-11, a pedido del usuario)
+# BOTÓN DE PASO SIMÉTRICO ONLINE
 # =============================================================================
-# Cada vez que el J2 (el Remoto) recibe la prioridad en CUALQUIER ventana, el
-# Anfitrión decide aquí qué hacer, con la misma regla que usa para el J1
-# (PriorityManager.needs_real_decision()):
-#   - sin decisión real (respuesta a su propia carta, atacante en Bloqueo,
-#     pila recién vaciada) → pasa solo;
-#   - Ventana de Respuesta real → el Remoto ve su botón de paso con cuenta
-#     regresiva de 5s y puede responder con un Talismán instantáneo o una
-#     habilidad activada; al vencer el plazo, el Anfitrión pasa por él;
-#   - Guerra de Talismanes → puede jugar Talismanes/habilidades, sin plazo;
-#   - Bloqueo (defensor) → elige bloqueadores, sin plazo.
-# El prompt viaja con window_id (= PriorityManager._window_generation) y la
-# respuesta debe traer el mismo id: una respuesta tardía de una ventana que
-# ya cerró se descarta sola, nunca se aplica sobre la ventana siguiente.
+# Cada vez que el jugador 1 (Remoto) recibe la prioridad, el Anfitrión decide con la misma regla que
+# para el jugador 0 (PriorityManager.needs_real_decision()):
+# - sin decisión real (respuesta a su propia carta, atacante en Bloqueo, pila recién vaciada) → pasa
+# solo;
+# - Ventana de Respuesta real → botón de paso con cuenta regresiva de 5 s; puede responder con un
+# Talismán instantáneo o una habilidad activada; al vencer, el Anfitrión pasa por él;
+# - Guerra de Talismanes → puede jugar Talismanes/habilidades, sin plazo;
+# - Bloqueo (defensor) → elige bloqueadores, sin plazo.
+# El prompt viaja con window_id (= PriorityManager._window_generation) y la respuesta debe traer el
+# mismo: una respuesta tardía de una ventana ya cerrada se descarta.
 func on_priority_received() -> void:
 	if not (PriorityManager.priority_window_active and PriorityManager.current_priority_player == 1):
 		return
@@ -550,6 +533,11 @@ func on_priority_received() -> void:
 			var gm = _main._gold_manager
 			if gm and gm.has_phase_exception(Constants.CardType.ARMA, 1) and gm._player_has_ally_in_play():
 				talisman_cards.append_array(_affordable_cards_in_hand([Constants.CardType.ARMA]))
+		PriorityManager.PriorityContext.PHASE_START:
+			# Comienzo de fase: las cartas que su texto deja jugar ahora (PhaseStartWindow), cualquier tipo.
+			# 5 s, como el Anfitrión.
+			timeout = PhaseStartWindowScript.TIMEOUT
+			talisman_cards = PhaseStartWindowScript.playable_cards(1)
 		PriorityManager.PriorityContext.BLOCK_DECLARATION:
 			button_text = "Confirmar bloqueos [P]"
 			for a in GameManager.attackers:
@@ -591,6 +579,9 @@ func on_priority_received() -> void:
 				return  # la habilidad quedó en la pila — el Paso D la detecta como respuesta
 		"play":
 			var card := _find_card_by_id(str(intent.get("card_id", "")))
+			if card and card in talisman_cards and context == PriorityManager.PriorityContext.PHASE_START:
+				await _play_phase_start_card(card, window_id)
+				return
 			if card and card in talisman_cards:
 				if card.get("card_type") != Constants.CardType.ARMA:
 					await _play_talisman_remote(card)
@@ -604,6 +595,25 @@ func on_priority_received() -> void:
 		"blocks":
 			_apply_remote_blocks(intent.get("pairs", []))
 	_pass_if_still_current(window_id)
+
+
+func _play_phase_start_card(card: Node, window_id: int) -> void:
+	"""Juega una carta en la ventana de comienzo de fase (PhaseStartWindow).
+	Si jugarla no abrió ninguna Ventana de Respuesta, la palabra pasa al
+	Anfitrión igual."""
+	match int(card.get("card_type")):
+		Constants.CardType.ALIADO:
+			await _play_ally(card)
+		Constants.CardType.TOTEM:
+			await _play_totem_remote(card)
+		Constants.CardType.ARMA:
+			if not await _play_weapon_remote(card):
+				_pass_if_still_current(window_id)
+				return
+		_:
+			await _play_talisman_remote(card)
+	if _is_current_window(window_id):
+		PriorityManager.start_priority_window(PriorityManager.PriorityContext.PHASE_START, 0)
 
 
 func _is_current_window(window_id: int) -> bool:
@@ -655,15 +665,16 @@ func _playable_talismans_now(response_only: bool) -> Array:
 
 
 func _block_options() -> Array:
-	"""[{card_data..., card_id, can_block: [attacker_id...]}] para cada Aliado
-	del Remoto en Línea de Defensa que puede bloquear a algún atacante."""
+	"""[{card_data..., card_id, can_block: [attacker_id...], max_blocks}] para cada Aliado
+	del Remoto en Línea de Defensa que puede bloquear a algún atacante. max_blocks: a cuántos
+	atacantes puede bloquear a la vez (Elías: 2, BlockPatterns.max_blocks())."""
 	var options: Array = []
 	if not _main.opponent_field:
 		return options
 	for blocker in _main.opponent_field.get_children():
 		if not is_instance_valid(blocker) or blocker.get("card_type") != Constants.CardType.ALIADO:
 			continue
-		if blocker in GameManager.blockers.values() or not ContinuousEffectManager.can_block(blocker):
+		if not BlockScript.can_block_more(blocker) or not ContinuousEffectManager.can_block(blocker):
 			continue
 		var valid_attackers: Array = []
 		for attacker in GameManager.attackers:
@@ -675,6 +686,7 @@ func _block_options() -> Array:
 			continue
 		var entry: Dictionary = _card_public_data(blocker)
 		entry["can_block"] = valid_attackers
+		entry["max_blocks"] = BlockScript.max_blocks(blocker)
 		options.append(entry)
 	return options
 
@@ -689,7 +701,7 @@ func _apply_remote_blocks(pairs: Array) -> void:
 		var attacker := _find_card_by_id(str(pair.get("attacker_id", "")))
 		if not blocker or not attacker or not (attacker in GameManager.attackers):
 			continue
-		if blocker.get_parent() != _main.opponent_field or blocker in GameManager.blockers.values():
+		if blocker.get_parent() != _main.opponent_field or not BlockScript.can_block_more(blocker):
 			continue
 		if GameManager.blockers.has(attacker) or not ContinuousEffectManager.can_block(blocker):
 			continue

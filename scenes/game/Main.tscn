@@ -646,6 +646,8 @@ text = "L. APOYO"
 horizontal_alignment = 1
 
 [node name="PlayerHand" type="Control" parent="GameBoard/PlayerArea" unique_id=1533866774]
+z_index = 120
+z_as_relative = false
 layout_mode = 1
 anchors_preset = 12
 anchor_top = 1.0

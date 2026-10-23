@@ -26,11 +26,9 @@ func setup(main: Node) -> void:
 
 
 func _on_field_child_entered(node: Node, container: Control) -> void:
-	"""Carta que entra a la Línea de Defensa/Apoyo SIN pasar por
-	pin_card_to_field_slot() (2026-10-13, bug real reportado por el usuario:
-	la carta que pone en juego quimera voragh quedaba debajo de la propia
-	quimera). Jugar normal la acomoda en su casilla al frame siguiente; si
-	al rato sigue sin casilla, se compacta la línea."""
+	"""Carta que entra a la Línea de Defensa/Apoyo sin pasar por pin_card_to_field_slot() (p.ej. la
+	que pone en juego quimera voragh). Jugar normal la acomoda en su casilla al frame siguiente; si
+	sigue sin casilla, se compacta la línea."""
 	if node.get("card_data") == null:
 		return
 	await get_tree().create_timer(0.15).timeout
@@ -77,21 +75,9 @@ func draw_card(player_id: int = 0, animated: bool = true) -> bool:
 		card.owner_id = 1
 		card.controller_id = 1
 		_main._opponent_fan.add_card(card)
-		# 2026-09-14, bug real reportado por el usuario: "puedo hacer objetivo
-		# a mis Aliados pero no a los del rival", en TODAS las habilidades de
-		# objetivo sin excepción. Causa: a diferencia de la rama del jugador
-		# 0 (arriba), aquí nunca se llamaba _main._connect_card_signals(card)
-		# — card_clicked/card_double_clicked/etc. quedaban sin NINGÚN listener
-		# conectado desde el momento en que la carta se roba (incluida la
-		# mano inicial completa, ver draw_initial_hand() más abajo, que solo
-		# llama a esta misma función). El click SÍ llegaba a Card._on_gui_
-		# input() (can_interact quedaba en true vía _force_board_
-		# interactable()) y emitía la señal, pero nadie escuchaba — la carta
-		# se veía "brillando" como objetivo válido y el click no hacía nada,
-		# en cualquier ability que pidiera un objetivo en juego. Se arrastraba
-		# incluso después de que la carta pasara de la mano al campo (mismo
-		# Node reparentado, las conexiones de señal no se pierden pero nunca
-		# existieron para empezar).
+		# Conectar las señales de la carta también para el jugador 1: sin listeners, sus cartas brillaban
+		# como objetivo válido pero el click no hacía nada en ninguna habilidad. La conexión se mantiene
+		# cuando la carta pasa de la mano al campo (mismo Node).
 		_main._connect_card_signals(card)
 		_update_castillo_counts()
 		if animated:
@@ -228,18 +214,15 @@ func _update_castillo_counts() -> void:
 	"""Actualiza los contadores de cartas en los Castillos."""
 	UIManager.sync_castillo_counts(_main.player_deck.size(), _main.opponent_deck.size())
 	castillo_counts_changed.emit(_main.player_deck.size(), _main.opponent_deck.size())
-	# Único punto de verdad para "el Castillo cambió" (robo normal, Destierra
-	# N del tope de Aho, la habilidad de La Ouija, etc.) — refrescar aquí el
-	# revelado del tope (2026-08-31) evita tener que llamarlo a mano en cada
-	# sitio que toca player_deck directo. Ver ZoneViewerModule.
-	# refresh_castillo_top_reveal().
+	# Único punto de verdad para "el Castillo cambió" (robo normal, Destierra N del tope de Aho, la
+	# habilidad de La Ouija, etc.) — refrescar aquí el revelado del tope evita tener que llamarlo a
+	# mano en cada sitio que toca player_deck directo. Ver ZoneViewerModule.
+	# refresh_castillo_top_reveal.
 	if _main._zone_viewer:
 		_main._zone_viewer.refresh_castillo_top_reveal()
-	# Chequeo de victoria por Castillo vacío (DAR 2.1) — mismo motivo: antes
-	# solo se chequeaba al INTENTAR robar con el mazo ya vacío (2026-08-31,
-	# reportado por el usuario: desterrar el Castillo rival a 0 con Aho no
-	# declaraba ganada la partida). Ver GameManager.check_victory() — ya
-	# tiene su propio guard is_game_active, no hace falta repetirlo aquí.
+	# Chequeo de victoria por Castillo vacío (DAR 2.1) en cada cambio del contador, no solo al robar
+	# con el mazo vacío (p.ej. desterrar el Castillo rival a 0 con Aho). GameManager.check_victory()
+	# tiene su propio guard is_game_active.
 	GameManager.check_victory()
 
 
@@ -278,12 +261,10 @@ func _pulse_zone_panel(panel: Control, color: Color) -> void:
 
 
 func _detach_for_flight(card: Node) -> void:
-	"""Saca la carta de la mano/abanico/campo y la deja colgando del tablero
-	para animar su vuelo. 2026-10-13, bug real reportado por el usuario (se
-	quedaba pegado en la Fase Final al descartar por límite de mano): sacarla
-	de la mano la dejaba FUERA del árbol, y un tween de un nodo fuera del árbol
-	nunca termina (probado) — el 'await tw.finished' colgaba para siempre.
-	Antes eran 3 copias del mismo bloque (Cementerio, Destierro, Castillo)."""
+	"""Saca la carta de la mano/abanico/campo y la deja colgando del tablero para animar su vuelo.
+	Debe quedar dentro del árbol: un tween de un nodo fuera del árbol nunca termina y el 'await
+	tw.finished' colgaba (p.ej. el descarte por límite de mano en Fase Final). Lo usan Cementerio,
+	Destierro y Castillo."""
 	var gpos: Vector2 = card.global_position
 	var from_field := true
 	if _main.player_hand and _main.player_hand.cards.has(card):
@@ -543,19 +524,12 @@ func move_card(from_zone: Constants.Zone, to_zone: Constants.Zone, amount: int =
 
 
 # =============================================================================
-# SLOTS FIJOS DE LÍNEA DE DEFENSA/APOYO (2026-08-31, a pedido del usuario)
+# SLOTS FIJOS DE LÍNEA DE DEFENSA/APOYO
 # =============================================================================
-## Antes Línea de Defensa/Apoyo eran HBoxContainer puro (alignment=CENTER):
-## agregar o sacar UN hijo reordenaba TODOS sus hermanos de una — reportado
-## como 'cuando 1 ataque, el otro toma su puesto' (el Aliado que se quedaba
-## en Defensa se corría solo al vacante el que salió a atacar). No se cambia
-## el TIPO de contenedor en la escena — sigue siendo un HBoxContainer real, y
-## container.get_children() sigue siendo la fuente de verdad de 'quién está
-## en esta zona' para el resto del proyecto (docenas de lugares dependen de
-## eso) — solo se desacopla cada carta de su layout automático
-## (top_level=true, mismo truco que CardInteraction._start_drag()) y se le
-## asigna una posición fija dentro de una grilla de slots imaginaria que el
-## Container ya no puede tocar.
+# Con el HBoxContainer puro, sacar un hijo reordenaba a todos ("cuando uno ataca, el otro toma su
+# puesto"). El contenedor sigue siendo un HBoxContainer y get_children() sigue siendo la fuente de
+# verdad de quién está en la zona; solo se desacopla cada carta del layout (top_level = true, como
+# CardInteraction._start_drag()) y se la pone en una posición fija de una grilla de slots.
 const _FIELD_SLOT_WIDTH: float = 170.0  # 150 (ancho de carta) + 20 (separación limpia entre cartas)
 var _field_slot_occupants: Dictionary = {}  # {container: Array[Node]}
 
@@ -635,7 +609,7 @@ func compact_field_slots(container: Control, animate: bool = true, exclude_anim_
 	for i in range(count):
 		var card: Node = active_cards[i]
 		var slot_pos_idx: float = start_slot + float(i)
-		var target_scale: Vector2 = Vector2(0.8, 0.8) if card.get("card_type") == Constants.CardType.TOTEM else Vector2.ONE
+		var target_scale: Vector2 = Constants.TOTEM_CARD_SCALE if card.get("card_type") == Constants.CardType.TOTEM else Vector2.ONE
 		var card_size: Vector2 = (card.custom_minimum_size if card.custom_minimum_size != Vector2.ZERO else Vector2(150.0, 210.0)) * target_scale
 		var local_center_x: float = base_container.size.x / 2.0 + (slot_pos_idx - center_val) * _FIELD_SLOT_WIDTH
 		var target_x: float = base_container.global_position.x + local_center_x - card_size.x / 2.0
@@ -645,6 +619,11 @@ func compact_field_slots(container: Control, animate: bool = true, exclude_anim_
 		var target_pos: Vector2 = Vector2(target_x, target_y)
 
 		card.top_level = true
+		card.z_index = 0
+		card.set("original_z_index", 0)
+		card.set_meta("hand_base_z_index", 0)
+		card.scale = target_scale
+		card.base_scale = target_scale
 		var int_slot: int = int(round(slot_pos_idx))
 		if int_slot >= 0 and int_slot < max_slots:
 			new_occupants[int_slot] = card
@@ -659,9 +638,8 @@ func compact_field_slots(container: Control, animate: bool = true, exclude_anim_
 
 		# Revalidar posición de armas equipadas en el Aliado
 		if "equipped_weapons" in card and card.equipped_weapons is Array:
-			# Sin tipar a propósito: un Arma que salió del juego por un camino
-			# que no la desequipó deja una referencia liberada, y asignarla a
-			# una variable 'Node' revienta. Se purga de paso (2026-10-14).
+			# Sin tipar a propósito: un Arma que salió del juego por un camino que no la desequipó deja una
+			# referencia liberada, y asignarla a una variable 'Node' revienta. Se purga de paso.
 			for w_idx in range(card.equipped_weapons.size() - 1, -1, -1):
 				if not is_instance_valid(card.equipped_weapons[w_idx]):
 					card.equipped_weapons.remove_at(w_idx)

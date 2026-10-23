@@ -63,8 +63,7 @@ var placeholder_icon: Label
 var placeholder_name: Label
 var placeholder_cost: Label
 
-## Módulos extraídos (Fase 4 de reestructuración; CardTriggerRuntime/
-## CardBadges agregados 2026-09-06, "módulos gordos")
+## Módulos separados (CardTriggerRuntime, CardBadges, ...).
 var _interaction: CardInteraction
 var _animations: CardAnimations
 var _trigger_runtime: CardTriggerRuntime
@@ -140,12 +139,9 @@ var is_selected: bool = false
 var is_dragging: bool = false
 var is_face_up: bool = true
 var can_interact: bool = true
-## Arrastrar quedó desactivado a pedido del usuario (2026-08-17): era la
-## fuente de varios bugs de posicionamiento (top_level sin preservar la
-## posición visual, contenedores reordenando de forma diferida, etc.).
-## Jugar cartas de la mano ya funciona por doble clic (_on_card_double_
-## clicked); declarar un atacante ahora funciona con un solo clic sobre el
-## Aliado en el campo (ver CardInteractionModule._on_card_clicked).
+## Arrastrar está desactivado (causaba problemas de posicionamiento). Jugar desde la mano es con
+## doble clic (_on_card_double_clicked); declarar atacante, con un clic sobre el Aliado
+## (CardInteractionModule._on_card_clicked).
 var drag_enabled: bool = false
 var _image_ready: bool = false  # true cuando la imagen frontal está disponible
 
@@ -164,31 +160,18 @@ var target_scale: Vector2 = Vector2.ONE
 # Escala base para animaciones de hover (permite que oros a 0.5 tengan hover proporcional)
 var base_scale: Vector2 = Vector2.ONE
 
-## Quién CONTROLA la carta ahora mismo (de qué lado del tablero pelea, quién
-## puede atacar/activar sus habilidades) — por defecto sigue a owner_id
-## (ver su setter abajo), y solo diverge cuando un efecto te deja jugar o
-## controlar una carta ajena sin volverte su dueño (2026-08-29, DAR: jugar
-## una carta del rival te vuelve controlador, no dueño — p.ej. Miguel,
-## "juega una carta de tu mano o de un Cementerio", donde SÍ puede ser el
-## Cementerio rival). Antes este campo existía pero nada lo mantenía
-## sincronizado con owner_id — toda carta normal (nunca tocada por un
-## efecto así) quedaba en controller_id=0 sin importar su dueño real.
+## Quién CONTROLA la carta ahora (de qué lado pelea, quién ataca/activa sus habilidades). Sigue a
+## owner_id por defecto (ver su setter) y solo diverge cuando un efecto te deja jugar o controlar
+## una carta ajena sin ser su dueño (DAR; p.ej. Miguel desde el Cementerio rival).
 var controller_id: int = 0
 
-## 'Hace doble daño de combate al Destierro' (2026-09-04, a pedido del
-## usuario — p.ej. atenea en wonderland, manuel rodriguez): el daño de
-## combate que ESTA carta hace al Castillo se dobla y las cartas Botadas
-## por él van al Destierro en vez del Cementerio — ver BattleManager.
-## _accumulate_castle_damage(), consultado durante ASIGNACION_DANIO.
+## "Hace doble daño de combate al Destierro" (p.ej. atenea en wonderland, manuel rodriguez): el daño
+## de combate de esta carta al Castillo se dobla y lo Botado va al Destierro. Ver
+## BattleManager._accumulate_castle_damage() (ASIGNACION_DANIO).
 var doubles_damage_to_exile: bool = false
 
-## 'Su daño de combate... es enviado al Destierro este turno' (2026-09-20,
-## Segundo Sello — sin doblar, a diferencia de doubles_damage_to_exile de
-## arriba). BattleManager._check_damage_to_exile_effect() YA consultaba este
-## nombre exacto de propiedad vía card.get("damage_goes_to_exile") desde
-## antes (comentario "también verificar en cartas en juego del oponente"),
-## pero ninguna carta del proyecto lo declaraba ni lo asignaba nunca —
-## infraestructura muerta reactivada aquí, sin tocar BattleManager.gd.
+## "Su daño de combate... es enviado al Destierro este turno" (Segundo Sello), sin doblar. Lo lee
+## BattleManager._check_damage_to_exile_effect() vía card.get("damage_goes_to_exile").
 var damage_goes_to_exile: bool = false
 
 var _owner_id: int = 0
@@ -202,26 +185,19 @@ var owner_id: int:
 ## Las cartas exhumadas van al destierro cuando dejan el campo, no al cementerio
 var is_exhumed: bool = false
 
-## Convertida en una carta (del mismo tipo u otro) SIN habilidad (2026-08-26,
-## p.ej. Signo Amarillo convirtiéndose en un Oro sin habilidad). Distinto de
-## "perder la habilidad" (silenciada, ver KeywordManager.is_silenced()): son
-## dos efectos separados con su propio texto de protección ("no puede ser
-## convertida" vs "no puede perder su habilidad"), pero el resultado visible
-## es el mismo — pierde su caja de texto, conserva coste y Fuerza, y gira
-## 180° (_refresh_disabled_rotation()).
+## Convertida en una carta sin habilidad (p.ej. Signo Amarillo como Oro sin habilidad). Distinto de
+## "perder la habilidad" (KeywordManager.is_silenced()): cada uno tiene su propia protección ("no
+## puede ser convertida" / "no puede perder su habilidad"), pero se ven igual: sin caja de texto,
+## conserva coste y Fuerza, y gira 180° (_refresh_disabled_rotation()).
 var is_converted: bool = false:
 	set(value):
 		is_converted = value
 		_refresh_disabled_rotation()
 
-## Datos originales de esta carta cuando su propio efecto la transformó
-## reversiblemente en OTRO tipo/zona de verdad (2026-08-29, p.ej.
-## Jormundgander: Aliado que se convierte en Oro al hacer daño y vuelve a
-## ser Aliado si se lo paga) — {} = no aplica. Distinto de is_converted
-## (que es "perdió su habilidad" sin cambiar tipo/zona, DAR otro efecto):
-## aquí card_type y la zona cambian de verdad. GoldManager._mover_oro_a_
-## pagado() lo revisa al pagar este Oro para saber si debe revertirlo en
-## vez de moverlo a Oro Pagado normalmente.
+## Datos originales cuando su propio efecto la transformó reversiblemente en otro tipo/zona (p.ej.
+## Jormundgander: Aliado → Oro al hacer daño, vuelve a ser Aliado si se lo paga). {} = no aplica. A
+## diferencia de is_converted, aquí cambian card_type y zona. Lo revisa
+## GoldManager._mover_oro_a_pagado() al pagar este Oro.
 var revert_to_data: Dictionary = {}
 
 ## Solo en el cliente Remoto: el Anfitrión avisa qué cartas están sin
@@ -236,15 +212,10 @@ var remote_ability_disabled: bool = false:
 
 
 func _refresh_disabled_rotation() -> void:
-	"""Gira la carta 180° desde su centro si es del oponente en juego (Mano, Oro, Aliado, Arma, Tótem);
-	si está silenciada o convertida, 180° más respecto de esa posición. Además aplica un tinte gris "sin
-	habilidad" (2026-09-15, a pedido del usuario) — antes lo único que
-	indicaba "silenciada/convertida" era este mismo giro de 180°, pero para
-	una carta del RIVAL ese giro ya pasa SIEMPRE (así se muestra cualquier
-	carta rival en juego) — silenciar/convertir una carta rival no se veía
-	distinto de una carta rival normal, sin ninguna forma de saber a simple
-	vista que perdió su habilidad. El tinte es independiente del giro y
-	funciona para los dos lados."""
+	"""Gira la carta 180° desde su centro si es del oponente en juego (Mano, Oro, Aliado, Arma,
+	Tótem); si está silenciada o convertida, 180° más respecto de esa posición. Además aplica un
+	tinte gris "sin habilidad", que se ve igual en los dos lados (el giro solo no distinguía una
+	carta rival silenciada de una normal)."""
 	var parent_name: String = get_parent().name if get_parent() else ""
 	var parent_parent_name: String = get_parent().get_parent().name if (get_parent() and get_parent().get_parent()) else ""
 	var is_in_opp_container: bool = parent_name.begins_with("Opponent") or parent_parent_name == "OpponentArea"
@@ -267,18 +238,10 @@ func _refresh_disabled_rotation() -> void:
 		if km and km.has_method("is_silenced"):
 			is_disabled_ability = km.is_silenced(self)
 
-	# 2026-09-23, a pedido del usuario: un Aliado sin habilidad (silenciado/
-	# convertido) debe seguir viéndose "apagado" (girado/teñido) SIEMPRE,
-	# incluso portando un Arma con habilidad propia — antes había una
-	# excepción aquí que lo hacía ver con habilidad de nuevo apenas
-	# equipaba un Arma, aunque su PROPIA habilidad siguiera bloqueada de
-	# verdad (is_silenced() no mira Armas para nada, ver KeywordManager).
-	# 2026-10-14, a pedido del usuario: "sin habilidad" gira 180° respecto
-	# de la posición ORIGINAL de la carta, sea propia o rival. Antes era un
-	# OR: una carta rival en juego ya está a 180°, así que silenciarla o
-	# convertirla no la giraba (solo el tinte). Ahora es XOR — propia
-	# 0°→180°, rival 180°→0°. En la mano no aplica (el abanico rival no se
-	# toca).
+	# Un Aliado sin habilidad (silenciado/convertido) se ve apagado siempre, aunque porte un Arma con
+	# habilidad propia (is_silenced() no mira Armas).
+	# "Sin habilidad" gira 180° respecto de la posición original, propia o rival (XOR): propia 0° →
+	# 180°, rival 180° → 0°. En la mano no aplica (el abanico rival no se toca).
 	var flip_disabled: bool = is_disabled_ability and current_zone != Constants.Zone.MANO
 	var should_rotate: bool = is_opp_in_play != flip_disabled
 
@@ -330,76 +293,45 @@ var entered_this_turn: bool = true
 const TRIGGER_KEYWORDS: Dictionary = {
 	"on_draw": ["cuando robes", "al robar", "cada vez que robes"],
 	"on_card_drawn": ["cuando robes una carta", "al robar una carta"],
-	# (2026-08-28, misma corrección de terminología que CardFactory.TRIGGER_PATTERNS)
+	# "al entrar"/"entre": misma terminología que CardFactory.TRIGGER_PATTERNS.
 	"on_enter_play": ["cuando entre al juego", "al entrar al juego", "cuando entra al juego", "cuando entre en juego", "al entrar en juego", "cuando entra en juego", "cuando entra o salga del juego", "cuando entra o sale del juego", "cuando entra en juego o ataque", "cuando entra en juego o ataca",
-		"cuando ataca, entra"],  # Dhampir (2026-10-17): "Cuando ataca, entra o sale del juego"
+		"cuando ataca, entra"],  # Dhampir: "Cuando ataca, entra o sale del juego"
 	"on_leave_play": ["al salir del juego", "cuando salga del juego", "cuando sale del juego", "cuando entra o salga del juego",
 		"cuando entra o sale del juego", "entra o sale del juego"],
 	"on_destroyed": ["cuando sea destruido", "al ser destruido"],
 	"on_discard": ["cuando descartes", "al descartar"],
-	# "cuando entra en juego o ataque" (2026-08-29, p.ej. Sherlock Holmes) es
-	# UNA sola cláusula con dos disparadores — "cuando ataque" no aparece
-	# como substring literal ahí ("cuando entra en juego O ataque"), así que
-	# necesita su propia frase para que has_trigger("on_attack") la detecte.
-	# "cuando el portador ataque" (2026-09-06, bug real reportado por el
-	# usuario — p.ej. Garfio Pirata: 'Cuando el portador ataque, si es de
-	# coste 1 o más, genera un Oro o Roba una carta') — NINGUNA de las
-	# frases de abajo matchea 'el portador' insertado entre 'cuando' y
-	# 'ataque', así que _isolate_all_trigger_clauses() no cortaba ahí el
-	# bloque del ETB y esta oración se ejecutaba AL EQUIPARSE en vez de al
-	# atacar (mismo síntoma que el bug ya documentado de 2026-08-30, pero
-	# esta frase puntual seguía sin cubrir).
-	# "cuando ataca" (2026-10-14, a pedido del usuario con Zadquiel): 41
-	# cartas lo usan y nunca se registraba el disparador.
+	# "cuando entra en juego o ataque" (p.ej. Sherlock Holmes): una cláusula con dos disparadores;
+	# "cuando ataque" no aparece literal, así que necesita su propia frase para
+	# has_trigger("on_attack").
+	# "cuando el portador ataque" (p.ej. Garfio Pirata): sin esta frase, _isolate_all_trigger_clauses()
+	# no cortaba el bloque del ETB y la oración se ejecutaba al equiparse.
+	# "cuando ataca" (muchas cartas, p.ej. Zadquiel).
 	"on_attack": ["cuando ataque", "cuando ataca", "al atacar", "cuando entra en juego o ataque", "cuando entra en juego o ataca", "cuando el portador ataque"],
 	"on_block": ["cuando bloquee", "al bloquear"],
-	# "cuando hace daño" (2026-10-12, p.ej. Sir Galahad).
+	# "cuando hace daño" (p.ej. Sir Galahad).
 	"on_damage_dealt": ["cuando haga daño de combate", "cuando haga daño", "si hizo daño", "cuando hace daño"],
 	"on_damage_received": ["cuando fueras a recibir daño"],
 	"on_turn_start": ["al comienzo del turno", "al inicio del turno", "al comienzo de tu turno"],
-	# "en tu fase final" agregado (2026-08-30, p.ej. Espada de O'Higgins) —
-	# antes SOLO estaban las frases genéricas de "al final del turno", que
-	# ninguna carta real usa; "en tu Fase Final" es la frase real del DAR
-	# para este disparador y no matcheaba nada.
-	# "en la Fase Final, si tienes" (2026-09-20, p.ej. torii) — frase NARROW
-	# a propósito: "en la fase final" a secas colisionaría con "en la fase
-	# final oponente" (Biblioteca de Caballería, on_opponent_turn_end de
-	# abajo), clasificando esa carta también como on_turn_end por error.
+	# "en tu fase final" (p.ej. Espada de O'Higgins) es la frase real del DAR para este disparador.
+	# "en la Fase Final, si tienes" (p.ej. torii): acotada a propósito; "en la fase final" a secas
+	# chocaría con "en la fase final oponente" (Biblioteca de Caballería, on_opponent_turn_end).
 	"on_turn_end": ["al final del turno", "al terminar el turno", "en tu fase final", "en la fase final, si tienes"],
-	# "en la Fase Final oponente" (2026-09-04, p.ej. Biblioteca de
-	# Caballería) — distinto de "en tu Fase Final" de arriba: dispara en la
-	# Fase Final del RIVAL, no la propia. Ver TriggerSystem.
-	# resolve_turn_end_triggers() para el disparo real (escanea el campo
-	# del jugador contrario cuando termina el turno de ESE jugador).
+	# "en la Fase Final oponente" (p.ej. Biblioteca de Caballería): dispara en la Fase Final del rival.
+	# El disparo real está en TriggerSystem.resolve_turn_end_triggers() (escanea el campo del jugador
+	# que no termina el turno).
 	"on_opponent_turn_end": ["en la fase final oponente", "en la fase final de tu oponente"],
-	# "Al comienzo del Ataque" (2026-09-04, a pedido del usuario — p.ej.
-	# almirante akari) — fase Ataque, distinta de "al comienzo del turno"
-	# (on_turn_start, ligado a Agrupación).
+	# "Al comienzo del Ataque" (p.ej. almirante akari): fase de Ataque, distinta de "al comienzo del
+	# turno" (on_turn_start, ligado a Agrupación).
 	"on_ataque_start": ["al comienzo del ataque"],
-	# "en tu Agrupación" (2026-08-30, p.ej. Espada del Juicio: "Cuando entra
-	# en juego y en tu Agrupación, Destierra..."). Sin/con tilde por las
-	# dudas — la API a veces trae mojibake en palabras acentuadas.
-	# "al comienzo de tu Agrupación" (2026-09-20, p.ej. torii) — distinta de
-	# "en tu Agrupación" (Espada del Juicio, arriba): mismo tipo de
-	# disparador (DAR, inicio de la fase de Agrupación), otra frase real.
+	# "en tu Agrupación" (p.ej. Espada del Juicio), con y sin tilde (la API a veces trae mojibake). "al
+	# comienzo de tu Agrupación" (p.ej. torii): mismo disparador, otra frase.
 	"on_agrupacion": ["en tu agrupación", "en tu agrupacion", "al comienzo de tu agrupación", "al comienzo de tu agrupacion"],
-	# "Al comienzo de tu/la Vigilia" (2026-09-03, corregido a pedido del
-	# usuario — NO "en tu vigilia" sola: Vigilia es la ventana NORMAL de
-	# las habilidades activadas ("una vez por turno, puedes X"), así que
-	# "En tu Vigilia, X" sin más es casi siempre esa ventana, no un
-	# disparador. Solo "Al comienzo de tu/la Vigilia" es inequívocamente
-	# un disparador real (p.ej. Colmillo de Vampiro: "Al comienzo de la
-	# Vigilia, puedes Barajar..." — el "puedes" ahí es sobre el EFECTO
-	# ofrecido en ese momento, no sobre cuándo activarlo). Con solo
-	# "en tu vigilia" como frase, la PRIMERA habilidad de Espada de
-	# O'Higgins ("En tu Vigilia, una vez por turno, puedes Barajar...")
-	# se habría tratado como disparador automático por error, saltándose
-	# el "puedes"/cupo de una vez por turno. "en tu vigilia o fase final"
-	# se agrega aparte, acotado a esa combinación exacta (p.ej. Mariano
-	# Osorio) — Fase Final SÍ es siempre disparador (no es ventana de
-	# activadas), así que emparejada con Vigilia en la misma oración
-	# arrastra a Vigilia también, sin el riesgo de falso positivo de
-	# "en tu vigilia" sola.
+	# "Al comienzo de tu/la Vigilia" (p.ej. Colmillo de Vampiro), NO "en tu vigilia" sola: Vigilia es
+	# la ventana normal de las habilidades activadas ("una vez por turno, puedes X"), y con esa frase
+	# la primera habilidad de Espada de O'Higgins ("En tu Vigilia, una vez por turno, puedes
+	# Barajar...") se trataría como disparador automático. "en tu vigilia o fase final" (p.ej. Mariano
+	# Osorio) va aparte: Fase Final siempre es disparador, así que esa combinación no da falso
+	# positivo.
 	"on_vigilia": ["al comienzo de tu vigilia", "al comienzo de la vigilia", "en tu vigilia o fase final"],
 	"on_ally_enters": ["cuando otro aliado entre", "cuando un aliado entre"],
 	"on_ally_dies": ["cuando otro aliado muera", "cuando un aliado sea destruido"],
@@ -407,19 +339,10 @@ const TRIGGER_KEYWORDS: Dictionary = {
 	"on_card_played": ["cuando juegues", "al jugar"],
 }
 
-## Recorte del área de CLICK (no del área visual — ver _has_point() más
-## abajo), en X local, cuando esta carta está tapada por la derecha por
-## otra carta superpuesta de la MISMA fila (2026-09-03, bug reportado:
-## en la Reserva de Oro, con muchas cartas la separación del HBoxContainer
-## se vuelve negativa (GoldManager._update_container_gold_spacing(), hasta
-## -125px) para que quepan todas, así que cartas consecutivas se superponen
-## bastante — cada Card sigue siendo un Control de 150×210 completo aunque
-## visualmente la carta siguiente (añadida después, dibujada encima) tape
-## buena parte de su derecha. Sin este recorte, esa porción tapada seguía
-## siendo clicable en la carta de ABAJO — un click ahí (que visualmente
-## apunta a la carta de ARRIBA) se lo comía la de abajo en silencio, y
-## viceversa en las esquinas/bordes donde la superposición es parcial.
-## -1.0 = sin recorte (comportamiento normal, rect completo).
+## Recorte del área de CLICK (no visual, ver _has_point()) en X local, cuando otra carta de la misma
+## fila la tapa por la derecha. En la Reserva, con muchas cartas, la separación es negativa
+## (GoldManager._update_container_gold_spacing(), hasta -125 px) y las cartas se superponen; sin
+## recorte, la parte tapada seguía siendo clickeable en la carta de abajo. -1.0 = sin recorte.
 var _click_clip_right: float = -1.0
 var _click_clip_top_free: float = 0.0
 
@@ -517,15 +440,10 @@ func _ready() -> void:
 
 	_is_ready = true
 
-	# Configurar mouse
-	# NO conectar mouse_entered/mouse_exited nativos (2026-08-28, arregla el
-	# salto infinito reportado por el usuario): el rect que Godot usa para
-	# esas señales no tiene en cuenta 'scale', así que quedaban desfasadas
-	# cerca de un borde apenas el hover escalaba la carta y competían con
-	# CardInteraction.process() (que sí calcula bien la posición con
-	# get_local_mouse_position()) — las dos fuentes de hover se peleaban y
-	# producían el loop entra/sale. process() es ahora la única fuente de
-	# verdad para is_hovered.
+	# Configurar mouse.
+	# No se conectan mouse_entered/mouse_exited nativos: su rect no tiene en cuenta 'scale' y competían
+	# con CardInteraction.process() (que usa get_local_mouse_position()), provocando un loop
+	# entra/sale. process() es la única fuente de is_hovered.
 	gui_input.connect(_interaction.on_gui_input)
 
 	# Escuchar cambios de dorso
@@ -669,11 +587,8 @@ func load_from_data(data: Dictionary, is_hidden: bool = false) -> void:
 		refresh_strength_badge()
 		refresh_cost_badge()
 
-	# Una copia recién creada de un nombre ya bloqueado por
-	# KeywordManager.lock_ability_by_name() (2026-08-29, p.ej. Alicia en
-	# Wonderland) debe nacer ya girada 180° — sin esto, una carta robada
-	# DESPUÉS de que el nombre quedó bloqueado no mostraba el indicador
-	# hasta que algo más disparara _refresh_disabled_rotation().
+	# Una copia nueva de un nombre ya bloqueado por KeywordManager.lock_ability_by_name() (p.ej. Alicia
+	# en Wonderland) nace ya girada 180°, sin esperar a otro _refresh_disabled_rotation().
 	_refresh_disabled_rotation()
 
 
@@ -713,16 +628,6 @@ func actualizar_aspecto() -> void:
 		_image_loader._apply_pending_data()  # ya llama _load_card_image() internamente
 
 
-func voltear() -> void:
-	"""Voltea la carta con animación de flip"""
-	var tween = create_tween()
-	tween.tween_property(self, "scale:x", 0.0, flip_duration / 2.0)
-	tween.tween_callback(func():
-		esta_oculta = !esta_oculta
-	)
-	tween.tween_property(self, "scale:x", scale.y, flip_duration / 2.0)
-
-
 func _on_card_back_changed(_back_id: String) -> void:
 	"""Actualiza el dorso cuando cambia en GameSettings"""
 	if esta_oculta and card_art:
@@ -733,12 +638,8 @@ func _on_card_back_changed(_back_id: String) -> void:
 
 
 func _on_strength_visual_update_required(card: Node, stat: String, _base_value: int, _modified_value: int) -> void:
-	"""Refresca el badge correspondiente cuando ContinuousEffectManager
-	avisa que un modificador cambió el valor calculado de ESTA carta —
-	conectado en _ready() (2026-08-30: la función existía referenciada aquí
-	en _exit_tree() para desconectarse, pero nunca estuvo declarada ni
-	conectada — 'Identifier not declared', corrupción histórica ajena a
-	esta sesión)."""
+	"""Refresca el badge cuando ContinuousEffectManager avisa que un modificador cambió el valor
+	calculado de esta carta. Conectado en _ready()."""
 	if card != self:
 		return
 	match stat:
@@ -756,34 +657,20 @@ func _exit_tree() -> void:
 	_image_loader._disconnect_image_signal()
 	if ContinuousEffectManager.card_visual_update_required.is_connected(_on_strength_visual_update_required):
 		ContinuousEffectManager.card_visual_update_required.disconnect(_on_strength_visual_update_required)
-	# Si esta carta era FUENTE de algún modificador continuo (p.ej. un Arma
-	# dándole Fuerza a su portador), se limpia cuando REALMENTE sale de
-	# juego — is_queued_for_deletion() es la guarda clave (2026-08-22):
-	# _exit_tree() también se dispara en un reparenting normal y temporal
-	# (remove_child + add_child), como cuando un Aliado ataca y se mueve a
-	# Línea de Ataque — el Arma equipada es su HIJA, así que también salía
-	# y volvía a entrar al árbol, y sin esta guarda el bono de Fuerza se
-	# borraba justo al declarar el ataque (el combate usaba la Fuerza base,
-	# aunque la carta siguiera mostrando el badge ya calculado en verde).
+	# Si esta carta era FUENTE de un modificador continuo (p.ej. un Arma dando Fuerza al portador), se
+	# limpia solo cuando sale de juego de verdad. is_queued_for_deletion() es la guarda: _exit_tree()
+	# también se dispara en un reparenting temporal (un Aliado que ataca y su Arma hija cambian de
+	# nodo), y sin la guarda el bono se borraba al declarar el ataque.
 	if is_queued_for_deletion() and ContinuousEffectManager.has_method("remove_modifiers_from_source"):
 		ContinuousEffectManager.remove_modifiers_from_source(self)
-	# Invalidar el cache SIEMPRE que una carta sale de juego de verdad, no
-	# solo cuando ELLA MISMA era fuente de un modificador (2026-09-02, bug
-	# reportado por el usuario: Manuel Bulnes — 'Gana 1 de Fuerza por cada
-	# Arma que controles', un valor DINÁMICO recalculado con un Callable —
-	# seguía mostrando el bono aunque ya no quedara ningún Arma en juego).
-	# remove_modifiers_from_source() de arriba solo invalida el cache si
-	# ESTA carta tenía modificadores propios registrados; un Arma sin
-	# habilidad propia (sin 'El portador gana...') no tiene ninguno, así
-	# que destruirla nunca disparaba la invalidación — el valor de Manuel
-	# Bulnes quedaba pegado al último cálculo, sin importar cuántas Armas
-	# quedaran de verdad en el tablero.
+	# Invalidar el caché siempre que una carta sale de juego, no solo si era fuente de un modificador:
+	# valores dinámicos con Callable (Manuel Bulnes: "1 de Fuerza por cada Arma que controles")
+	# dependen de cartas sin modificador propio.
 	if is_queued_for_deletion() and ContinuousEffectManager.has_method("_invalidate_cache"):
 		ContinuousEffectManager._invalidate_cache()
-	# Misma idea para modificadores de COSTE registrados por esta carta
-	# mientras estuvo en juego (p.ej. el impuesto de Bernardo O'Higgins a
-	# Talismanes/Tótems, 2026-08-26) — PaymentManager.cost_modifiers no se
-	# limpiaba solo al salir de juego, solo al empezar un turno nuevo.
+	# Lo mismo para modificadores de COSTE registrados por esta carta (p.ej. el impuesto de Bernardo
+	# O'Higgins a Talismanes/Tótems): PaymentManager.cost_modifiers no se limpia solo al salir de
+	# juego.
 	if is_queued_for_deletion() and PaymentManager.has_method("remover_modificador_coste"):
 		PaymentManager.remover_modificador_coste(self)
 
@@ -809,10 +696,8 @@ func return_to_hand() -> void:
 # SELECCIÓN
 # =============================================================================
 func select() -> void:
-	"""Selecciona la carta — solo el borde, sin escala (2026-08-28, a pedido
-	del usuario: hacía un 'pop' a Vector2.ONE * card_scale_selected que
-	ignoraba base_scale — se veía mal en cartas en juego, sobre todo en
-	Tótems (base_scale 0.8) que saltaban a tamaño completo."""
+	"""Selecciona la carta: solo el borde, sin escala (escalar ignoraba base_scale y los Tótems, a
+	0.8, saltaban a tamaño completo)."""
 	is_selected = true
 	if selection_effect:
 		selection_effect.visible = true
@@ -853,11 +738,8 @@ func refresh_cost_badge(source_override: Node = null) -> void:
 
 
 func set_activatable(value: bool, glow_color: Color = CardBadges.GLOW_COLOR_GOLD, reason: StringName = &"ability") -> void:
-	# 2026-10-12, bug real reportado por el usuario ("Nonexistent function
-	# 'set_activatable' in base 'Nil'" al buscar con Tempilcahue): el visor
-	# del selector de zonas crea la carta y le pide el brillo ANTES de
-	# agregarla a la escena — _badges recién existe tras _ready(). Se aplica
-	# en cuanto la carta esté lista.
+	# El visor del selector de zonas crea la carta y le pide el brillo antes de agregarla a la escena
+	# (_badges existe recién tras _ready()): se aplica cuando la carta esté lista.
 	if not _badges:
 		if not is_node_ready():
 			ready.connect(func(): set_activatable(value, glow_color, reason), CONNECT_ONE_SHOT)
@@ -893,29 +775,9 @@ func get_strength() -> int:
 
 
 func has_keyword(keyword: int) -> bool:
-	"""Verifica si la carta tiene una keyword — incluye las que le transmiten
-	sus Armas equipadas (2026-08-24, DAR): un Arma con Furia/Imbloqueable/
-	etc. se la da a su portador mientras esté equipada. Se lee
-	weapon.card_keywords directo (no weapon.has_keyword()) porque un Arma
-	nunca porta otras Armas — no hace falta ni tiene sentido recursar.
-
-	También consulta ContinuousEffectManager (2026-09-02, bug reportado por
-	el usuario con Espíritu Kotaix: 'Tus Aliados ganan... Furia' registraba
-	el modificador de keyword bien, pero esta función — la que de verdad
-	usa la declaración de ataque, CardInteractionModule.gd — solo miraba
-	card_keywords/equipped_weapons, sin ningún cruce con las keywords
-	OTORGADAS por auras de otras cartas. Hay un tercer sistema paralelo
-	(KeywordManager._temporary_keywords) que tampoco se cruza con ninguno
-	de los otros dos — quedó fuera de este fix a propósito, alcance
-	acotado al caso reportado."""
-	if keyword in card_keywords:
-		return true
-	for weapon in equipped_weapons:
-		if is_instance_valid(weapon) and keyword in weapon.card_keywords:
-			return true
-	if ContinuousEffectManager and ContinuousEffectManager.has_method("has_keyword") and ContinuousEffectManager.has_keyword(self, keyword):
-		return true
-	return false
+	"""Igual que KeywordManager.has_keyword(self, keyword), la única consulta: impresas, ganadas,
+	quitadas, condicionales, las de sus Armas y las de auras."""
+	return KeywordManager.has_keyword(self, keyword)
 
 
 func can_attack() -> bool:
@@ -946,10 +808,15 @@ func set_zone(zone: int) -> void:
 	if zone == Constants.Zone.RESERVA_ORO or zone == Constants.Zone.ORO_PAGADO:
 		scale = Constants.GOLD_CARD_SCALE
 		base_scale = Constants.GOLD_CARD_SCALE
+	elif zone == Constants.Zone.LINEA_APOYO and card_type == Constants.CardType.TOTEM:
+		scale = Constants.TOTEM_CARD_SCALE
+		base_scale = Constants.TOTEM_CARD_SCALE
+	elif zone == Constants.Zone.MANO:
+		scale = Vector2.ONE
+		base_scale = Vector2.ONE
 
-	# La insignia de coste depende de la zona (CardBadges.refresh_cost_badge(),
-	# 2026-10-12): al salir de la mano/Cementerio deja de mostrar descuentos e
-	# impuestos de jugarla.
+	# La insignia de coste depende de la zona (CardBadges.refresh_cost_badge()): fuera de la
+	# mano/Cementerio no muestra descuentos ni impuestos.
 	if _badges:
 		refresh_cost_badge()
 

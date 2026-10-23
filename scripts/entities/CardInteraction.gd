@@ -21,26 +21,17 @@ func setup(card: Card) -> void:
 
 
 func process(_delta: float) -> void:
-	"""Red de seguridad contra hover perdido (2026-08-22): mouse_entered/
-	mouse_exited de Godot a veces no se disparan para estas cartas —
-	reparentado entre contenedores al declarar ataque/agrupar, reflow del
-	HBoxContainer de la mano al jugar/robar cartas, o movimiento rápido del
-	mouse — dejando una carta con la que 'no se puede targetear ni hacer
-	zoom' aunque el mouse esté encima. Se corrige el estado cada frame
-	comparando contra la posición real del mouse."""
+	"""Red de seguridad contra hover perdido: mouse_entered/mouse_exited de Godot a veces no se
+	disparan para estas cartas — reparentado entre contenedores al declarar ataque/agrupar, reflow
+	del HBoxContainer de la mano al jugar/robar cartas, o movimiento rápido del mouse — dejando una
+	carta con la que 'no se puede targetear ni hacer zoom' aunque el mouse esté encima. Se corrige
+	el estado cada frame comparando contra la posición real del mouse."""
 	if _card.is_dragging or not _card.can_interact or _card.get("hover_enabled") == false:
 		return
-	# get_global_rect() NO tiene en cuenta la escala del nodo (limitación
-	# conocida de Godot) — con pivot_offset != (0,0), escalar en hover corre
-	# la posición global real para mantener el pivote fijo, pero este rect
-	# sigue siendo el de antes de escalar. Cerca de un borde (2026-08-26,
-	# reportado por el usuario: pasaba sobre todo abajo de la carta), ese
-	# desfase hacía que el rect "viejo" quedara justo afuera del mouse →
-	# se disparaba mouse_exited → la escala volvía a 1 → el rect volvía a
-	# su lugar → mouse_entered de nuevo → loop infinito de "salto".
-	# get_local_mouse_position() sí invierte la transform completa (posición,
-	# escala, pivote), así que no tiene este problema. _has_point() además respeta
-	# _click_clip_right cuando las cartas están solapadas (en mano o en escalera de oros).
+	# get_global_rect() no tiene en cuenta la escala: con pivot_offset != (0,0), al escalar en hover la
+	# carta se mueve pero el rect no, y cerca de un borde entraba en un loop entra/sale.
+	# get_local_mouse_position() invierte la transformación completa (posición, escala, pivote).
+	# _has_point() además respeta _click_clip_right con cartas solapadas (mano o escalera de Oros).
 	var local_mouse = _card.get_local_mouse_position()
 	var mouse_over := _card._has_point(local_mouse)
 	# Si esta carta es un Arma equipada a un Aliado (wielder), el Aliado que está encima
@@ -68,9 +59,16 @@ func _on_mouse_entered() -> void:
 	# Guardar z_index original (si no estaba ya elevado) y ponerlo encima de las demás
 	# (Las armas equipadas deben permanecer detrás de su portador en z_index = 0)
 	if _card.wielder == null:
-		if _card.z_index < 100:
-			_card.original_z_index = _card.z_index
-		_card.z_index = 100
+		var parent = _card.get_parent()
+		var is_in_hand: bool = (parent is DynamicHand) or (parent != null and parent.name == "PlayerHand")
+		if is_in_hand:
+			if _card.z_index < 80:
+				_card.original_z_index = _card.z_index
+			_card.z_index = 80
+		else:
+			if _card.z_index < 25:
+				_card.original_z_index = _card.z_index
+			_card.z_index = 25
 
 	# Quitar temporalmente el recorte de click en hover para que responda completa
 	if _card.has_method("set_click_clip_right"):
@@ -106,6 +104,9 @@ func _on_mouse_exited() -> void:
 		_card.z_index = _card.original_z_index
 		if _card.has_method("set_click_clip_right"):
 			_card.set_click_clip_right(_card.get_meta("gold_click_clip", -1.0))
+	elif _card.current_zone in [Constants.Zone.LINEA_DEFENSA, Constants.Zone.LINEA_ATAQUE, Constants.Zone.LINEA_APOYO]:
+		_card.z_index = 0
+		_card.original_z_index = 0
 	else:
 		_card.z_index = _card.original_z_index
 
@@ -138,13 +139,9 @@ func on_gui_input(event: InputEvent) -> void:
 			_card.emit_signal("card_right_clicked", _card)
 			return
 
-		# 2026-09-14, diagnóstico temporal a pedido del usuario ("no puedo
-		# hacer objetivo a los Aliados oponentes, mis Aliados sí") — mismo
-		# criterio que el DIAG de right-click de arriba (§10.7): imprime ANTES
-		# del corte por can_interact para distinguir "el click nunca llegó aquí"
-		# de "llegó pero can_interact era false" o "llegó, pasó, pero el
-		# filtro de la habilidad lo rechazó" (ese último caso ya avisa con su
-		# propio mensaje en CardInteractionModule._resolve_target_selection()).
+		# Diagnóstico de clicks (como el DIAG de click derecho, §10.7): se imprime ANTES del corte por
+		# can_interact, para distinguir "no llegó", "llegó con can_interact = false" o "lo rechazó el
+		# filtro" (este último ya avisa en CardInteractionModule._resolve_target_selection()).
 		if event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
 			if Constants.VERBOSE_DIAG_LOGS:
 				print("[DIAG] gui_input LEFT-CLICK llegó a: %s (owner=%s, controller=%s, can_interact=%s, zona=%s)" % [
@@ -162,24 +159,12 @@ func on_gui_input(event: InputEvent) -> void:
 		if event.button_index == MOUSE_BUTTON_LEFT:
 			if event.pressed:
 				if event.double_click:
-					# Godot decide 'double_click' por tiempo+posición GLOBAL del
-					# mouse, no por nodo (2026-08-22): si el jugador acaba de
-					# doble-clickear OTRA carta (p.ej. jugar un Arma) y enseguida
-					# hace un solo click en ÉSTA (p.ej. el Aliado pedido como
-					# portador), Godot puede marcar ese primer press de ESTA
-					# carta como double_click=true directamente, sin pasar nunca
-					# por un evento con double_click=false — quien solo escucha
-					# card_clicked (selección de objetivo) nunca se enteraba.
-					# Se emite card_clicked también para que ese listener reciba
-					# su evento igual.
-					# PERO (2026-08-23): en un doble-click REAL sobre ESTA MISMA carta, el
-					# primer press (double_click=false) ya emitio card_clicked -- emitirlo
-					# de nuevo aquí duplica el evento y dispara handlers como
-					# _declare_attacker() dos veces en paralelo (bug real: un Aliado
-					# atacando "teletransportado" al bando rival por la carrera entre
-					# ambas llamadas). Solo se emite el eco si NO hubo un press simple
-					# reciente de esta misma carta -- cubre el caso huerfano sin
-					# duplicar el gesto genuino.
+					# Godot decide 'double_click' por tiempo y posición GLOBAL del mouse, no por nodo: tras
+					# doble-clickear otra carta, un solo click en ésta puede llegar ya como double_click = true, y
+					# quien solo escucha card_clicked (selección de objetivo) no se enteraría. Por eso se emite
+					# también card_clicked, salvo que haya habido un press simple reciente de esta misma carta: en
+					# un doble click real ya se emitió y duplicarlo dispararía handlers como _declare_attacker()
+					# dos veces.
 					var is_orphan_double_click := Time.get_ticks_msec() - _last_plain_click_ms > DOUBLE_CLICK_ECHO_WINDOW_MS
 					if is_orphan_double_click:
 						_card.emit_signal("card_clicked", _card)
@@ -210,16 +195,9 @@ func on_gui_input(event: InputEvent) -> void:
 
 
 func can_declare_attack_drag() -> bool:
-	"""Verifica si un Aliado en el campo puede arrastrarse para declarar
-	ataque.
-
-	DAR (2026-08-28, reemplaza el diseño de 2026-08-23 a pedido del
-	usuario): ya no existe el atajo Vigilia→Ataque por declarar un atacante
-	directo — ahora hay un botón "Atacar" explícito que termina Vigilia y
-	empieza la Batalla Mitológica, y declarar atacantes (con o sin Furia)
-	solo es posible una vez que la fase YA es Ataque. Furia deja de ser un
-	atajo de fase; sigue siendo el keyword que evita la enfermedad de
-	invocación, validado por TurnManager.can_attack()."""
+	"""¿Un Aliado en el campo puede declararse atacante? Solo en fase Ataque (Vigilia termina con el
+	botón "Atacar"). Furia evita la enfermedad de invocación (TurnManager.can_attack()), no salta
+	la fase."""
 	if _card.card_type != Constants.CardType.ALIADO:
 		return false
 	if _card.current_zone != Constants.Zone.LINEA_DEFENSA:
@@ -242,7 +220,7 @@ func _start_drag(mouse_pos: Vector2) -> void:
 	_card.drag_offset = mouse_pos
 	_card.original_position = _card.global_position  # Guardar posición global antes de top_level
 	_card.original_z_index = _card.z_index
-	_card.z_index = 100
+	_card.z_index = 300
 	# Desacoplar del Container para que global_position no sea sobreescrita por el layout
 	_card.top_level = true
 	# Godot NO preserva la posición visual al activar top_level: 'position'
@@ -305,12 +283,11 @@ func return_to_hand() -> void:
 		_card.z_index = _card.original_z_index
 		return
 
-	# Rotación de destino real (2026-08-30): _card.target_rotation es siempre
-	# 0.0 (la inclinación de descanso en la mano), pero si la carta está
-	# Convertida o Silenciada debe seguir mostrando el giro de 180° — sin esto,
-	# cualquier llamada a return_to_hand() (p.ej. el 'soltar' genérico que usa
-	# _declare_attacker() al declarar un atacante) pisaba ese giro y la carta
-	# 'se enderezaba' sola aunque siguiera convertida/silenciada."""
+	# Rotación de destino real: _card.target_rotation es siempre 0.0 (la inclinación de descanso en la
+	# mano), pero si la carta está Convertida o Silenciada debe seguir mostrando el giro de 180° — sin
+	# esto, cualquier llamada a return_to_hand (p.ej. el 'soltar' genérico que usa _declare_attacker al
+	# declarar un atacante) pisaba ese giro y la carta 'se enderezaba' sola aunque siguiera
+	# convertida/silenciada."""
 	var is_opp: bool = (_card.owner_id == 1 or _card.controller_id == 1)
 	var is_opp_in_play: bool = is_opp and _card.current_zone in [
 		Constants.Zone.RESERVA_ORO, Constants.Zone.ORO_PAGADO,
@@ -363,9 +340,11 @@ func return_to_hand() -> void:
 		if has_local_target:
 			_card.position = local_target_pos
 		_card.rotation_degrees = target_rot
-		_card._refresh_disabled_rotation()
-
-	_card.z_index = _card.original_z_index
+	if _card.current_zone in [Constants.Zone.LINEA_DEFENSA, Constants.Zone.LINEA_ATAQUE, Constants.Zone.LINEA_APOYO]:
+		_card.z_index = 0
+		_card.original_z_index = 0
+	else:
+		_card.z_index = _card.original_z_index
 
 
 func _get_drop_zone_under_mouse() -> Node:
