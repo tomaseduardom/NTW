@@ -1,0 +1,6 @@
+{"base": "Base", "layers": [
+ {"name": "Construccion", "func": "show_selector"},
+ {"name": "Carga", "from": "CARGA DE MAZOS"},
+ {"name": "Carrusel", "from": "CONSTRUCCIÓN DE CADA GRIMORIO"},
+ {"name": "Publicos", "from": "MAZOS PÚBLICOS DE SHADOWFORGE"}
+], "order": ["Publicos", "Carga", "Carrusel", "Construccion"]}

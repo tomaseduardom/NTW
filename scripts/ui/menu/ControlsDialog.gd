@@ -14,6 +14,9 @@ const TEX_STONE_NORMAL := preload("res://assets/ui/controls/btn_stone_normal_305
 const TEX_STONE_HOVER := preload("res://assets/ui/controls/btn_stone_hover_305.png")
 const TEX_STONE_PRESSED := preload("res://assets/ui/controls/btn_stone_pressed_305.png")
 
+const TEX_BTN_RESET := preload("res://assets/ui/controls/btn_reset_1280.png")
+const TEX_BTN_CLOSE := preload("res://assets/ui/controls/btn_close_1280.png")
+
 const MODAL_WIDTH: float = 1280.0
 const MODAL_HEIGHT: float = 794.0
 
@@ -51,8 +54,6 @@ func open_dialog() -> void:
 	tween.tween_property(_modal_panel, "modulate:a", 1.0, 0.22)
 	tween.tween_property(_modal_panel, "scale", Vector2.ONE, 0.24).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_BACK)
 
-	call_deferred("_focus_first_element")
-
 
 func close_dialog() -> void:
 	if _listening_action != "":
@@ -66,11 +67,6 @@ func close_dialog() -> void:
 		visible = false
 		closed.emit()
 	)
-
-
-func _focus_first_element() -> void:
-	if _btn_close and is_instance_valid(_btn_close):
-		_btn_close.grab_focus()
 
 
 func _input(event: InputEvent) -> void:
@@ -176,23 +172,22 @@ func _build_ui() -> void:
 		var row = _create_action_row(action)
 		rows_container.add_child(row)
 
-	# 5. Botones interactivos inferiores (alineados sobre la barra de piedra inferior)
-	# Botón RESTAURAR DEFECTO
+	# 5. Botones interactivos inferiores (RESTAURAR DEFECTO y CERRAR)
+	# Realmente interactivos con textura dedicada, animación táctil y sin recuadros amarillos
 	_btn_reset = _create_bottom_interactive_button(
-		Rect2(183.0, 678.0, 404.0, 78.0),
-		_on_reset_pressed,
-		"Restaurar controles por defecto",
-		8
+		Rect2(222.0, 673.0, 388.0, 82.0),
+		TEX_BTN_RESET,
+		_on_reset_pressed
 	)
+	_btn_reset.name = "BtnReset"
 	_modal_panel.add_child(_btn_reset)
 
-	# Botón CERRAR
 	_btn_close = _create_bottom_interactive_button(
-		Rect2(642.0, 676.0, 459.0, 82.0),
-		close_dialog,
-		"Cerrar menú de controles",
-		6
+		Rect2(665.0, 670.0, 430.0, 85.0),
+		TEX_BTN_CLOSE,
+		close_dialog
 	)
+	_btn_close.name = "BtnClose"
 	_modal_panel.add_child(_btn_close)
 
 
@@ -318,42 +313,49 @@ func _on_reset_pressed() -> void:
 
 func _create_bottom_interactive_button(
 	rect: Rect2,
-	callback: Callable,
-	tooltip: String,
-	corner_rad: int
+	texture: Texture2D,
+	callback: Callable
 ) -> Button:
 	var btn = Button.new()
 	btn.position = rect.position
 	btn.size = rect.size
+	btn.custom_minimum_size = rect.size
+	btn.pivot_offset = rect.size * 0.5
 	btn.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
-	btn.tooltip_text = tooltip
-	btn.focus_mode = Control.FOCUS_ALL
+	btn.focus_mode = Control.FOCUS_NONE
 
-	# Normal: transparente para lucir el botón pintado con fidelidad 100%
-	var style_n = StyleBoxEmpty.new()
+	# Estilos usando la textura exacta: sin recuadros amarillos
+	var style_tex = StyleBoxTexture.new()
+	style_tex.texture = texture
+	style_tex.axis_stretch_horizontal = StyleBoxTexture.AXIS_STRETCH_MODE_STRETCH
+	style_tex.axis_stretch_vertical = StyleBoxTexture.AXIS_STRETCH_MODE_STRETCH
 
-	# Hover: borde dorado radiante y halo resplandeciente
-	var style_h = StyleBoxFlat.new()
-	style_h.draw_center = true
-	style_h.bg_color = Color(1.0, 0.90, 0.45, 0.08)
-	style_h.border_color = Color(1.0, 0.88, 0.45, 0.95)
-	style_h.set_border_width_all(2)
-	style_h.set_corner_radius_all(corner_rad)
-	style_h.shadow_color = Color(0.92, 0.78, 0.28, 0.45)
-	style_h.shadow_size = 12
+	btn.add_theme_stylebox_override("normal", style_tex)
+	btn.add_theme_stylebox_override("hover", style_tex)
+	btn.add_theme_stylebox_override("pressed", style_tex)
+	btn.add_theme_stylebox_override("focus", style_tex)
 
-	# Pressed: tinte oscuro sutil para dar sensación táctil de hundimiento
-	var style_p = StyleBoxFlat.new()
-	style_p.draw_center = true
-	style_p.bg_color = Color(0.0, 0.0, 0.0, 0.25)
-	style_p.border_color = Color(0.85, 0.70, 0.25, 0.90)
-	style_p.set_border_width_all(2)
-	style_p.set_corner_radius_all(corner_rad)
-
-	btn.add_theme_stylebox_override("normal", style_n)
-	btn.add_theme_stylebox_override("hover", style_h)
-	btn.add_theme_stylebox_override("pressed", style_p)
-	btn.add_theme_stylebox_override("focus", style_h)
+	# Interacción táctil fluida y elegante
+	btn.mouse_entered.connect(func():
+		var tw = btn.create_tween().set_parallel(true)
+		tw.tween_property(btn, "modulate", Color(1.20, 1.16, 1.06), 0.12).set_ease(Tween.EASE_OUT)
+		tw.tween_property(btn, "scale", Vector2(1.025, 1.025), 0.12).set_ease(Tween.EASE_OUT)
+	)
+	btn.mouse_exited.connect(func():
+		var tw = btn.create_tween().set_parallel(true)
+		tw.tween_property(btn, "modulate", Color.WHITE, 0.14).set_ease(Tween.EASE_OUT)
+		tw.tween_property(btn, "scale", Vector2.ONE, 0.14).set_ease(Tween.EASE_OUT)
+	)
+	btn.button_down.connect(func():
+		var tw = btn.create_tween().set_parallel(true)
+		tw.tween_property(btn, "modulate", Color(0.85, 0.85, 0.85), 0.05)
+		tw.tween_property(btn, "scale", Vector2(0.975, 0.975), 0.05)
+	)
+	btn.button_up.connect(func():
+		var tw = btn.create_tween().set_parallel(true)
+		tw.tween_property(btn, "modulate", Color(1.20, 1.16, 1.06), 0.08)
+		tw.tween_property(btn, "scale", Vector2(1.025, 1.025), 0.08)
+	)
 
 	btn.pressed.connect(callback)
 	return btn

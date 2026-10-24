@@ -1,0 +1,191 @@
+extends "res://scripts/core/effects/compiler/EffectInterpreterAuxiliares.gd"
+## EffectInterpreterCostes — familia Costes de EffectInterpreter.gd (ver EffectInterpreterBase.gd).
+
+
+# =============================================================================
+# COSTES (EffectCompiler.COST_PIECES): se revisan todos y después se pagan, antes de declarar.
+# =============================================================================
+
+
+func _cost_candidates(main: Node, c: Dictionary, card: Node, controller_id: int) -> Array:
+	"""Cartas entre las que se elige el coste: la mano (Descartar / mostrar) o tus otros Aliados en
+	juego (Destruir otro Aliado que controles)."""
+	match c.kind:
+		"discard", "reveal":
+			var types: Array = c.get("types", [])
+			var race := str(c.get("race", ""))
+			var in_hand: Array = []
+			for h in _hand_cards(main, controller_id):
+				if not is_instance_valid(h) or h == card:
+					continue
+				if not types.is_empty() and _type_word(int(h.card_type)) not in types:
+					continue
+				if not race.is_empty() and not (race.substr(0, 5) in EffectCompilerScript.normalize(str(h.get("card_raza")))):
+					continue
+				in_hand.append(h)
+			return in_hand
+		"sacrifice":
+			var out: Array = []
+			for cont in PlayerSideScript.ally_containers(main, controller_id):
+				for a in cont.get_children():
+					if is_instance_valid(a) and a != card and a.get("card_type") == Constants.CardType.ALIADO:
+						out.append(a)
+			return out
+	return []
+
+
+func _cost_unpayable(main: Node, c: Dictionary, card: Node, controller_id: int) -> String:
+	"""'' si el coste se puede pagar; si no, por qué."""
+	var zone = card.get("current_zone")
+	match c.kind:
+		"self_banish":
+			if zone == Constants.Zone.DESTIERRO:
+				return "ya está en el Destierro"
+			if load("res://scripts/core/effects/mechanics/ProtectionRules.gd").cannot_be_banished(card):
+				return "no puede ser Desterrado"
+		"self_discard":
+			if zone != Constants.Zone.MANO:
+				return "no está en tu mano"
+		"self_bounce":
+			if not (zone in Constants.ZONES_IN_PLAY):
+				return "no está en juego"
+		"self_destroy":
+			if not (zone in Constants.ZONES_IN_PLAY):
+				return "no está en juego"
+			if not KeywordManager.can_be_destroyed(card):
+				return "no puede ser Destruido"
+		"shuffle_hand":
+			if _hand_cards(main, controller_id).filter(func(h): return h != card).size() < int(c.amount):
+				return "no tienes %d cartas en tu mano" % int(c.amount)
+		"self_pay":
+			if card.get_parent() != PlayerSideScript.gold_reserva(main, controller_id):
+				return "no está en tu Reserva"
+		"self_convert":
+			if int(card.get("card_type")) != Constants.CardType.ORO or KeywordManager.is_silenced(card):
+				return "ya es un Oro sin habilidad"
+		"mill":
+			if CardManager.get_deck_count(controller_id) < int(c.amount):
+				return "no tienes %d cartas en tu Castillo" % int(c.amount)
+		"discard", "reveal", "sacrifice":
+			if _cost_candidates(main, c, card, controller_id).size() < int(c.amount):
+				return "no tienes con qué pagar el coste"
+	return ""
+
+
+func _pay_cost(main: Node, c: Dictionary, card: Node, controller_id: int) -> bool:
+	var name := _card_name(card)
+	match c.kind:
+		"self_banish":
+			var owner_id: int = card.owner_id if card.get("owner_id") != null else controller_id
+			if card.get("current_zone") == Constants.Zone.CEMENTERIO:
+				# En el Cementerio la carta son datos (CardManager); el Nodo fuente es una vista.
+				var idx: int = CardManager.get_cemetery(owner_id).find(card.card_data)
+				if idx < 0:
+					return false
+				var data: Dictionary = CardManager.remove_from_cemetery(owner_id, idx)
+				data["esta_oculta"] = false
+				CardManager.append_to_exile(owner_id, data)
+				return true
+			if card.get("current_zone") == Constants.Zone.MANO:
+				# Como Drácula (HandCementerioAbilityHandler): sale de la mano y sus datos van al Destierro.
+				var hand_data: Dictionary = PlayerSideScript.take_from_hand(main, owner_id, card)
+				if hand_data.is_empty():
+					return false
+				CardManager.add_to_exile(owner_id, hand_data)
+				return true
+			# bypass_prevention: es un coste propio (EffectController.exile_card()).
+			return await EffectController.exile_card(owner_id, card, true)
+		"self_discard":
+			await ActionModule.discard(controller_id, [card], "coste", true)
+			return true
+		"self_destroy":
+			# Cementerio de Kingstead. Con Exhumar va al Destierro (CardManager.destroy_card()).
+			var d_owner: int = card.owner_id if card.get("owner_id") != null else controller_id
+			return await EffectController.destroy_card(d_owner, card, true, card)
+		"self_bounce":
+			# "Subir este Oro a tu mano" (hem hem real): sale de juego y sus datos vuelven a la mano.
+			var b_owner: int = card.owner_id if card.get("owner_id") != null else controller_id
+			var b_data: Dictionary = card.card_data.duplicate()
+			if card.get_parent() == PlayerSideScript.gold_reserva(main, b_owner):
+				GameState.agregar_oro_reserva(b_owner, -1)
+			elif card.get_parent() == PlayerSideScript.oro_pagado(main, b_owner):
+				GameState.agregar_oro_pagado(b_owner, -1)
+			if b_owner == 0 and main.get("gold_cards") is Array:
+				main.gold_cards.erase(card)
+			if card.get_parent():
+				card.get_parent().remove_child(card)
+			card.queue_free()
+			PlayerSideScript.put_in_hand(main, b_owner, b_data)
+			if main._gold_manager:
+				main._gold_manager._update_gold_display()
+			return true
+		"shuffle_hand":
+			return await _shuffle_from_hand(main, {"amount": int(c.amount), "up_to": false}, controller_id)
+		"self_pay":
+			var diverted: bool = await main._gold_manager._mover_oro_a_pagado(card)
+			if not diverted:
+				GameState.pagar_oro(controller_id, 1)
+			main._gold_manager._update_gold_display()
+			return true
+		"self_convert":
+			await KeywordManager.silence_card(card, card, "permanent", true)
+			main._update_debug("%s se convierte en un Oro sin habilidad" % name)
+			return true
+		"mill":
+			await ActionModule.mill(controller_id, int(c.amount), false, "coste", true)
+			return true
+		"discard", "reveal", "sacrifice":
+			var pool := _cost_candidates(main, c, card, controller_id)
+			var n: int = int(c.amount)
+			var picked: Array = []
+			if _is_bot(controller_id):
+				pool.sort_custom(func(a: Node, b: Node) -> bool: return int(a.card_cost) < int(b.card_cost))
+				picked = pool.slice(0, n)
+			elif c.kind == "discard":
+				picked = await _ts._targeted_executor._select_hand_cards_for_discard(pool, n, controller_id)
+			else:
+				var prompt := "%s: %s" % [name, "muestra una carta de tu mano" if c.kind == "reveal" else "Destruye otro Aliado que controles"]
+				picked = await main._card_interaction.await_multi_target(prompt, pool, n, Callable(), Callable(),
+					false, null, controller_id)
+			picked = picked.filter(func(p): return is_instance_valid(p))
+			if picked.size() < n:
+				return false
+			match c.kind:
+				"discard":
+					await ActionModule.discard(controller_id, picked, "coste", true)
+				"reveal":
+					load("res://scripts/core/effects/mechanics/RevealedCards.gd").record(controller_id, picked.map(func(p): return p.card_data), name)
+				"sacrifice":
+					await ActionModule.destroy(picked, card, false, true)
+			return true
+	return false
+
+
+func _shuffle_from_hand(main: Node, st: Dictionary, controller_id: int) -> bool:
+	"""'Baraja (hasta) N cartas de tu mano (en tu Castillo)' — mismo
+	mecanismo que DSR_ShuffleDrawCombos (Manuel Bulnes)."""
+	var hand_container = PlayerSideScript.hand(main, controller_id)
+	var hand := _hand_cards(main, controller_id)
+	if not hand_container or hand.is_empty():
+		return st.up_to  # "hasta N" con la mano vacía igual se resolvió
+	var pick_amount: int = mini(st.amount, hand.size())
+	var chosen: Array = []
+	if _is_bot(controller_id):
+		if not st.up_to:
+			hand.sort_custom(func(a: Node, b: Node) -> bool: return int(a.card_cost) < int(b.card_cost))
+			chosen = hand.slice(0, pick_amount)
+	else:
+		var prompt := "Baraja %s%d carta(s) de tu mano en tu Castillo" % ["hasta " if st.up_to else "", st.amount]
+		chosen = await main._card_interaction.await_multi_target(prompt, hand, pick_amount, Callable(), Callable(),
+			st.up_to, null, controller_id)
+	var shuffled := 0
+	for c in chosen:
+		if is_instance_valid(c):
+			var data: Dictionary = c.card_data
+			hand_container.remove_card(c, true)
+			CardManager.get_deck(controller_id).append(data)
+			shuffled += 1
+	if shuffled > 0:
+		CardManager.shuffle_deck(controller_id)
+		AnimationQueue.queue_shuffle(controller_id, "Barajar mazo (efecto compilado)")
+	return st.up_to or shuffled >= st.amount

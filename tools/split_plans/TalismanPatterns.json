@@ -1,0 +1,6 @@
+{"base": "Base", "layers": [
+ {"name": "Cartas", "from": "CARTAS"},
+ {"name": "Lote2", "from": "SEGUNDO LOTE"},
+ {"name": "Lote3", "from": "TERCER LOTE"},
+ {"name": "RespuestasLimites", "from": "INMUNIDAD A EFECTOS OPONENTES"}
+]}

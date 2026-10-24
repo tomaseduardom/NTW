@@ -1,0 +1,6 @@
+{"base": "Base", "layers": [
+ {"name": "Mensajes", "func": "skip_optional"},
+ {"name": "UI", "from": "CONSTRUCCIÓN DE LA UI"},
+ {"name": "Prompts", "from": "MULLIGAN"},
+ {"name": "Mesa", "from": "BOTÓN DE PASO DEL REMOTO"}
+], "order": ["UI", "Mesa", "Prompts", "Mensajes"]}

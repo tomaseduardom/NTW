@@ -1,0 +1,5 @@
+{"base": "Base", "layers": [
+ {"name": "Colocar", "func": "_place_card_as_gold"},
+ {"name": "Jugar", "func": "play_card"},
+ {"name": "Pago", "func": "_update_gold_display"}
+], "order": ["Pago", "Colocar", "Jugar"]}

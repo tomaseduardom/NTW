@@ -1,0 +1,7 @@
+{"base": "Base", "layers": [
+ {"name": "Entrada", "from": "ENTRADA"},
+ {"name": "Declaracion", "from": "DECLARACIÓN"},
+ {"name": "Ejecucion", "from": "EJECUCIÓN"},
+ {"name": "Costes", "from": "COSTES"},
+ {"name": "Auxiliares", "from": "AUXILIARES"}
+], "order": ["Auxiliares", "Costes", "Declaracion", "Ejecucion", "Entrada"]}

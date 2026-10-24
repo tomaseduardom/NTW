@@ -1,0 +1,5 @@
+{"base": "Base", "layers": [
+ {"name": "Acciones", "from": "1. ROBAR CARTAS"},
+ {"name": "Prevencion", "from": "PREVENCIÓN \"SALE DEL JUEGO\""},
+ {"name": "Inmunidades", "func": "opp_immune_card"}
+]}

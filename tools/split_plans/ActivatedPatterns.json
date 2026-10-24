@@ -1,0 +1,6 @@
+{"base": "Base", "layers": [
+ {"name": "Control", "from": "CONTROL Y BOTAR"},
+ {"name": "Zonas", "from": "SEGUNDO LOTE: JUGAR DESDE ZONAS"},
+ {"name": "ManoCementerio", "from": "TERCER LOTE"},
+ {"name": "Fases", "from": "QUINTO LOTE"}
+]}
