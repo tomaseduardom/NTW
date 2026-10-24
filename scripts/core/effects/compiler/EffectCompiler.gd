@@ -277,6 +277,8 @@ const ATOMS := [
 	["mill_x", "(?<who>tu oponente|un jugador) bota tantas cartas como fuerza tenga (?<src>un aliado que controles|un aliado que porte armas?)"],
 	["mill_x", "(?<who>tu oponente|un jugador) bota cartas igual a la fuerza (?<src>del portador)"],
 	["mill_x", "(?<who>tu oponente) bota tantas cartas como (?<src>aliados tenga en su mano)"],
+	# "Tu oponente Bota tantas cartas como Aliados controles" (principe ur nammu, mr smee).
+	["mill_x", "(?<who>tu oponente|un jugador) bota tantas cartas como (?<src>aliados controles)(?! o )"],
 	["mill_x", "(?<exile>destierra) tantas cartas del tope del castillo oponente como fuerza tenga (?<src>un aliado que porte armas?|un aliado que controles)"],
 	["mill_opp", "tu oponente bota (?<n>" + NUM + ") cartas?"],
 	["mill_both", "(?:cada jugador bota|los jugadores botan) (?<n>" + NUM + ") cartas?(?: de su castillo)?"],
@@ -1034,6 +1036,8 @@ static func _build(atom_name: String, m: RegExMatch) -> Dictionary:
 				src = "bearer"
 			elif "mano" in src_word:
 				src = "opp_hand_allies"
+			elif src_word == "aliados controles":
+				src = "own_allies_count"
 			return {"op": "mill_x", "who": "choose" if _group(m, "who") == "un jugador" else "opponent", "src": src,
 				"exile": not _group(m, "exile").is_empty()}
 		"cancel_attack":

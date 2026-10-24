@@ -597,6 +597,11 @@ func _mill_x(main: Node, st: Dictionary, card: Node, controller_id: int) -> bool
 			if bearer == null:
 				return false
 			n = ContinuousEffectManager.get_modified_strength(bearer)
+		"own_allies_count":
+			for cont in PlayerSideScript.ally_containers(main, controller_id):
+				for a in cont.get_children():
+					if is_instance_valid(a) and a.get("card_type") == Constants.CardType.ALIADO:
+						n += 1
 		"opp_hand_allies":
 			n = PlayerSideScript.hand_cards(main, 1 - controller_id).filter(
 				func(c): return is_instance_valid(c) and c.get("card_type") == Constants.CardType.ALIADO).size()
