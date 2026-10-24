@@ -6,14 +6,10 @@ class_name OpponentFan
 ## de manera uniforme y elegante en el borde superior de la pantalla.
 
 signal hand_changed(count: int)
-## 2026-10-08 (ver arquitectura.md §45): GameStateBroadcaster se cuelga de
-## estas dos para transmitirle al Remoto conectado los cambios reales de SU
-## PROPIA mano (nunca la del Anfitrión — fuera de alcance, fog of war real)
-## — este Control es el único punto por donde pasa CUALQUIER cambio a la
-## mano del jugador 1 en todo el proyecto (decenas de llamadores, ningún
-## otro hook posible). card_removed se emite ANTES de queue_free() en
-## remove_card(destroy=true), así que el Node sigue siendo válido cuando
-## llega al listener.
+## GameStateBroadcaster escucha estas dos señales para transmitirle al Remoto los cambios de SU mano
+## (nunca la del Anfitrión; arquitectura.md §45). Este Control es el único punto por donde pasa todo
+## cambio a la mano del jugador 1. card_removed se emite ANTES de queue_free() en
+## remove_card(destroy = true): el Node sigue válido en el listener.
 signal card_added(card: Node)
 signal card_removed(card: Node)
 
@@ -24,13 +20,9 @@ signal card_removed(card: Node)
 const CARD_W: float = 150.0  # Ancho base de carta (sin escalar)
 const CARD_H: float = 210.0  # Alto base de carta (sin escalar)
 
-## 2026-10-07: pública (no "_cards") a propósito — mismo nombre que
-## DynamicHand.cards (la mano del Anfitrión), para que el patrón repetido en
-## todo el proyecto `hand_container = main.player_hand if owner_id == 0 else
-## main._opponent_fan` pueda seguir leyendo/escribiendo `hand_container.cards`
-## sin importar cuál de las dos sea — antes era `_cards` (privada) y ese
-## acceso crudo fallaba en tiempo de ejecución para cualquier carta del
-## Remoto (ver arquitectura.md §34).
+## Pública, con el mismo nombre que DynamicHand.cards (la mano del Anfitrión), para que
+## `hand_container = main.player_hand if owner_id == 0 else main._opponent_fan` pueda usar
+## `hand_container.cards` con cualquiera de las dos (arquitectura.md §34).
 var cards: Array[Node] = []
 
 
@@ -49,6 +41,7 @@ func add_card(card: Node) -> void:
 	cards.append(card)
 	add_child(card)
 	_init_card(card)
+	load("res://scripts/core/effects/mechanics/HandReveal.gd").reveal_if_needed(card)  # mano descubierta
 	card.modulate.a = 0.0
 	_arrange()
 	emit_signal("hand_changed", cards.size())

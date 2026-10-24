@@ -1,13 +1,11 @@
 extends RefCounted
-## HandCementerioAbilityHandler — Patrones especiales de habilidades
-## ACTIVADAS usables DESDE LA MANO o el CEMENTERIO, antes de jugar la carta
-## (Tyet — 2 habilidades, Ramón Freire, Espada del Juicio, Drácula —
-## cancela ataque, Estaca — robo+barajado). Detectados en
-## CardInspectionLayer._build_ability_buttons() y ruteados aquí en vez de al
-## pipeline genérico de habilidades activadas. Opera sobre CardInspectionLayer
-## via _inspector (y sobre el Main del juego via _inspector._main).
-## Extraído de CardInspectionLayer.gd (2026-08-30, "módulos gordos" — mismo
-## corte que ya separó BernardoAbilityHandler/ResponseWindowHandler).
+## HandCementerioAbilityHandler — habilidades ACTIVADAS usables desde la MANO o el CEMENTERIO, antes
+## de jugar la carta (Tyet —2 habilidades—, Ramón Freire, Espada del Juicio, Drácula —cancela
+## ataque—, Estaca —robo + barajado). CardInspectionLayer._build_ability_buttons() las detecta y las
+## manda aquí en vez del pipeline genérico. Opera sobre CardInspectionLayer vía _inspector (y sobre
+## Main vía _inspector._main). También las del Destierro (sandraudiga).
+
+const PlayerSideScript = preload("res://scripts/core/game/PlayerSide.gd")
 
 var _inspector: CardInspectionLayer
 
@@ -17,18 +15,12 @@ func setup(inspector: CardInspectionLayer) -> void:
 
 
 func _activate_tyet_silence_and_pay(source_card: Node, ability: Dictionary) -> void:
-	"""'Puedes pagar este Oro para que un Oro pierda su habilidad este turno
-	y muévelo al Oro Pagado' (Tyet, 2026-08-29). Costo: esta misma carta (un
-	Oro) se gasta como pago del turno — CostType.SELF_AS_GOLD, un concepto
-	que ActionPipeline no conoce. Efecto sobre OTRO Oro elegido: pierde su
-	habilidad SOLO este turno (KeywordManager.silence_card(..., 'turn') —
-	se autolimpia sola al empezar el próximo turno, sin hook aparte) y se
-	mueve a SU PROPIO Oro Pagado. 'un Oro' sin calificar (2026-08-31,
-	corrige: el texto real no dice 'de tu Reserva' ni 'tuyo' — antes esta
-	función restringía por error a la Reserva propia) — cualquier Oro en
-	Reserva, propio o rival, ver [[project_no_zone_means_in_play]].
-	GoldManager._mover_oro_a_pagado() ya resuelve la Reserva/Oro Pagado
-	correctos según el controller_id del Oro elegido."""
+	"""Tyet: "Puedes pagar este Oro para que un Oro pierda su habilidad este turno y muévelo al Oro
+	Pagado". Costo: esta misma carta se gasta como pago (CostType.SELF_AS_GOLD, que ActionPipeline
+	no conoce). Efecto sobre otro Oro: pierde su habilidad este turno
+	(KeywordManager.silence_card(..., 'turn'), se limpia sola) y va a SU Oro Pagado. "un Oro" sin
+	calificar = cualquier Oro en Reserva, propio o rival; GoldManager._mover_oro_a_pagado()
+	resuelve el lado según el controller_id."""
 	if not is_instance_valid(source_card) or not _inspector._main._gold_manager:
 		return
 	var owner_id: int = source_card.owner_id if source_card.get("owner_id") != null else 0
@@ -57,12 +49,9 @@ func _activate_tyet_silence_and_pay(source_card: Node, ability: Dictionary) -> v
 		"Elige un Oro: pierde su habilidad este turno y va a su Oro Pagado", filter, true, owner_id)
 	if not target or not is_instance_valid(target):
 		return
-	# 2026-09-06, bug real reportado por el usuario: validado 'source_card' UNA
-	# sola vez al entrar, pero el await de arriba es tiempo real de espera del
-	# jugador — si la carta salió de juego mientras el selector estaba abierto,
-	# quedaba una referencia colgante que crasheaba más abajo (turn_registry,
-	# _mover_oro_a_pagado). Mismo fix aplicado a todas las funciones de este
-	# archivo que usan 'source_card' después de un await.
+	# Revalidar 'source_card' después del await: si la carta salió de juego mientras el selector estaba
+	# abierto, la referencia queda colgante (turn_registry, _mover_oro_a_pagado). Igual en todas las
+	# funciones de este archivo que usan 'source_card' tras un await.
 	if not is_instance_valid(source_card):
 		return
 	if await TriggerSystem.open_response_window(source_card, str(source_card.card_name), owner_id):
@@ -73,15 +62,9 @@ func _activate_tyet_silence_and_pay(source_card: Node, ability: Dictionary) -> v
 
 
 func _activate_tyet_mill_and_draw(source_card: Node, ability: Dictionary) -> void:
-	"""'Puedes poner esta y otra carta de tu mano en el fondo de tu Castillo
-	y Robar dos cartas' (Tyet). Solo usable DESDE LA MANO (2026-09-09,
-	revertido a pedido explícito del usuario — hubo un vaivén: se restringió
-	a solo-mano el 2026-08-31, se abrió también a Reserva de Oro el
-	2026-09-06 razonando que 'esta' no implica zona, y ahora se confirma que
-	la restricción original era la correcta: Tyet ya en juego NO puede usar
-	esta habilidad). Costo: esta misma carta + una elegida de la mano, ambas
-	al FONDO del mazo (deck.append(), no pop_front() — el índice 0 es el
-	tope)."""
+	"""Tyet: "Puedes poner esta y otra carta de tu mano en el fondo de tu Castillo y Robar dos
+	cartas". Solo desde la MANO: Tyet ya en juego no puede usarla. Costo: esta carta + una elegida
+	de la mano, al FONDO del mazo (deck.append(); el índice 0 es el tope)."""
 	if not is_instance_valid(source_card):
 		return
 	var owner_id: int = source_card.owner_id if source_card.get("owner_id") != null else 0
@@ -100,8 +83,7 @@ func _activate_tyet_mill_and_draw(source_card: Node, ability: Dictionary) -> voi
 
 	if not _inspector._main._card_interaction:
 		return
-	# 2026-09-13, a pedido del usuario: click directo en la mano en vez del
-	# modal de lista viejo.
+	# Click directo en la mano en vez del modal de lista viejo.
 	var other_filter := func(c: Node) -> bool: return c in other_hand_cards
 	var other_node: Node = await _inspector._main._card_interaction.await_target(
 		"Elige otra carta de tu mano para poner en el fondo de tu Castillo", other_filter, true, owner_id)
@@ -128,13 +110,10 @@ func _activate_tyet_mill_and_draw(source_card: Node, ability: Dictionary) -> voi
 
 
 func _activate_sandraudiga_banish_pair_and_peek(source_card: Node, ability: Dictionary) -> void:
-	"""'Puedes pagar un Oro para Desterrar este y otro Aliado Sacerdote de
-	tu mano. Mira la mano de tu oponente, Destierra una carta que no sea
-	Aliado ni Oro de ahí' (sandraudiga, 2026-09-06) — usable DESDE LA MANO
-	(ver _ability_is_hand_usable()). 'Si está en tu Destierro, puedes
-	Desterrar una carta de tu mano para Barajarlo en tu Castillo' NO
-	implementado (necesitaría una categoría nueva de zona-usable: desde el
-	Destierro)."""
+	"""'Puedes pagar un Oro para Desterrar este y otro Aliado Sacerdote de tu mano. Mira la mano de tu
+	oponente, Destierra una carta que no sea Aliado ni Oro de ahí' (sandraudiga) — usable DESDE LA
+	MANO (ver _ability_is_hand_usable). La segunda, desde el Destierro:
+	_activate_sandraudiga_shuffle_from_exile()."""
 	if not is_instance_valid(source_card) or not _inspector._main._gold_manager:
 		return
 	var owner_id: int = source_card.owner_id if source_card.get("owner_id") != null else 0
@@ -156,8 +135,7 @@ func _activate_sandraudiga_banish_pair_and_peek(source_card: Node, ability: Dict
 
 	if not _inspector._main._card_interaction:
 		return
-	# 2026-09-13, a pedido del usuario: click directo en la mano en vez del
-	# modal de lista viejo.
+	# Click directo en la mano en vez del modal de lista viejo.
 	var priest_filter := func(c: Node) -> bool: return c in other_priests
 	var other_node: Node = await _inspector._main._card_interaction.await_target(
 		"Elige otro Aliado Sacerdote de tu mano para Desterrar", priest_filter, true, owner_id)
@@ -165,11 +143,8 @@ func _activate_sandraudiga_banish_pair_and_peek(source_card: Node, ability: Dict
 		return
 	if not is_instance_valid(source_card):
 		return
-	# Ventana ANTES del auto-costo (2026-09-10): source_card se destierra a sí
-	# misma como parte del costo un poco más abajo, y open_response_window()
-	# exige que 'source_card' siga siendo un Node válido — abrirla aquí, con la
-	# carta todavía en la mano, es lo único seguro (después de esto queue_free()
-	# la invalida, y el picker de la mano rival que sigue tarda varios frames).
+	# Ventana ANTES del auto-costo: source_card se destierra a sí misma más abajo y
+	# open_response_window() exige un Node válido.
 	if await TriggerSystem.open_response_window(source_card, "sandraudiga", owner_id):
 		return
 
@@ -219,14 +194,52 @@ func _activate_sandraudiga_banish_pair_and_peek(source_card: Node, ability: Dict
 			CardManager.add_to_exile(opponent_id, discarded_data)
 
 
+func _activate_sandraudiga_shuffle_from_exile(source_card: Node, ability: Dictionary) -> void:
+	"""sandraudiga: 'Si está en tu Destierro, puedes Desterrar una carta de tu mano para Barajarlo en tu
+	Castillo'. source_card es un Nodo de solo vista del Destierro (visor del Anfitrión o proxy del
+	Remoto, RemotePlayerController._exile_proxies()); se opera sobre el dato real del Destierro."""
+	if not is_instance_valid(source_card) or not _inspector._main._card_interaction:
+		return
+	var owner_id: int = source_card.owner_id if source_card.get("owner_id") != null else 0
+	var exile: Array = CardManager.get_exile(owner_id)
+	if exile.find(source_card.card_data) < 0:
+		return
+	var hand_container = PlayerSideScript.hand(_inspector._main, owner_id)
+	if not hand_container or hand_container.cards.is_empty():
+		_inspector._main._update_debug("Necesitas una carta en tu mano para usar esta habilidad")
+		return
+	var hand_cards: Array = hand_container.cards.filter(func(c): return is_instance_valid(c))
+	var cost_node: Node = await _inspector._main._card_interaction.await_target(
+		"sandraudiga: elige una carta de tu mano para Desterrar", func(c: Node) -> bool: return c in hand_cards, true, owner_id)
+	if not cost_node or not is_instance_valid(cost_node) or exile.find(source_card.card_data) < 0:
+		return
+	UniversalCardParser.turn_registry.register_ability_use(source_card, ability)
+	var cost_data: Dictionary = cost_node.card_data.duplicate()
+	hand_container.remove_card(cost_node, true)
+	cost_data["esta_oculta"] = false
+	CardManager.add_to_exile(owner_id, cost_data)
+	if await TriggerSystem.open_response_window(source_card, "sandraudiga", owner_id):
+		return
+	exile = CardManager.get_exile(owner_id)
+	var idx: int = exile.find(source_card.card_data)
+	if idx < 0:
+		return
+	var data: Dictionary = exile[idx]
+	exile.remove_at(idx)
+	CardManager._emit_exile_changed(owner_id)
+	data["esta_oculta"] = true
+	CardManager.get_deck(owner_id).append(data)
+	CardManager.shuffle_deck(owner_id)
+	AnimationQueue.queue_shuffle(owner_id, "Barajar mazo (sandraudiga)")
+	_inspector._main._update_debug("sandraudiga se baraja en tu Castillo")
+
+
 func _activate_ramon_freire_banish_for_gold(source_card: Node, ability: Dictionary) -> void:
-	"""'Si controlas Aliados de coste 2 o más, puedes Desterrarlo de tu mano
-	o en juego para generar un Oro para jugar Armas. Sólo puedes utilizar
-	la habilidad de Ramón Freire una vez por turno' (2026-08-30). Usable
-	DESDE LA MANO o ya en juego (ver _ability_is_hand_usable()). Condición
-	previa (controlar un Aliado de coste ≥2) que ActionPipeline no sabe
-	verificar. Oro Virtual RESTRINGIDO — mismo mecanismo que Padre de la
-	Patria (GoldManager.generar_oro_virtual_restringido)."""
+	"""'Si controlas Aliados de coste 2 o más, puedes Desterrarlo de tu mano o en juego para generar
+	un Oro para jugar Armas. Sólo puedes utilizar la habilidad de Ramón Freire una vez por turno'.
+	Usable DESDE LA MANO o ya en juego (ver _ability_is_hand_usable). Condición previa (controlar
+	un Aliado de coste ≥2) que ActionPipeline no sabe verificar. Oro Virtual RESTRINGIDO — mismo
+	mecanismo que Padre de la Patria (GoldManager.generar_oro_virtual_restringido)."""
 	if not is_instance_valid(source_card) or not _inspector._main._gold_manager:
 		return
 	var owner_id: int = source_card.owner_id if source_card.get("owner_id") != null else 0
@@ -253,8 +266,7 @@ func _activate_ramon_freire_banish_for_gold(source_card: Node, ability: Dictiona
 
 	var predicate := func(card_type: int, _card_race: String, _card_cost: int) -> bool:
 		return card_type == Constants.CardType.ARMA
-	# 2026-10-06: generar_oro_virtual_restringido() ya es por jugador (ver
-	# arquitectura.md §33) — esta habilidad se desbloquea.
+	# generar_oro_virtual_restringido ya es por jugador (ver arquitectura.md §33).
 	_inspector._main._gold_manager.generar_oro_virtual_restringido(1, predicate, "Armas", owner_id)
 
 	var zone = source_card.get("current_zone")
@@ -269,17 +281,11 @@ func _activate_ramon_freire_banish_for_gold(source_card: Node, ability: Dictiona
 
 
 func _activate_espada_juicio_banish_cemetery_for_buff(source_card: Node, ability: Dictionary) -> void:
-	"""'Puedes Desterrarla de tu Cementerio para que un Aliado gane o
-	pierda 2 de Fuerza permanentemente' (Espada del Juicio, 2026-08-30) —
-	primera habilidad usable DESDE EL CEMENTERIO de esta sesión. source_card
-	aquí es un Card node de SOLO VISTA (ZoneViewerModule lo arma fresco a
-	partir de los datos crudos del Cementerio, no es el mismo objeto que
-	vive en CardManager._zones[player_id].cemetery) — el costo (Desterrar)
-	tiene que operar sobre el DATO real de esa lista, no sobre este nodo
-	descartable. 'Permanentemente' con la Espada ya desterrada (fuente que
-	ya no está en juego): el modificador se autorreferencia al Aliado
-	elegido (source=target), dura mientras ÉL siga en juego — no tiene
-	sentido atarlo a una fuente que ya no existe."""
+	"""Espada del Juicio: "Puedes Desterrarla de tu Cementerio para que un Aliado gane o pierda 2 de
+	Fuerza permanentemente". source_card es un Card de solo vista (ZoneViewerModule lo arma desde
+	los datos del Cementerio): el costo opera sobre el dato real de
+	CardManager._zones[player_id].cemetery. El modificador se ata al Aliado elegido (source =
+	target) y dura mientras él siga en juego."""
 	if not is_instance_valid(source_card):
 		return
 	var owner_id: int = source_card.owner_id if source_card.get("owner_id") != null else 0
@@ -323,17 +329,12 @@ func _activate_espada_juicio_banish_cemetery_for_buff(source_card: Node, ability
 
 
 func _activate_dracula_cancel_attacks(source_card: Node, ability: Dictionary) -> void:
-	"""'Puedes Desterrarlo de tu mano o Cementerio para cancelar el ataque
-	de hasta dos Aliados' (Drácula, 2026-08-30) — usable DESDE LA MANO o el
-	CEMENTERIO (ver _ability_is_hand_usable()/_ability_is_cementerio_usable()).
-	Costo sobre la carta REAL de la zona correspondiente (mismo criterio que
-	_activate_espada_juicio_banish_cemetery_for_buff() para Cementerio,
-	_activate_ramon_freire_banish_for_gold() para mano). Efecto: sacar hasta
-	2 Aliados de GameManager.attackers (cualquier bando — el texto no dice
-	'que controla tu oponente') y revertir su aspecto visual de 'atacando'
-	vía CardInteractionModule.unmark_attackers(), sin pasar por
-	undeclare_attacker() (ese exige que sea el turno del propio controlador
-	del atacante)."""
+	"""Drácula: "Puedes Desterrarlo de tu mano o Cementerio para cancelar el ataque de hasta dos
+	Aliados" (ver _ability_is_hand_usable()/_ability_is_cementerio_usable()). El costo opera sobre
+	la carta real de su zona (como Espada del Juicio / Ramón Freire). Efecto: saca hasta 2 Aliados
+	de GameManager.attackers (de cualquier bando) y revierte su aspecto con
+	CardInteractionModule.unmark_attackers(), sin undeclare_attacker() (que exige el turno del
+	controlador del atacante)."""
 	if not is_instance_valid(source_card):
 		return
 	var owner_id: int = source_card.owner_id if source_card.get("owner_id") != null else 0
@@ -347,12 +348,11 @@ func _activate_dracula_cancel_attacks(source_card: Node, ability: Dictionary) ->
 
 	if not _inspector._main._card_interaction:
 		return
-	# 2026-09-13, a pedido del usuario: click directo sobre los Aliados
-	# atacando en vez del modal de lista viejo.
+	# Click directo sobre los Aliados atacando en vez del modal de lista viejo.
 	var candidates: Array = []
 	for a in GameManager.attackers:
-		# "su ataque no puede ser cancelado" (Ira, 2026-10-17)
-		if is_instance_valid(a) and int(a.get_meta("attack_uncancellable_turn", -1)) != GameManager.current_turn:
+		# "su ataque no puede ser cancelado" (Ira, shade).
+		if is_instance_valid(a) and not load("res://scripts/core/effects/mechanics/ProtectionRules.gd").attack_uncancellable(a):
 			candidates.append(a)
 	var chosen: Array = await _inspector._main._card_interaction.await_multi_target(
 		"Cancela el ataque de hasta dos Aliados", candidates, 2, Callable(), Callable(), true, null, owner_id)
@@ -379,29 +379,25 @@ func _activate_dracula_cancel_attacks(source_card: Node, ability: Dictionary) ->
 			if not removed_data.is_empty():
 				CardManager.add_to_exile(owner_id, removed_data)
 
-	var cancelled: Array = chosen.filter(func(a): return is_instance_valid(a))
+	var cancelled: Array = await EffectController.filter_attack_cancel(chosen.filter(func(a): return is_instance_valid(a)), source_card)
 	for a in cancelled:
 		GameManager.attackers.erase(a)
-	if _inspector._main._card_interaction and _inspector._main._card_interaction.has_method("unmark_attackers"):
+	if _inspector._main._card_interaction and _inspector._main._card_interaction.has_method("unmark_attackers") and not cancelled.is_empty():
 		await _inspector._main._card_interaction.unmark_attackers(cancelled)
 
 
 func _activate_estaca_draw_and_shuffle(source_card: Node, ability: Dictionary) -> void:
-	"""'Una vez por turno, puedes Robar tres cartas, Barajar una carta
-	oponente que no sea Oro y tantas cartas de tu mano como coste tenga'
-	(Estaca, 2026-08-30). La carta oponente no menciona zona — es EN JUEGO
-	(regla general del proyecto: sin 'de tu mano'/'de tu Castillo' =
-	sucede en juego), excluyendo Oro. El robo (3) es independiente y
-	siempre ocurre; el barajado de la carta rival y el de tu propia mano
-	(tantas cartas como el COSTE de esa carta rival) están LIGADOS: sin
+	"""'Una vez por turno, puedes Robar tres cartas, Barajar una carta oponente que no sea Oro y
+	tantas cartas de tu mano como coste tenga' (Estaca). La carta oponente no menciona zona — es EN
+	JUEGO (regla general del proyecto: sin 'de tu mano'/'de tu Castillo' = sucede en juego),
+	excluyendo Oro. El robo (3) es independiente y siempre ocurre; el barajado de la carta rival y
+	el de tu propia mano (tantas cartas como el COSTE de esa carta rival) están LIGADOS: sin
 	objetivo rival válido, ninguno de los dos barajados ocurre."""
 	if not is_instance_valid(source_card):
 		return
 	var owner_id: int = source_card.owner_id if source_card.get("owner_id") != null else 0
-	# Ventana única para toda la habilidad (2026-09-10): sin declare real
-	# todavía en este punto (el objetivo rival se elige solo más abajo) —
-	# se gatea aquí, al principio, igual que el resto de efectos compuestos
-	# sin un punto de declare limpio antes de arrancar.
+	# Una sola ventana para toda la habilidad, al principio: el objetivo rival se elige más abajo y no
+	# hay un punto de declaración limpio antes.
 	if await TriggerSystem.open_response_window(source_card, "Estaca", owner_id):
 		return
 
@@ -449,8 +445,7 @@ func _activate_estaca_draw_and_shuffle(source_card: Node, ability: Dictionary) -
 			and _inspector._main._card_interaction:
 		var hand_cards: Array = hand_container_estaca.cards.duplicate()
 		var pick_amount: int = mini(opp_cost, hand_cards.size())
-		# 2026-09-13, a pedido del usuario: click directo en la mano en vez
-		# del modal de lista viejo. Costo TODO o NADA de 'pick_amount'
+		# Click directo en la mano en vez del modal de lista viejo. Costo TODO o NADA de 'pick_amount'
 		# cartas exactas (mismo criterio que Belta, §10.19).
 		var chosen: Array = await _inspector._main._card_interaction.await_multi_target(
 			"Baraja %d carta(s) de tu mano en tu Castillo" % pick_amount, hand_cards, pick_amount, Callable(), Callable(), true, null, owner_id)
@@ -465,20 +460,11 @@ func _activate_estaca_draw_and_shuffle(source_card: Node, ability: Dictionary) -
 
 
 func _activate_ouija_play_from_cemetery_or_deck_top(source_card: Node, ability: Dictionary) -> void:
-	"""'Una vez por turno, puedes jugar una carta de tu Cementerio o del
-	tope de tu Castillo. Juega mostrando la primera carta de tu Castillo.'
-	(La Ouija, 2026-08-31 — carta promocional de 'IMP - Chile Oscuro 2', sin
-	myl_id real: no está en la API externa — ver [[reference_myl_external_api]],
-	el cache local es la única fuente para esta carta). 'de tu Cementerio' y
-	'del tope de tu Castillo' llevan posesivo (solo el propio, a diferencia
-	de Miguel, cuyo 'un Cementerio' sin posesivo sí incluye el rival — ver
-	_activate_miguel_discount_play() en SearchAbilityHandler.gd, mismo
-	esqueleto de esta función). La segunda oración es el aviso de que jugar
-	desde el tope revela esa carta al hacerlo — no hay sistema de revelado
-	real conectado en este motor (mismo caso ya resuelto para Levisterio:
-	'puedes mostrar tu mano'), así que se deja constancia en el log en vez
-	de abrir una UI de revelado nueva para un único caso. Reusa
-	GoldManager.play_card() completo, igual que Miguel."""
+	"""La Ouija: "Una vez por turno, puedes jugar una carta de tu Cementerio o del tope de tu
+	Castillo. Juega mostrando la primera carta de tu Castillo." (Carta promocional sin myl_id: el
+	caché local es la única fuente.) "tu Cementerio" / "tu Castillo": solo los propios (a
+	diferencia de Miguel, "un Cementerio"). La segunda oración avisa que la carta del tope se
+	revela: queda en el log. Usa GoldManager.play_card() completo, como Miguel."""
 	if not is_instance_valid(source_card) or not _inspector._main._gold_manager:
 		return
 	var owner_id: int = source_card.owner_id if source_card.get("owner_id") != null else 0
@@ -486,14 +472,9 @@ func _activate_ouija_play_from_cemetery_or_deck_top(source_card: Node, ability: 
 		_inspector._main._update_debug("%s ya no está en tu Reserva" % str(source_card.get("card_name")))
 		return
 
-	# 2026-09-13, a pedido del usuario: reemplaza el modal de lista viejo por
-	# click directo sobre cartas reales — un popup con las cartas del propio
-	# Cementerio MÁS una carta temporal extra representando 'el tope de tu
-	# Castillo' (revelada de una: el propio texto de La Ouija dice 'Juega
-	# mostrando la primera carta de tu Castillo', así que no hay nada oculto
-	# que preservar mostrándola en el picker). Todo vive en UN solo
-	# await_multi_target() — evita el problema de correr dos mecanismos de
-	# selección en carrera a la vez (ver arquitectura.md §10.14).
+	# Un popup con las cartas del Cementerio propio más una carta temporal que representa el tope del
+	# Castillo (ya revelada: el texto dice "Juega mostrando la primera carta"). Todo en un solo
+	# await_multi_target(), sin dos selecciones en carrera (arquitectura.md §10.14).
 	var deck: Array = _inspector._main.player_deck if owner_id == 0 else _inspector._main.opponent_deck
 	var own_cemetery: Array = CardManager.get_cemetery(owner_id)
 	if own_cemetery.is_empty() and deck.is_empty():
@@ -597,29 +578,20 @@ func _activate_ouija_play_from_cemetery_or_deck_top(source_card: Node, ability: 
 
 
 func _activate_sacrificio_solar_self_shuffle_banish_or_shuffle(source_card: Node, ability: Dictionary) -> void:
-	"""'Puedes pagar un Oro y Barajar esta carta desde tu mano para
-	Desterrar o Barajar una carta de coste 2 o menos y Robar una carta'
-	(Sacrificio Solar, 2026-09-02 — verificado contra la API, sin
-	discrepancias con el cache local). Costo: 1 Oro + esta misma carta,
-	barajada desde la mano de vuelta al Castillo (no destierro ni
-	descarte — mismo mecanismo que Aaru/Manuel Bulnes: remove_card(...,
-	true) + CardManager.get_deck().append() + shuffle_deck()). 'Una carta
-	de coste 2 o menos' sin zona ni dueño = EN JUEGO, de cualquier lado
-	(ver [[project_no_zone_means_in_play]]) — se elige el objetivo Y si
-	termina Desterrado o Barajado, la misma elección para ambos efectos.
-	'Puedes X para Y' es atómico (ver [[project_puedes_x_para_y_atomic]]):
-	no se ofrece nada si falta el Oro o no hay ningún objetivo válido —
-	el pago y el autobarajado de esta carta se resuelven AL FINAL, después
-	de resolver el objetivo, para no quedarse con una referencia a un nodo
-	ya en cola de borrado mientras todavía hace falta."""
+	"""Sacrificio Solar: "Puedes pagar un Oro y Barajar esta carta desde tu mano para Desterrar o
+	Barajar una carta de coste 2 o menos y Robar una carta". Costo: 1 Oro + esta carta barajada
+	desde la mano al Castillo (remove_card(..., true) + get_deck().append() + shuffle_deck(), como
+	Aaru/Manuel Bulnes). "Una carta de coste 2 o menos" sin zona = en juego, de cualquier lado; se
+	elige el objetivo y si se Destierra o Baraja.
+	"Puedes X para Y" es atómico: sin Oro o sin objetivo válido no se ofrece nada. El pago y el
+	autobarajado van al final, para no usar un nodo ya en cola de borrado."""
 	if not is_instance_valid(source_card) or not _inspector._main._gold_manager:
 		return
 	var owner_id: int = source_card.owner_id if source_card.get("owner_id") != null else 0
 	if source_card.get("current_zone") != Constants.Zone.MANO:
 		return
 
-	# 2026-10-06: GoldManager.puede_pagar()/pagar_coste() ya son por jugador
-	# (ver arquitectura.md §33) — esta habilidad se desbloquea.
+	# GoldManager.puede_pagar/pagar_coste ya son por jugador (ver arquitectura.md §33).
 	if not _inspector._main._gold_manager.puede_pagar(1, -1, "", -1, owner_id):
 		_inspector._main._update_debug("No tienes 1 Oro disponible para Sacrificio Solar")
 		return

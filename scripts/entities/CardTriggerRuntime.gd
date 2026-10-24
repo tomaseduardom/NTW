@@ -1,19 +1,12 @@
 extends RefCounted
 class_name CardTriggerRuntime
-## CardTriggerRuntime — Sistema de triggers de una carta (DAR 7.2, 7.3, 7.4):
-## parseo de triggers desde el texto de habilidad, verificación de
-## condiciones, ejecución de efectos vía Callable, y los hooks de
-## entrar/salir de juego. Opera sobre el nodo Card via _card. Card.gd
-## reenvía como wrappers públicos los métodos que otros sistemas llaman
-## directamente sobre la carta (parse_triggers_from_ability, is_in_play,
-## has_trigger, _trigger_conditions_met, _on_trigger_event, on_entered_play,
-## on_left_play — TriggerSystem/ActionModule/ConvertAndMiscResolver los
-## llaman así en varios puntos).
-## Extraído de Card.gd (2026-09-06, "módulos gordos" — mismo corte que ya
-## separó CardInteraction.gd/CardAnimations.gd, Fase 4 de reestructuración).
-## Nota: Card.TRIGGER_KEYWORDS queda en Card.gd (no aquí) porque se accede de
-## forma ESTÁTICA vía la clase (Card.TRIGGER_KEYWORDS[...] en
-## TriggerResolution.gd) — moverlo rompería ese acceso estático.
+## CardTriggerRuntime — triggers de una carta (DAR 7.2, 7.3, 7.4): parseo desde el texto de
+## habilidad, condiciones, ejecución vía Callable y los hooks de entrar/salir de juego. Opera sobre
+## el nodo Card vía _card. Card.gd reenvía los métodos que otros sistemas llaman sobre la carta
+## (parse_triggers_from_ability, is_in_play, has_trigger, _trigger_conditions_met,
+## _on_trigger_event, on_entered_play, on_left_play).
+## Card.TRIGGER_KEYWORDS queda en Card.gd porque se accede de forma estática
+## (Card.TRIGGER_KEYWORDS[...]).
 
 var _card: Card
 
@@ -45,7 +38,13 @@ func parse_triggers_from_ability() -> void:
 	if _card.card_ability.is_empty():
 		return
 
-	var ability_lower = _card.card_ability.to_lower()
+	# "Puede atacar cuando entra en juego" (brujo mendigo, Guardia Real, Sir Galahad) es una regla, no un
+	# disparador: la aplica KeywordManager. Sin quitarla, contaba como "cuando entra en juego".
+	var ability_lower = _card.card_ability.to_lower().replace("puede atacar cuando entra en juego.", "") \
+		.replace("puede atacar cuando entra en juego", "")
+	# Lo que está entre comillas es la habilidad que la carta da o gana (colmillo arcano: "...en un Aliado con
+	# la habilidad "Furia. Cuando ataca, ..."), no un disparador suyo.
+	ability_lower = RegEx.create_from_string("[\"“”][^\"“”]*[\"“”]?").sub(ability_lower, "", true)
 
 	for trigger_type in Card.TRIGGER_KEYWORDS:
 		var keywords: Array = Card.TRIGGER_KEYWORDS[trigger_type]
@@ -58,10 +57,9 @@ func parse_triggers_from_ability() -> void:
 				})
 				# Solo un trigger por tipo
 				break
-	# Nota (2026-08-27): los Talismanes NO se resuelven por aquí — no
-	# "disparan" nada (DAR Sección 7.4 es para habilidades disparadas de
-	# permanentes). Su texto se resuelve directo al jugarlos, ver
-	# TriggerSystem.resolve_talisman() / GoldManager._trigger_enter_play().
+	# Nota: los Talismanes NO se resuelven por aquí — no "disparan" nada (DAR Sección 7.4 es para
+	# habilidades disparadas de permanentes). Su texto se resuelve directo al jugarlos, ver
+	# TriggerSystem.resolve_talisman / GoldManager._trigger_enter_play.
 
 
 func is_in_play() -> bool:
@@ -153,16 +151,10 @@ func _on_trigger_event(trigger_type: String, event_data: Dictionary) -> Dictiona
 				result.merge(handler_result, true)
 			return result
 
-	# Sin handler específico registrado (2026-08-22): NO usar
-	# _resolve_default_effect() aquí — es un escaneo de palabras clave sobre
-	# el texto COMPLETO de la carta (sin aislar por oración), así que una
-	# carta con VARIAS habilidades en el mismo bloque (p.ej. Tyet: 'Cuando
-	# entra en juego, busca un Arma o un Oro...' + más adelante 'Robar dos
-	# cartas' de una habilidad de Oro completamente distinta) disparaba la
-	# frase equivocada — Tyet buscaba nada y robaba una carta en su lugar.
-	# TriggerSystem._execute_trigger_effect() ya tiene el parser bueno
-	# (aísla la oración correcta, reconoce SEARCH/DESTROY/BUFF/etc., no solo
-	# 'roba') y lo corre él mismo cuando este resultado no aplicó nada.
+	# Sin handler específico: no se escanea el texto completo buscando palabras clave (con varias
+	# habilidades en el bloque, p.ej. Tyet, se tomaba la frase equivocada).
+	# TriggerSystem._execute_trigger_effect() aísla la oración correcta y la resuelve cuando este
+	# resultado no aplicó nada.
 	result["no_handler"] = true
 	return result
 
@@ -188,9 +180,8 @@ func on_left_play() -> void:
 	TriggerSystem.unregister_continuous_effect(_card)
 
 	effect_handlers.clear()
-	# 2026-09-23, a pedido del usuario: este mensaje solo duplicaba lo que ya
-	# informa EffectController ("X fue destruida"/"X resuelve su efecto y va
-	# al Cementerio") — 3 líneas distintas para el mismo evento de salida de
-	# juego. Se mantiene gateado para depuración profunda.
+	# Este mensaje solo duplicaba lo que ya informa EffectController ("X fue destruida"/"X resuelve su
+	# efecto y va al Cementerio") — 3 líneas distintas para el mismo evento de salida de juego. Se
+	# mantiene gateado para depuración profunda.
 	if Constants.VERBOSE_DIAG_LOGS:
 		print("[Card] %s dejó el juego" % _card.card_name)

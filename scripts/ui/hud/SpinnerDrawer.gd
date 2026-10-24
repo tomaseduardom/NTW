@@ -1,11 +1,7 @@
 extends Node2D
-## SpinnerDrawer — dibuja el anillo místico rotatorio del spinner de carga
-## (MatchLoadingOverlay._build_mystic_spinner()). Necesita su propio _draw(),
-## así que no puede vivir como función suelta en MatchLoadingOverlay.gd — de
-## ahí que se asigne con set_script() en vez de definirse inline.
-## Placeholder simple (2026-09-08, arregla un "SpinnerDrawerScript" referenciado
-## pero nunca declarado, que rompía la carga del autoload) — reemplazar el
-## dibujo si se quiere un diseño más elaborado.
+## SpinnerDrawer — dibuja el anillo rotatorio del spinner de carga
+## (MatchLoadingOverlay._build_mystic_spinner()). Necesita su propio _draw(), por eso se asigna con
+## set_script(). Dibujo simple; reemplazarlo si se quiere algo más elaborado.
 
 const RADIUS := 28.0
 const RING_COLOR := Color(0.83, 0.69, 0.22, 1.0)

@@ -4,6 +4,9 @@ class_name CardInteractionModule
 ## Se instancia como hijo de Main en _ready().
 
 const EffectContextScript = preload("res://scripts/core/effects/EffectContext.gd")  # detector de paridad (§56)
+const PlayerSideScript = preload("res://scripts/core/game/PlayerSide.gd")
+const BlockScript = preload("res://scripts/core/effects/triggers/BlockPatterns.gd")  # bloquear a varios (Elías)
+const _Rules = preload("res://scripts/core/effects/mechanics/ProtectionRules.gd")  # Oro adicional por afectar
 
 var _main: Node = null
 
@@ -11,13 +14,9 @@ var selected_card: Node = null
 var is_placing_gold: bool = false
 var _card_clicked_this_frame: bool = false
 var _opponent_card_original_pos: Dictionary = {}
-## Traba de reentrada por carta para _declare_attacker() (2026-08-23):
-## la función es async con varios await ANTES de llegar a
-## GameManager.attackers.append() — un segundo click (p.ej. el eco de
-## card_double_clicked sobre un Aliado ya en juego) podía entrar de nuevo
-## mientras el primero seguía en vuelo, ganándole la carrera a
-## GameManager.declare_attacker() y quedando rechazado con 'no puede
-## atacar todavía' aunque el primero sí se hubiera declarado bien.
+## Traba de reentrada por carta para _declare_attacker(): es async con varios await antes de
+## GameManager.attackers.append(), y un segundo click (p.ej. el eco de card_double_clicked) podía
+## entrar en paralelo y quedar rechazado con "no puede atacar todavía".
 var _declaring_attackers: Dictionary = {}
 
 # =============================================================================
@@ -30,13 +29,10 @@ var _declaring_attackers: Dictionary = {}
 var is_selecting_target: bool = false
 var _target_filter: Callable = Callable()
 var _target_callback: Callable = Callable()
-## Si false, ESC no cancela la selección en curso (2026-09-13, a pedido del
-## usuario — ver §10.29: una selección MANDATORIA, p.ej. "Descarta N
-## cartas" sin "puedes", no debe poder esquivarse con ESC como si fuera un
-## costo opcional). Default true preserva el comportamiento de siempre.
+## Si es false, ESC no cancela la selección en curso: una selección obligatoria (p.ej. "Descarta N
+## cartas" sin "puedes") no se esquiva como un costo opcional (arquitectura.md §10.29).
 var _selection_cancellable: bool = true
-## "Seleccionar todo" para await_multi_target() (2026-09-13, Abrazo de Maipú)
-## — ver request_select_all() y el docstring de await_multi_target().
+## "Seleccionar todo" para await_multi_target() (p.ej. Abrazo de Maipú) — ver request_select_all().
 var _select_all_requested: bool = false
 ## Debounce del eco de doble-click (ver _resolve_target_selection): un
 ## double-click real dispara PRIMERO card_clicked (press 1) y LUEGO
@@ -44,42 +40,20 @@ var _select_all_requested: bool = false
 ## selección, press 2 no debe caer en "Solo puedes jugar cartas de la mano".
 var _last_resolved_target: Node = null
 var _last_resolved_at_ms: int = -100000
-## Cartas a las que start_target_selection() les forzó can_interact=true
-## (2026-09-14, bug real reportado por el usuario: eligiendo objetivo para
-## Capitán O'Brien —'Convertir un Oro o una carta de coste 2 o menos', DAR
-## Sección 8, objetivo propio o enemigo— el click izquierdo sobre el Aliado
-## RIVAL no hacía absolutamente nada, ni siquiera el mensaje de "objetivo no
-## válido"; tuvo que targetear su propio Aliado como única forma de
-## continuar). Causa real: Card.on_gui_input() corta el click IZQUIERDO por
-## completo si can_interact es false (línea "Otras interacciones requieren
-## can_interact") — el evento nunca llega a _on_card_clicked(), así que ni
-## el filtro ni el mensaje de error se ejecutan nunca. Las cartas PROPIAS
-## quedan can_interact=true apenas terminan de entrar en juego, pero nada
-## garantizaba lo mismo para las del RIVAL en todo momento (a diferencia de
-## los pickers de mano/Cementerio, que sí lo fuerzan explícitamente al
-## construir sus nodos temporales — ver ZoneViewerModule/HandCementerio
-## AbilityHandler/SearchAbilityHandler_JV). Se guarda aquí qué cartas se
-## forzaron para poder devolverlas a su estado real al cerrar la selección
-## (nunca se toca una carta que YA estaba en true).
+## Cartas a las que start_target_selection() les forzó can_interact = true. Card.on_gui_input()
+## corta el click izquierdo si can_interact es false, así que una carta rival no interactiva no
+## llegaba nunca a _on_card_clicked() (ni filtro ni mensaje). Se guardan para devolverlas a su
+## estado al cerrar la selección (nunca se toca una que ya estaba en true).
 var _forced_interact_cards: Array = []
-## Cartas con el brillo celeste "objetivo válido" prendido por una selección
-## de UN solo objetivo (2026-09-15, a pedido del usuario: await_target() no
-## tenía ningún indicador visual de candidatos — solo await_multi_target()
-## lo tenía — así que no había forma de distinguir a simple vista "no hay
-## ningún objetivo rival válido" de "el bug de targeting volvió"). Ver
+## Cartas con el brillo de "objetivo válido" de una selección de un solo objetivo, para distinguir a
+## simple vista "no hay objetivo válido" de un fallo de targeting. Ver
 ## _glow_valid_targets()/_unglow_target_cards().
 var _glowing_target_cards: Array = []
-## Puente para selecciones de objetivo cuyos candidatos del Cementerio NO
-## viven en ningún contenedor real del tablero (2026-09-25, bug real
-## reportado por el usuario: "con lobo sagrado no me permite jugar armas
-## del cementerio" — el jugador clickeaba el visor de Cementerio de
-## SIEMPRE, que no sabía nada de la selección pendiente y probaba Exhumar
-## en su lugar). Nodos temporales tipo Lobo Sagrado (WeaponSearchShuffle
-## Executor._execute_play_weapon_discount_draw()) se registran aquí antes
-## de abrir la selección — ZoneViewerModule._on_exhumar_card_clicked()
-## los consulta ANTES de intentar Exhumar, y si el Dictionary clickeado
-## coincide con uno de estos Nodos (misma referencia de card_data),
-## resuelve la selección real en vez de la acción de Exhumar.
+## Puente para selecciones cuyos candidatos del Cementerio no viven en un contenedor real (nodos
+## temporales, p.ej. Lobo Sagrado en
+## WeaponSearchShuffleExecutor._execute_play_weapon_discount_draw()).
+## ZoneViewerModule._on_exhumar_card_clicked() los consulta antes de intentar Exhumar: si el
+## card_data clickeado coincide, resuelve la selección pendiente.
 var _cemetery_target_nodes: Array = []
 
 
@@ -98,6 +72,62 @@ func try_resolve_cemetery_click(card_data: Dictionary) -> bool:
 
 func setup(main: Node) -> void:
 	_main = main
+	_watch_attack_lines.call_deferred()
+
+
+# -----------------------------------------------------------------------------
+# Aliados en la Línea de Ataque que no están atacando (movidos por un efecto: akashi, Batallón de
+# Ovejas; meta "idle_attack_line"): tono azul hielo. Los que atacaron siguen ahí hasta su Agrupación
+# y no cuentan. Lo calcula el Anfitrión (o la partida local) y el Remoto recibe la lista
+# (GameStateBroadcaster, op "idle_attack_cards").
+# -----------------------------------------------------------------------------
+const IDLE_ATTACK_TINT := Color(0.78, 0.93, 1.0, 1.0)
+signal idle_attack_changed(card_ids: Array)
+var _idle_tinted: Dictionary = {}
+var _idle_refresh_queued: bool = false
+
+
+func _watch_attack_lines() -> void:
+	if not _main or (NetworkClient.room_code != "" and not NetworkClient.is_host):
+		return  # Remoto: aplica la lista del Anfitrión (RemoteMirrorController)
+	for line in [_main.get("player_linea_ataque"), _main.get("opponent_linea_ataque")]:
+		if line:
+			line.child_entered_tree.connect(func(_n): queue_idle_attack_refresh())
+			line.child_exiting_tree.connect(func(_n): queue_idle_attack_refresh())
+	BattleManager.combat_finished.connect(func(_r) -> void:
+		# después del tween de "dejar de bloquear" (0.2 s), que deja el color en blanco
+		await get_tree().create_timer(0.3).timeout
+		queue_idle_attack_refresh())
+
+
+func queue_idle_attack_refresh() -> void:
+	if _idle_refresh_queued:
+		return
+	_idle_refresh_queued = true
+	_refresh_idle_attack_tint.call_deferred()
+
+
+func _refresh_idle_attack_tint() -> void:
+	_idle_refresh_queued = false
+	if not _main:
+		return
+	var now: Dictionary = {}
+	for line in [_main.get("player_linea_ataque"), _main.get("opponent_linea_ataque")]:
+		if not line:
+			continue
+		for c in line.get_children():
+			if is_instance_valid(c) and c.get_meta("idle_attack_line", false) and c.get("card_type") == Constants.CardType.ALIADO 					and not (c in GameManager.attackers) and not (c in GameManager.blockers.values()):
+				now[c] = true
+	for c in _idle_tinted:
+		if not now.has(c) and is_instance_valid(c):
+			if c.modulate == IDLE_ATTACK_TINT:
+				c.modulate = Color.WHITE
+			if c.get("current_zone") != Constants.Zone.LINEA_ATAQUE or c in GameManager.attackers:
+				c.remove_meta("idle_attack_line")  # salió de la Línea de Ataque o pasó a atacar
+	for c in now:
+		c.modulate = IDLE_ATTACK_TINT
+	_idle_tinted = now
+	idle_attack_changed.emit(now.keys().map(func(c): return str(c.get_instance_id())))
 
 
 func _force_board_interactable() -> void:
@@ -135,29 +165,20 @@ func _restore_board_interactable() -> void:
 
 
 func _glow_color_for_owner(c: Node) -> Color:
-	"""Celeste para tus propias cartas, rojo para las del rival (2026-09-15,
-	a pedido del usuario: antes TODO objetivo válido brillaba dorado sin
-	distinguir de quién es — ahora el color mismo dice 'tuya' o 'rival' de
-	un vistazo, sin tener que leer el owner_id)."""
+	"""Celeste para tus cartas, rojo para las del rival: el color dice de quién es el objetivo de un
+	vistazo."""
 	if c.get("owner_id") == 0:
 		return CardBadges.GLOW_COLOR_CELESTE
 	return CardBadges.GLOW_COLOR_RED
 
 
 func _glow_valid_targets(filter: Callable) -> void:
-	"""Prende el brillo 'objetivo válido' (CardBadges.set_activatable(), el
-	mismo indicador que ya usa await_multi_target()) en toda carta
-	candidata real de una selección de UN solo objetivo (2026-09-15, a
-	pedido del usuario: sin esto no había forma VISUAL de distinguir 'no hay
-	ningún objetivo rival válido ahora mismo' de 'el bug de targeting
-	volvió' — await_target() nunca mostraba ningún indicador, a diferencia
-	de await_multi_target()). Celeste/rojo según dueño — ver _glow_color_
-	for_owner(). A diferencia de _force_board_interactable() (que fuerza
-	can_interact de más a propósito, sin mirar el filtro), aquí SÍ se evalúa
-	el filtro real — es puramente visual, no cambia qué click es válido.
-	Barre las mismas 10 zonas de tablero que _force_board_interactable()
-	más mano/abanico rival, ya que await_target() también se usa para
-	elegir cartas de la mano (p.ej. Golpe Solar)."""
+	"""Prende el brillo de "objetivo válido" (CardBadges.set_activatable(), como await_multi_target())
+	en cada candidato real de una selección de un solo objetivo. Color según dueño
+	(_glow_color_for_owner()).
+	A diferencia de _force_board_interactable(), aquí sí se evalúa el filtro; es solo visual. Barre
+	las 10 zonas del tablero más la mano/abanico rival (await_target() también elige cartas de la
+	mano, p.ej. Golpe Solar)."""
 	if not filter.is_valid() or not _main:
 		return
 	for name in ["player_field", "player_linea_ataque", "player_linea_apoyo",
@@ -200,27 +221,12 @@ func request_select_all() -> void:
 
 
 func start_target_selection(prompt: String, filter: Callable, on_selected: Callable, cancellable: bool = true) -> void:
-	"""Activa el modo de selección de objetivo.
-	filter: Callable(card) -> bool — decide si esa carta es un objetivo legal.
-	on_selected: Callable(card) — se llama con la carta elegida al resolver.
-	cancellable: false para selecciones MANDATORIAS (ver _selection_
-	cancellable arriba) — ESC no hace nada, el jugador tiene que clickear
-	un objetivo válido si es que hay alguno disponible.
-	2026-09-14, bug real reportado por el usuario (log en vivo: 'Elige un
-	Oro o una carta de coste 2 o menos para Convertir' seguido, ~200ms
-	después, de 'Jugador 1 pasa prioridad' → 'Ambos pasaron' →
-	awaiting_response atascado en true para siempre): PhaseFlowController.
-	_human_pass_after() auto-pasa la prioridad del humano solo mirando
-	PriorityManager.suppress_human_autopass — nunca sabía que había una
-	selección de objetivo real pendiente, así que la auto-pasaba de
-	debajo justo cuando la ventana de prioridad (Paso D del propio
-	trigger) coincidía en el tiempo con este await_target(). El fix en
-	PhaseFlowController._on_paso_pressed() (mismo día) bloquea el CLICK
-	manual del botón ¿Paso?, pero este auto-pase por timer es un camino
-	totalmente aparte que no pasa por ahí. Se reusa el mismo flag que ya
-	usa ResponseWindowHandler._offer_signo_amarillo_for_step_d() para su
-	propio diálogo reactivo — mismo criterio, un caso más de 'hay una
-	decisión real esperando, no auto-pases'."""
+	"""Activa el modo de selección de objetivo. filter: Callable(card) -> bool (objetivo legal).
+	on_selected: Callable(card), se llama con la carta elegida. cancellable: false para selecciones
+	obligatorias (ESC no hace nada).
+	Suprime el auto-pase de prioridad (PriorityManager.suppress_human_autopass) mientras hay una
+	selección pendiente: si no, PhaseFlowController._human_pass_after() pasaba la prioridad por
+	debajo y la ventana quedaba colgada."""
 	is_selecting_target = true
 	_target_filter = filter
 	_target_callback = on_selected
@@ -231,93 +237,163 @@ func start_target_selection(prompt: String, filter: Callable, on_selected: Calla
 
 
 func await_target(prompt: String, filter: Callable, cancellable: bool = true, chooser_id: int = 0) -> Node:
-	"""Envoltorio de start_target_selection() que espera la respuesta —
-	extraído (2026-08-30) del mismo bloque de 8 líneas que se repetía
-	copiado en _select_ally_target()/_select_convert_target()
-	(TargetedEffectExecutor.gd), la elección de portador de Tyet/Aho
-	(CardManager.gd) y GoldManager._select_weapon_wielder(). Dictionary de
-	estado a propósito, no 'var chosen'/'var done' sueltas — mismo motivo
-	de siempre (los lambdas de GDScript capturan variables locales por
-	VALOR, ver comentarios de esta clase). Devuelve la carta elegida, o
-	null si se canceló (ESC) o no había forma de abrir la selección.
+	"""Elige un objetivo (ver _await_target_raw()). Oro adicional por afectar cartas del rival
+	(ProtectionRules.affect_tax: manuel rodriguez, Sake): lo que no se puede pagar no es elegible, y
+	se paga recién cuando el rival cede su prioridad (_pay_affect_tax())."""
+	var taxed := _affordable_filter(filter, chooser_id)
+	var chosen: Node = await _await_target_raw(prompt, taxed, cancellable, chooser_id)
+	if chosen and not await _pay_affect_tax([chosen], chooser_id):
+		return null
+	return chosen
 
-	'chooser_id' (2026-09-30, Fase 3 del plan de paridad remota, cuarto
-	sistema — ver docs/plans/2026-09-20-remote-multiplayer-parity.md): si
-	quien elige es el jugador 1 y hay un Remoto real conectado, se delega
-	por red en vez de activar el modo de selección local (que de otro modo
-	esperaría un click en la pantalla del Anfitrión)."""
+
+func _affordable_filter(filter: Callable, chooser_id: int) -> Callable:
+	return func(c: Node) -> bool:
+		if not filter.call(c):
+			return false
+		var tax: int = _Rules.affect_tax(c, chooser_id)
+		return tax <= 0 or (_main and _main._gold_manager and _main._gold_manager.puede_pagar(tax, -1, "", -1, chooser_id))
+
+
+func _pay_affect_tax(cards: Array, chooser_id: int) -> bool:
+	"""Elegir el objetivo (Pasos A-B) todavía no lo afecta: el Oro adicional se paga cuando el rival
+	cede su prioridad sin responder. Por eso abre antes la ventana de respuesta del efecto en curso
+	(EffectContext.ensure_window(); si ya pasó, como en las activadas, no abre otra). false si el
+	efecto quedó anulado/cancelado o no se pudo pagar: la carta no se ve afectada."""
+	var tax := 0
+	for c in cards:
+		tax += _Rules.affect_tax(c, chooser_id)
+	if tax <= 0:
+		return true
+	if await EffectContextScript.ensure_window():
+		return false
+	tax = 0
+	for c in cards:
+		if is_instance_valid(c):
+			tax += _Rules.affect_tax(c, chooser_id)
+	if tax <= 0:
+		return true
+	var ok: bool = await PlayerSideScript.pay(_main, chooser_id, tax)
+	if ok and _main and _main.has_method("_update_debug"):
+		_main._update_debug("Oro adicional por afectar: %d" % tax)
+	return ok
+
+
+func _await_target_raw(prompt: String, filter: Callable, cancellable: bool = true, chooser_id: int = 0) -> Node:
+	"""Envoltorio de start_target_selection() que espera la respuesta. Devuelve la carta elegida, o
+	null si se canceló (ESC) o no se pudo abrir. Estado en un Dictionary porque los lambdas de
+	GDScript capturan las variables locales por valor.
+	chooser_id: si elige el jugador 1 y hay un Remoto conectado, se delega por red (paridad remota,
+	docs/plans/2026-09-20-remote-multiplayer-parity.md)."""
 	if not is_instance_valid(self):
 		return null
 	EffectContextScript.check_chooser(chooser_id, prompt)
 	if chooser_id == 1 and NetworkClient.room_code != "" and NetworkClient.is_host:
 		return await _delegate_target_to_remote(prompt, filter, cancellable)
+	if PlayerSideScript.is_bot(chooser_id):
+		var picks := _bot_pick(prompt, _board_and_hand_cards().filter(func(c): return filter.call(c)), 1, chooser_id)
+		return null if picks.is_empty() else picks[0]
 	var state := {"done": false, "chosen": null}
 	var on_selected := func(c: Node) -> void:
 		state.chosen = c
 		state.done = true
 	start_target_selection(prompt, filter, on_selected, cancellable)
-	# 2026-09-15, a pedido del usuario: brillo celeste en cada candidato real
-	# (propio o rival) — ver _glow_valid_targets(). Solo aquí, NO dentro de
-	# start_target_selection() en sí, porque await_multi_target() también
-	# usa start_target_selection() puertas adentro con su propio manejo de
-	# brillo por lock_group_key/dynamic_filter — duplicarlo ahí pisaría esa
-	# lógica más fina.
+	# Brillo en cada candidato real (_glow_valid_targets()). Solo aquí y no en
+	# start_target_selection(): await_multi_target() la usa por dentro con su propio brillo por
+	# lock_group_key/dynamic_filter.
 	_glow_valid_targets(filter)
 	while not state.done:
 		await get_tree().process_frame
 	return state.chosen
 
 
+## Verbos que perjudican a la carta elegida: el bot elige primero las del rival. Si no, las propias.
+const _BOT_HARMFUL := ["destru", "destierr", "desterr", "baraj", "descart", "anul", "pierd", "pierde", "bota",
+	"sube", "devuelv", "convier", "fuerza 0", "no pueda", "silenc", "ganar el control"]
+
+
+func _bot_pick(prompt: String, candidates: Array, count: int, chooser_id: int) -> Array:
+	"""Elección del bot local (jugador 1 sin sala) en await_target()/await_multi_target(): en vez de
+	esperar un clic del Anfitrión, ordena los candidatos (del rival primero si el efecto perjudica,
+	los propios primero si beneficia) y toma los primeros 'count'."""
+	var lower := prompt.to_lower()
+	var harmful := false
+	for w in _BOT_HARMFUL:
+		if w in lower:
+			harmful = true
+			break
+	var rival: Array = []
+	var own: Array = []
+	for c in candidates:
+		var ctrl: int = int(c.controller_id) if c.get("controller_id") != null else (int(c.owner_id) if c.get("owner_id") != null else 0)
+		(own if ctrl == chooser_id else rival).append(c)
+	var ordered: Array = (rival + own) if harmful else (own + rival)
+	return ordered.slice(0, maxi(count, 0))
+
+
+func _board_and_hand_cards() -> Array:
+	var out: Array = []
+	for prop in ["player_field", "player_linea_ataque", "player_linea_apoyo", "player_gold", "player_oro_pagado",
+			"opponent_field", "opponent_linea_ataque", "opponent_linea_apoyo", "opponent_gold", "opponent_oro_pagado"]:
+		var zone = _main.get(prop)
+		if zone:
+			for c in zone.get_children():
+				if is_instance_valid(c):
+					out.append(c)
+					var weapons = c.get("equipped_weapons")
+					if weapons is Array:
+						for w in weapons:
+							if is_instance_valid(w):
+								out.append(w)
+	for h in [_main.player_hand, _main.get("_opponent_fan")]:
+		if h and h.get("cards") != null:
+			out.append_array(h.cards.filter(func(c): return is_instance_valid(c)))
+	return out
+
+
 func await_multi_target(prompt_prefix: String, candidates: Array, max_count: int = -1, lock_group_key: Callable = Callable(), dynamic_filter: Callable = Callable(), cancellable: bool = true, glow_color_override = null, chooser_id: int = 0) -> Array:
-	"""Selección de 0 a 'max_count' objetivos (-1 = sin tope) clickeando
-	directo sobre las cartas reales, en vez de un modal de lista — extraído
-	(2026-09-13, a pedido del usuario) del mismo mecanismo que ya usaba
-	GoldManager._choose_physical_gold_to_spend() para elegir qué Oro físico
-	gastar (brillo celeste de "activable" + await_target() repetido).
-	'candidates' puede mezclar cartas de VARIAS zonas a la vez (mano,
-	Cementerio, en juego) — así el jugador ve y elige directo, sin que el
-	juego le pregunte antes 'desde dónde' con un modal separado; DÓNDE está
-	cada carta ya se ve con solo mirar la mesa/mano/Cementerio.
-	'lock_group_key' (opcional): Callable(Node) -> Variant — si se pasa,
-	tras el PRIMER pick el resto de la selección queda restringida a
-	candidatos cuyo key coincida con el del primero (p.ej. Hanta el
-	Samurai: 'hasta N cartas de UN Cementerio' — un solo Cementerio, no un
-	pool combinado — key = owner_id del candidato).
-	'dynamic_filter' (opcional): Callable(chosen: Array, candidate: Node) ->
-	bool — se re-evalúa en CADA click con el 'chosen' acumulado hasta ese
-	momento; false excluye al candidato de la vuelta siguiente. Útil para
-	presupuestos que se consumen con cada pick (p.ej. Tempilcahue: 'Baraja
-	cartas cuyos costes sumen hasta 4' — el filtro rechaza cualquier carta
-	que haría superar la suma con lo ya elegido).
-	ESC en cualquier punto TERMINA la selección con lo ya elegido hasta
-	ahí (no cancela todo) — mismo criterio ya usado en otros flujos
-	'Baraja hasta una carta... ESC para no barajar ninguna'.
-	'Seleccionar todo' (2026-09-13, a pedido del usuario: Abrazo de Maipú,
-	'Baraja CUALQUIER CANTIDAD de cartas de tu Cementerio y Destierro' —
-	con muchas cartas disponibles, clickear una por una es tedioso): un
-	botón de UI puede llamar a request_select_all() en cualquier momento
-	mientras esta función espera un click; en el próximo frame, todo lo
-	que quede en 'remaining' (respetando el lock/dynamic_filter vigentes)
-	se toma de una sola vez y la selección termina ahí.
-	'glow_color_override' (2026-09-15, a pedido del usuario): por defecto el
-	brillo es celeste/rojo según dueño (ver _glow_color_for_owner()) — pasar
-	un Color aquí (p.ej. CardBadges.GLOW_COLOR_GOLD) lo fuerza igual para
-	TODOS los candidatos, para usos que no son "elegir un objetivo" sino
-	otra cosa (p.ej. TriggerSystem._prompt_trigger_order(): elegir el ORDEN
-	de resolución entre tus propios triggers ya disparados, no un objetivo
-	propio/rival)."""
+	"""Ver _await_multi_target_raw(). Con Oro adicional por afectar (ver await_target()): quedan
+	afuera las que no se pueden pagar y, si al final no alcanza, las gravadas."""
+	var affordable := _affordable_filter(func(_x): return true, chooser_id)
+	var pool: Array = candidates.filter(func(c): return not is_instance_valid(c) or affordable.call(c))
+	var chosen: Array = await _await_multi_target_raw(prompt_prefix, pool, max_count, lock_group_key, dynamic_filter,
+		cancellable, glow_color_override, chooser_id)
+	if not await _pay_affect_tax(chosen, chooser_id):
+		chosen = chosen.filter(func(c): return _Rules.affect_tax(c, chooser_id) <= 0)
+	return chosen
+
+
+func _await_multi_target_raw(prompt_prefix: String, candidates: Array, max_count: int = -1, lock_group_key: Callable = Callable(), dynamic_filter: Callable = Callable(), cancellable: bool = true, glow_color_override = null, chooser_id: int = 0) -> Array:
+	"""Selección de 0 a max_count objetivos (-1 = sin tope) clickeando las cartas reales, sin modal de
+	lista. candidates puede mezclar zonas (mano, Cementerio, en juego): el jugador ve dónde está
+	cada una.
+	lock_group_key: Callable(Node) -> Variant; tras el primer pick, solo candidatos con la misma
+	clave (p.ej. Hanta el Samurai: "de UN Cementerio", clave = owner_id).
+	dynamic_filter: Callable(chosen, candidate) -> bool, reevaluado en cada click (p.ej.
+	Tempilcahue: costes que sumen hasta 4).
+	ESC termina con lo ya elegido (no cancela todo). request_select_all() toma de una vez todo lo
+	que quede elegible (Abrazo de Maipú: "cualquier cantidad").
+	glow_color_override: fuerza un color para todos (p.ej. dorado al elegir el orden de tus
+	triggers en TriggerSystem._prompt_trigger_order()); por defecto, celeste/rojo según dueño."""
 	var chosen: Array = []
 	if not is_instance_valid(self):
 		return chosen
-	# 2026-09-30, Fase 3 del plan de paridad remota, cuarto sistema — mismo
-	# criterio que await_target(). 2026-10-08: lock_group_key/dynamic_filter
-	# ya se le pasan a _delegate_multi_target_to_remote(), que los enforcea
-	# al recibir la respuesta completa (ver su propio comentario) en vez de
-	# en vivo por click — suficiente para que Tempilcahue/Ngenechén/asedio
-	# naval se puedan desbloquear de verdad (ver arquitectura.md §43).
+	# Remoto: igual que await_target(). lock_group_key/dynamic_filter se aplican al recibir la
+	# respuesta (ver _delegate_multi_target_to_remote(); arquitectura.md §43).
 	EffectContextScript.check_chooser(chooser_id, prompt_prefix)
 	if chooser_id == 1 and NetworkClient.room_code != "" and NetworkClient.is_host:
 		return await _delegate_multi_target_to_remote(prompt_prefix, candidates, max_count, cancellable, lock_group_key, dynamic_filter)
+	if PlayerSideScript.is_bot(chooser_id):
+		var ordered := _bot_pick(prompt_prefix, candidates.filter(func(c): return is_instance_valid(c)), candidates.size(), chooser_id)
+		for c in ordered:
+			if max_count >= 0 and chosen.size() >= max_count:
+				break
+			if lock_group_key.is_valid() and not chosen.is_empty() and lock_group_key.call(c) != lock_group_key.call(chosen[0]):
+				continue
+			if dynamic_filter.is_valid() and not dynamic_filter.call(chosen, c):
+				continue
+			chosen.append(c)
+		return chosen
 	var glow_of := func(c: Node) -> Color:
 		return glow_color_override if glow_color_override != null else _glow_color_for_owner(c)
 	var remaining: Array = candidates.duplicate()
@@ -378,9 +454,7 @@ func await_multi_target(prompt_prefix: String, candidates: Array, max_count: int
 			break
 		if has_lock and chosen.is_empty():
 			locked_key = lock_group_key.call(picked)
-			# Apagar el brillo de los candidatos que el lock acaba de excluir
-			# (2026-09-13) — sin esto seguían brillando como "elegibles"
-			# aunque el filtro ya los rechazara.
+			# Apagar el brillo de los candidatos que el lock acaba de excluir.
 			for c in remaining:
 				if is_instance_valid(c) and c.has_method("set_activatable") and lock_group_key.call(c) != locked_key:
 					c.set_activatable(false, CardBadges.GLOW_COLOR_GOLD, &"target_select")
@@ -398,6 +472,17 @@ func await_multi_target(prompt_prefix: String, candidates: Array, max_count: int
 		if is_instance_valid(c) and c.has_method("set_activatable"):
 			c.set_activatable(false, CardBadges.GLOW_COLOR_GOLD, &"target_select")
 	return chosen
+
+
+## Una candidata para un prompt del Remoto: card_data completo, salvo las cartas de la mano del Anfitrión
+## (privada): solo su id, boca abajo.
+func _remote_candidate_entry(c: Node) -> Dictionary:
+	var host_hand = _main.get("player_hand")
+	if host_hand and host_hand.get("cards") and c in host_hand.cards:
+		return {"card_id": str(c.get_instance_id()), "host_hand_hidden": true, "nombre": "Carta en la mano"}
+	var entry: Dictionary = c.card_data.duplicate(true) if c.get("card_data") != null else {}
+	entry["card_id"] = str(c.get_instance_id())
+	return entry
 
 
 func _delegate_target_to_remote(prompt: String, filter: Callable, cancellable: bool) -> Node:
@@ -426,25 +511,20 @@ func _delegate_target_to_remote(prompt: String, filter: Callable, cancellable: b
 		for c in hand.cards:
 			if is_instance_valid(c) and filter.call(c):
 				candidates.append(c)
-	# Nodos temporales de un popup de Cementerio (2026-10-12, p.ej. Lobo
-	# Sagrado jugado por el Remoto) — no viven en ningún contenedor; del lado
-	# Remoto no son visibles en el tablero, así que se muestran en el popup
-	# con la carta dibujada (RemoteMirrorController._show_await_target_prompt()).
+	# Nodos temporales de un popup de Cementerio (p.ej. Lobo Sagrado jugado por el Remoto): no están en
+	# el tablero del Remoto, así que se muestran dibujados en el popup
+	# (RemoteMirrorController._show_await_target_prompt()).
 	for c in _cemetery_target_nodes:
 		if is_instance_valid(c) and filter.call(c) and c not in candidates:
 			candidates.append(c)
 	if candidates.is_empty():
 		return null
 
-	# 2026-10-07, a pedido del usuario ("no sale... el abanico de cartas
-	# está todo escrito"): antes mandaba solo nombre/coste curados — ahora
-	# el card_data completo (Nodos reales ya lo tienen cargado), para que
-	# RemoteMirrorController pueda dibujar la carta de verdad en vez de un
-	# botón de solo texto.
+	# Se manda el card_data completo para que RemoteMirrorController dibuje la carta en vez de un botón
+	# de solo texto.
 	var payload: Array = []
 	for c in candidates:
-		var entry: Dictionary = c.card_data.duplicate(true) if c.get("card_data") != null else {}
-		entry["card_id"] = str(c.get_instance_id())
+		var entry: Dictionary = _remote_candidate_entry(c)
 		payload.append(entry)
 	NetworkClient.send_message({
 		"op": "prompt", "kind": "await_target",
@@ -465,12 +545,10 @@ func _delegate_target_to_remote(prompt: String, filter: Callable, cancellable: b
 
 
 func _delegate_target_or_castillo_to_remote(prompt: String, filter: Callable, castillo_title: String, allow_cancel: bool, castillo_own_only: bool) -> Dictionary:
-	"""Contraparte en red de await_target_or_castillo_pick() (2026-10-07,
-	ver arquitectura.md §41) — junta las dos mitades de la carrera local
-	(cartas candidatas + Castillo propio/rival) en un solo prompt de texto,
-	ya que del lado del Remoto no hay carrera real entre dos interacciones
-	de UI simultáneas, solo una lista de opciones. Mismo criterio de
-	identificar candidatas que _delegate_target_to_remote()."""
+	"""Contraparte en red de await_target_or_castillo_pick() (arquitectura.md §41): junta cartas
+	candidatas y Castillo propio/rival en un solo prompt, porque del lado del Remoto no hay carrera
+	entre dos interacciones. Mismo criterio de identificar candidatas que
+	_delegate_target_to_remote()."""
 	var candidates: Array = []
 	for zone_name in ["player_field", "player_linea_ataque", "player_linea_apoyo",
 			"opponent_field", "opponent_linea_ataque", "opponent_linea_apoyo",
@@ -491,8 +569,7 @@ func _delegate_target_or_castillo_to_remote(prompt: String, filter: Callable, ca
 
 	var payload: Array = []
 	for c in candidates:
-		var entry: Dictionary = c.card_data.duplicate(true) if c.get("card_data") != null else {}
-		entry["card_id"] = str(c.get_instance_id())
+		var entry: Dictionary = _remote_candidate_entry(c)
 		payload.append(entry)
 	NetworkClient.send_message({
 		"op": "prompt", "kind": "await_target_or_castillo",
@@ -517,28 +594,17 @@ func _delegate_target_or_castillo_to_remote(prompt: String, filter: Callable, ca
 
 
 func _delegate_multi_target_to_remote(prompt_prefix: String, candidates: Array, max_count: int, cancellable: bool, lock_group_key: Callable = Callable(), dynamic_filter: Callable = Callable()) -> Array:
-	"""Contraparte en red de await_multi_target() — ver _delegate_target_
-	to_remote() para el mismo criterio de identificar por get_instance_id().
-	2026-10-08, a pedido del usuario ("dale arreglemoslo" — ver
-	arquitectura.md §43): lock_group_key/dynamic_filter YA se enforcean,
-	pero del lado del ANFITRIÓN al recibir la respuesta completa, no en
-	vivo mientras el Remoto tilda checkboxes (no hay un mecanismo de re-
-	evaluar en cada click sin convertir esa UI en algo iterativo). Se
-	recorren los card_ids que mandó el Remoto EN EL ORDEN en que vinieron
-	y se van aceptando uno por uno solo si siguen pasando el mismo filtro
-	que usaría el panel local dado lo YA aceptado hasta ese punto — un pick
-	que lo violaría se descarta (no trunca el resto: una carta más cara
-	rechazada no bloquea otras más chicas que sí entren después), en vez
-	de confiar ciegamente en lo que mandó."""
+	"""Contraparte en red de await_multi_target() (identifica por get_instance_id()).
+	lock_group_key/dynamic_filter se aplican en el Anfitrión al recibir la respuesta
+	(arquitectura.md §43): se recorren los card_ids en orden y se acepta cada uno solo si pasa el
+	filtro dado lo ya aceptado. Un pick inválido se descarta sin truncar el resto."""
 	var live_candidates: Array = candidates.filter(func(c): return is_instance_valid(c))
 	if live_candidates.is_empty():
 		return []
-	# 2026-10-07, mismo motivo/arreglo que _delegate_target_to_remote()
-	# (await_target) — card_data completo en vez de nombre/coste curados.
+	# card_data completo, igual que _delegate_target_to_remote().
 	var payload: Array = []
 	for c in live_candidates:
-		var entry: Dictionary = c.card_data.duplicate(true) if c.get("card_data") != null else {}
-		entry["card_id"] = str(c.get_instance_id())
+		var entry: Dictionary = _remote_candidate_entry(c)
 		payload.append(entry)
 	NetworkClient.send_message({
 		"op": "prompt", "kind": "await_multi_target",
@@ -571,54 +637,34 @@ func _delegate_multi_target_to_remote(prompt_prefix: String, candidates: Array, 
 
 
 func await_target_or_castillo_pick(prompt: String, filter: Callable, castillo_title: String, allow_cancel: bool = true, castillo_own_only: bool = false, chooser_id: int = 0) -> Dictionary:
-	"""Carrera entre clickear una carta real (que pase 'filter') y clickear
-	un Panel de Castillo entero (propio o rival) — extraído (2026-09-13, a
-	pedido del usuario, ver arquitectura.md §10.14/La Ouija) del mismo
-	mecanismo ya usado a mano por ConvertAndMiscResolver.try_execute_mill_
-	convert_to_ally_pattern() (Sherlock Holmes: 'convierte cartas en juego
-	O del tope de un Castillo'). Útil para habilidades que ofrecen elegir
-	entre una carta visible (mano/campo/Cementerio) y 'el tope/fondo de un
-	Castillo' — no hay nada que clickear DENTRO del Castillo (es
-	información oculta hasta que se elige), así que el Panel del Castillo
-	entero actúa como el objetivo; el primer click real (carta o Castillo)
-	decide la fuente, el otro deja de ser clickeable.
-	'allow_cancel': si true (habilidad opcional, 'puedes'), ESC en el
-	picker de cartas cancela TODA la elección (incluye el Castillo en
-	paralelo) y devuelve {type: "none"}. Si false (habilidad obligatoria,
-	sin 'puedes'), ESC solo reintenta el picker de cartas — el Castillo
-	sigue esperando en paralelo, la habilidad tiene que resolverse por
-	algún lado.
-	'castillo_own_only': si true (p.ej. La Ouija: 'del tope de TU
-	Castillo', con posesivo — a diferencia de Sherlock Holmes, 'un
-	Castillo' sin posesivo, cualquiera de los dos), un click en el
-	Castillo rival se ignora (se re-arma el listener del Castillo, sigue
-	esperando) en vez de resolver la carrera con ese lado inválido.
-	Devuelve {type: "card", card: Node}, {type: "castillo", own: bool}, o
-	{type: "none"} si se canceló sin elegir nada.
-	'chooser_id' (2026-10-07, ver arquitectura.md §41): toda esta carrera
-	depende de Paneles y Nodos reales de ESTA pantalla — sin equivalente
-	directo para el Remoto. Se delega a _delegate_target_or_castillo_to_
-	remote(), que junta ambas opciones (cartas candidatas + Castillo
-	propio/rival) en un solo prompt de texto."""
+	"""Carrera entre clickear una carta real (que pase filter) y clickear un Panel de Castillo entero
+	(propio o rival), para habilidades que ofrecen "una carta ... o el tope de un Castillo"
+	(Sherlock Holmes, La Ouija; arquitectura.md §10.14). El primer click decide la fuente.
+	allow_cancel: true ("puedes") → ESC cancela todo y devuelve {type: "none"}; false → ESC solo
+	reintenta el picker de cartas.
+	castillo_own_only: "TU Castillo" (La Ouija); un click en el Castillo rival se ignora y se sigue
+	esperando.
+	Devuelve {type: "card", card}, {type: "castillo", own} o {type: "none"}.
+	chooser_id: el jugador 1 con Remoto se delega a _delegate_target_or_castillo_to_remote()
+	(arquitectura.md §41)."""
 	EffectContextScript.check_chooser(chooser_id, prompt)
 	if chooser_id == 1 and NetworkClient.room_code != "" and NetworkClient.is_host:
 		return await _delegate_target_or_castillo_to_remote(prompt, filter, castillo_title, allow_cancel, castillo_own_only)
 	if not is_instance_valid(self):
 		return {"type": "none"}
-	# 2026-09-23, bug real reportado ("Attempt to call function 'null::null
-	# (Callable)' on a null instance"): los lambdas de GDScript capturan las
-	# variables locales POR VALOR, no por referencia (ver misma causa raíz
-	# documentada en arquitectura.md §13.17 para el cuelgue de mazos). Un
-	# lambda auto-referenciado como "arm_castillo_pick = func(): ...
-	# arm_castillo_pick.call()..." se rompe: adentro del lambda,
-	# "arm_castillo_pick" es la copia (vacía) de ANTES de la asignación, así
-	# que reintentar el pick del Castillo llamaba un Callable nulo. Lo mismo
-	# le pasaba en silencio a race_done/castillo_own/castillo_chosen (se
-	# reasignaban adentro del lambda sin que el bucle de abajo se enterara
-	# nunca). Arreglado guardando todo en un Dictionary ("_state"): SÍ se
-	# captura por referencia (la copia por valor es una copia del puntero al
-	# mismo objeto), así que mutar sus claves adentro del lambda es visible
-	# afuera, y el lambda puede llamarse a sí mismo vía _state["arm"].
+	# El bot: el primer objetivo que pase el filtro; si no hay, el Castillo rival (o el propio si solo puede ese).
+	if PlayerSideScript.is_bot(chooser_id):
+		await get_tree().process_frame
+		for side in [0, 1]:
+			for c in PlayerSideScript.line_containers(_main, side):
+				for n in c.get_children():
+					if is_instance_valid(n) and filter.is_valid() and filter.call(n):
+						return {"type": "card", "card": n}
+		return {"type": "castillo", "own": castillo_own_only}
+	# Estado en un Dictionary (_state): los lambdas de GDScript capturan las variables locales por
+	# valor, así que un lambda que se llama a sí mismo o reasigna flags no se ve desde afuera
+	# (arquitectura.md §13.17). El Dictionary se comparte por referencia y el lambda se reinvoca vía
+	# _state["arm"].
 	var _state := {"race_done": false, "castillo_own": true, "castillo_chosen": false, "arm": Callable()}
 	_state["arm"] = func() -> void:
 		SelectionManager.start_castillo_pick(_main, castillo_title,
@@ -641,9 +687,8 @@ func await_target_or_castillo_pick(prompt: String, filter: Callable, castillo_ti
 		start_target_selection(prompt, filter, func(c: Node) -> void:
 			card_state.chosen = c
 			card_state.done = true)
-		# Las cartas válidas brillan junto con el Castillo (2026-10-17, a
-		# pedido del usuario: Espada de O'Higgins solo hacía brillar el
-		# Castillo, sin mostrar qué cartas se podían Barajar).
+		# Las cartas válidas brillan junto con el Castillo (p.ej. Espada de O'Higgins), para mostrar qué
+		# se puede elegir.
 		_glow_valid_targets(filter)
 		while not card_state.done and not _state["race_done"]:
 			await get_tree().process_frame
@@ -668,15 +713,9 @@ func await_target_or_castillo_pick(prompt: String, filter: Callable, castillo_ti
 
 
 func cancel_target_selection() -> void:
-	"""Cancela con ESC. Llama al callback con null (en vez de dejarlo sin
-	invocar) — quien esperaba con 'while not done: await process_frame'
-	(TriggerSystem._select_ally_target, GoldManager._select_weapon_wielder,
-	etc.) se quedaba colgado para siempre si el jugador cancelaba, porque
-	'done' nunca se ponía en true.
-	No hace nada si la selección actual es NO cancelable (2026-09-13, ver
-	_selection_cancellable arriba) — p.ej. un descarte MANDATORIO ('Descarta
-	N cartas', sin 'puedes') no debe poder esquivarse con ESC como si fuera
-	un costo opcional; el jugador tiene que clickear un objetivo válido."""
+	"""Cancela con ESC llamando al callback con null, para que quien espera 'while not done' no se
+	cuelgue. No hace nada si la selección es obligatoria (_selection_cancellable): p.ej. "Descarta
+	N cartas" sin "puedes"."""
 	if not is_selecting_target or not _selection_cancellable:
 		return
 	is_selecting_target = false
@@ -694,12 +733,8 @@ func cancel_target_selection() -> void:
 
 func _resolve_target_selection(card: Node) -> void:
 	if _target_filter.is_valid() and not _target_filter.call(card):
-		# 2026-09-06, bug reportado por el usuario: quedarse pegado
-		# clickeando la mano repetidamente sin saber que ESC cancela la
-		# selección (p.ej. Golpe Solar: 'Baraja hasta una carta rival...
-		# ESC para no barajar ninguna' — sin este recordatorio, cada click
-		# en la mano solo repetía este mensaje para siempre, sin pista de
-		# cómo salir). El mensaje ahora lo dice explícito.
+		# El mensaje dice explícitamente que ESC cancela, para no quedar clickeando la mano sin salida
+		# (p.ej. Golpe Solar: "Baraja hasta una carta... ESC para no barajar ninguna").
 		_main._update_debug("Objetivo no válido — elige otra carta o presiona N si es opcional")
 		return
 	var callback = _target_callback
@@ -731,12 +766,12 @@ func check_deselect() -> void:
 # =============================================================================
 func _on_card_clicked(card: Node) -> void:
 	_card_clicked_this_frame = true
-	# Selector de zonas con candidatas en la mano (Miguel) — antes que el
-	# desvío del Remoto y que cualquier otro modo (2026-10-12).
+	# Selector de zonas con candidatas en la mano (Miguel): antes que el desvío del Remoto y que
+	# cualquier otro modo.
 	if _main.get("_zone_browse_picker") and _main._zone_browse_picker.try_hand_click(card):
 		return
-	# 2026-10-11: el cliente Remoto no corre la partida — un click nunca debe
-	# llegar a la lógica local (atacar, bloquear, jugar). Ver on_card_double_clicked().
+	# El cliente Remoto no corre la partida: un click nunca llega a la lógica local (atacar, bloquear,
+	# jugar). Ver _on_card_double_clicked().
 	if NetworkClient.room_code != "" and not NetworkClient.is_host:
 		if _main._remote_mirror:
 			_main._remote_mirror.on_card_clicked(card)
@@ -747,30 +782,19 @@ func _on_card_clicked(card: Node) -> void:
 	if is_placing_gold:
 		await _main._gold_manager._place_card_as_gold(card)
 		return
-	# Declarar bloqueador con un clic (2026-09-08, primera vez que se conecta
-	# GameManager.declare_blocker() a una UI real — existía desde antes pero
-	# sin ningún llamador, así que Bloqueo nunca dejaba hacer nada más que
-	# pasar prioridad, bug real reportado por el usuario: "no funcionó el
-	# sistema de bloqueos"). Solo el propio Aliado en Línea de Defensa del
-	# jugador humano — si el humano es quien ataca, sus Aliados están en
-	# Línea de Ataque, no Defensa, así que este bloque no interfiere.
+	# Declarar bloqueador con un clic (GameManager.declare_blocker()): solo un Aliado propio en Línea
+	# de Defensa del humano. Si el humano ataca, sus Aliados están en Línea de Ataque y esto no
+	# interfiere.
 	if GameManager.current_phase == Constants.Phase.BLOQUEO and card.card_type == Constants.CardType.ALIADO \
 			and card.current_zone == Constants.Zone.LINEA_DEFENSA and card.controller_id == 0:
 		await _declare_blocker(card)
 		return
-	# Declarar atacante con un clic (2026-08-17): el arrastre se desactivó
-	# (Card.drag_enabled = false) por los bugs de posicionamiento que
-	# causaba — ver Card._can_declare_attack_drag() para la condición real
-	# (fase de Ataque, ya sin atajo de Vigilia — 2026-08-28). Se reutiliza
-	# esa función tal cual para no duplicar la lógica de cuándo tiene
-	# sentido intentar atacar.
-	# Acepta Defensa (para declarar) o Ataque (para desdeclarar con un
-	# segundo clic) — desde que declarar mueve de verdad la carta a Línea
-	# de Ataque (consolidación 2026-08-20), ya no se queda en Defensa.
+	# Declarar atacante con un clic (el arrastre está desactivado por problemas de posicionamiento).
+	# Reusa Card._can_declare_attack_drag() para saber cuándo tiene sentido (fase de Ataque).
+	# Acepta Defensa (declarar) o Ataque (desdeclarar con un segundo clic), porque declarar mueve la
+	# carta a la Línea de Ataque.
 	if card.card_type == Constants.CardType.ALIADO and card.current_zone in [Constants.Zone.LINEA_DEFENSA, Constants.Zone.LINEA_ATAQUE]:
-		# Si ya está atacando, un segundo clic lo retira del combate en vez
-		# de rechazar el clic con un mensaje — a pedido del usuario, para
-		# poder corregir una declaración antes de confirmar con ¿Paso?.
+		# Si ya ataca, un segundo clic lo retira del combate, para corregir antes de confirmar con ¿Paso?.
 		if card in GameManager.attackers:
 			if GameManager.current_phase in [Constants.Phase.VIGILIA, Constants.Phase.ATAQUE]:
 				var undeclared = GameManager.undeclare_attacker(card)
@@ -782,10 +806,8 @@ func _on_card_clicked(card: Node) -> void:
 		if card.has_method("_can_declare_attack_drag") and card._can_declare_attack_drag():
 			await _declare_attacker(card)
 			return
-		# No puede atacar todavía, pero SÍ estamos en una fase donde intentar
-		# atacar tiene sentido (2026-08-23) — dar la razón real (enfermedad
-		# de invocación, normalmente) en vez de caer al mensaje genérico de
-		# selección de más abajo, que no explica nada sobre el ataque.
+		# No puede atacar todavía pero la fase es la correcta: dar la razón real (normalmente enfermedad
+		# de invocación) en vez del mensaje genérico.
 		if GameManager.current_phase in [Constants.Phase.VIGILIA, Constants.Phase.ATAQUE]:
 			var validation_reason = TurnManager.can_attack(card)
 			if not validation_reason.get("can_attack", true):
@@ -808,20 +830,15 @@ func _on_card_clicked(card: Node) -> void:
 func _on_card_double_clicked(card: Node) -> void:
 	if _main.get("_zone_browse_picker") and _main._zone_browse_picker.try_hand_click(card):
 		return
-	# 2026-10-11: en el cliente Remoto, jugar desde la mano física manda la
-	# jugada al Anfitrión (RemoteMirrorController), nunca GoldManager local.
+	# En el cliente Remoto, jugar desde la mano manda la jugada al Anfitrión (RemoteMirrorController),
+	# nunca al GoldManager local.
 	if NetworkClient.room_code != "" and not NetworkClient.is_host:
 		if _main._remote_mirror:
 			_main._remote_mirror.on_card_double_clicked(card)
 		return
-	# Un click real en Godot (Card._on_gui_input) SIEMPRE dispara card_clicked
-	# primero (press 1, double_click=false) y LUEGO card_double_clicked (press
-	# 2 del mismo gesto, double_click=true) — confirmado con logging en vivo
-	# (2026-08-22). Si press 1 ya resolvió una selección de objetivo pendiente
-	# (p.ej. elegir portador de un Arma), press 2 llega con is_selecting_target
-	# ya en false — sin este chequeo caía en 'Solo puedes jugar cartas de la
-	# mano' como si hubiera fallado, aunque la selección ya se había resuelto
-	# bien. Se ignora en silencio ese eco (mismo objetivo, <700ms).
+	# Un click real dispara primero card_clicked y luego card_double_clicked (mismo gesto). Si el
+	# primero ya resolvió una selección (p.ej. portador de un Arma), el eco llega con
+	# is_selecting_target en false: se ignora en silencio (mismo objetivo, <700 ms).
 	if card == _last_resolved_target and Time.get_ticks_msec() - _last_resolved_at_ms < 700:
 		return
 	# Si la selección sigue pendiente (el objetivo de este double-click no es
@@ -830,36 +847,26 @@ func _on_card_double_clicked(card: Node) -> void:
 	if is_selecting_target:
 		_resolve_target_selection(card)
 		return
-	# Un Aliado ya en juego (Defensa/Ataque) no se 'juega' con doble-click —
-	# tratarlo como el click simple de declarar/desdeclarar ataque en vez de
-	# caer en el rechazo genérico de abajo (2026-08-23): antes, doble-clickear
-	# por error un Aliado que no podía atacar todavía mostraba 'Solo puedes
-	# jugar cartas de la mano', un mensaje que no tiene nada que ver con la
-	# razón real (enfermedad de invocación, no es su turno, etc.).
+	# Doble click sobre un Aliado ya en juego (Defensa/Ataque) = el click simple de
+	# declarar/desdeclarar ataque, en vez del rechazo genérico "Solo puedes jugar cartas de la mano".
 	if card.card_type == Constants.CardType.ALIADO and card.current_zone in [Constants.Zone.LINEA_DEFENSA, Constants.Zone.LINEA_ATAQUE]:
 		_on_card_clicked(card)
 		return
-	# No usar solo VIGILIA aquí: este gateo corría ANTES de que la carta
-	# llegara a GoldManager.play_card(), así que un Arma con Lobo Sagrado en
-	# juego (o cualquier Talismán) en Guerra de Talismanes nunca alcanzaba a
-	# intentarse siquiera (2026-08-28, bug reportado por el usuario).
-	# Talismanes de respuesta instantánea (Anula/Cancela) también quedan
-	# exceptuados aquí, en CUALQUIER fase (2026-09-06) — mismo criterio que
-	# GoldManager.play_card()'s is_instant_response, este gateo de UI corre
-	# antes y los habría bloqueado igual sin este chequeo repetido.
+	# No solo VIGILIA: este filtro de UI corre antes de GoldManager.play_card(), así que debe repetir
+	# sus excepciones (Armas con Lobo Sagrado y Talismanes en Guerra de Talismanes; Talismanes de
+	# respuesta en cualquier fase).
 	var is_instant_response_talisman: bool = card.card_type == Constants.CardType.TALISMAN \
 		and _main._gold_manager._is_response_only_talisman(card)
+	# Ventana de comienzo de fase (PhaseStartWindow).
+	var phase_start_ok: bool = load("res://scripts/core/game/PhaseStartWindow.gd").allows_now(card, 0)
 	if GameManager.current_phase != Constants.Phase.VIGILIA and not _main._gold_manager.has_phase_exception(card.card_type) \
-			and not is_instant_response_talisman:
+			and not is_instant_response_talisman and not phase_start_ok:
 		_main._update_debug(_main._gold_manager.get_phase_rejection_reason(card.card_type))
 		return
-	# 2026-09-15, mismo bug y mismo motivo que GoldManager.play_card() (ver
-	# ese comentario) — este gateo de UI corre ANTES de llegar ahí, así que
-	# sin esta excepción un Talismán de respuesta instantánea quedaba
-	# bloqueado igual antes de siquiera intentarlo.
-	# En la Guerra de Talismanes decide la prioridad, no el turno (§64) —
-	# GoldManager.play_card() lo valida.
-	if GameManager.active_player_id != 0 and not is_instant_response_talisman \
+	# Talismanes de respuesta fuera de tu turno: mismo criterio que GoldManager.play_card(), que este
+	# filtro precede. En Guerra de Talismanes decide la prioridad, no el turno (§64); lo valida
+	# GoldManager.play_card().
+	if GameManager.active_player_id != 0 and not is_instant_response_talisman and not phase_start_ok \
 			and GameManager.current_phase != Constants.Phase.GUERRA_TALISMANES:
 		_main._update_debug("No es tu turno")
 		return
@@ -891,35 +898,27 @@ func _on_card_dropped(card: Node, pos: Vector2) -> void:
 # =============================================================================
 # BATALLA — DECLARAR ATACANTE
 # =============================================================================
-func _declare_attacker(card: Node) -> void:
-	"""Declara un Aliado como atacante. Se llama al soltarlo en la Línea de
-	Ataque — DropZone solo deja soltar aquí durante el paso de Ataque (DAR
-	5.3.1, ya sin atajo de Vigilia — ver 2026-08-28), y
-	GameManager.declare_attacker() valida enfermedad de invocación (Furia
-	la evita, pero ya no salta la fase). Antes esta función solo se usaba
-	(y nombraba) para Furia, pero el drop de DropZone ya aceptaba ambos
-	casos — ver hallazgo 5.
+## Aspecto de "atacando" (a la Línea de Ataque y marcado). También para Aliados que entran atacando sin
+## pasar por la declaración (andras, hombre invisible: GameManager.replacement_attackers).
+func mark_attacker_visual(card: Node) -> void:
+	if not is_instance_valid(card):
+		return
+	var ataque_container: HBoxContainer = _main.player_linea_ataque if card.controller_id == 0 else _main.opponent_linea_ataque
+	await _advance_card_to_attack_line(card, ataque_container)
+	_mark_card_as_attacker(card)
 
-	NO abre su propia ventana de prioridad (2026-08-16): antes lo hacía
-	siempre, apenas se declaraba UN atacante — eso hacía que, en cuanto se
-	pasaba esa ventana, se interpretara como 'atacantes confirmados' y el
-	combate arrancaba con un solo Aliado, sin dejar declarar más. Además esa
-	ventana se solapaba con la que GameManager.declare_attacker() ya abre
-	internamente al resolver el trigger 'cuando ataque' de la propia carta
-	(ver TriggerSystem._collect_triggers_for_event), lo que dejaba la
-	prioridad en un estado inconsistente. Ahora el jugador puede seguir
-	arrastrando más Aliados a la Línea de Ataque, y confirma todos juntos
-	presionando ¿Paso? — que ya llama a GameManager.confirm_attackers()
-	cuando no hay ninguna ventana de prioridad activa (ver _on_paso_pressed
-	en PhaseFlowController), y ESA transición sí abre la ventana real
-	(Guerra de Talismanes o Bloqueo)."""
+
+func _declare_attacker(card: Node) -> void:
+	"""Declara un Aliado como atacante (DAR 5.3.1). GameManager.declare_attacker() valida enfermedad
+	de invocación (Furia la evita).
+	No abre su propia ventana de prioridad: el jugador sigue declarando más atacantes y confirma
+	todos con ¿Paso? (GameManager.confirm_attackers(), vía PhaseFlowController._on_paso_pressed());
+	esa transición abre la ventana real (Guerra de Talismanes o Bloqueo). Abrirla aquí arrancaba el
+	combate con un solo atacante."""
 	if not card or not is_instance_valid(card):
 		return
-	# Traba de reentrada (2026-08-23): un segundo click/eco sobre la MISMA
-	# carta mientras una declaración anterior sigue en vuelo (ver comentario
-	# de _declaring_attackers) no debe iniciar una segunda declaración en
-	# paralelo — se ignora en silencio en vez de competir por
-	# GameManager.attackers.
+	# Traba de reentrada: un segundo click/eco sobre la misma carta mientras su declaración sigue en
+	# vuelo se ignora (ver _declaring_attackers).
 	if _declaring_attackers.has(card):
 		return
 	_declaring_attackers[card] = true
@@ -945,12 +944,9 @@ func _declare_attacker(card: Node) -> void:
 		_declaring_attackers.erase(card)
 		return
 	var card_name = card.get("card_name") if card.get("card_name") else "Aliado"
-	# KeywordManager.can_attack_immediately() (2026-09-02, refactor), no
-	# card.has_keyword() directo — mismo motivo que el resto de checks de
-	# keyword movidos a KeywordManager: respeta silencio/remociones
-	# temporales, y ya es la misma función que usa TurnManager.can_attack()
-	# para la validación real, así que el mensaje ahora no puede
-	# desincronizarse de si el ataque de verdad contó como 'con Furia'.
+	# KeywordManager.can_attack_immediately() (no card.has_keyword()): respeta silencios/remociones
+	# temporales y es la misma función que usa TurnManager.can_attack(), así que el mensaje no se
+	# desincroniza.
 	var has_furia = KeywordManager.can_attack_immediately(card)
 	await get_tree().process_frame
 	var declared = await GameManager.declare_attacker(card)
@@ -960,9 +956,7 @@ func _declare_attacker(card: Node) -> void:
 		_declaring_attackers.erase(card)
 		return
 
-	var ataque_container: HBoxContainer = _main.player_linea_ataque if card.controller_id == 0 else _main.opponent_linea_ataque
-	await _advance_card_to_attack_line(card, ataque_container)
-	_mark_card_as_attacker(card)
+	await mark_attacker_visual(card)
 	_main._game_hud.start_paso_glow()
 	_main._update_debug("%s declara ataque%s! Puedes seguir declarando o presionar ¿Paso?" % [card_name, " con Furia" if has_furia else ""])
 	print("[CardInteraction] '%s' declaró ataque%s" % [card_name, " (Furia)" if has_furia else ""])
@@ -970,34 +964,39 @@ func _declare_attacker(card: Node) -> void:
 
 
 func _declare_blocker(card: Node) -> void:
-	"""Declara 'card' como bloqueador de un atacante (fase BLOQUEO, DAR
-	5.3.2). Con exactamente un atacante sin bloquear, se asigna directo sin
-	preguntar. Con más de uno, pide clickear DIRECTO sobre el atacante rival
-	en el tablero (2026-09-12, a pedido del usuario — antes era una lista de
-	texto con nombres, no clickeable). Un segundo clic sobre un bloqueador ya
-	declarado no hace nada especial todavía (deselección/reasignación queda
-	fuera de alcance de este primer cableado real)."""
+	"""Declara card como bloqueador (fase de Bloqueo, DAR 5.3.2). Con un solo atacante sin bloquear se
+	asigna directo; con varios, se clickea el atacante rival en el tablero. Clickear un bloqueador ya
+	declarado lo quita (mismo criterio que el Remoto, RemoteMirrorController._on_board_block_click());
+	para reasignarlo se vuelve a clickear. Un bloqueo forzado (Cañón Helios) no se quita.
+	Un bloqueador que puede bloquear a varios (Elías, BlockPatterns.max_blocks()) suma otro atacante
+	con cada clic mientras tenga lugar y atacantes libres; después, el clic quita todos sus bloqueos."""
 	if not card or not is_instance_valid(card):
 		return
-	if card in GameManager.blockers.values():
-		var blocking_name: String = card.get("card_name") if card.get("card_name") else "Aliado"
-		_main._update_debug("%s ya está bloqueando" % blocking_name)
-		return
-
 	var unblocked_attackers: Array = []
 	for attacker in GameManager.attackers:
 		if is_instance_valid(attacker) and not GameManager.blockers.has(attacker):
 			unblocked_attackers.append(attacker)
+	var current_blocks: Array = BlockScript.blocks_of(card)
+	if not current_blocks.is_empty() and (not BlockScript.can_block_more(card) or unblocked_attackers.is_empty()):
+		var blocking_name: String = card.get("card_name") if card.get("card_name") else "Aliado"
+		if int(card.get_meta("forced_block_turn", -1)) == GameManager.turn_serial:
+			_main._update_debug("%s está obligado a bloquear" % blocking_name)
+			return
+		for atk in current_blocks:
+			GameManager.blockers.erase(atk)
+		var untween = create_tween()
+		untween.tween_property(card, "modulate", Color.WHITE, 0.2)
+		_main._update_debug("%s ya no bloquea" % blocking_name)
+		return
+
 	if unblocked_attackers.is_empty():
 		_main._update_debug("No hay atacantes sin bloquear")
 		return
 
 	var attacker: Node = unblocked_attackers[0]
 	if unblocked_attackers.size() > 1:
-		# 2026-09-12 (a pedido del usuario): click directo sobre el atacante en
-		# el tablero, no una lista de texto — mismo mecanismo (await_target)
-		# que usa el resto del juego para elegir objetivo (Anular, Convertir,
-		# Barajar una carta puntual, etc.), en vez de un modal con nombres.
+		# Click directo sobre el atacante en el tablero (await_target), como el resto de las elecciones de
+		# objetivo.
 		var filter := func(c: Node) -> bool:
 			return c in unblocked_attackers
 		var clicked_attacker: Node = await await_target(
@@ -1019,6 +1018,7 @@ func _declare_blocker(card: Node) -> void:
 
 func _mark_card_as_attacker(card: Node) -> void:
 	"""Aspecto visual de 'atacando': tinte naranja."""
+	queue_idle_attack_refresh()
 	if not card or not is_instance_valid(card):
 		return
 	var tween = create_tween()

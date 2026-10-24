@@ -1,26 +1,18 @@
 extends RefCounted
 class_name CardBadges
-## CardBadges — Badges visuales de una carta: el brillo celeste de "habilidad
-## activable ahora" y las Placas Heráldicas de Fuerza/Coste efectivos
-## (verde=buff/descuento, rojo=debuff/recargo). Opera sobre el nodo Card via
-## _card. Card.gd reenvía como wrappers públicos los métodos que otros
-## sistemas llaman directamente sobre la carta (refresh_strength_badge,
-## refresh_cost_badge, set_activatable — llamados desde muchos managers cada
-## vez que un modificador continuo puede haber cambiado el valor mostrado).
-## Extraído de Card.gd (2026-09-06, "módulos gordos" — mismo corte que ya
-## separó CardInteraction.gd/CardAnimations.gd, Fase 4 de reestructuración).
+## CardBadges — badges visuales de una carta: el brillo de "activable/relevante ahora" y las Placas
+## Heráldicas de Fuerza/Coste efectivos (verde = buff/descuento, rojo = debuff/recargo). Opera sobre
+## el nodo Card vía _card. Card.gd reenvía los métodos que otros sistemas llaman sobre la carta
+## (refresh_strength_badge, refresh_cost_badge, set_activatable).
 
 const PlaqueBuffEmerald = preload("res://assets/ui/badges/plaque_buff_emerald.png")
 const PlaqueDebuffRuby = preload("res://assets/ui/badges/plaque_debuff_ruby.png")
 
-## Colores del brillo de set_activatable() (2026-09-15, a pedido del usuario):
-## antes era SIEMPRE dorado sin importar el motivo — ahora distingue "por qué
-## brilla" con 3 colores fijos, usados desde CardInteractionModule.gd/
-## TriggerSystem.gd: DORADO = "disparadas" (habilidad activable disponible,
-## u orden de triggers a elegir — CardInspectionLayer.refresh_activatable_
-## glows()/TriggerSystem._prompt_trigger_order()); CELESTE = objetivo válido
-## PROPIO de una selección en curso; ROJO = objetivo válido RIVAL. Ver
-## CardInteractionModule._glow_valid_targets()/await_multi_target().
+## Colores del brillo de set_activatable(): DORADO = habilidad activable disponible u orden de
+## triggers a elegir
+## (CardInspectionLayer.refresh_activatable_glows()/TriggerSystem._prompt_trigger_order()); CELESTE
+## = objetivo válido PROPIO de una selección; ROJO = objetivo válido RIVAL
+## (CardInteractionModule._glow_valid_targets()/await_multi_target()).
 const GLOW_COLOR_GOLD := Color(1.0, 0.85, 0.38, 1.0)
 const GLOW_COLOR_CELESTE := Color(0.35, 0.78, 1.0, 1.0)
 const GLOW_COLOR_RED := Color(1.0, 0.32, 0.30, 1.0)
@@ -30,11 +22,8 @@ var _card: Card
 var activatable_glow: Panel = null  # Indicador de "tiene una habilidad activada disponible ahora"
 var _activatable_tween: Tween = null
 var is_activatable: bool = false
-## Motivos independientes de brillo activo (StringName -> Color), 2026-09-30
-## fix de revisión: antes un solo is_activatable/color representaba a la vez
-## "habilidad activable" (CardInspectionLayer) Y "objetivo de una selección
-## en curso" (CardInteractionModule/GoldManager) — apagar uno apagaba el
-## otro aunque siguiera vigente. Ver set_activatable() más abajo.
+## Motivos independientes de brillo activo (StringName → Color): "habilidad activable" y "objetivo
+## de una selección" conviven; apagar uno no apaga el otro. Ver set_activatable().
 var _activatable_reasons: Dictionary = {}
 
 var strength_badge: Control = null
@@ -221,30 +210,23 @@ func _apply_strength_badge_text(value: int) -> void:
 
 
 func refresh_cost_badge(source_override: Node = null) -> void:
-	"""Recalcula y muestra el Coste efectivo AHORA — llamar después de cualquier acción que pueda cambiarlo.
-
-	Según la zona (2026-10-12, a pedido del usuario: "la reducción o aumento
-	de coste debe mostrarse solo desde la mano o el Cementerio; en juego no,
-	a menos que una carta en juego le cambie el coste"):
-	- Mano / Cementerio: lo que costaría JUGARLA ahora (PaymentManager.
-	  calcular_coste_real(): descuentos, 'cuesta un Oro adicional', etc.).
+	"""Recalcula y muestra el Coste efectivo ahora; llamar después de cualquier acción que pueda
+	cambiarlo. Según la zona:
+	- Mano / Cementerio: lo que costaría JUGARLA ahora (PaymentManager.calcular_coste_real():
+	descuentos, "cuesta un Oro adicional", etc.).
 	- En juego: solo el coste modificado por efectos sobre la carta en juego
-	  (ContinuousEffectManager.get_modified_cost(), p.ej. Cuerno de Titán
-	  'aumentar o disminuir el coste de hasta una carta en juego'); los
-	  impuestos y descuentos para jugar ya no aplican.
+	(ContinuousEffectManager.get_modified_cost(), p.ej. Cuerno de Titán); impuestos y descuentos
+	para jugar no aplican.
 	- Resto (Castillo, Destierro): sin insignia."""
 	var effective := _card.card_cost
 	var zone = _card.get("current_zone")
-	# Cementerio: solo si esa carta se puede jugar desde ahí (Exhumar, etc.)
-	# (2026-10-17, a pedido del usuario: la reducción/aumento de coste se
-	# muestra solo en cartas que se van a jugar).
-	# Los Oros no se juegan ni tienen coste: nunca muestran reducción (2026-10-17,
-	# bug real: Crono Diamante en la mano mostraba -1).
+	# Cementerio: solo si la carta se puede jugar desde ahí (Exhumar, etc.). Los Oros no se juegan ni
+	# tienen coste: nunca muestran reducción.
 	if _card.get("card_type") == Constants.CardType.ORO:
 		_apply_cost_badge_text(_card.card_cost)
 		return
 	var playable_here: bool = zone == Constants.Zone.MANO or (zone == Constants.Zone.CEMENTERIO
-		and _card.get("card_data") is Dictionary and PaymentManager.card_has_exhumar(_card.card_data))
+		and _card.get("card_data") is Dictionary and PaymentManager.card_has_exhumar(_card.card_data, _card.owner_id))
 	if playable_here:
 		if PaymentManager.has_method("calcular_coste_real"):
 			effective = PaymentManager.calcular_coste_real(source_override if source_override else _card)
@@ -290,32 +272,16 @@ func _apply_cost_badge_text(value: int) -> void:
 
 
 func set_activatable(value: bool, glow_color: Color = GLOW_COLOR_GOLD, reason: StringName = &"ability") -> void:
-	"""Muestra u oculta el brillo que indica 'esto es relevante ahora mismo'
-	— dorado por defecto ('tienes una habilidad activable disponible ahora
-	mismo', o el orden de triggers a elegir — distinto del brillo amarillo
-	desde CardInspectionLayer.refresh_activatable_glows()).
-	'glow_color' (2026-09-15, a pedido del usuario): CardInteractionModule.
-	_glow_valid_targets()/await_multi_target() lo llaman con GLOW_COLOR_
-	CELESTE/GLOW_COLOR_RED para distinguir objetivo propio de objetivo
-	rival en una selección — el color se re-aplica en cada llamado con
-	value=true, incluso si ya estaba prendida (p.ej. una carta que YA
-	brillaba dorada por tener una habilidad activable y ahora además es
-	objetivo rival de otra selección concurrente pasa a rojo).
-
-	'reason' (2026-09-30, fix de revisión — hallazgo real: un solo bool
-	'is_activatable' representaba a la vez tres motivos independientes
-	["habilidad activable" de CardInspectionLayer, "objetivo propio/rival de
-	una selección en curso" de CardInteractionModule, "elegí qué Oro gastar"
-	de GoldManager] — apagar UN motivo (value=false) apagaba el brillo
-	entero aunque otro motivo siguiera vigente: una carta que brillaba
-	dorada por tener una habilidad activable, y que de paso se vuelve
-	objetivo válido de una selección en curso, perdía su brillo dorado
-	apenas esa selección terminaba, aunque la habilidad siguiera activable.
-	Ahora cada motivo se registra por separado en _activatable_reasons y el
-	brillo solo se apaga del todo cuando ninguno queda. Los llamadores que no
-	son CardInspectionLayer DEBEN pasar su propio 'reason' explícito (p.ej.
-	&"target_select") — el default &"ability" es el motivo original de
-	CardInspectionLayer, para no tener que tocar sus llamados existentes."""
+	"""Muestra u oculta el brillo de "esto es relevante ahora": dorado por defecto (habilidad
+	activable u orden de triggers).
+	'glow_color': CardInteractionModule lo pasa como GLOW_COLOR_CELESTE/GLOW_COLOR_RED para
+	objetivo propio/rival; se re-aplica en cada llamado con value = true (una carta dorada que
+	además es objetivo rival pasa a rojo).
+	'reason': cada motivo (habilidad activable de CardInspectionLayer, objetivo de
+	CardInteractionModule, "elegí qué Oro gastar" de GoldManager) se registra por separado en
+	_activatable_reasons y el brillo solo se apaga cuando no queda ninguno. Quien no sea
+	CardInspectionLayer debe pasar su propio 'reason' (p.ej. &"target_select"); el default
+	&"ability" es el de CardInspectionLayer."""
 	if value:
 		_activatable_reasons[reason] = glow_color
 	else:

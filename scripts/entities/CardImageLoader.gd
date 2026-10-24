@@ -1,18 +1,10 @@
 extends RefCounted
 class_name CardImageLoader
-## CardImageLoader — Carga de imagen/placeholder de una carta: aplica los
-## datos pendientes tras load_from_data(), muestra el dorso de carga y el
-## placeholder legible (nombre/coste) mientras el arte frontal no está
-## disponible, y gestiona la descarga async vía CardDatabase.card_image_loaded
-## (cache hit inmediato o conexión de señal + callback). Opera sobre el nodo
-## Card via _card. Ninguna de estas funciones tiene llamadores fuera de
-## Card.gd (verificado por grep en todo scripts/), así que Card.gd NO expone
-## wrappers públicos para ellas — solo las llama internamente vía
-## _image_loader.X() en los 3 puntos donde antes se llamaban directo
-## (esta_oculta.set(), actualizar_aspecto(), _exit_tree()).
-## Extraído de Card.gd (2026-09-06, "módulos gordos" — mismo corte que ya
-## separó CardInteraction.gd/CardAnimations.gd/CardTriggerRuntime.gd/
-## CardBadges.gd, Fase 4 de reestructuración).
+## CardImageLoader — imagen/placeholder de una carta: aplica los datos pendientes tras
+## load_from_data(), muestra el dorso de carga y un placeholder legible (nombre/coste) mientras no
+## hay arte, y gestiona la descarga async vía CardDatabase.card_image_loaded (caché inmediato o
+## señal + callback). Opera sobre el nodo Card vía _card. Solo lo usa Card.gd internamente
+## (_image_loader.X() en esta_oculta.set(), actualizar_aspecto() y _exit_tree()).
 
 var _card: Card
 
@@ -105,10 +97,14 @@ func _load_card_image() -> void:
 		return
 
 	# Carga directa de rutas locales (res:// o user://) para tokens de oro virtual y assets
+	# Solo imágenes: la ruta puede venir por red (datos de carta del otro jugador) y load() de un
+	# .tres/.tscn/.gd cargaría cualquier recurso.
 	if _card.card_image_path.begins_with("res://") or _card.card_image_path.begins_with("user://"):
-		if ResourceLoader.exists(_card.card_image_path):
+		var ext: String = _card.card_image_path.get_extension().to_lower()
+		if ext in ["png", "webp", "jpg", "jpeg", "svg"] and not ".." in _card.card_image_path \
+				and ResourceLoader.exists(_card.card_image_path):
 			var local_tex = load(_card.card_image_path)
-			if local_tex:
+			if local_tex is Texture2D:
 				_set_card_texture(local_tex)
 				return
 

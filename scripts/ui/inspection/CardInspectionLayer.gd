@@ -374,6 +374,8 @@ func _build_gained_abilities_panel(source_card: Node) -> void:
 				if not await TriggerTollScript.pay_toll(source_card, 0, TriggerTollScript.ability_toll(source_card, 0)):
 					return
 				RuleState.add("abilities_used", 0)  # anillo de tierra
+				if TriggerTollScript.consume_cancel_next(source_card, 0):  # Gusano de Haftvad
+					return
 				await _button_support._activate_ability_via_pipeline(source_card, source_card.card_data.duplicate(), captured,
 					{"controller_id": 0, "source_card_node": source_card}))
 			col.add_child(btn)
@@ -509,6 +511,13 @@ func _ability_is_hand_usable(full_text: String) -> bool:
 	if "puedes descartarlo para" in lower or "puedes descartarla para" in lower \
 			or "desterrarlo de tu mano" in lower or "desterrarla de tu mano" in lower:
 		return true
+	# andras, iki balam, los korgors ("pagar un Oro para jugarlo sin pagar su coste"), Baphomet (Descartar
+	# otra carta para jugarlo por un Oro menos), alicia (ponerlo desde tu mano en tu Oro Pagado).
+	if "si atacaste en tu anterior turno puedes pagar" in lower \
+			or "para jugar este aliado sin pagar su coste desde tu mano" in lower \
+			or "descartar una carta de tu mano para para reducir su coste" in lower \
+			or "para ponerlo desde tu mano en tu oro pagado" in lower:
+		return true
 	return false
 
 
@@ -535,6 +544,17 @@ func _ability_is_cementerio_usable(full_text: String) -> bool:
 		return true  # Drácula
 	if "en tu cementerio" in lower and "gana la habilidad" in lower:
 		return true  # Duelo Espacial (habilidad que gana en el Cementerio)
+	# hikari no ga, el carro, los korgors (jugarlo desde el Cementerio), Daikaiju Furioso, orco alpino,
+	# Los Marcados ("Desterrarlo en juego o de tu Cementerio").
+	if "para jugarlo de tu cementerio" in lower or "para jugarlo desde tu cementerio" in lower \
+			or "sin pagar su coste desde tu mano o cementerio" in lower \
+			or ("está en tu cementerio" in lower and "convertirlo en un oro sin habilidad" in lower) \
+			or ("esta en tu cementerio" in lower and "convertirlo en un oro sin habilidad" in lower) \
+			or "si está en tu cementerio, puedes desterrarlo para que un aliado pierda" in lower \
+			or "desterrarlo en juego o de tu cementerio" in lower \
+			or "destierra dos cartas de tu cementerio para subirlo a tu mano" in lower \
+			or "destierra tres cartas de tu cementerio para jugarlo pagando su coste" in lower:  # tundra viva, isla de gigantes
+		return true
 	return false
 
 
@@ -565,6 +585,8 @@ func activate_ability_for(source_card: Node, ability: Dictionary, controller_id:
 	if not await TriggerTollScript.pay_toll(source_card, controller_id, TriggerTollScript.ability_toll(source_card, controller_id)):
 		return
 	RuleState.add("abilities_used", controller_id)  # anillo de tierra
+	if TriggerTollScript.consume_cancel_next(source_card, controller_id):  # Gusano de Haftvad
+		return
 	if not is_instance_valid(source_card):
 		return
 	if not (source_card.get("current_zone") in Constants.ZONES_IN_PLAY):
@@ -925,7 +947,7 @@ func _build_ability_buttons(source_card: Node) -> void:
 		var ability_lower: String = str(captured.get("raw_text", "")).to_lower()
 		# Con recargo por utilizarla (jose miguel carrera, capitan daisuke): por activate_ability_for(),
 		# que lo cobra y después sigue el mismo camino que este botón.
-		if TriggerTollScript.ability_toll(source_card, 0) > 0:
+		if TriggerTollScript.ability_toll(source_card, 0) > 0 or TriggerTollScript.cancel_next_pending(0):
 			btn.pressed.connect(func():
 				close_card_inspection()
 				await activate_ability_for(card_for_glow, captured, 0))

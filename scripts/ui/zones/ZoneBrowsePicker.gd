@@ -12,8 +12,10 @@ class_name ZoneBrowsePicker
 const CardScene = preload("res://scenes/cards/Card.tscn")
 ## Escala de las cartas del visor: se calcula con el alto de la pantalla: "te muestra casi todo el
 ## mazo con las cartas muy pequeñas"), entre estos dos topes.
-const VIEWER_SCALE_MIN := 0.7
-const VIEWER_SCALE_MAX := 1.05
+# Mismo estilo y tamaño que el visor de mirar (CastleLookWindow): cartas grandes, instrucción arriba.
+const VIEWER_SCALE_MIN := 0.9
+const VIEWER_SCALE_MAX := 1.6
+const VIEWER_GOLD := Color(0.85, 0.72, 0.28)
 const TYPE_FILTERS := [
 	["Todas", -1],
 	["Aliados", Constants.CardType.ALIADO],
@@ -118,8 +120,16 @@ func pick(title: String, pools: Array, min_count: int, max_count: int, distinct_
 		# Con candidatas en la mano no se abre el visor solo (taparía la
 		# mano): los Cementerios brillan y se abren con clic.
 		_arm_hand_pick()
+	# Tiempo agotado (TurnClock): las primeras elegibles hasta el mínimo (ninguna si puede fallar).
+	var force_gen: int = NetworkClient.force_gen
+	NetworkClient.local_waits += 1
 	while not _done:
+		if NetworkClient.ui_forced(force_gen):
+			_selected = default_picks(_pools, _min, _distinct_names)
+			NetworkClient.ui_forced_done()
+			break
 		await get_tree().process_frame
+	NetworkClient.local_waits = maxi(0, NetworkClient.local_waits - 1)
 	_disarm_hand_pick()
 	_close_viewer()
 	for restore in _panel_restores:
@@ -130,6 +140,28 @@ func pick(title: String, pools: Array, min_count: int, max_count: int, distinct_
 		_main._game_hud.stop_paso_glow()
 		_main._game_hud.update_paso_button_state()
 	return _selected.duplicate()
+
+
+static func default_picks(pools: Array, min_count: int, distinct_names: bool = false) -> Array:
+	"""Elección por defecto (tiempo agotado): las primeras elegibles de una misma zona hasta el
+	mínimo, sin repetir nombre si distinct_names."""
+	for p in range(pools.size()):
+		var picks: Array = []
+		var names := {}
+		var cards: Array = pools[p].get("cards", [])
+		for i in range(cards.size()):
+			if picks.size() >= min_count:
+				break
+			if not bool(cards[i].get("eligible", false)):
+				continue
+			var card_name := str(cards[i].get("data", {}).get("nombre", ""))
+			if distinct_names and names.has(card_name):
+				continue
+			names[card_name] = true
+			picks.append([p, i])
+		if picks.size() >= min_count:
+			return picks
+	return []
 
 
 func _arm_hand_pick() -> void:
@@ -273,7 +305,7 @@ func _open_viewer(pool_idx: int) -> void:
 
 	# Clic afuera (en el fondo) cierra el visor sin perder lo elegido.
 	var bg := ColorRect.new()
-	bg.color = Color(0, 0, 0, 0.55)
+	bg.color = Color(0.01, 0.01, 0.02, 0.82)
 	bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	bg.mouse_filter = Control.MOUSE_FILTER_STOP
 	bg.gui_input.connect(func(ev: InputEvent) -> void:
@@ -281,30 +313,36 @@ func _open_viewer(pool_idx: int) -> void:
 			_close_viewer())
 	_viewer.add_child(bg)
 
-	var frame := PanelContainer.new()
+	# Sin marco: como el visor de mirar, sobre el fondo oscuro.
+	var frame := MarginContainer.new()
 	frame.anchor_left = 0.03
 	frame.anchor_right = 0.97
-	frame.anchor_top = 0.04
-	frame.anchor_bottom = 0.96
-	var style := StyleBoxFlat.new()
-	style.bg_color = Color(0.04, 0.04, 0.06, 0.97)
-	style.border_color = Color(0.78, 0.65, 0.35, 0.9)
-	style.set_border_width_all(2)
-	style.set_corner_radius_all(14)
-	style.content_margin_left = 18
-	style.content_margin_right = 18
-	style.content_margin_top = 14
-	style.content_margin_bottom = 14
-	frame.add_theme_stylebox_override("panel", style)
+	frame.anchor_top = 0.03
+	frame.anchor_bottom = 0.97
 	_viewer.add_child(frame)
 
 	var vbox := VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", 10)
+	vbox.add_theme_constant_override("separation", 14)
 	frame.add_child(vbox)
+
+	var title := Label.new()
+	title.text = _title
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.add_theme_font_override("font", preload("res://assets/fonts/Marcellus-Regular.ttf"))
+	title.add_theme_font_size_override("font_size", 22)
+	title.add_theme_color_override("font_color", Color(0.75, 0.72, 0.80))
+	vbox.add_child(title)
+	var hint := Label.new()
+	hint.text = "%s · toca las cartas que eliges" % zone_label(pool.is_own, pool.zone)
+	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	hint.add_theme_font_override("font", preload("res://assets/fonts/Cinzel-Bold.ttf"))
+	hint.add_theme_font_size_override("font_size", 32)
+	hint.add_theme_color_override("font_color", Color(1.0, 0.92, 0.70))
+	vbox.add_child(hint)
 
 	# Tamaño de carta según la pantalla, y tantas columnas como entren.
 	var vp: Vector2 = _viewer.get_viewport().get_visible_rect().size
-	var card_scale: float = clampf(vp.y * 0.00095, VIEWER_SCALE_MIN, VIEWER_SCALE_MAX)
+	var card_scale: float = clampf(vp.y * 0.0014, VIEWER_SCALE_MIN, VIEWER_SCALE_MAX)
 	var cell_w: float = 150.0 * card_scale
 	var avail_w: float = vp.x * 0.94 - 36.0 - 16.0
 	var scroll := ScrollContainer.new()
@@ -315,9 +353,9 @@ func _open_viewer(pool_idx: int) -> void:
 	center.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	scroll.add_child(center)
 	var grid := GridContainer.new()
-	grid.columns = maxi(3, int((avail_w + 12.0) / (cell_w + 12.0)))
-	grid.add_theme_constant_override("h_separation", 12)
-	grid.add_theme_constant_override("v_separation", 12)
+	grid.columns = maxi(3, int((avail_w + 20.0) / (cell_w + 20.0)))
+	grid.add_theme_constant_override("h_separation", 20)
+	grid.add_theme_constant_override("v_separation", 20)
 	center.add_child(grid)
 
 	_viewer_markers = {}
@@ -336,25 +374,45 @@ func _open_viewer(pool_idx: int) -> void:
 		grid.add_child(empty)
 
 	var footer := HBoxContainer.new()
-	footer.add_theme_constant_override("separation", 12)
+	footer.add_theme_constant_override("separation", 16)
+	footer.alignment = BoxContainer.ALIGNMENT_CENTER
 	vbox.add_child(footer)
 	_viewer_count_label = Label.new()
-	_viewer_count_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_viewer_count_label.add_theme_font_override("font", preload("res://assets/fonts/Marcellus-Regular.ttf"))
-	_viewer_count_label.add_theme_font_size_override("font_size", 14)
+	_viewer_count_label.add_theme_font_size_override("font_size", 20)
+	_viewer_count_label.add_theme_color_override("font_color", VIEWER_GOLD)
 	footer.add_child(_viewer_count_label)
-	var close_btn := Button.new()
-	close_btn.text = "Cerrar"
-	close_btn.add_theme_font_override("font", preload("res://assets/fonts/Cinzel-Bold.ttf"))
-	close_btn.add_theme_font_size_override("font_size", 14)
+	var close_btn := _viewer_button("Cerrar", false)
 	close_btn.pressed.connect(_close_viewer)
 	footer.add_child(close_btn)
-	_viewer_confirm_btn = Button.new()
-	_viewer_confirm_btn.add_theme_font_override("font", preload("res://assets/fonts/Cinzel-Bold.ttf"))
-	_viewer_confirm_btn.add_theme_font_size_override("font_size", 14)
+	_viewer_confirm_btn = _viewer_button("Confirmar", true)
 	_viewer_confirm_btn.pressed.connect(_try_confirm)
 	footer.add_child(_viewer_confirm_btn)
 	_refresh_paso()
+
+
+func _viewer_button(text: String, primary: bool) -> Button:
+	var b := Button.new()
+	b.text = text
+	b.custom_minimum_size = Vector2(240, 60)
+	b.add_theme_font_override("font", preload("res://assets/fonts/Cinzel-Bold.ttf"))
+	b.add_theme_font_size_override("font_size", 22)
+	var sb := StyleBoxFlat.new()
+	sb.set_corner_radius_all(10)
+	if primary:
+		sb.bg_color = VIEWER_GOLD
+		for c in ["font_color", "font_hover_color", "font_pressed_color", "font_disabled_color"]:
+			b.add_theme_color_override(c, Color(0.08, 0.07, 0.10))
+	else:
+		sb.bg_color = Color(0, 0, 0, 0)
+		sb.set_border_width_all(1)
+		sb.border_color = Color(0.45, 0.42, 0.52)
+	var disabled := sb.duplicate()
+	disabled.bg_color = sb.bg_color.darkened(0.45) if primary else sb.bg_color
+	for st in ["normal", "hover", "pressed"]:
+		b.add_theme_stylebox_override(st, sb)
+	b.add_theme_stylebox_override("disabled", disabled)
+	return b
 
 
 func _display_order(pool: Dictionary) -> Array:

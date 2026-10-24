@@ -168,10 +168,8 @@ func _can_accept_card(card: Node) -> bool:
 
 
 func _play_card_fallback(card: Node) -> void:
-	"""Intento alternativo de jugar la carta (2026-08-28, "módulos gordos"
-	punto 1: antes intentaba GameManager.play_card(), que nunca existió —
-	esta rama era inalcanzable siempre. GoldManager.play_card() es el
-	camino real, ya intentado antes de llegar aquí — ver el llamador)."""
+	"""Intento alternativo de jugar la carta. El camino real es GoldManager.play_card(), que el
+	llamador ya intentó antes."""
 	push_warning("[DropZone] No se encontró sistema para jugar carta")
 	card.return_to_hand()
 
@@ -252,14 +250,9 @@ func _hide_highlight() -> void:
 
 
 func _player_has_ally_in_play(_p_id: int) -> bool:
-	"""Verifica si hay al menos un Aliado libre en juego (propio O rival,
-	2026-09-03: DAR no restringe el portador de un Arma a Aliados que
-	controlas) para portar un Arma (sin una ya equipada) — delega siempre
-	a GoldManager._player_has_ally_in_play(), que ya escanea ambos lados,
-	para que el highlight del arrastre no diga 'legal' cuando GoldManager
-	lo va a rechazar. _p_id ya no importa (la elegibilidad no depende de
-	quién arrastra la carta), se mantiene solo para no romper la firma
-	del único llamador."""
+	"""¿Hay al menos un Aliado en juego (propio o rival: DAR no restringe el portador) con espacio
+	para un Arma? Delega en GoldManager._player_has_ally_in_play(), para que el resaltado del
+	arrastre coincida con lo que GoldManager acepta. _p_id no se usa (se mantiene la firma)."""
 	var main = get_tree().current_scene
 	if not main or not main.get("_gold_manager") or not main._gold_manager.has_method("_player_has_ally_in_play"):
 		return false
@@ -279,11 +272,9 @@ func _check_card_legality(card: Node) -> bool:
 		if not _player_has_ally_in_play(player_id):
 			return false
 
-	# ZONA DE BATALLA: Aliados desde LINEA_DEFENSA, sin enfermedad de
-	# invocación, durante el paso de Ataque (DAR 5.3.1) — ya sin atajo de
-	# Vigilia (2026-08-28). El drop en sí (on_card_dropped → _can_accept_card)
-	# ya lo aceptaba; esto solo hace que el brillo de "legal/ilegal" diga la
-	# verdad. Ver hallazgo 5.
+	# ZONA DE BATALLA: Aliados desde LINEA_DEFENSA, sin enfermedad de invocación, durante el paso de
+	# Ataque (DAR 5.3.1) — ya sin atajo de Vigilia. El drop en sí (on_card_dropped → _can_accept_card)
+	# ya lo aceptaba; esto solo hace que el brillo de "legal/ilegal" diga la verdad. Ver hallazgo 5.
 	if zone_type == Constants.Zone.LINEA_ATAQUE:
 		var ct = card.get("card_type") if card.get("card_type") != null else -1
 		if ct != Constants.CardType.ALIADO:
@@ -291,9 +282,8 @@ func _check_card_legality(card: Node) -> bool:
 		var cz = card.get("current_zone") if card.get("current_zone") != null else -1
 		if cz != Constants.Zone.LINEA_DEFENSA:
 			return false
-		# Ya no hay atajo Vigilia→Ataque (2026-08-28, a pedido del usuario):
-		# declarar atacantes requiere el botón "Atacar" primero, incluso con
-		# Furia — ese keyword solo evita la enfermedad de invocación.
+		# Declarar atacantes requiere el botón "Atacar" primero, también con Furia (que solo evita la
+		# enfermedad de invocación).
 		if GameManager.current_phase == Constants.Phase.ATAQUE:
 			return TurnManager.can_attack(card).get("can_attack", false)
 		return false
@@ -309,7 +299,8 @@ func _check_card_legality(card: Node) -> bool:
 		var main = get_tree().current_scene
 		var gold_mgr = main.get("_gold_manager") if main else null
 		var ct = card.get("card_type") if card.get("card_type") != null else -1
-		if not (gold_mgr and gold_mgr.has_method("has_phase_exception") and gold_mgr.has_phase_exception(ct)):
+		if not (gold_mgr and gold_mgr.has_method("has_phase_exception") and gold_mgr.has_phase_exception(ct)) \
+				and not load("res://scripts/core/game/PhaseStartWindow.gd").allows_now(card, player_id):
 			return false
 
 	# Oros siempre son legales (no tienen coste)

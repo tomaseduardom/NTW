@@ -419,8 +419,3 @@ func _kill_tween(card: Node) -> void:
 		_tweens.erase(card)
 
 
-func set_cards_interactive(interactive: bool) -> void:
-	"""Activa/desactiva la interacción de todas las cartas"""
-	for card in cards:
-		if is_instance_valid(card) and not _entering_cards.has(card):
-			card.can_interact = interactive

@@ -4,25 +4,18 @@ extends CanvasLayer
 ## Vista cenital estilo mesa de juego y simulación de rodado dinámico multiciclo.
 
 signal duel_completed(winner_id: int)
-## Emitida apenas se decide el resultado (antes de la animación de tirada) —
-## 2026-09-20, multiplayer: el Anfitrión escucha esto para mandarle el
-## resultado real al Remoto por red, así los dos ven la MISMA tirada en vez
-## de cada lado tirando la suya propia por separado.
+## Emitida apenas se decide el resultado (antes de la animación): el Anfitrión la escucha para
+## mandar el resultado real al Remoto, así los dos ven la MISMA tirada.
 signal result_decided(result1: int, result2: int, winner_id: int)
 
-## Resultado forzado (2026-09-20, multiplayer): si ambos son > 0, se usan
-## estos valores en vez de tirar al azar — el Remoto reproduce aquí la MISMA
-## tirada que el Anfitrión ya resolvió, en vez de tirar la suya propia
-## (antes cada pantalla mostraba 2 dados random sin relación con la otra).
-## Dejar en -1 (default) para el camino de siempre (partida local contra el
-## bot: cada lado tira de verdad).
+## Resultado forzado: si ambos son > 0, se usan en vez de tirar al azar (el Remoto reproduce la
+## tirada del Anfitrión). -1 (default) = tirada real (partida local).
 var forced_result1: int = -1
 var forced_result2: int = -1
 
-## Textos del banner "quién parte" (2026-09-20, multiplayer): "¡TÚ PARTES!"
-## solo tiene sentido en la pantalla de quien de verdad controla al jugador 0
-## (el Anfitrión) — la vista espejo del Remoto necesita su propio texto,
-## ver RemoteMirrorController._show_dice_roll_mirror().
+## Textos del banner "quién parte" (multiplayer): "¡TÚ PARTES!" solo tiene sentido en la pantalla de
+## quien de verdad controla al jugador 0 (el Anfitrión) — la vista espejo del Remoto necesita su
+## propio texto, ver RemoteMirrorController._show_dice_roll_mirror.
 var winner_text_p0: String = "¡TÚ PARTES!"
 var winner_text_p1: String = "¡OPONENTE PARTE!"
 
@@ -378,11 +371,7 @@ func _create_ground_shadow() -> Dictionary:
 # =============================================================================
 func start_roll() -> void:
 	"""Lanza ambos dados D20 con simulación multiciclo de rodado, giros 3D y asentamiento exacto."""
-	# 2026-09-20: restaurado el sorteo real (el "DEBUG TEMPORAL" de 2026-09-11
-	# —resultado fijo 20/1— nunca se sacó pese a la nota de "sacar antes de
-	# jugar en serio", así que TODO sorteo hasta hoy era 100% determinístico).
-	# forced_result1/2 (multiplayer, ver docstring arriba) tienen prioridad
-	# sobre el azar cuando vienen seteados desde afuera.
+	# Sorteo real al azar; forced_result1/2 (multijugador) tienen prioridad cuando vienen seteados.
 	if forced_result1 > 0 and forced_result2 > 0:
 		_result1 = forced_result1
 		_result2 = forced_result2

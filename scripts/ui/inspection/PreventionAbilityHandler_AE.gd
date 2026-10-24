@@ -1,13 +1,7 @@
 ﻿extends RefCounted
-## PreventionAbilityHandler_AE — Mitad A-E (alfabético por nombre de carta) de
-## PreventionAbilityHandler.gd, dividido por tamaño (2026-09-06, "módulos
-## gordos" — mismo corte que ya separó SearchAbilityHandler_AI.gd/
-## SearchAbilityHandler_JV.gd del propio SearchAbilityHandler.gd). Ver
-## PreventionAbilityHandler.gd para el facade que reune esta parte con
-## PreventionAbilityHandler_EP.gd y PreventionAbilityHandler_PV.gd bajo los
-## mismos nombres públicos que antes — CardInspectionLayer.gd no cambió una
-## sola línea por este split. Opera sobre CardInspectionLayer via _inspector
-## (y sobre el Main del juego via _inspector._main).
+## PreventionAbilityHandler_AE — mitad A-E (alfabético por carta) de PreventionAbilityHandler.gd
+## (fachada que reúne esta parte con PreventionAbilityHandler_EP.gd y _PV.gd bajo los mismos nombres
+## públicos). Opera sobre CardInspectionLayer vía _inspector (y sobre Main vía _inspector._main).
 
 var _inspector: CardInspectionLayer
 
@@ -17,9 +11,8 @@ func setup(inspector: CardInspectionLayer) -> void:
 
 
 func _activate_akari_banish_annul_non_ally(source_card: Node, ability: Dictionary) -> void:
-	"""'Puedes Desterrarlo para Anular una carta de coste 1 o menos que no
-	sea Aliado' (akari, 2026-09-04) — 'Anular' ~ destruir (misma
-	simplificación usada en todo el proyecto), objetivo Arma/Tótem (no
+	"""'Puedes Desterrarlo para Anular una carta de coste 1 o menos que no sea Aliado' (akari) —
+	'Anular' ~ destruir (misma simplificación usada en todo el proyecto), objetivo Arma/Tótem (no
 	Aliado, no Oro) de coste efectivo ≤1."""
 	if not is_instance_valid(source_card):
 		return
@@ -31,7 +24,7 @@ func _activate_akari_banish_annul_non_ally(source_card: Node, ability: Dictionar
 	var filter := func(c: Node) -> bool:
 		if c.get("card_type") not in [Constants.CardType.ARMA, Constants.CardType.TOTEM]:
 			return false
-		# 2026-09-12: current_zone en vez de get_parent() (ver §10.5)
+		# current_zone en vez de get_parent (ver §10.5)
 		if c.get("current_zone") not in [Constants.Zone.LINEA_DEFENSA, Constants.Zone.LINEA_ATAQUE, Constants.Zone.LINEA_APOYO]:
 			return false
 		return ContinuousEffectManager.cost_at_most(c, 1)
@@ -49,9 +42,8 @@ func _activate_akari_banish_annul_non_ally(source_card: Node, ability: Dictionar
 
 
 func _activate_akuma_banish_or_draw(source_card: Node, ability: Dictionary) -> void:
-	"""'Una vez por turno, puedes Desterrar hasta dos cartas de los
-	Cementerio o Roba una carta' (akuma el terrible, 2026-09-04) —
-	elección A/B; 'los Cementerios' = ambos jugadores
+	"""'Una vez por turno, puedes Desterrar hasta dos cartas de los Cementerio o Roba una carta'
+	(akuma el terrible) — elección A/B; 'los Cementerios' = ambos jugadores
 	([[project_no_zone_means_in_play]])."""
 	if not is_instance_valid(source_card):
 		return
@@ -61,10 +53,8 @@ func _activate_akuma_banish_or_draw(source_card: Node, ability: Dictionary) -> v
 		_inspector._main, "akuma el terrible", "Desterrar hasta dos cartas de los Cementerios", "Robar una carta", owner_id)
 
 	if choose_banish:
-		# 2026-09-13, a pedido del usuario: click directo sobre ambos
-		# Cementerios en vez del modal de lista viejo — pool combinado, sin
-		# lock (mismo caso que Espada de O'Higgins, ver arquitectura.md
-		# §10.14/§10.19).
+		# Click directo sobre los dos Cementerios: pool combinado, sin lock (como Espada de O'Higgins,
+		# arquitectura.md §10.14/§10.19).
 		if not _inspector._main._zone_viewer:
 			return
 		var no_filter := func(_c: Node) -> bool: return true
@@ -88,31 +78,20 @@ func _activate_akuma_banish_or_draw(source_card: Node, ability: Dictionary) -> v
 		await ActionModule.draw(owner_id, 1, "activated_ability", true)
 
 
-## _activate_almirante_akari_shuffle_annul_or_prevent() eliminada
-## (2026-09-09, "sistema de respuestas" — corregido a pedido del usuario:
-## Akari no es una elección A/B proactiva, son dos disparadores reactivos
-## distintos). "Prevenir" ahora vive en EffectController._prevention_registry
-## (mismo mecanismo que Estaca, solo Aliados); "Anular cuando el rival juega
-## una carta" vive en EffectController.offer_counter_annul(), llamado desde
-## GoldManager._trigger_enter_play()/EasyBotController._play_ally() justo
-## después de que la carta jugada entra en juego. Ambas comparten el costo
-## (barajar 1 carta propia) vía EffectController._pay_akari_shuffle_cost().
+## Almirante Akari no tiene botón: son dos disparadores reactivos. "Prevenir" está en
+## EffectController._prevention_registry y "Anular cuando el rival juega una carta" en
+## EffectController.offer_counter_annul(); comparten el costo vía
+## EffectController._pay_akari_shuffle_cost().
 
 
-## _activate_angel_redentor_prevent() eliminada (2026-09-09, "sistema de
-## respuestas"): ya no es un botón — EffectController.offer_prevention()
-## la detecta y ofrece reactivamente (tags "annul"/"cancel"), con su propio
-## candado de una vez por turno vía turn_registry en el 'is_available' del
-## registro (ver EffectController.gd).
+## Ángel Redentor no tiene botón: EffectController.offer_prevention() lo ofrece reactivamente (tags
+## "annul"/"cancel"), con su cupo de una vez por turno en el 'is_available' del registro.
 
 
 func _activate_atenea_grant_double_damage_exile(source_card: Node, ability: Dictionary) -> void:
-	"""'Una vez por turno, un Aliado hace doble daño de combate al
-	Destierro este turno' (atenea en wonderland, 2026-09-04) — otorga
-	Card.doubles_damage_to_exile TEMPORALMENTE (solo este turno) a un
-	Aliado elegido (propio o rival, el texto no lo restringe), vía
-	GameManager.turn_started para limpiarlo (mismo patrón que el Exhumar
-	temporal de sumi el terrible)."""
+	"""'Una vez por turno, un Aliado hace doble daño de combate al Destierro este turno' (atenea en
+	wonderland) — meta 'double_exile_damage_turn' con el turno en que vale (BattleManager
+	._accumulate_castle_damage), a un Aliado elegido (propio o rival, el texto no lo restringe)."""
 	if not is_instance_valid(source_card):
 		return
 	var owner_id: int = source_card.owner_id if source_card.get("owner_id") != null else 0
@@ -123,7 +102,7 @@ func _activate_atenea_grant_double_damage_exile(source_card: Node, ability: Dict
 	var filter := func(c: Node) -> bool:
 		if c.get("card_type") != Constants.CardType.ALIADO:
 			return false
-		# 2026-09-12: current_zone en vez de get_parent() (ver §10.5)
+		# current_zone en vez de get_parent (ver §10.5)
 		return c.get("current_zone") in [Constants.Zone.LINEA_DEFENSA, Constants.Zone.LINEA_ATAQUE, Constants.Zone.LINEA_APOYO]
 	var target: Node = await main._card_interaction.await_target("Elige un Aliado que haga doble daño de combate al Destierro este turno", filter, true, owner_id)
 	if not target or not is_instance_valid(target):
@@ -132,23 +111,13 @@ func _activate_atenea_grant_double_damage_exile(source_card: Node, ability: Dict
 		return
 
 	UniversalCardParser.turn_registry.register_ability_use(source_card, ability)
-	target.doubles_damage_to_exile = true
-	var clear_it: Callable
-	clear_it = func(started_player_id: int, _turn: int) -> void:
-		if started_player_id != owner_id:
-			return
-		if is_instance_valid(target):
-			target.doubles_damage_to_exile = false
-		if GameManager.turn_started.is_connected(clear_it):
-			GameManager.turn_started.disconnect(clear_it)
-	GameManager.turn_started.connect(clear_it)
+	target.set_meta("double_exile_damage_turn", GameManager.turn_serial)
 
 
 func _activate_belta_barajar_desterrar(source_card: Node, ability: Dictionary) -> void:
-	"""'Una vez por turno, Baraja y/o Destierra hasta dos cartas de los
-	Cementerios' (Belta, 2026-09-04) — reusa GoldManager._resolve_armeria_
-	barajar_desterrar() genérica, sin costo (a diferencia de Armería, aquí
-	no hay condición previa)."""
+	"""'Una vez por turno, Baraja y/o Destierra hasta dos cartas de los Cementerios' (Belta) — reusa
+	GoldManager._resolve_armeria_barajar_desterrar genérica, sin costo (a diferencia de Armería,
+	aquí no hay condición previa)."""
 	if not is_instance_valid(source_card):
 		return
 	var owner_id: int = source_card.owner_id if source_card.get("owner_id") != null else 0
@@ -164,12 +133,10 @@ func _activate_belta_barajar_desterrar(source_card: Node, ability: Dictionary) -
 
 
 func _activate_belta_self_banish_revive(source_card: Node, ability: Dictionary) -> void:
-	"""'Puedes Desterrar dos cartas de tu Cementerio para ponerlo en juego
-	desde tu Cementerio como un Aliado sin habilidad de Fuerza 2' (Belta,
-	2026-09-04) — costo: desterrar 2 cartas CUALQUIERA de tu Cementerio
-	(no incluye a Belta misma, que está siendo jugada desde ahí). Efecto:
-	Belta deja de ser el Oro y pasa a ser un Aliado Fuerza 2 sin
-	habilidad, en juego."""
+	"""'Puedes Desterrar dos cartas de tu Cementerio para ponerlo en juego desde tu Cementerio como un
+	Aliado sin habilidad de Fuerza 2' (Belta) — costo: desterrar 2 cartas CUALQUIERA de tu
+	Cementerio (no incluye a Belta misma, que está siendo jugada desde ahí). Efecto: Belta deja de
+	ser el Oro y pasa a ser un Aliado Fuerza 2 sin habilidad, en juego."""
 	if not is_instance_valid(source_card):
 		return
 	var owner_id: int = source_card.owner_id if source_card.get("owner_id") != null else 0
@@ -185,13 +152,8 @@ func _activate_belta_self_banish_revive(source_card: Node, ability: Dictionary) 
 		return
 	if not main._zone_viewer:
 		return
-	# 2026-09-13, a pedido del usuario: click directo en vez del modal de
-	# lista viejo — 'tu Cementerio' (solo propio) + excluir a la propia
-	# Belta, lock_to_one_side=true de paso restringe al lado propio (mismo
-	# efecto que filtrar por owner, reutiliza el parámetro ya existente en
-	# vez de duplicar la exclusión en el filtro). Costo TODO o NADA: si
-	# cancela antes de elegir las 2, no se mueve nada (el picker no muta
-	# estado — solo aquí se toca el Cementerio).
+	# Click directo: "tu Cementerio" (lock_to_one_side = true restringe al lado propio) y se excluye a
+	# la propia Belta. Costo todo o nada: si cancela antes de elegir las 2, no se mueve nada.
 	var filter := func(c: Node) -> bool:
 		return c.owner_id == owner_id and c.card_data != source_card.card_data
 	var picked: Array = await main._zone_viewer.open_cemetery_target_picker(
@@ -221,11 +183,10 @@ func _activate_belta_self_banish_revive(source_card: Node, ability: Dictionary) 
 
 
 func _activate_campanita_banish_cancel_or_draw(source_card: Node, ability: Dictionary) -> void:
-	"""'Puedes Desterrarlo para cancelar una habilidad o Robar dos cartas'
-	(Campanita, 2026-09-04) — elección A/B. 'Cancelar la habilidad' ~
-	silenciar (misma simplificación de Frankenstein/Red de Plata/Sheut),
-	sin restricción de coste ni tipo (a diferencia de Frankenstein, que sí
-	las tiene en su propio texto)."""
+	"""'Puedes Desterrarlo para cancelar una habilidad o Robar dos cartas' (Campanita) — elección A/B.
+	'Cancelar la habilidad' ~ silenciar (misma simplificación de Frankenstein/Red de Plata/Sheut),
+	sin restricción de coste ni tipo (a diferencia de Frankenstein, que sí las tiene en su propio
+	texto)."""
 	if not is_instance_valid(source_card):
 		return
 	var owner_id: int = source_card.owner_id if source_card.get("owner_id") != null else 0
@@ -239,17 +200,16 @@ func _activate_campanita_banish_cancel_or_draw(source_card: Node, ability: Dicti
 		if not main._card_interaction:
 			return
 		var filter := func(c: Node) -> bool:
-			# 2026-09-12: current_zone en vez de get_parent() (ver §10.5)
+			# current_zone en vez de get_parent (ver §10.5)
 			return c.get("current_zone") in [Constants.Zone.LINEA_DEFENSA, Constants.Zone.LINEA_ATAQUE,
 				Constants.Zone.LINEA_APOYO, Constants.Zone.RESERVA_ORO]
 		target = await main._card_interaction.await_target("Elige una carta para cancelar su habilidad", filter, true, owner_id)
 		if not target or not is_instance_valid(target):
 			return
 
-	# Rama "roba dos": a diferencia de la de cancelar (protegida después por
-	# silence_card()), el Robo no tiene cobertura propia — la ventana va AQUÍ,
-	# antes del autodestierro de más abajo (2026-09-10), porque después
-	# source_card queda inválida para open_response_window().
+	# Rama "roba dos": el Robo no tiene cobertura propia (la de cancelar la tiene en silence_card()),
+	# así que la ventana va aquí, antes del autodestierro: después source_card queda inválida para
+	# open_response_window().
 	if not choose_cancel and await TriggerSystem.open_response_window(source_card, "Campanita", owner_id):
 		return
 
@@ -266,21 +226,13 @@ func _activate_campanita_banish_cancel_or_draw(source_card: Node, ability: Dicti
 
 
 func _activate_crono_diamante_discard_ally_discount(source_card: Node, ability: Dictionary) -> void:
-	"""'Una vez por turno, si jugaste un Aliado de coste 2 o más este
-	turno puedes Descartar una carta para jugar un Aliado reduciendo su
-	coste en un Oro, hasta un mínimo de 1' (Crono Diamante, 2026-09-02 —
-	verificado contra la API, sin discrepancias con el cache local).
-	Condición previa (GoldManager._play_card_to_field() registra
-	'played_ally_cost2plus:0' cada vez que se juega un Aliado de coste ≥2,
-	sin importar el origen — mano/Exhumar/gratis). Costo: descartar 1
-	carta CUALQUIERA de la mano. Efecto: jugar OTRA carta de la mano (un
-	Aliado) con -1 Oro, piso 1 — a diferencia de Paladín Bestiarium
-	(_activate_paladin_bestiarium_discard_weapon_discount(), mismo
-	esqueleto), el texto NO dice 'hasta un mínimo de 0', así que
-	allow_zero queda en false. 'Puedes X para Y' es atómico (2026-08-31,
-	mismo criterio ya aplicado a Padre de la Patria/Paladín Bestiarium):
-	solo se ofrecen como candidatas las Aliados que YA son pagables con
-	el descuento aplicado, filtrado antes de preguntar qué descartar."""
+	"""Crono Diamante: "Una vez por turno, si jugaste un Aliado de coste 2 o más este turno puedes
+	Descartar una carta para jugar un Aliado reduciendo su coste en un Oro, hasta un mínimo de 1".
+	Condición: GoldManager._play_card_to_field() registra 'played_ally_cost2plus:0' con cada Aliado
+	de coste ≥2 jugado (de cualquier origen). Costo: descartar 1 carta cualquiera de la mano.
+	Efecto: jugar otro Aliado de la mano a -1 Oro, piso 1 (allow_zero = false, a diferencia de
+	Paladín Bestiarium). "Puedes X para Y" es atómico: solo se ofrecen Aliados que ya son pagables
+	con el descuento, antes de preguntar qué descartar."""
 	if not is_instance_valid(source_card) or not _inspector._main._gold_manager:
 		return
 	var owner_id: int = source_card.owner_id if source_card.get("owner_id") != null else 0
@@ -288,7 +240,7 @@ func _activate_crono_diamante_discard_ally_discount(source_card: Node, ability: 
 	if not hand_container_crono or hand_container_crono.cards.is_empty():
 		return
 
-	if not UniversalCardParser.turn_registry.was_used("played_ally_cost2plus:%d" % owner_id, 0, GameManager.current_turn):
+	if not UniversalCardParser.turn_registry.was_used("played_ally_cost2plus:%d" % owner_id, 0, GameManager.turn_serial):
 		_inspector._main._update_debug("Necesitas haber jugado un Aliado de coste 2 o más este turno")
 		return
 
@@ -309,8 +261,7 @@ func _activate_crono_diamante_discard_ally_discount(source_card: Node, ability: 
 
 	if not _inspector._main._card_interaction:
 		return
-	# 2026-09-13, a pedido del usuario: click directo en la mano en vez de
-	# los dos modales de lista viejos.
+	# Click directo en la mano en vez de los dos modales de lista viejos.
 	var ally_filter := func(c: Node) -> bool: return c in ally_candidates
 	var ally_node: Node = await _inspector._main._card_interaction.await_target(
 		"Elige el Aliado a jugar con 1 Oro de descuento", ally_filter, true, owner_id)
@@ -338,20 +289,16 @@ func _activate_crono_diamante_discard_ally_discount(source_card: Node, ability: 
 	await gold_manager.play_card(ally_node)
 
 
-## _activate_dracula_convert_for_prevention() eliminada (2026-09-09,
-## "sistema de respuestas"): ya no es un botón — EffectController.
-## offer_prevention()/offer_prevention_for_player() detecta a Drácula
-## (sin convertir, en juego) y ofrece reactivamente (tags "cancel"/"annul")
-## en el momento exacto; el 'on_used' del registro hace el auto-convertir +
-## silenciar que antes pasaba aquí.
+## Drácula no tiene botón para prevenir:
+## EffectController.offer_prevention()/offer_prevention_for_player() lo ofrece reactivamente (tags
+## "cancel"/"annul") y su 'on_used' hace el auto-convertir + silenciar.
 
 
 func _activate_dulce_canasta(source_card: Node, ability: Dictionary) -> void:
-	"""'Una vez por turno, un Aliado gana o pierde 2 de Fuerza
-	permanentemente' (Dulce Canasta, 2026-09-04). Sin costo. Cualquier
-	Aliado en juego, propio o rival (sin calificador de dueño en el
-	texto). 'permanentemente' = mismo molde que Espada del Juicio:
-	source=target, sobrevive aunque Dulce Canasta salga de juego."""
+	"""'Una vez por turno, un Aliado gana o pierde 2 de Fuerza permanentemente' (Dulce Canasta). Sin
+	costo. Cualquier Aliado en juego, propio o rival (sin calificador de dueño en el texto).
+	'permanentemente' = mismo molde que Espada del Juicio: source=target, sobrevive aunque Dulce
+	Canasta salga de juego."""
 	if not is_instance_valid(source_card):
 		return
 	var owner_id: int = source_card.owner_id if source_card.get("owner_id") != null else 0
@@ -361,8 +308,7 @@ func _activate_dulce_canasta(source_card: Node, ability: Dictionary) -> void:
 		return
 	var gains: bool = await SelectionManager.await_two_choice(
 		_inspector._main, "Dulce Canasta", "Gana 2 de Fuerza", "Pierde 2 de Fuerza", owner_id)
-	# Solo el débuff es prevenible (2026-09-09 — Estaca, tag "strength_change")
-	# — un buff no es un efecto hostil que valga la pena bloquear.
+	# Solo el debuff es prevenible (Estaca, tag "strength_change"): un buff no es un efecto hostil.
 	if not gains and await EffectController.offer_prevention(target, source_card, "strength_change"):
 		return
 	UniversalCardParser.turn_registry.register_ability_use(source_card, ability)
@@ -380,10 +326,9 @@ func _activate_dulce_canasta(source_card: Node, ability: Dictionary) -> void:
 
 
 func _activate_ereshkigal_banish_cost1_or_cemeteries(source_card: Node, ability: Dictionary) -> void:
-	"""'Una vez por turno, puedes Desterrar una carta de coste 1 o menos o
-	Barajar y/o Desterrar dos cartas de los Cementerios' (ereshkigal,
-	2026-09-04) — elección A/B; B reusa GoldManager._resolve_armeria_
-	barajar_desterrar() genérica (ya generalizada para Belta/Perla de
+	"""'Una vez por turno, puedes Desterrar una carta de coste 1 o menos o Barajar y/o Desterrar dos
+	cartas de los Cementerios' (ereshkigal) — elección A/B; B reusa
+	GoldManager._resolve_armeria_barajar_desterrar genérica (ya generalizada para Belta/Perla de
 	Sangre)."""
 	if not is_instance_valid(source_card):
 		return
@@ -407,20 +352,11 @@ func _activate_ereshkigal_banish_cost1_or_cemeteries(source_card: Node, ability:
 
 
 func _activate_espada_ohiggins_shuffle_or_search_gold(source_card: Node, ability: Dictionary) -> void:
-	"""'En tu Vigilia, una vez por turno, puedes Barajar una carta que no
-	sea Oro o buscar un Oro en tu Castillo y ponerlo en tu mano' (Espada
-	de O'Higgins, 2026-09-04) — elección A/B.
-	2026-09-14, a pedido del usuario: en vez de preguntar antes "¿qué
-	quieres hacer?" con un diálogo A/B, ahora es una carrera de click
-	directo (`CardInteractionModule.await_target_or_castillo_pick()`,
-	mismo mecanismo ya usado por Sherlock Holmes/La Ouija — ver
-	arquitectura.md §10.14): el Castillo PROPIO brilla como objetivo
-	clickeable (buscar un Oro) AL MISMO TIEMPO que las cartas en juego que
-	no sean Oro brillan como objetivo (barajar) — el primer click real
-	decide cuál de las dos ramas resuelve; la otra deja de ofrecerse.
-	`castillo_own_only=true` porque el texto dice 'tu Castillo' con
-	posesivo (a diferencia de Sherlock Holmes, 'un Castillo' sin
-	posesivo)."""
+	"""Espada de O'Higgins: "En tu Vigilia, una vez por turno, puedes Barajar una carta que no sea Oro
+	o buscar un Oro en tu Castillo y ponerlo en tu mano" — elección A/B como carrera de click
+	(CardInteractionModule.await_target_or_castillo_pick(), como Sherlock Holmes/La Ouija;
+	arquitectura.md §10.14): brillan a la vez tu Castillo (buscar un Oro) y las cartas en juego que
+	no son Oro (barajar); el primer click decide. castillo_own_only = true por "tu Castillo"."""
 	if not is_instance_valid(source_card):
 		return
 	var owner_id: int = source_card.owner_id if source_card.get("owner_id") != null else 0
@@ -428,15 +364,8 @@ func _activate_espada_ohiggins_shuffle_or_search_gold(source_card: Node, ability
 	if not main._card_interaction:
 		return
 
-	# 2026-09-12 (bug real reportado por el usuario: no dejaba elegir un
-	# Aliado del rival — 5 clicks seguidos rechazados como "objetivo no
-	# válido"). El filtro comparaba c.get_parent() contra los contenedores
-	# de zona directo, en vez de current_zone (la propiedad que el motor
-	# ya usa para esto en todo el resto del código, p.ej.
-	# _select_convert_target()) — un Arma equipada, por ejemplo, es hija
-	# de su portador, no de la línea, así que ese chequeo de parent NUNCA
-	# la hubiera aceptado ni a ella ni a cualquier carta cuya jerarquía de
-	# nodos no calzara 1:1 con la zona lógica.
+	# current_zone (no get_parent()): un Arma equipada es hija de su portador, no de la línea, y el
+	# chequeo por parent no aceptaba cartas cuya jerarquía no calza con la zona lógica.
 	var valid_zone_ids = [Constants.Zone.LINEA_DEFENSA, Constants.Zone.LINEA_ATAQUE, Constants.Zone.LINEA_APOYO]
 	var filter := func(c: Node) -> bool:
 		if c.get("card_type") == Constants.CardType.ORO:
@@ -463,25 +392,17 @@ func _activate_espada_ohiggins_shuffle_or_search_gold(source_card: Node, ability
 
 
 func _activate_espiritu_maquina_shuffle_or_banish_cemetery(source_card: Node, ability: Dictionary) -> void:
-	"""'Una vez por turno, puedes Barajar o Desterrar una carta de un
-	Cementerio' (Espíritu de la Máquina, 2026-09-04) — 'un Cementerio' =
-	elige CUÁL (propio o rival), no ambos ([[project_y_o_means_choose_one_zone]]
-	mismo criterio aplicado a 'un' singular). Macu comparte el mismo texto
-	('Una vez en tu turno, ...') y este mismo handler (2026-09-07, bug real
-	encontrado en auditoría: el diálogo de Barajar/Desterrar tenía el título
-	'Espíritu de la Máquina' hardcodeado, mostrándose igual cuando activaba
-	Macu — ahora usa el nombre real de la carta)."""
+	"""Espíritu de la Máquina: "Una vez por turno, puedes Barajar o Desterrar una carta de un
+	Cementerio" — "un Cementerio" = elige cuál (propio o rival). Macu comparte el texto ("Una vez
+	en tu turno, ...") y este handler; el título usa el nombre real de la carta."""
 	if not is_instance_valid(source_card):
 		return
 	var owner_id: int = source_card.owner_id if source_card.get("owner_id") != null else 0
 	var main := _inspector._main
 	if not main._zone_viewer:
 		return
-	# 2026-09-13, a pedido del usuario: click directo con ambos Cementerios
-	# visibles en vez de preguntar antes "¿en cuál?" — "un Cementerio"
-	# (elige uno) se resuelve con lock_to_one_side=true, mismo criterio que
-	# Hanta el Samurai (aunque aquí el tope es 1 carta, el lock no cambia
-	# nada práctico salvo dejar el resto sin brillo tras el primer click).
+	# Click directo con los dos Cementerios visibles; "un Cementerio" se resuelve con lock_to_one_side
+	# = true, como Hanta el Samurai.
 	var no_filter := func(_c: Node) -> bool: return true
 	var picked_list: Array = await main._zone_viewer.open_cemetery_target_picker(
 		"Elige una carta de un Cementerio", no_filter, 1, "cemetery", true, false, owner_id)

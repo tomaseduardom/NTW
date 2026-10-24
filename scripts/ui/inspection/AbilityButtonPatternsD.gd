@@ -1,13 +1,14 @@
 extends RefCounted
-## AbilityButtonPatternsD — cuarto y último grupo (por posición en el archivo
-## original) de los patrones especiales de botones de habilidad ACTIVADA
-## extraídos de CardInspectionLayer._build_ability_buttons() (2026-09-06,
-## "módulos gordos", Fase 2). Ver AbilityButtonPatternsA.gd para la
-## explicación completa del mecanismo try_build()/orden de evaluación.
-##
-## Uriel, Atenea, Sumi, Gran Kraken, Ereshkigal, Campanita, akuma el
-## terrible, Chakram, Estaca (x2), Ángel Redentor, Espada del Juicio,
-## Drácula (x2), Espíritu Kotaix, Sacrificio Solar, La Ouija.
+## AbilityButtonPatternsD — cuarto y último grupo de patrones especiales de botones de habilidad
+## ACTIVADA (ver AbilityButtonPatternsA.gd para el mecanismo try_build() y el orden). Aquí: Uriel,
+## Atenea, Sumi, Gran Kraken, Ereshkigal, Campanita, akuma el terrible, Chakram, Estaca, Espada del
+## Juicio, Envidia, Ira, Drácula (x2), Espíritu Kotaix, Sacrificio Solar, La Ouija y los botones de
+## scripts/core/effects/mechanics/.
+
+const ConvertPatterns = preload("res://scripts/core/effects/mechanics/ConvertPatterns.gd")
+const InPlayAbilities = preload("res://scripts/core/effects/mechanics/InPlayAbilities.gd")
+const SearchPatterns = preload("res://scripts/core/effects/mechanics/SearchPatterns.gd")
+const CastleTopPlay = preload("res://scripts/core/effects/mechanics/CastleTopPlay.gd")
 
 var _inspector: CardInspectionLayer
 
@@ -80,12 +81,10 @@ func try_build(ability_lower: String, btn: Button, panel: Control, card_for_glow
 		panel.add_child(btn)
 		return true
 
-	# Patrón especial de Chakram (2026-08-30): "Una vez por turno, puedes
-	# mirar la mano de tu oponente y elegir una carta de ahí que no sea
-	# Oro para que no pueda ser jugada hasta tu próximo turno y Roba una
-	# carta." — reveal privado de la mano rival + candado por carta
-	# puntual (GoldManager.lock_card_from_playing()), ningún concepto que
-	# ActionPipeline resuelva solo.
+	# Patrón especial de Chakram: "Una vez por turno, puedes mirar la mano de tu oponente y elegir una
+	# carta de ahí que no sea Oro para que no pueda ser jugada hasta tu próximo turno y Roba una
+	# carta." — reveal privado de la mano rival + candado por carta puntual
+	# (GoldManager.lock_card_from_playing), ningún concepto que ActionPipeline resuelva solo.
 	var is_chakram_pattern: bool = ("mirar la mano de tu oponente" in ability_lower
 		and "no pueda ser jugada" in ability_lower)
 	if is_chakram_pattern:
@@ -96,12 +95,10 @@ func try_build(ability_lower: String, btn: Button, panel: Control, card_for_glow
 		panel.add_child(btn)
 		return true
 
-	# Patrón especial de Estaca (2026-08-30): "Una vez por turno, puedes
-	# Robar tres cartas, Barajar una carta oponente que no sea Oro y
-	# tantas cartas de tu mano como coste tenga." — la carta oponente no
-	# dice zona (EN JUEGO, ver [[project_no_zone_means_in_play]]) y la
-	# cantidad a barajar de la propia mano es DINÁMICA (el coste de la
-	# carta rival elegida), nada de esto lo resuelve ActionPipeline solo.
+	# Patrón especial de Estaca: "Una vez por turno, puedes Robar tres cartas, Barajar una carta
+	# oponente que no sea Oro y tantas cartas de tu mano como coste tenga." — la carta oponente no dice
+	# zona (EN JUEGO, ver [[project_no_zone_means_in_play]]) y la cantidad a barajar de la propia mano
+	# es DINÁMICA (el coste de la carta rival elegida), nada de esto lo resuelve ActionPipeline solo.
 	var is_estaca_pattern: bool = ("barajar una carta oponente que no sea oro" in ability_lower
 		and "tantas cartas de tu mano como coste tenga" in ability_lower)
 	if is_estaca_pattern:
@@ -112,25 +109,16 @@ func try_build(ability_lower: String, btn: Button, panel: Control, card_for_glow
 		panel.add_child(btn)
 		return true
 
-	# Estaca (segunda habilidad) y Ángel Redentor removidos de aquí
-	# (2026-09-09, "sistema de respuestas"): ya no son botones que el
-	# jugador activa desde el Zoom — EffectController.offer_prevention()
-	# las detecta y ofrece reactivamente en el momento exacto en que
-	# corresponde (ver el registro en EffectController.gd). Los handlers
-	# viejos (_activate_estaca_banish_for_prevention/_activate_angel_
-	# redentor_prevent en PreventionAbilityHandler_EP.gd/_AE.gd) se
-	# eliminaron junto con este bloque.
+	# Estaca (segunda habilidad) y Ángel Redentor no tienen botón: EffectController.offer_prevention()
+	# las ofrece reactivamente (ver el registro en EffectController.gd).
 
-	# Patrón especial de Espada del Juicio (2026-08-30): "Puedes
-	# Desterrarla de tu Cementerio para que un Aliado gane o pierda 2
-	# de Fuerza permanentemente." — primera habilidad usable DESDE EL
-	# CEMENTERIO de esta sesión (ver _ability_is_cementerio_usable()),
-	# costo sobre el DATO real del Cementerio (no sobre este nodo de
-	# solo vista) + elegir Aliado y signo del bono.
-	# Envidia (2026-10-14, mazo 170): desde el Cementerio, con menos cartas
-	# en la mano que el oponente, Desterrarlo para Robar una carta.
-	# Ira (2026-10-17): desde el Cementerio, Desterrarlo para +1 y ataque
-	# que no puede ser cancelado.
+	# Espada del Juicio: "Puedes Desterrarla de tu Cementerio para que un Aliado gane o pierda 2 de
+	# Fuerza permanentemente." Usable desde el Cementerio (_ability_is_cementerio_usable()); el costo
+	# opera sobre el dato real del Cementerio (no sobre el nodo de solo vista) y luego se elige Aliado
+	# y signo.
+	# Envidia: desde el Cementerio, con menos cartas en la mano que el oponente, Desterrarlo para Robar
+	# una carta.
+	# Ira: desde el Cementerio, Desterrarlo para +1 y un ataque que no puede ser cancelado.
 	if "puedes desterrarlo para que un aliado gane 1 de fuerza y su ataque no pueda ser cancelado" in ability_lower:
 		btn.pressed.connect(func():
 			_inspector.close_card_inspection()
@@ -139,8 +127,8 @@ func try_build(ability_lower: String, btn: Button, panel: Control, card_for_glow
 		panel.add_child(btn)
 		return true
 
-	# Alto Prime (2026-10-17): Descartar una carta para ponerlo en juego
-	# desde tu Cementerio como un Aliado sin habilidad.
+	# Alto Prime: Descartar una carta para ponerlo en juego desde tu Cementerio como un Aliado sin
+	# habilidad.
 	if "descartar una carta para poner este aliado en juego desde tu cementerio como un aliado sin habilidad" in ability_lower:
 		btn.pressed.connect(func():
 			_inspector.close_card_inspection()
@@ -167,18 +155,14 @@ func try_build(ability_lower: String, btn: Button, panel: Control, card_for_glow
 		panel.add_child(btn)
 		return true
 
-	# Drácula (tercera habilidad, "convertirlo... para prevenir...")
-	# removida de aquí (2026-09-09, "sistema de respuestas") — mismo motivo
-	# que Estaca/Ángel Redentor arriba: ya no es un botón, es reactiva.
+	# Drácula (tercera habilidad, "convertirlo... para prevenir...") removida de aquí ("sistema de
+	# respuestas") — mismo motivo que Estaca/Ángel Redentor arriba: ya no es un botón, es reactiva.
 
-	# Patrón especial de Drácula, cuarta habilidad (2026-08-30): "Puedes
-	# Desterrarlo de tu mano o Cementerio para cancelar el ataque de
-	# hasta dos Aliados." — usable DESDE LA MANO o el CEMENTERIO (ver
-	# _ability_is_hand_usable()/_ability_is_cementerio_usable()), primera
-	# habilidad que cancela un ataque ya declarado (nuevo: sacar de
-	# GameManager.attackers + revertir el aspecto visual, sin pasar por
-	# undeclare_attacker() porque no requiere ser el propio turno del
-	# controlador de ese Aliado).
+	# Patrón especial de Drácula, cuarta habilidad: "Puedes Desterrarlo de tu mano o Cementerio para
+	# cancelar el ataque de hasta dos Aliados." — usable DESDE LA MANO o el CEMENTERIO (ver
+	# _ability_is_hand_usable/_ability_is_cementerio_usable), primera habilidad que cancela un ataque
+	# ya declarado (nuevo: sacar de GameManager.attackers + revertir el aspecto visual, sin pasar por
+	# undeclare_attacker porque no requiere ser el propio turno del controlador de ese Aliado).
 	var is_dracula_cancel_attack_pattern: bool = ("desterrarlo de tu mano o cementerio" in ability_lower
 		and "cancelar el ataque" in ability_lower)
 	if is_dracula_cancel_attack_pattern:
@@ -189,11 +173,10 @@ func try_build(ability_lower: String, btn: Button, panel: Control, card_for_glow
 		panel.add_child(btn)
 		return true
 
-	# Patrón especial de Espíritu Kotaix, segunda habilidad (2026-09-02):
-	# "Una vez por turno, Roba dos cartas y Baraja una carta oponente que
-	# no sea Oro. Esta habilidad no puede ser cancelada." — mismo patrón
-	# que Estaca (Robo incondicional + Baraja de una carta rival en juego
-	# excluyendo Oro), sin el barajado adicional de la propia mano.
+	# Patrón especial de Espíritu Kotaix, segunda habilidad: "Una vez por turno, Roba dos cartas y
+	# Baraja una carta oponente que no sea Oro. Esta habilidad no puede ser cancelada." — mismo patrón
+	# que Estaca (Robo incondicional + Baraja de una carta rival en juego excluyendo Oro), sin el
+	# barajado adicional de la propia mano.
 	var is_kotaix_pattern: bool = "baraja una carta oponente que no sea oro" in ability_lower
 	if is_kotaix_pattern:
 		btn.pressed.connect(func():
@@ -203,13 +186,11 @@ func try_build(ability_lower: String, btn: Button, panel: Control, card_for_glow
 		panel.add_child(btn)
 		return true
 
-	# Patrón especial de Sacrificio Solar (2026-09-02): "Puedes pagar un
-	# Oro y Barajar esta carta desde tu mano para Desterrar o Barajar
-	# una carta de coste 2 o menos y Robar una carta." — usable DESDE LA
-	# MANO (ver _ability_is_hand_usable()), costo de Oro + la propia
-	# carta (autobarajarse desde la mano, no destierro ni descarte —
-	# concepto que ActionPipeline no tiene) y elección Destierra/Baraja
-	# sobre el objetivo, algo que tampoco resuelve solo.
+	# Patrón especial de Sacrificio Solar: "Puedes pagar un Oro y Barajar esta carta desde tu mano para
+	# Desterrar o Barajar una carta de coste 2 o menos y Robar una carta." — usable DESDE LA MANO (ver
+	# _ability_is_hand_usable), costo de Oro + la propia carta (autobarajarse desde la mano, no
+	# destierro ni descarte — concepto que ActionPipeline no tiene) y elección Destierra/Baraja sobre
+	# el objetivo, algo que tampoco resuelve solo.
 	var is_sacrificio_solar_pattern: bool = "barajar esta carta desde tu mano" in ability_lower
 	if is_sacrificio_solar_pattern:
 		btn.pressed.connect(func():
@@ -219,11 +200,37 @@ func try_build(ability_lower: String, btn: Button, panel: Control, card_for_glow
 		panel.add_child(btn)
 		return true
 
-	# Patrón especial de La Ouija (2026-08-31): "Una vez por turno, puedes
-	# jugar una carta de tu Cementerio o del tope de tu Castillo." — dos
-	# zonas de origen alternativas ('de tu Cementerio' Y 'del tope de tu
-	# Castillo', ambas con posesivo — solo las propias) que ActionPipeline
-	# no resuelve solo (solo sabe jugar la carta que ya tienes en mano).
+	# Patrón especial de La Ouija: "Una vez por turno, puedes jugar una carta de tu Cementerio o del
+	# tope de tu Castillo." — dos zonas de origen alternativas ('de tu Cementerio' Y 'del tope de tu
+	# Castillo', ambas con posesivo — solo las propias) que ActionPipeline no resuelve solo (solo sabe
+	# jugar la carta que ya tienes en mano). Botones de scripts/core/effects/mechanics/: [texto,
+	# módulo, función]. Todas reciben (carta, habilidad) salvo Escritura Sagrada, que es una habilidad
+	# sintética (su texto es exacto).
+	for entry in [[ConvertPatterns.TENSHI_TEXT, ConvertPatterns, "tenshi_convert"],
+			[ConvertPatterns.JEREMIEL_TEXT, ConvertPatterns, "jeremiel_steal"],
+			[InPlayAbilities.HOSHI_TEXT, InPlayAbilities, "hoshi_mill"],
+			[SearchPatterns.PAN_TEXT, SearchPatterns, "pan_search"],
+			[InPlayAbilities.CIUDAD_TEXT, InPlayAbilities, "ciudad_activate"],
+			[InPlayAbilities.QUICAVI_TEXT, InPlayAbilities, "quicavi"],
+			[InPlayAbilities.ARMADURA_TEXT, InPlayAbilities, "armadura_celestial"],
+			[InPlayAbilities.KABUTOWARI_TEXT, InPlayAbilities, "kabutowari"]]:
+		if entry[0] in ability_lower:
+			var module = entry[1]
+			var method: String = entry[2]
+			btn.pressed.connect(func():
+				_inspector.close_card_inspection()
+				await module.call(method, card_for_glow, captured)
+			)
+			panel.add_child(btn)
+			return true
+	if ability_lower == CastleTopPlay.ESCRITURA_ABILITY_TEXT:
+		btn.pressed.connect(func():
+			_inspector.close_card_inspection()
+			await CastleTopPlay.escritura_play_from_top(card_for_glow)
+		)
+		panel.add_child(btn)
+		return true
+
 	var is_ouija_pattern: bool = ("jugar una carta de tu cementerio" in ability_lower
 		and "tope de tu castillo" in ability_lower)
 	if is_ouija_pattern:

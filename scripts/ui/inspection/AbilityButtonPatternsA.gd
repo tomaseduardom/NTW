@@ -1,21 +1,12 @@
 extends RefCounted
-## AbilityButtonPatternsA — primer cuarto (por posición en el archivo
-## original) de los patrones especiales de botones de habilidad ACTIVADA
-## extraídos de CardInspectionLayer._build_ability_buttons() (2026-09-06,
-## "módulos gordos", Fase 2 — ver iterative-booping-abelson.md).
-##
-## Cada patrón vivía como un bloque `if is_X_pattern: ... continue` dentro
-## del for-loop de _build_ability_buttons(). Aquí cada uno es simplemente un
-## `if` más dentro de try_build(), que corta en el PRIMER match y devuelve
-## true (equivalente al `continue` original) — CardInspectionLayer.gd llama
-## a los 4 archivos hermanos (A, B, C, D) EN ORDEN, así que el orden relativo
-## de todos los chequeos originales queda exactamente igual, solo que ahora
-## repartido en 4 funciones en vez de un if-chain gigante en una sola.
-##
-## Bernardo O'Higgins, Padre de la Patria, Cetro Demoniaco, quimera voragh
-## (mill), voragh el devorador (x2), tenshi Z, dyyavol titán, jinete de la
-## peste, sandraudiga, asmodeus, belcebu, cuerno titán, Legión Paladín,
-## Don de Amma, Tesoro de los Césares, Miguel, Tyet (primera habilidad).
+## AbilityButtonPatternsA — primer cuarto de los patrones especiales de botones de habilidad
+## ACTIVADA de CardInspectionLayer._build_ability_buttons(). Cada patrón es un `if` en try_build()
+## que corta en el PRIMER match y devuelve true. CardInspectionLayer llama a los 4 archivos (A, B,
+## C, D) en orden, así que el orden de los chequeos importa.
+## Aquí: Bernardo O'Higgins, Padre de la Patria, Cetro Demoniaco, quimera voragh (mill), voragh el
+## devorador (x2), tenshi Z, dyyavol titán, jinete de la peste, sandraudiga, asmodeus, belcebu,
+## cuerno titán, Don de Amma, Tesoro de los Césares, Miguel, Tyet (primera habilidad), Maldición
+## Vudú.
 
 var _inspector: CardInspectionLayer
 
@@ -25,9 +16,8 @@ func setup(inspector: CardInspectionLayer) -> void:
 
 
 func try_build(ability_lower: String, btn: Button, panel: Control, card_for_glow: Node, captured: Dictionary) -> bool:
-	# Maldición Vudú (2026-10-18): desde el Cementerio, Desterrarla para
-	# Barajar o Desterrar una carta de un Cementerio. Antes que el patrón de
-	# Espíritu de la Máquina (grupo B), que tiene el mismo final de texto.
+	# Maldición Vudú: desde el Cementerio, Desterrarla para Barajar o Desterrar una carta de un
+	# Cementerio. Va antes que Espíritu de la Máquina (grupo B), que tiene el mismo final de texto.
 	if "desterrarlo de tu cementerio para barajar o desterrar una carta de un cementerio" in ability_lower:
 		btn.pressed.connect(func():
 			_inspector.close_card_inspection()
@@ -35,11 +25,10 @@ func try_build(ability_lower: String, btn: Button, panel: Control, card_for_glow
 		)
 		panel.add_child(btn)
 		return true
-	# Patrón especial de Bernardo O'Higgins (2026-08-26): coste alternativo
-	# (barajar un Arma/Aliado Caballero) + elegir entre dos efectos con
-	# objetivo (desterrar ≤3 / cancelar habilidad) — no encaja en el
-	# sistema genérico de costes/acciones de ActionPipeline (un solo tipo
-	# de coste, sin targeting), así que se resuelve aparte.
+	# Patrón especial de Bernardo O'Higgins: coste alternativo (barajar un Arma/Aliado Caballero) +
+	# elegir entre dos efectos con objetivo (desterrar ≤3 / cancelar habilidad) — no encaja en el
+	# sistema genérico de costes/acciones de ActionPipeline (un solo tipo de coste, sin targeting), así
+	# que se resuelve aparte.
 	var is_bernardo_pattern: bool = ("barajar" in ability_lower and "caballero" in ability_lower
 		and ("desterrar" in ability_lower or "cancelar" in ability_lower))
 
@@ -51,10 +40,9 @@ func try_build(ability_lower: String, btn: Button, panel: Control, card_for_glow
 		panel.add_child(btn)
 		return true
 
-	# Patrón especial de Padre de la Patria (2026-08-28): "genera un Oro
-	# para jugar X" es Oro Virtual RESTRINGIDO (GoldManager.
-	# restricted_gold_pools), un concepto que ActionPipeline no conoce —
-	# se genera directo aquí, sin pasar por el pipeline genérico.
+	# Patrón especial de Padre de la Patria: "genera un Oro para jugar X" es Oro Virtual RESTRINGIDO
+	# (GoldManager. restricted_gold_pools), un concepto que ActionPipeline no conoce — se genera
+	# directo aquí, sin pasar por el pipeline genérico.
 	var is_padre_patria_gold_pattern: bool = ("genera" in ability_lower
 		and "para jugar" in ability_lower and "caballero" in ability_lower)
 	if is_padre_patria_gold_pattern:
@@ -65,11 +53,9 @@ func try_build(ability_lower: String, btn: Button, panel: Control, card_for_glow
 		panel.add_child(btn)
 		return true
 
-	# Patrón especial de Cetro Demoniaco (2026-09-06): "genera un Oro y
-	# Destierra cuatro cartas del tope de un Castillo" — Oro SIN
-	# restringir + Destierro masivo de tope elegido, ActionPipeline no
-	# resuelve acciones compuestas de dos tipos distintos en una sola
-	# habilidad.
+	# Patrón especial de Cetro Demoniaco: "genera un Oro y Destierra cuatro cartas del tope de un
+	# Castillo" — Oro SIN restringir + Destierro masivo de tope elegido, ActionPipeline no resuelve
+	# acciones compuestas de dos tipos distintos en una sola habilidad.
 	var is_cetro_demoniaco_pattern: bool = ("genera un oro y destierra cuatro cartas del tope de un castillo" in ability_lower)
 	if is_cetro_demoniaco_pattern:
 		btn.pressed.connect(func():
@@ -79,9 +65,8 @@ func try_build(ability_lower: String, btn: Button, panel: Control, card_for_glow
 		panel.add_child(btn)
 		return true
 
-	# Patria Vieja (2026-10-13): "En tu Vigilia, si no has puesto Oros en
-	# juego este turno, puedes mirar las primeras seis cartas de tu
-	# Castillo y poner un Oro de ahí en tu Reserva".
+	# Patria Vieja: "En tu Vigilia, si no has puesto Oros en juego este turno, puedes mirar las
+	# primeras seis cartas de tu Castillo y poner un Oro de ahí en tu Reserva".
 	if "mirar las primeras seis cartas de tu castillo y poner un oro de ahí en tu reserva" in ability_lower:
 		btn.pressed.connect(func():
 			_inspector.close_card_inspection()
@@ -90,8 +75,8 @@ func try_build(ability_lower: String, btn: Button, panel: Control, card_for_glow
 		panel.add_child(btn)
 		return true
 
-	# Duelo Espacial en el Cementerio (2026-10-13): gana "En tu Vigilia,
-	# puedes Robar una carta" (una vez por turno).
+	# Duelo Espacial en el Cementerio: gana "En tu Vigilia, puedes Robar una carta" (una vez por
+	# turno).
 	if "en tu cementerio" in ability_lower and "gana la habilidad" in ability_lower \
 			and "puedes robar una carta" in ability_lower:
 		btn.pressed.connect(func():
@@ -101,12 +86,10 @@ func try_build(ability_lower: String, btn: Button, panel: Control, card_for_glow
 		panel.add_child(btn)
 		return true
 
-	# Patrón especial de quimera voragh (2026-09-06): "cada jugador Bota
-	# tres cartas. Si se Botaron Aliados u Oros, pon en juego una carta
-	# de un Cementerio como un Aliado de Fuerza 2 con Furia" — botado
-	# por ambos jugadores con seguimiento de tipos (ActionModule.mill()
-	# no informa tipos en su fallback), condición sobre lo botado y
-	# conversión real.
+	# Patrón especial de quimera voragh: "cada jugador Bota tres cartas. Si se Botaron Aliados u Oros,
+	# pon en juego una carta de un Cementerio como un Aliado de Fuerza 2 con Furia" — botado por ambos
+	# jugadores con seguimiento de tipos (ActionModule.mill no informa tipos en su fallback), condición
+	# sobre lo botado y conversión real.
 	var is_quimera_voragh_mill_pattern: bool = ("cada jugador bota tres cartas" in ability_lower
 		and "pon en juego una carta de un cementerio" in ability_lower)
 	if is_quimera_voragh_mill_pattern:
@@ -117,10 +100,8 @@ func try_build(ability_lower: String, btn: Button, panel: Control, card_for_glow
 		panel.add_child(btn)
 		return true
 
-	# Patrón especial de voragh el devorador (2026-09-06): "puedes
-	# Destruir una de tus cartas para generar un Oro para jugar
-	# Aliados" — costo de Destruir con objetivo (propio), efecto de Oro
-	# Virtual restringido.
+	# Patrón especial de voragh el devorador: "puedes Destruir una de tus cartas para generar un Oro
+	# para jugar Aliados" — costo de Destruir con objetivo (propio), efecto de Oro Virtual restringido.
 	var is_voragh_devorador_pattern: bool = ("puedes destruir una de tus cartas para generar un oro para jugar aliados" in ability_lower)
 	if is_voragh_devorador_pattern:
 		btn.pressed.connect(func():
@@ -167,6 +148,14 @@ func try_build(ability_lower: String, btn: Button, panel: Control, card_for_glow
 		panel.add_child(btn)
 		return true
 
+	if "si está en tu destierro, puedes desterrar una carta de tu mano para barajarlo en tu castillo" in ability_lower:
+		btn.pressed.connect(func():
+			_inspector.close_card_inspection()
+			await _inspector._hand_cementerio_handler._activate_sandraudiga_shuffle_from_exile(card_for_glow, captured)
+		)
+		panel.add_child(btn)
+		return true
+
 	var is_sandraudiga_pattern: bool = ("puedes pagar un oro para desterrar este y otro aliado sacerdote de tu mano" in ability_lower)
 	if is_sandraudiga_pattern:
 		btn.pressed.connect(func():
@@ -204,19 +193,14 @@ func try_build(ability_lower: String, btn: Button, panel: Control, card_for_glow
 		panel.add_child(btn)
 		return true
 
-	# Legión Paladín removida de aquí (2026-09-09, "sistema de respuestas"):
-	# ya no es un botón — EffectController.offer_prevention() la detecta y
-	# ofrece reactivamente (tag "leave_play") en el momento en que un
-	# Aliado propio está por salir del juego, no antes. El handler viejo
-	# (_activate_legion_paladin_prevention, PreventionAbilityHandler_EP.gd)
-	# se eliminó junto con este bloque.
+	# Legión Paladín no tiene botón: EffectController.offer_prevention() la ofrece reactivamente (tag
+	# "leave_play") cuando un Aliado propio está por salir del juego.
 
-	# Patrón especial de Don de Amma (2026-08-29): "Una vez por turno,
-	# puedes Desterrar un Oro con habilidad de tu Reserva. Luego, busca
-	# un Oro en tu Castillo y ponlo en tu Reserva." — costo de Desterrar
-	# UNA carta elegida entre los Oros-con-habilidad propios en Reserva
-	# (no necesariamente esta misma), seguido de una búsqueda que no va
-	# a la mano — ActionPipeline no tiene ninguno de los dos conceptos.
+	# Patrón especial de Don de Amma: "Una vez por turno, puedes Desterrar un Oro con habilidad de tu
+	# Reserva. Luego, busca un Oro en tu Castillo y ponlo en tu Reserva." — costo de Desterrar UNA
+	# carta elegida entre los Oros-con-habilidad propios en Reserva (no necesariamente esta misma),
+	# seguido de una búsqueda que no va a la mano — ActionPipeline no tiene ninguno de los dos
+	# conceptos.
 	var is_don_de_amma_pattern: bool = ("desterrar un oro" in ability_lower
 		and "con habilidad" in ability_lower and "busca un oro" in ability_lower)
 	if is_don_de_amma_pattern:
@@ -227,17 +211,11 @@ func try_build(ability_lower: String, btn: Button, panel: Control, card_for_glow
 		panel.add_child(btn)
 		return true
 
-	# Patrón especial de Tesoro de los Césares (2026-08-29): "Una vez por
-	# turno, puedes Barajar una carta de tu mano para nombrar una carta.
-	# Esa carta cuesta un Oro adicional el próximo turno." — costo de
-	# Barajar (mano → mazo, no descarte) + nombrar una carta CUALQUIERA
-	# del juego (no un objeto en juego, un NOMBRE) con un recargo de
-	# coste que arranca solo el turno siguiente — ActionPipeline no
-	# tiene ninguno de los tres conceptos (costo Barajar, nombrar, tax
-	# diferido). Requiere el fix de parse_abilities() de esta misma
-	# sesión que une la segunda oración (sin coste/trigger propio) a la
-	# ACTIVADA anterior — sin eso 'cuesta un oro adicional' nunca
-	# aparecía en raw_text y este patrón no matcheaba nunca.
+	# Tesoro de los Césares: "Una vez por turno, puedes Barajar una carta de tu mano para nombrar una
+	# carta. Esa carta cuesta un Oro adicional el próximo turno." Costo de Barajar (mano → mazo) +
+	# nombrar cualquier carta + recargo desde el turno siguiente: ActionPipeline no tiene ninguno de
+	# los tres. Depende de que parse_abilities() una la segunda oración a la habilidad anterior (si no,
+	# "cuesta un oro adicional" no aparece en raw_text).
 	var is_tesoro_cesares_pattern: bool = ("barajar una carta de tu mano" in ability_lower
 		and "nombrar una carta" in ability_lower and "cuesta un oro adicional" in ability_lower)
 	if is_tesoro_cesares_pattern:
@@ -248,14 +226,12 @@ func try_build(ability_lower: String, btn: Button, panel: Control, card_for_glow
 		panel.add_child(btn)
 		return true
 
-	# Patrón especial de Miguel (2026-08-29): "Una vez en tu turno, juega
-	# una carta de tu mano o de un Cementerio reduciendo su coste en un
-	# Oro, hasta un mínimo de 0." — elegir entre mano Y Cementerio a la
-	# vez, con descuento de -1/piso 0 aplicado solo a esa carta, no es
-	# nada que ActionPipeline sepa hacer solo. Reusa GoldManager.
-	# play_card() completo (fases, portador de Armas, Talismanes) con el
-	# mismo mecanismo de descuento puntual que 'Muestra X para reducir
-	# el coste' (El Rey y el Verdugo, ya en GoldManager.play_card()).
+	# Patrón especial de Miguel: "Una vez en tu turno, juega una carta de tu mano o de un Cementerio
+	# reduciendo su coste en un Oro, hasta un mínimo de 0." — elegir entre mano Y Cementerio a la vez,
+	# con descuento de -1/piso 0 aplicado solo a esa carta, no es nada que ActionPipeline sepa hacer
+	# solo. Reusa GoldManager. play_card completo (fases, portador de Armas, Talismanes) con el mismo
+	# mecanismo de descuento puntual que 'Muestra X para reducir el coste' (El Rey y el Verdugo, ya en
+	# GoldManager.play_card).
 	var is_miguel_pattern: bool = ("juega una carta de tu mano" in ability_lower
 		and "cementerio" in ability_lower and "reduciendo su coste" in ability_lower)
 	if is_miguel_pattern:
@@ -266,12 +242,10 @@ func try_build(ability_lower: String, btn: Button, panel: Control, card_for_glow
 		panel.add_child(btn)
 		return true
 
-	# Patrón especial de Tyet (2026-08-29): "Puedes pagar este Oro para
-	# que un Oro pierda su habilidad este turno y muévelo al Oro Pagado."
-	# Costo = esta misma carta (CostType.SELF_AS_GOLD, ActionPipeline no
-	# lo conoce). Efecto sobre OTRO Oro elegido: silencio temporal
-	# (KeywordManager.silence_card(..., "turn"), se autolimpia solo al
-	# empezar el próximo turno) + mover a Oro Pagado.
+	# Patrón especial de Tyet: "Puedes pagar este Oro para que un Oro pierda su habilidad este turno y
+	# muévelo al Oro Pagado." Costo = esta misma carta (CostType.SELF_AS_GOLD, ActionPipeline no lo
+	# conoce). Efecto sobre OTRO Oro elegido: silencio temporal (KeywordManager.silence_card(...,
+	# "turn"), se autolimpia solo al empezar el próximo turno) + mover a Oro Pagado.
 	var is_tyet_pattern: bool = (("pagar este oro" in ability_lower or "puedes pagarlo" in ability_lower)
 		and "pierda su habilidad" in ability_lower and "oro pagado" in ability_lower)
 	if is_tyet_pattern:

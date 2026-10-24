@@ -1,19 +1,10 @@
 extends RefCounted
-## SearchAbilityHandler — Facade de Patrones especiales de habilidades
-## ACTIVADAS que buscan/miran/reordenan cartas del Castillo, generan Oro
-## Virtual restringido, o juegan otra carta con descuento (Padre de la
-## Patria, Don de Amma, Tesoro de los Césares, Miguel, Espada de O'Higgins,
-## Infernum Vox, Aho, y todas las cartas agregadas 2026-09-06 en adelante).
-## Detectados en CardInspectionLayer._build_ability_buttons() y ruteados aquí
-## en vez de al pipeline genérico de habilidades activadas.
-##
-## Dividido en dos archivos por tamaño (2026-09-06, "módulos gordos"):
-## SearchAbilityHandler_AI.gd (nombres de carta A-I) y
-## SearchAbilityHandler_JV.gd (J-V). Este archivo queda como FACADE — cada
-## función de abajo es un reenvío de una sola línea a la mitad que
-## corresponda, con el mismo nombre y firma de siempre, así que
-## CardInspectionLayer.gd (único llamador, vía `_search_handler._activate_X(...)`)
-## no necesitó cambiar una sola línea por este split.
+## SearchAbilityHandler — FACHADA de los patrones de habilidades ACTIVADAS que
+## buscan/miran/reordenan cartas del Castillo, generan Oro Virtual restringido o juegan otra carta
+## con descuento (Padre de la Patria, Don de Amma, Tesoro de los Césares, Miguel, Espada de
+## O'Higgins, Infernum Vox, Aho...). Cada función reenvía en una línea a SearchAbilityHandler_AI.gd
+## (A-I) o _JV.gd (J-V), con el mismo nombre y firma (CardInspectionLayer la llama vía
+## `_search_handler._activate_X(...)`).
 
 const SearchAbilityHandlerAIScript = preload("res://scripts/ui/inspection/SearchAbilityHandler_AI.gd")
 const SearchAbilityHandlerJVScript = preload("res://scripts/ui/inspection/SearchAbilityHandler_JV.gd")

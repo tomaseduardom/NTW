@@ -1,15 +1,9 @@
 extends RefCounted
-## AbilityButtonPatternsC — tercer cuarto (por posición en el archivo
-## original) de los patrones especiales de botones de habilidad ACTIVADA
-## extraídos de CardInspectionLayer._build_ability_buttons() (2026-09-06,
-## "módulos gordos", Fase 2). Ver AbilityButtonPatternsA.gd para la
-## explicación completa del mecanismo try_build()/orden de evaluación.
-##
-## Frankenstein (silencio), Perla de Sangre (x2), Líder del Comité,
-## Almirante Akari, Tótem Dragón Ancestral, Torre de Babel, Lanza Argenta,
-## Skofnung, Espada de O'Higgins (barajar/buscar), Nu Galahad (x2),
-## Visión Heroica, Shub-Niggurath (x2), Piruquina, Akari, quimera voragh
-## (anular talismán).
+## AbilityButtonPatternsC — tercer cuarto de los patrones especiales de botones de habilidad
+## ACTIVADA (ver AbilityButtonPatternsA.gd para el mecanismo try_build() y el orden). Aquí:
+## Frankenstein (silencio), Perla de Sangre (x2), Líder del Comité, Tótem Dragón Ancestral, Torre de
+## Babel, Lanza Argenta, Skofnung, Espada de O'Higgins (barajar/buscar), Nu Galahad (x2), Visión
+## Heroica, Shub-Niggurath (x2), Piruquina, Akari, quimera voragh (anular Talismán).
 
 var _inspector: CardInspectionLayer
 
@@ -46,10 +40,9 @@ func try_build(ability_lower: String, btn: Button, panel: Control, card_for_glow
 		panel.add_child(btn)
 		return true
 
-	# Patrón especial de akuma el terrible (2026-09-04): "Una vez por
-	# turno, puedes Desterrar hasta dos cartas de los Cementerio o Roba
-	# una carta" — elección A/B, ActionPipeline no resuelve un "o" entre
-	# dos efectos de forma tan distinta (desterrar de Cementerio vs robar).
+	# Patrón especial de akuma el terrible: "Una vez por turno, puedes Desterrar hasta dos cartas de
+	# los Cementerio o Roba una carta" — elección A/B, ActionPipeline no resuelve un "o" entre dos
+	# efectos de forma tan distinta (desterrar de Cementerio vs robar).
 	var is_lider_comite_pattern: bool = "descartar una carta para mirar la mano de tu oponente y nombrar una carta" in ability_lower
 	if is_lider_comite_pattern:
 		btn.pressed.connect(func():
@@ -59,12 +52,9 @@ func try_build(ability_lower: String, btn: Button, panel: Control, card_for_glow
 		panel.add_child(btn)
 		return true
 
-	# Almirante Akari removida de aquí (2026-09-09, "sistema de respuestas" —
-	# corregido a pedido del usuario): ya no es un botón con elección A/B
-	# proactiva — son DOS disparadores reactivos distintos que comparten un
-	# candado de una vez por turno (EffectController._prevention_registry
-	# para "prevenir"; EffectController.offer_counter_annul() para "anular
-	# cuando el rival juega una carta").
+	# Almirante Akari no tiene botón: son dos disparadores reactivos con un candado compartido
+	# (EffectController._prevention_registry para prevenir; EffectController.offer_counter_annul() para
+	# anular cuando el rival juega una carta).
 
 	var is_totem_dragon_pattern: bool = "en tu turno, puedes barajarlo para anular un aliado o cancelar una habilidad" in ability_lower
 	if is_totem_dragon_pattern:

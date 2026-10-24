@@ -1,11 +1,7 @@
 extends RefCounted
-## AbilityButtonSupport — validación de habilidades ACTIVADAS + ciclo de
-## vida del botón superpuesto de habilidad (creación visual, activación vía
-## ActionPipeline, brillo de "habilidad en la pila") extraído de
-## CardInspectionLayer.gd (2026-09-06, "módulos gordos", Fase 2 — ver
-## iterative-booping-abelson.md). Sin llamadores externos confirmados por
-## grep — CardInspectionLayer.gd sigue siendo el único punto de entrada,
-## ahora vía _button_support, montado en setup().
+## AbilityButtonSupport — validación de habilidades ACTIVADAS y ciclo de vida del botón superpuesto
+## (creación, activación vía ActionPipeline, brillo de "habilidad en la pila").
+## CardInspectionLayer.gd es el único punto de entrada (_button_support, montado en setup()).
 
 const PlayerSideScript = preload("res://scripts/core/game/PlayerSide.gd")
 
@@ -18,29 +14,19 @@ func setup(inspector: CardInspectionLayer) -> void:
 
 
 func _tamales_ability_restriction_reason(source_card: Node) -> String:
-	"""Wrapper — la lógica real vive en ContinuousEffectManager.tamales_
-	ability_restriction_reason() (2026-09-04, movida ahí para compartirla
-	con TriggerSystem._check_trigger_conditions(), que necesita el mismo
+	"""Wrapper — la lógica real vive en ContinuousEffectManager.tamales_ability_restriction_reason
+	(movida ahí para compartirla con TriggerSystem._check_trigger_conditions, que necesita el mismo
 	chequeo para 'ni disparar')."""
 	return ContinuousEffectManager.tamales_ability_restriction_reason(source_card)
 
 
 func _is_annul_or_cancel_ability(ability_raw_text: String) -> bool:
-	"""Detecta si UNA habilidad ACTIVATED puntual (raw_text ya aislado por
-	parse_abilities(), no la carta entera) es de tipo Anular/Cancelar — la
-	única categoría de ACTIVATED que CardInspectionLayer._build_ability_
-	buttons() ofrece durante el turno RIVAL (2026-09-19, arquitectura.md
-	§10.11 caso 4). Mismo criterio de palabra que GoldManagerRestrictions.
-	_is_response_only_ability_text() (Talismanes de respuesta), pero por
-	'contains' en vez de 'begins_with': aquí ya operamos sobre el raw_text de
-	UNA sola habilidad (p.ej. 'Puedes Desterrarlo para Anular una carta de
-	coste 1 o menos que no sea Aliado', Akari), no sobre la carta completa
-	con varias oraciones sin relación — el costo casi siempre precede a
-	'anular'/'cancela' en la misma oración, así que 'begins_with' descartaría
-	falsos negativos reales. Excluye frases de PROTECCIÓN ('no puede ser
-	anulada/cancelada', p.ej. Padre de la Patria) para no ofrecer el botón
-	por error en una habilidad que blinda a la propia carta, no que anula al
-	rival."""
+	"""¿Esta habilidad ACTIVADA (raw_text ya aislado por parse_abilities()) es de Anular/Cancelar? Es
+	la única categoría que se ofrece en el turno rival (arquitectura.md §10.11 caso 4). Mismas
+	palabras que GoldManagerRestrictions._is_response_only_ability_text(), pero con 'contains' (el
+	costo suele ir antes de "anular" en la misma oración, p.ej. Akari: "Puedes Desterrarlo para
+	Anular..."). Excluye frases de protección ("no puede ser anulada/cancelada", p.ej. Padre de la
+	Patria)."""
 	var lower := ability_raw_text.to_lower()
 	if "no puede ser anulad" in lower or "no puede ser cancelad" in lower:
 		return false
@@ -48,69 +34,51 @@ func _is_annul_or_cancel_ability(ability_raw_text: String) -> bool:
 
 
 func _is_responding_to_opponent_action() -> bool:
-	"""¿Hay ahora mismo una ventana de respuesta real abierta (Paso D,
-	PriorityContext.RESPONSE_WINDOW) — es decir, se está reaccionando a algo
-	puntual que ya está en la Pila (una carta jugada o una habilidad
-	activada/disparada, cualquiera de las dos, §10.53 abre esa ventana para
-	TODO) — en vez de actuando proactivamente (tu propia Vigilia, o
-	simplemente tener la palabra en Guerra de Talismanes sin responder a
-	nada puntual, PriorityContext.GUERRA_TALISMANES)?
-
-	2026-09-19, a pedido del usuario: varias cartas (Bernardo O'Higgins,
-	Lanza Argenta, ...) combinan en un mismo botón/costo un efecto
-	PROACTIVO (Desterrar, Robar tres cartas) con uno REACTIVO (Cancelar una
-	habilidad) — la idea es que la rama se elija SOLA según el momento en
-	que se usa, no una elección A/B libre cada vez: "si voy en mi turno o en
-	Guerra de Talismanes, siempre la de Desterrar/Robar; si mi oponente jugó
-	una carta o usó una habilidad, ahí cancelaría" (cita textual del
-	usuario). No mira de quién es el turno (`GameManager.active_player_id`)
-	a propósito — mira el CONTEXTO de prioridad, que es lo que realmente
-	distingue "estoy respondiendo a algo puntual" de "tengo la palabra en
-	general" sin importar de quién sea el turno."""
+	"""¿Hay una ventana de respuesta real (Paso D, PriorityContext.RESPONSE_WINDOW): se reacciona a
+	algo puntual en la Pila (carta jugada o habilidad, §10.53)? Si no, se actúa proactivamente (tu
+	Vigilia, o la palabra en Guerra de Talismanes sin responder a nada).
+	Cartas como Bernardo O'Higgins o Lanza Argenta eligen la rama sola según esto: proactivo →
+	Desterrar/Robar; respondiendo a algo del rival → Cancelar. Se mira el contexto de prioridad, no
+	de quién es el turno."""
 	return PriorityManager.priority_window_active \
 		and PriorityManager.current_priority_context == PriorityManager.PriorityContext.RESPONSE_WINDOW
 
 
 func _validate_ability(ability: Dictionary, source_card: Node, player_id: int = 0) -> Dictionary:
-	"""Valida si una habilidad activada puede ejecutarse ahora.
-	Comprueba: prioridad, oro disponible, cartas en mano, carta girada, ActionPipeline.
-	'player_id' (2026-10-12): quién la activaría — el Remoto usa la misma
-	validación que los botones del Anfitrión (antes todo asumía jugador 0)."""
+	"""Valida si una habilidad activada puede ejecutarse ahora: prioridad, Oro disponible, cartas en
+	mano, carta girada, ActionPipeline. 'player_id': quién la activaría (el Remoto usa la misma
+	validación que los botones del Anfitrión)."""
 	if PriorityManager.priority_window_active and not PriorityManager.can_act(player_id):
 		return {"can": false, "reason": "Sin prioridad ahora"}
 
-	# Silenciada (por instancia o por nombre, ver KeywordManager.is_silenced())
-	# = pierde TODAS sus habilidades, activadas incluidas — antes esto solo
-	# se chequeaba para triggers (TriggerSystem._check_trigger_conditions()),
-	# los botones de habilidad activada seguían mostrándose igual (2026-08-29).
+	# Silenciada (por instancia o por nombre, KeywordManager.is_silenced()) = pierde todas sus
+	# habilidades, activadas incluidas.
 	if KeywordManager.is_silenced(source_card):
 		return {"can": false, "reason": "Sin habilidad (silenciada)"}
+	# anillo de tierra: una carta más o una habilidad más por el turno.
+	if not GoldManager.one_more_action_left(player_id):
+		return {"can": false, "reason": "Ya no puedes utilizar más habilidades este turno"}
 
-	# Restricción de fase por texto propio de la carta (2026-08-30, p.ej.
-	# Espada de O'Higgins: "En tu Vigilia, una vez por turno, puedes...").
-	# _build_ability_buttons() ya permite el botón en Vigilia O en ventana
-	# de prioridad (genérico, para cartas sin restricción de fase) — esto
-	# cierra el caso más estricto de una carta que solo se puede usar en su
-	# propia Vigilia, ni siquiera con prioridad abierta en otra fase.
+	# Restricción de fase por texto propio de la carta (p.ej. Espada de O'Higgins: "En tu Vigilia, una
+	# vez por turno, puedes..."). _build_ability_buttons ya permite el botón en Vigilia O en ventana de
+	# prioridad (genérico, para cartas sin restricción de fase) — esto cierra el caso más estricto de
+	# una carta que solo se puede usar en su propia Vigilia, ni siquiera con prioridad abierta en otra
+	# fase.
 	var raw_lower: String = str(ability.get("raw_text", "")).to_lower()
 	if "en tu vigilia" in raw_lower and GameManager.current_phase != Constants.Phase.VIGILIA:
 		return {"can": false, "reason": "Solo en tu Vigilia"}
+	if raw_lower.begins_with("en guerra de talismanes") and GameManager.current_phase != Constants.Phase.GUERRA_TALISMANES:
+		return {"can": false, "reason": "Solo en Guerra de Talismanes"}  # kabutowari
 
-	# "Una vez EN tu/su turno" (2026-09-13, a pedido del usuario — ver
-	# arquitectura.md §10.11): más restrictiva que "una vez por/al turno" en
-	# CUÁNDO se puede activar, no solo en frecuencia. "una vez por turno"
-	# genérico ya se permite en cualquier ventana de prioridad de tu turno
-	# (Guerra de Talismanes incluida, más abajo en can_act()/priority_window_
-	# active) — esta variante explícita NO, aunque la propia habilidad pueda
-	# Anular/Cancelar (p.ej. paladín bestiarium: su habilidad de Anular dice
-	# "una vez en tu turno", más restrictiva que la convención general de
-	# que Anular/Cancelar es de respuesta instantánea).
+	# "Una vez EN tu/su turno" (arquitectura.md §10.11) restringe CUÁNDO: solo en tu turno normal, no
+	# en ventanas anidadas, aunque pueda Anular/Cancelar (p.ej. paladín bestiarium). "Una vez por
+	# turno" genérico vale en cualquier ventana de prioridad de tu turno (Guerra de Talismanes
+	# incluida).
 	if ability.get("once_per_turn_own_turn_only", false) and PriorityManager.priority_window_active:
 		return {"can": false, "reason": "Solo en tu turno (no en una ventana de prioridad)"}
 
-	# 'Tu oponente sólo puede utilizar las habilidades de Oros y cartas de
-	# coste 2 o más si no controla más copias de esa carta' (2026-09-04,
-	# Tamales) — único choke point real de validación de habilidades
+	# 'Tu oponente sólo puede utilizar las habilidades de Oros y cartas de coste 2 o más si no controla
+	# más copias de esa carta' (Tamales) — único choke point real de validación de habilidades
 	# ACTIVADAS, así que basta un chequeo aquí para cubrir cualquier carta.
 	var tamales_reason: String = _tamales_ability_restriction_reason(source_card)
 	if not tamales_reason.is_empty():
@@ -136,27 +104,25 @@ func _validate_ability(ability: Dictionary, source_card: Node, player_id: int = 
 				return {"can": false, "reason": "Carta ya girada"}
 
 		UniversalCardParser.CostType.ONCE_PER_TURN:
-			# instance_id, NO card_data.id (2026-08-30, corrección: card_data.id
-			# es el ID de la carta/impresión, compartido por TODAS las copias en
-			# juego — con 2 Aho en juego, usar uno marcaba el cupo también para
-			# el otro. Cada copia física necesita su propio cupo).
+			# instance_id, NO card_data.id (corrección: card_data.id es el ID de la carta/impresión,
+			# compartido por TODAS las copias en juego — con 2 Aho en juego, usar uno marcaba el cupo también
+			# para el otro. Cada copia física necesita su propio cupo).
 			var card_id: String = str(source_card.get_instance_id())
 			var ability_idx: int = ability.get("ability_index", 0)
-			var turn: int = GameManager.current_turn
-			if UniversalCardParser.turn_registry.was_used(card_id, ability_idx, turn):
+			var turn: int = GameManager.turn_serial
+			if UniversalCardParser.turn_registry.is_exhausted(card_id, ability_idx, turn, int(ability.get("uses_per_turn", 1))):
 				return {"can": false, "reason": "Ya usada este turno"}
 
 	# Flag once_per_turn desde parse_abilities() (puede venir sin cost_type ONCE_PER_TURN)
 	if ability.get("once_per_turn", false) and cost_type != UniversalCardParser.CostType.ONCE_PER_TURN:
 		var card_id: String = str(source_card.get_instance_id())
 		var ability_idx: int = ability.get("ability_index", 0)
-		var turn: int = GameManager.current_turn
-		if UniversalCardParser.turn_registry.was_used(card_id, ability_idx, turn):
+		var turn: int = GameManager.turn_serial
+		if UniversalCardParser.turn_registry.is_exhausted(card_id, ability_idx, turn, int(ability.get("uses_per_turn", 1))):
 			return {"can": false, "reason": "Ya usada este turno"}
 
-	# Verificación adicional con ActionPipeline — source_card_node en el
-	# context (2026-08-30) para que can_activate_ability() también use el
-	# instance_id, no el id compartido entre copias.
+	# Verificación adicional con ActionPipeline — source_card_node en el context para que
+	# can_activate_ability también use el instance_id, no el id compartido entre copias.
 	var context = {"controller_id": player_id, "source_card_node": source_card}
 	var check = ActionPipeline.can_activate_ability(source_card.card_data, ability, context)
 	if not check.get("can", true):
@@ -178,13 +144,10 @@ func _create_ability_overlay_button(
 	corner_top: bool = true,
 	corner_bottom: bool = true
 ) -> Button:
-	"""Botón superpuesto sobre el párrafo de la carta donde está impresa esta
-	habilidad. No dibuja texto propio (la carta ya lo muestra); un
-	rectángulo de bordes curvos color celeste marca SIEMPRE qué habilidad se
-	puede activar y dónde clickear (2026-08-26, a pedido del usuario — antes
-	el borde solo aparecía al pasar el mouse, así que no había forma de
-	saber de antemano qué parte de la carta era clickeable). Al pasar el
-	mouse se resalta más fuerte, y lleva el costo y efecto como tooltip."""
+	"""Botón superpuesto sobre el párrafo de la carta donde está impresa esta habilidad. No dibuja
+	texto (la carta ya lo muestra); un rectángulo celeste de bordes curvos marca siempre qué
+	habilidad se puede activar y dónde clickear. Al pasar el mouse se resalta más y muestra costo y
+	efecto como tooltip."""
 	var cost_type   = ability.get("cost_type",   UniversalCardParser.CostType.NONE)
 	var cost_amount = ability.get("cost_amount", 0)
 	var effect_text = ability.get("effect_text", ability.get("raw_text", ""))

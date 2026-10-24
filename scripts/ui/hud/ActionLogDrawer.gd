@@ -12,6 +12,9 @@ const TEX_BTN_NORMAL := preload("res://assets/ui/menu/btn_menu_normal.png")
 const TEX_BTN_HOVER := preload("res://assets/ui/menu/btn_menu_hover.png")
 const TEX_BTN_PRESSED := preload("res://assets/ui/menu/btn_menu_pressed.png")
 
+const RevealedCardsScript = preload("res://scripts/core/effects/mechanics/RevealedCards.gd")
+const RevealWindowScript = preload("res://scripts/ui/zones/RevealWindow.gd")
+
 const DRAWER_WIDTH: float = 490.0
 const TOP_OFFSET: float = 50.0  # Justo debajo del TopBar
 
@@ -544,7 +547,7 @@ func _matches_filter(entry: Dictionary, filter_id: String) -> bool:
 		"combat":
 			return t in ["attack", "atacar", "block", "bloquear", "damage", "daño", "destroy", "destruir"]
 		"cards":
-			return t in ["play", "jugar", "gold", "oro", "discard", "descartar"]
+			return t in ["play", "jugar", "gold", "oro", "discard", "descartar", "reveal"]
 		_:
 			return true
 
@@ -847,6 +850,19 @@ func _on_meta_clicked(meta: Variant) -> void:
 	if meta_str.begins_with("card:"):
 		var card_name = meta_str.substr(5).strip_edges()
 		_inspect_card_from_log(card_name)
+	elif meta_str.begins_with("reveal:"):
+		_show_revealed_group(int(meta_str.substr(7)))
+
+
+func _show_revealed_group(id: int) -> void:
+	"""Grupo de cartas mostradas (RevealedCards.record()): se ve en el visor de mostrar, solo para
+	mirar."""
+	var g: Dictionary = RevealedCardsScript.group(id)
+	if g.is_empty() or not _main:
+		return
+	var w = RevealWindowScript.new()
+	await w.open(_main, {"title": str(g.title), "hint": "Cartas mostradas", "cards": g.cards, "mode": "show",
+		"browse": true})
 
 
 func _inspect_card_from_log(card_name: String) -> void:

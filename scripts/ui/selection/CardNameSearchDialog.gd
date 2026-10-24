@@ -42,9 +42,33 @@ static func _ensure_search_index() -> void:
 	_index_initialized = true
 
 
+## El bot nombra la carta (que no sea Oro) de mayor coste que tenga en juego su rival; si no hay, una al
+## azar del catálogo.
+func _bot_name_pick() -> Dictionary:
+	var main: Node = (Engine.get_main_loop() as SceneTree).root.get_node_or_null("Main")
+	var best: Node = null
+	if main:
+		for container in [main.player_field, main.player_linea_ataque, main.player_linea_apoyo]:
+			if not container:
+				continue
+			for c in container.get_children():
+				if is_instance_valid(c) and c.get("card_data") is Dictionary and c.get("card_type") != Constants.CardType.ORO 						and (best == null or int(c.get("card_cost")) > int(best.get("card_cost"))):
+					best = c
+	if best:
+		return best.card_data
+	var all: Array = CardDatabase.cards.values()
+	return all[randi() % all.size()] if not all.is_empty() else {}
+
+
 func open_and_wait(prompt: String = "Escribe el nombre de una carta", chooser_id: int = 0) -> Dictionary:
 	"""Abre el buscador centrado, compacto y optimizado. Devuelve card_data elegido o {} si se cancela."""
 	_ensure_search_index()
+	# Sin quien elige explícito, nombra quien controla el efecto en curso (el bot nombra solo).
+	var ctx: Dictionary = load("res://scripts/core/effects/EffectContext.gd").current()
+	if chooser_id == 0 and not ctx.is_empty() and int(ctx.controller_id) == 1:
+		chooser_id = 1
+	if load("res://scripts/core/game/PlayerSide.gd").is_bot(chooser_id):
+		return _bot_name_pick()
 
 	if chooser_id == 1 and NetworkClient.room_code != "" and NetworkClient.is_host:
 		NetworkClient.send_message({"op": "prompt", "kind": "name_card", "title": "Escribe el nombre de una carta"})
@@ -250,8 +274,16 @@ func open_and_wait(prompt: String = "Escribe el nombre de una carta", chooser_id
 	)
 
 	input.grab_focus()
+	# Tiempo agotado (TurnClock): no nombra ninguna.
+	var force_gen: int = NetworkClient.force_gen
+	NetworkClient.local_waits += 1
 	while not state.resolved:
+		if NetworkClient.ui_forced(force_gen):
+			state.picked = {}
+			NetworkClient.ui_forced_done()
+			break
 		await _main.get_tree().process_frame
+	NetworkClient.local_waits = maxi(0, NetworkClient.local_waits - 1)
 
 	clear_results.call()
 	layer.queue_free()

@@ -47,10 +47,8 @@ func _on_exhume_card_selected(card_data: Dictionary) -> void:
 		push_error("[SelectionModule] Carta no encontrada en cementerio")
 		return
 	if card_cost > 0:
-		# 2026-10-06 (ver arquitectura.md §33): GoldManager.pagar_coste() ya
-		# es por jugador — antes esto solo pasaba por ahí para el jugador 0
-		# (Oro Virtual/restringido + elegir QUÉ Oro físico gastar) y le
-		# debitaba directo al jugador 1 sin pasar por ninguno de los dos.
+		# GoldManager.pagar_coste() es por jugador (Oro Virtual/restringido + elegir qué Oro físico
+		# gastar; arquitectura.md §33).
 		var paid = await _main._gold_manager.pagar_coste(card_cost, -1, "", -1, player_id)
 		if not paid:
 			_main._update_debug("Error al pagar coste de exhumar")
@@ -90,10 +88,9 @@ func _on_exhume_resolved(stack_object: Dictionary, _result: Dictionary) -> void:
 	_main.player_field.add_child(card)
 	card.set_zone(Constants.Zone.LINEA_DEFENSA)
 	_main._connect_card_signals(card)
-	# Slot fijo (2026-08-31) — ver ZoneManager.pin_card_to_field_slot() y el
-	# mismo motivo en GoldManager._play_card_to_field(): sin esto, un Aliado
-	# exhumado reordenaba (vía el HBoxContainer) a los que ya estaban en
-	# Línea de Defensa.
+	# Slot fijo — ver ZoneManager.pin_card_to_field_slot y el mismo motivo en
+	# GoldManager._play_card_to_field: sin esto, un Aliado exhumado reordenaba (vía el HBoxContainer) a
+	# los que ya estaban en Línea de Defensa.
 	if _main.get("_zone_manager"):
 		_main._zone_manager.pin_card_to_field_slot(card, _main.player_field)
 	_main._update_debug("'%s' entra al campo (exhumado - irá al destierro si muere)" % card.card_name)

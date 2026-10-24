@@ -778,37 +778,6 @@ func reveal_deck_top(cards: Array, player: int, keep_order: bool = true) -> void
 # =============================================================================
 # INTERFAZ SIMPLIFICADA PARA BÚSQUEDA (DAR Sección 8)
 # =============================================================================
-func await_selection(cards: Array, count: int, is_private: bool, filter: Dictionary = {}) -> Array:
-	"""Interfaz simplificada para búsqueda de cartas con await
-
-	DAR Sección 8: En zonas privadas (Castillo, Mano propia), el jugador puede
-	elegir "no encontrar" incluso si hay cartas que coincidan.
-
-	Args:
-		cards: Array de cartas entre las que buscar
-		count: Cantidad de cartas a seleccionar
-		is_private: Si la zona es privada (habilita botón "Fallar búsqueda")
-		filter: Filtro opcional de requisitos
-
-	Returns: Array de cartas seleccionadas (vacío si falló/canceló)
-
-	Ejemplo:
-		var selected = await selection_canvas.await_selection(deck_cards, 1, true, {"card_type": Constants.CardType.ALIADO})
-		if selected.is_empty():
-			print("No se encontró o el jugador eligió no encontrar")
-	"""
-	var result = await open_selection(
-		cards,
-		count,
-		is_private,  # can_fail = is_private
-		SelectionMode.SEARCH,
-		filter
-	)
-
-	if result.success and not result.failed:
-		return result.selected
-
-	return []
 
 
 func await_show_to_opponent(cards: Array, reveal_context: String = "") -> void:
@@ -823,9 +792,4 @@ func await_show_to_opponent(cards: Array, reveal_context: String = "") -> void:
 	await _reveal.await_show_to_opponent(cards, reveal_context)
 
 
-# INTEGRACIÓN CON CardEffectSystem — eliminada (2026-08-17): connect_to_
-# effect_system() no la llamaba nadie, y las señales a las que se conectaba
-# (search_selection_required/look_reorder_required) eran parte del pipeline
-# de CardEffectSystem.gd eliminado por ser código muerto (cero llamadores
-# en todo el proyecto). El camino real de búsqueda/mirar es TriggerSystem →
-# UniversalCardParser → ActionModule → SelectionManager.
+# La búsqueda/mirada real es TriggerSystem → UniversalCardParser → ActionModule → SelectionManager.

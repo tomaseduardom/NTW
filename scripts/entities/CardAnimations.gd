@@ -67,13 +67,9 @@ func play_enter_animation() -> void:
 	_card.scale = Vector2.ZERO
 	_card.modulate.a = 0
 
-	# Animar hacia base_scale, NO Vector2.ONE fijo (2026-08-29): un Arma
-	# recién equipada (GoldManager._equip_weapon(), escala 0.45 de insignia
-	# en la esquina del Aliado) llama a esta misma animación — con el target
-	# fijo en 1.0 terminaba agrandada a tamaño de mano completa apenas
-	# entraba en juego, y encima el hover posterior la recalculaba con un
-	# base_scale que nunca se había actualizado a 0.45, dando la sensación de
-	# que el Arma 'desaparecía y solo volvía a aparecer al pasar el mouse'.
+	# Animar hacia base_scale, no a Vector2.ONE: un Arma recién equipada (GoldManager._equip_weapon(),
+	# escala de insignia en la esquina del Aliado) también usa esta animación y quedaba agrandada a
+	# tamaño de mano.
 	var target_scale: Vector2 = _card.base_scale if _card.base_scale != Vector2.ZERO else Vector2.ONE
 
 	var tween = _card.create_tween()
