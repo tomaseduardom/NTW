@@ -14,6 +14,7 @@ var _main: Node = null
 var _active: bool = false
 var _current_overlay: Control = null
 const CastleLookWindowScript = preload("res://scripts/ui/zones/CastleLookWindow.gd")
+const RevealedCardsScript = preload("res://scripts/core/effects/mechanics/RevealedCards.gd")
 
 var _card_nodes: Dictionary = {}  # card_id (String) -> Node local (ghost)
 var _hand_card_nodes: Dictionary = {}  # card_id (String) -> Node local en player_hand (§45)
@@ -65,6 +66,9 @@ var _pick_multi: Dictionary = {}
 func setup(main: Node) -> void:
 	_main = main
 	_active = NetworkClient.room_code != "" and not NetworkClient.is_host
+	# El historial del Remoto es el del Anfitrión (op "log"); CombatLog es autoload: se reinicia en
+	# cada partida.
+	CombatLog.remote_mirror = _active
 	if not _active:
 		return
 	NetworkClient.message_received.connect(_on_message)
@@ -117,12 +121,31 @@ func _on_message(data: Dictionary) -> void:
 					_show_priority_prompt(data)
 				"zone_pick":
 					_show_zone_pick_prompt(data)
+				"reveal_window":
+					var reveal_window = load("res://scripts/ui/zones/RevealWindow.gd").new()
+					var reveal_result: Dictionary = await reveal_window.open(_main, data.get("config", {}))
+					NetworkClient.send_message({"op": "intent", "kind": "reveal_window_choice", "result": reveal_result})
 				"castle_look":
 					# Misma ventana que el Anfitrión (CastleLook.gd, §69):
 					# repartir las cartas miradas y ordenar el resto.
 					var look_window = CastleLookWindowScript.new()
 					var result: Dictionary = await look_window.open(_main, data.get("config", {}))
 					NetworkClient.send_message({"op": "intent", "kind": "castle_look_choice", "result": result})
+		"reveal_log":
+			RevealedCardsScript.on_network(data)
+		"log":
+			CombatLog.add_net_entry(data)
+		"force_close":
+			# Se acabó el tiempo y el Anfitrión ya respondió por ti (TurnClock): se cierra lo abierto.
+			# Las ventanas que esperan solas (RevealWindow, CastleLookWindow...) se cierran con
+			# NetworkClient.ui_forced() y su intent se descarta.
+			_close_current_overlay()
+			_clear_remote_paso()
+			_clear_hand_actions()
+			_clear_attack_candidates()
+			_clear_board_blocking()
+			_clear_board_pick()
+			_pending_vigilia = {}
 		"move_card":
 			_apply_move_card(data)
 		"remove_card":
@@ -405,7 +428,7 @@ func _build_card_display(card_data: Dictionary) -> Control:
 	var wrapper := Control.new()
 	wrapper.custom_minimum_size = Vector2(84.0, 118.0)
 	var c_node = _CardScene.instantiate()
-	c_node.load_from_data(card_data)
+	c_node.load_from_data(card_data, bool(card_data.get("host_hand_hidden", false)))
 	c_node.can_interact = false
 	c_node.drag_enabled = false
 	c_node.custom_minimum_size = Vector2(150.0, 210.0)
@@ -949,11 +972,10 @@ func _show_await_target_or_castillo_prompt(data: Dictionary) -> void:
 func _show_choose_option_prompt(data: Dictionary) -> void:
 	var title: String = str(data.get("title", "Elige una opción"))
 	var options: Array = data.get("options", [])
-	var vbox := _build_overlay(title)
-	for i in range(options.size()):
-		var idx: int = i
-		_add_row_button(vbox, str(options[i]), func():
-			_send_intent_and_close({"op": "intent", "kind": "choose_option_choice", "index": idx}))
+	# Las mismas fichas sobre la mesa que en el Anfitrión (BoardChoice), ancladas a la carta del efecto.
+	var source = _card_nodes.get(str(data.get("source_id", "")), null)
+	var idx: int = await load("res://scripts/ui/hud/BoardChoice.gd").choose(_main, title, options, source)
+	NetworkClient.send_message({"op": "intent", "kind": "choose_option_choice", "index": idx})
 
 
 # =============================================================================

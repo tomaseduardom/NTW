@@ -245,6 +245,9 @@ func take_vigilia_actions() -> void:
 			return
 
 		var gold_candidates: Array = []
+		# Lo que el Remoto puede elegir: un id que no esté aquí (otra carta, del Anfitrión, ya jugada) se ignora.
+		var gold_nodes: Array = []
+		var play_nodes: Array = []
 		for c in _main._opponent_fan.get_cards():
 			if not is_instance_valid(c) or c.get("card_type") != Constants.CardType.ORO:
 				continue
@@ -254,19 +257,24 @@ func take_vigilia_actions() -> void:
 					or _main._gold_manager._card_play_locked(c)):
 				continue
 			gold_candidates.append(_card_public_data(c))
+			gold_nodes.append(c)
 
 		var ally_candidates: Array = []
 		for c in _affordable_allies_in_hand():
 			ally_candidates.append(_card_public_data(c))
+			play_nodes.append(c)
 		var weapon_candidates: Array = []
 		for c in _affordable_cards_in_hand([Constants.CardType.ARMA]):
 			weapon_candidates.append(_card_public_data(c))
+			play_nodes.append(c)
 		var talisman_candidates: Array = []
 		for c in _affordable_cards_in_hand([Constants.CardType.TALISMAN]):
 			talisman_candidates.append(_card_public_data(c))
+			play_nodes.append(c)
 		var totem_candidates: Array = []
 		for c in _affordable_cards_in_hand([Constants.CardType.TOTEM]):
 			totem_candidates.append(_card_public_data(c))
+			play_nodes.append(c)
 
 		var hand_data: Array = []
 		for c in _main._opponent_fan.get_cards():
@@ -297,11 +305,11 @@ func take_vigilia_actions() -> void:
 		match intent.get("kind", ""):
 			"place_gold":
 				var card := _find_card_by_id(str(intent.get("card_id", "")))
-				if card and is_instance_valid(card) and card.get("card_type") == Constants.CardType.ORO:
+				if card and is_instance_valid(card) and card in gold_nodes and card.get("card_type") == Constants.CardType.ORO:
 					await _place_gold_card(card)
 			"play_card":
 				var card := _find_card_by_id(str(intent.get("card_id", "")))
-				if card and is_instance_valid(card):
+				if card and is_instance_valid(card) and card in play_nodes:
 					match card.get("card_type"):
 						Constants.CardType.ALIADO:
 							await _play_ally(card)
@@ -639,6 +647,7 @@ func _await_priority_intent(window_id: int, timeout: float) -> Dictionary:
 		state.intent = data
 		state.done = true
 	NetworkClient.message_received.connect(on_message)
+	NetworkClient.remote_waits += 1
 	var elapsed: float = 0.0
 	while not state.done:
 		await get_tree().create_timer(0.1).timeout
@@ -647,6 +656,10 @@ func _await_priority_intent(window_id: int, timeout: float) -> Dictionary:
 			break
 		if not _is_current_window(window_id):
 			break
+		# Tiempo del turno agotado (TurnClock): pasa.
+		if NetworkClient.forced_intent.is_valid() and not NetworkClient.forced_intent.call(["priority_response"]).is_empty():
+			break
+	NetworkClient.remote_waits = maxi(0, NetworkClient.remote_waits - 1)
 	NetworkClient.message_received.disconnect(on_message)
 	return state.intent
 

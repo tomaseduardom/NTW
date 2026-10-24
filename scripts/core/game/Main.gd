@@ -7,9 +7,8 @@ extends Control
 # ESCENAS PRECARGADAS
 # =============================================================================
 const CardScene = preload("res://scenes/cards/Card.tscn")
-# preload y no el class_name global (2026-10-12): un editor de Godot abierto
-# desde antes de crear la clase no la tiene registrada y Main/TriggerSystem
-# fallaban con "Could not find type" hasta reabrir el proyecto.
+# preload y no el class_name global: un editor abierto desde antes de crear la clase no la tiene
+# registrada y falla con "Could not find type".
 const ZoneBrowsePickerScript = preload("res://scripts/ui/zones/ZoneBrowsePicker.gd")
 const DropZoneScript = preload("res://scripts/ui/zones/DropZone.gd")
 const OpponentFanScript = preload("res://scripts/ui/hand/OpponentFan.gd")
@@ -24,6 +23,8 @@ const _CardInteractionScript  = preload("res://scripts/ui/hud/CardInteractionMod
 const _SceneSetupScript       = preload("res://scripts/ui/hud/SceneSetupModule.gd")
 const _DebugInputScript       = preload("res://scripts/ui/hud/DebugInputModule.gd")
 const _ActionLogDrawerScript  = preload("res://scripts/ui/hud/ActionLogDrawer.gd")
+const MatchConnectionWatcherScript = preload("res://scripts/core/network/MatchConnectionWatcher.gd")
+const TurnClockScript = preload("res://scripts/core/network/TurnClock.gd")
 
 # =============================================================================
 # REFERENCIAS A NODOS
@@ -43,11 +44,8 @@ const _ActionLogDrawerScript  = preload("res://scripts/ui/hud/ActionLogDrawer.gd
 @onready var opponent_field: HBoxContainer   = $GameBoard/OpponentArea/OpponentField
 @onready var opponent_linea_ataque: HBoxContainer = $GameBoard/OpponentArea/OpponentLineaAtaque
 @onready var opponent_linea_apoyo: HBoxContainer  = $GameBoard/OpponentArea/OpponentLineaApoyo
-# Contenedores ya existían en la escena sin usar (2026-08-25): el Oro del
-# oponente solo se mostraba como número en OpponentReservaOroLabel/
-# OpponentOroPagadoLabel, nunca como carta real — ni siquiera el Oro
-# Inicial con el que arranca la partida (ver GameBootstrap._setup_oro_
-# inicial(), que para J1 solo hacía agregar_oro_reserva() sin crear nodo).
+# Contenedores del Oro del oponente (Reserva y Oro Pagado): sus Oros se muestran como cartas reales,
+# además del número en OpponentReservaOroLabel/OpponentOroPagadoLabel.
 @onready var opponent_gold: HBoxContainer         = $GameBoard/OpponentArea/OpponentReservaOro
 @onready var opponent_oro_pagado: HBoxContainer   = $GameBoard/OpponentArea/OpponentOroPagado
 var _opponent_fan: Node = null
@@ -101,6 +99,8 @@ var _scene_setup: SceneSetupModule         = null
 var _debug_input: DebugInputModule         = null
 var _remote_mirror: RemoteMirrorController  = null
 var _state_broadcaster: GameStateBroadcaster = null
+var _connection_watcher: Node = null
+var _turn_clock: Node = null
 var _game_over_overlay: GameOverOverlay    = null
 var _combat_juice: CombatJuiceModule       = null
 var _action_log_drawer: Node               = null
@@ -134,12 +134,10 @@ func _ready() -> void:
 	_zone_manager = ZoneManager.new(); _zone_manager.name = "ZoneManager"
 	add_child(_zone_manager); _zone_manager.setup(self)
 
-	# Multiplayer remoto (2026-09-11, Fase B — docs/plans/2026-09-09-
-	# multiplayer-remoto-design.md): si esta instancia es el Anfitrión de una
-	# sala de red activa, el jugador 1 lo controla una PERSONA real por
-	# network, no la IA. RemotePlayerController extiende EasyBotController y
-	# expone la misma superficie pública — ningún otro archivo que llama a
-	# _easy_bot.<método> necesitó cambiar.
+	# Multijugador remoto (docs/plans/2026-09-09-multiplayer-remoto-design.md): si esta instancia es el
+	# Anfitrión de una sala activa, el jugador 1 lo controla una persona por red.
+	# RemotePlayerController extiende EasyBotController con la misma superficie pública
+	# (_easy_bot.<método>).
 	if NetworkClient.room_code != "" and NetworkClient.is_host:
 		_easy_bot = RemotePlayerController.new()
 	else:
@@ -147,12 +145,8 @@ func _ready() -> void:
 	_easy_bot.name = "EasyBotController"
 	add_child(_easy_bot); _easy_bot.setup(self)
 
-	# Etiqueta superior "Jugador 1" (2026-10-07, bug real reportado por el
-	# usuario: la pantalla del Remoto seguía diciendo "Jugador 1" arriba a la
-	# izquierda) — el texto venía fijo en Main.tscn, ningún script lo
-	# actualizaba nunca según quién mira la pantalla. En una sala online, el
-	# Remoto es Jugador 2 desde su propia perspectiva; en cualquier otro modo
-	# (local, contra el bot) la única persona real siempre es Jugador 1.
+	# Etiqueta superior "Jugador N" según quién mira la pantalla: en una sala online el Remoto es
+	# Jugador 2; en cualquier otro modo (local, contra el bot), la persona es Jugador 1.
 	if NetworkClient.room_code != "" and not NetworkClient.is_host:
 		player_info.text = "Jugador 2"
 
@@ -172,6 +166,14 @@ func _ready() -> void:
 	# instancia no es el Anfitrión (chequea NetworkClient en su setup()).
 	_state_broadcaster = GameStateBroadcaster.new(); _state_broadcaster.name = "GameStateBroadcaster"
 	add_child(_state_broadcaster); _state_broadcaster.setup(self)
+
+	# Partida en línea: desconexiones, fin de partida y concesión del Remoto. Inerte sin sala.
+	_connection_watcher = MatchConnectionWatcherScript.new(); _connection_watcher.name = "MatchConnectionWatcher"
+	add_child(_connection_watcher); _connection_watcher.setup(self)
+
+	# Partida en línea: reloj de turno (1 minuto, +2 s por acción). Inerte sin sala.
+	_turn_clock = TurnClockScript.new(); _turn_clock.name = "TurnClock"
+	add_child(_turn_clock); _turn_clock.setup(self)
 
 	_phase_flow = PhaseFlowController.new(); _phase_flow.name = "PhaseFlowController"
 	add_child(_phase_flow); _phase_flow.setup(self)
@@ -201,12 +203,9 @@ func _ready() -> void:
 	add_child(_bootstrap); _bootstrap.setup(self)
 
 	_debug_input = DebugInputModule.new(); _debug_input.name = "DebugInputModule"
-	# PROCESS_MODE_ALWAYS (2026-09-11, bug real reportado por el usuario: ESC
-	# abre el menú de pausa pero no lo cierra) — pause_menu ya tiene este
-	# mismo modo (SceneSetupModule.gd) para que sus botones funcionen con el
-	# árbol pausado, pero este nodo (dueño del _input() que escucha ESC) no lo
-	# tenía: al pausar (get_tree().paused = true), dejaba de recibir _input()
-	# por completo, así que una segunda tecla ESC nunca llegaba a procesarse.
+	# PROCESS_MODE_ALWAYS: este nodo es dueño del _input() que escucha ESC; con el árbol pausado
+	# dejaría de recibirlo y ESC no cerraría el menú de pausa (pause_menu ya usa este modo,
+	# SceneSetupModule.gd).
 	_debug_input.process_mode = Node.PROCESS_MODE_ALWAYS
 	add_child(_debug_input); _debug_input.setup(self)
 
@@ -303,23 +302,17 @@ func _sync_oro_ui() -> void:
 # =============================================================================
 # DEBUG
 # =============================================================================
-# Los atajos de teclado F1-F9/ESC y el _input() que los procesa se movieron a
-# DebugInputModule.gd (2026-08-28, a pedido del usuario: "el main es para
-# arrancar la app", eso es tooling de runtime, no arranque). _update_debug()
-# se queda aquí porque es infraestructura mínima usada por TODO el proyecto
-# (142 llamadores vía _main._update_debug()) — sacarla implicaría tocar cada
-# uno de esos archivos por puro cosmética, sin beneficio real.
+# Los atajos F1-F9/ESC y su _input() están en DebugInputModule.gd. _update_debug() queda aquí: es
+# infraestructura mínima usada por todo el proyecto (_main._update_debug()).
 var _last_debug_text: String = ""
 
 
 func _update_debug(text: String) -> void:
 	UIManager.show_debug(text)
-	# 2026-09-25, a pedido del usuario ("quitar el log redundante, hay
-	# bastante"): un rechazo repetido (clicks fallidos seguidos, p.ej.
-	# "Objetivo no válido" varias veces) imprimía la misma línea una vez
-	# por click — la UI ya se actualiza igual (el jugador ve el mensaje en
-	# pantalla cada vez), solo se evita reimprimir la MISMA línea dos veces
-	# seguidas en consola.
+	# ("quitar el log redundante, hay bastante"): un rechazo repetido (clicks fallidos seguidos, p.ej.
+	# "Objetivo no válido" varias veces) imprimía la misma línea una vez por click — la UI ya se
+	# actualiza igual (el jugador ve el mensaje en pantalla cada vez), solo se evita reimprimir la
+	# MISMA línea dos veces seguidas en consola.
 	if text != _last_debug_text:
 		print("[Main] %s" % text)
 		_last_debug_text = text

@@ -4,6 +4,13 @@ class_name GameBootstrap
 ## Se instancia como hijo de Main en _ready().
 
 var _main: Node = null
+const DeckValidatorScript = preload("res://scripts/core/cards/DeckValidator.gd")
+
+var _match_cancelled := false
+## Partida en línea: el "hello" del otro lado llegó y coincide con esta versión.
+var _peer_hello_ok := false
+## Sube cuando cambia el protocolo de red aunque no cambie la versión del juego.
+const NET_PROTOCOL := 1
 
 
 func setup(main: Node) -> void:
@@ -69,24 +76,17 @@ func _show_deck_selector() -> void:
 
 
 func _on_deck_selection_cancelled() -> void:
-	"""2026-09-30, a pedido del usuario: antes no había forma de cancelar
-	esta pantalla — Escape en DeckSelector.gd ahora emite esta señal en vez
-	de quedar como código muerto. Vuelve al menú principal (mismo destino
-	que el botón 'Volver' de OnlineConnect.gd/DeckManager.gd/BackSelector.gd)."""
+	"""Escape en DeckSelector cancela la elección de mazo: vuelve al menú principal (mismo destino que
+	el botón "Volver" de OnlineConnect/DeckManager/BackSelector)."""
 	if NetworkClient.room_code != "":
 		NetworkClient.disconnect_from_relay()
 	get_tree().change_scene_to_file("res://scenes/menu/MainMenu.tscn")
 
 
 func _on_decks_selected(player_data: Dictionary, opponent_data: Dictionary, player_is_external: bool = false, opponent_is_external: bool = false) -> void:
-	# get_node_or_null("/root/...") en vez del identificador global directo
-	# (2026-08-30): MatchLoadingOverlay SÍ está registrado como autoload en
-	# project.godot, pero el compilador de GDScript no lo reconocía como
-	# identificador válido ("Compile Error: Identifier not found") — mismo
-	# síntoma que CardNameSearchDialog antes (un class_name/autoload nuevo
-	# que el editor todavía no había terminado de indexar). La búsqueda por
-	# ruta es una resolución en tiempo de ejecución, no depende de que el
-	# compilador ya conozca el identificador.
+	# get_node_or_null("/root/...") en vez del identificador global: aunque MatchLoadingOverlay es
+	# autoload, un editor que aún no lo indexó da "Identifier not found". La búsqueda por ruta se
+	# resuelve en ejecución.
 	var _loading_overlay := get_node_or_null("/root/MatchLoadingOverlay")
 	if _loading_overlay:
 		_loading_overlay.show_loading(_main, "PREPARANDO PARTIDA", "Barajando los grimorios...")
@@ -96,29 +96,38 @@ func _on_decks_selected(player_data: Dictionary, opponent_data: Dictionary, play
 		return
 	if not DeckLoader.all_decks_ready.is_connected(_show_dice_roll):
 		DeckLoader.all_decks_ready.connect(_show_dice_roll, CONNECT_ONE_SHOT)
-	# Nadie escuchaba deck_load_failed en este flujo (2026-08-18): si un mazo
-	# no tenía ninguna carta encontrable en CardDatabase (p.ej. porque el
-	# catálogo cargado es más chico que el mazo guardado), DeckLoader emitía
-	# el fallo a la nada y el juego se quedaba esperando para siempre una
-	# all_decks_ready que nunca iba a llegar — sin ningún error visible.
+	# Escuchar deck_load_failed: si un mazo no tiene ninguna carta encontrable en CardDatabase, sin
+	# esto el juego esperaba para siempre un all_decks_ready que no llega.
 	if not DeckLoader.deck_load_failed.is_connected(_on_deck_load_failed):
 		DeckLoader.deck_load_failed.connect(_on_deck_load_failed)
-	# Jugador y oponente pueden venir de orígenes distintos ahora (2026-08-24):
-	# tu propio mazo (externo) para uno, un preset por raza (local) para el
-	# otro — cada lado se enruta según SU propio origen, no uno compartido.
+	# Jugador y oponente pueden venir de orígenes distintos ahora: tu propio mazo (externo) para uno,
+	# un preset por raza (local) para el otro — cada lado se enruta según SU propio origen, no uno
+	# compartido.
 	if player_is_external:
 		DeckLoader.load_deck_from_external_data(0, player_data)
 	else:
 		DeckLoader.load_deck_from_data(0, player_data)
 
-	# Multiplayer remoto (Fase A — docs/plans/2026-09-09-multiplayer-remoto-
-	# design.md): el mazo del jugador 1 no sale de aquí si hay una sala de red
-	# activa. Del lado Anfitrión, llega por red (el mazo real del Remoto, no
-	# una copia aleatoria del propio). Del lado Remoto, esta misma instancia
-	# NUNCA corre su propia partida — solo manda su mazo (el que acaba de
-	# cargar como jugador 0 arriba) y se queda esperando; Fase B reemplaza esa
-	# espera por la partida reflejada de verdad.
+	# Multijugador remoto (docs/plans/2026-09-09-multiplayer-remoto-design.md): con una sala activa, el
+	# mazo del jugador 1 no sale de aquí. En el Anfitrión llega por red (el mazo real del Remoto). El
+	# Remoto no corre su propia partida: manda su mazo (cargado arriba como jugador 0) y espera;
+	# RemoteMirrorController refleja la partida.
 	if NetworkClient.room_code != "":
+		if not NetworkClient.message_received.is_connected(_on_network_match_cancelled):
+			NetworkClient.message_received.connect(_on_network_match_cancelled)
+		var early_cancel: Dictionary = NetworkClient.last_message_by_op.get("match_cancelled", {})
+		if not early_cancel.is_empty():
+			_on_network_match_cancelled(early_cancel)
+			return
+		# Versión: los dos se mandan su "hello" antes del mazo (llega antes, mismo canal).
+		if not NetworkClient.message_received.is_connected(_on_network_hello):
+			NetworkClient.message_received.connect(_on_network_hello)
+		NetworkClient.send_message(_local_hello())
+		var early_hello: Dictionary = NetworkClient.last_message_by_op.get("hello", {})
+		if not early_hello.is_empty():
+			_on_network_hello(early_hello)
+		if _match_cancelled:
+			return
 		if NetworkClient.is_host:
 			_load_opponent_deck_from_network()
 		else:
@@ -141,10 +150,8 @@ func _load_opponent_deck_from_network() -> void:
 	if not pending.is_empty():
 		_apply_network_opponent_deck(pending)
 		return
-	# 2026-09-20, a pedido del usuario: si el Anfitrión ya eligió su mazo pero
-	# el Remoto todavía no mandó el suyo, mostrar "esperando jugador" en vez
-	# de quedar en silencio — mismo overlay/estilo que ya usa el lado Remoto
-	# en _send_deck_to_host() para el caso simétrico.
+	# Si el Anfitrión ya eligió y el Remoto todavía no mandó su mazo, se muestra "esperando jugador"
+	# (mismo overlay que _send_deck_to_host() del lado Remoto).
 	var _loading_overlay := get_node_or_null("/root/MatchLoadingOverlay")
 	if _loading_overlay:
 		_loading_overlay.show_loading(_main, "ESPERANDO JUGADOR",
@@ -162,8 +169,93 @@ func _on_network_message_while_waiting_deck(data: Dictionary) -> void:
 
 
 func _apply_network_opponent_deck(data: Dictionary) -> void:
-	var card_ids: Array = data.get("card_ids", [])
+	if _match_cancelled:
+		return
+	if not _peer_hello_ok:
+		_cancel_online_match("version", ["El rival usa una versión del juego sin chequeo de versión."])
+		return
+	var card_ids: Array = data.get("card_ids", []) if data.get("card_ids") is Array else []
+	var errors: Array = DeckValidatorScript.validate_ids(card_ids)
+	if not errors.is_empty():
+		_cancel_online_match("remote", errors)
+		return
 	DeckLoader.load_test_deck(1, card_ids)
+
+
+# =============================================================================
+# VERSIÓN (hello) Y CANCELACIÓN DE PARTIDA EN LÍNEA (mazo inválido, DeckValidator)
+# =============================================================================
+func _local_hello() -> Dictionary:
+	return {
+		"op": "hello",
+		"version": str(ProjectSettings.get_setting("application/config/version", "")),
+		"protocol": NET_PROTOCOL,
+		"cards": FileAccess.get_md5(CardDatabase.BUNDLED_CARDS_PATH),
+	}
+
+
+func _on_network_hello(data: Dictionary) -> void:
+	if data.get("op", "") != "hello" or _peer_hello_ok or _match_cancelled:
+		return
+	var own := _local_hello()
+	var peer_version := str(data.get("version", "?")).left(32)
+	var errors: Array = []
+	if peer_version != own.version or int(data.get("protocol", -1)) != NET_PROTOCOL:
+		errors.append("Tu versión: %s — versión del rival: %s." % [own.version, peer_version])
+	elif str(data.get("cards", "")) != own.cards:
+		errors.append("La base de cartas del rival es distinta a la tuya.")
+	if not errors.is_empty():
+		_cancel_online_match("version", errors)
+		return
+	_peer_hello_ok = true
+
+
+func _cancel_online_match(who: String, errors: Array) -> void:
+	"""Cancela la partida en línea: el mazo de `who` ("host"/"remote") no cumple las reglas, o
+	`who` == "version" (versiones distintas). Avisa al otro lado ({"op":"match_cancelled"}) y
+	muestra el motivo."""
+	if _match_cancelled:
+		return
+	_match_cancelled = true
+	NetworkClient.send_message({"op": "match_cancelled", "who": who, "errors": errors})
+	_show_match_cancelled(who, errors)
+
+
+func _on_network_match_cancelled(data: Dictionary) -> void:
+	if data.get("op", "") != "match_cancelled" or _match_cancelled:
+		return
+	_match_cancelled = true
+	var errors: Array = []
+	if data.get("errors") is Array:
+		for e in data.get("errors"):
+			errors.append(str(e).left(200))
+	_show_match_cancelled(str(data.get("who", "")), errors.slice(0, 12))
+
+
+func _show_match_cancelled(who: String, errors: Array) -> void:
+	var own := (who == "host") == NetworkClient.is_host
+	var loading_overlay := get_node_or_null("/root/MatchLoadingOverlay")
+	if loading_overlay:
+		loading_overlay.hide_loading()
+	var dialog := AcceptDialog.new()
+	dialog.title = "Partida cancelada"
+	if who == "version":
+		dialog.dialog_text = "Los dos jugadores deben tener la misma versión del juego.\n\n%s" % \
+			"\n".join(PackedStringArray(errors))
+	else:
+		dialog.dialog_text = "%s no cumple las reglas de construcción:\n\n%s" % [
+			"Tu mazo" if own else "El mazo del rival", "\n".join(PackedStringArray(errors))]
+	dialog.ok_button_text = "Volver al menú"
+	dialog.exclusive = true
+	dialog.confirmed.connect(_leave_cancelled_match)
+	dialog.canceled.connect(_leave_cancelled_match)
+	_main.add_child(dialog)
+	dialog.popup_centered()
+
+
+func _leave_cancelled_match() -> void:
+	NetworkClient.disconnect_from_relay()
+	get_tree().change_scene_to_file("res://scenes/menu/MainMenu.tscn")
 
 
 func _send_own_deck_and_wait_for_host() -> void:
@@ -184,7 +276,14 @@ func _on_own_deck_loaded_for_network(player_id: int, _card_count: int) -> void:
 
 
 func _send_deck_to_host() -> void:
+	if _match_cancelled:
+		return
 	var deck_data: Array = DeckLoader.get_deck_data(0)
+	# El Anfitrión lo vuelve a validar; validarlo aquí le muestra el motivo al Remoto sin ida y vuelta.
+	var errors: Array = DeckValidatorScript.validate(deck_data)
+	if not errors.is_empty():
+		_cancel_online_match("remote", errors)
+		return
 	var card_ids: Array = []
 	for card in deck_data:
 		card_ids.append(str(card.get("id", card.get("uuid", ""))))
@@ -228,15 +327,9 @@ func _prepare_game() -> void:
 
 
 func _setup_oro_inicial() -> void:
-	"""Extrae el Oro Inicial de ambos mazos y lo coloca en Reserva antes del mulligan.
-
-	Resetea GameState.oro_reserva/oro_pagado ANTES de agregar nada (2026-09-06,
-	bug real reportado por el usuario): GameState es autoload, así que si se
-	vuelve al menú y se arranca una partida nueva SIN cerrar el juego, los
-	oros de la partida anterior seguían en memoria — esta función solo
-	SUMABA el Oro Inicial encima de lo que ya hubiera, dejando una Reserva
-	inicial inflada (p.ej. 6 en vez de 1) que después dejaba pagar cartas
-	que no debían ser pagables."""
+	"""Extrae el Oro Inicial de ambos mazos y lo coloca en la Reserva antes del mulligan. Resetea
+	GameState.oro_reserva/oro_pagado ANTES: GameState es autoload y sin reset una partida nueva
+	sumaba el Oro de la anterior."""
 	GameState.reset_oro(0)
 	GameState.reset_oro(1)
 	for player_id in [0, 1]:
@@ -272,37 +365,23 @@ func _setup_oro_inicial() -> void:
 			card.base_scale = Constants.GOLD_CARD_SCALE
 			_main._connect_card_signals(card)
 			_main.player_gold.add_child(card)
-			# set_zone() faltaba aquí (2026-08-29, bug real reportado: el Oro
-			# Inicial quedaba con current_zone en su valor por defecto, MANO
-			# — nunca se actualizaba a RESERVA_ORO porque este camino de
-			# colocación es distinto al de _place_card_as_gold(), que sí lo
-			# hace. Cualquier efecto que revise 'está en juego/en Reserva'
-			# vía current_zone —p.ej. Convertir de Capitán O'Brien— rechazaba
-			# el Oro Inicial como objetivo aunque estuviera ahí a la vista).
+			# set_zone(): este camino no pasa por _place_card_as_gold(), y sin current_zone = RESERVA_ORO los
+			# efectos que miran la zona (p.ej. Convertir de Capitán O'Brien) rechazaban el Oro Inicial.
 			card.set_zone(Constants.Zone.RESERVA_ORO)
 			_main.gold_cards.append(card)
 			GameState.agregar_oro_reserva(0, 1)
 			_main._gold_manager._update_gold_display()
-			# El Oro Inicial nunca pasa por _trigger_enter_play() (este
-			# camino de colocación es aparte, ver comentario de más arriba
-			# sobre set_zone) — sin esto, un Oro Inicial con aura continua
-			# (p.ej. Armería del Guerrero: 'Tus Aliados de coste 1 o más
-			# ganan 1 de Fuerza') nunca la registraba (2026-09-04, bug real:
-			# el aura quedaba inerte toda la partida).
+			# El Oro Inicial no pasa por _trigger_enter_play(): sus auras continuas (p.ej. Armería del
+			# Guerrero: "Tus Aliados de coste 1 o más ganan 1 de Fuerza") se registran aquí.
 			ContinuousEffectManager._register_card_continuous_effects(card)
 			_main._gold_manager._register_armeria_opponent_turn_trigger(card)
 		else:
-			# El Oro Inicial del oponente ahora también se muestra como carta
-			# real (2026-08-25, a pedido del usuario) — antes solo sumaba al
-			# contador, sin ningún nodo visible en OpponentReservaOro. El Oro
-			# es información pública (DAR): va boca arriba, no oculta como una
-			# carta de mano (2026-08-26 — se creaba con is_hidden=true por error).
+			# El Oro Inicial del oponente también es una carta real en OpponentReservaOro, boca arriba (el
+			# Oro es información pública, DAR).
 			var card = _main._create_card(oro_data, false)
 			card.owner_id = 1
-			# can_interact = true (2026-08-28, a pedido del usuario: "necesito
-			# poder interactuar con él como con mis cartas") — antes estaba en
-			# false, así que ni el hover corría sobre esta carta (con
-			# can_interact=false, CardInteraction.process() la ignora entera).
+			# can_interact = true: se puede inspeccionar como cualquier carta propia (con false,
+			# CardInteraction.process() la ignora).
 			card.can_interact = true
 			card.scale = Constants.GOLD_CARD_SCALE
 			card.base_scale = Constants.GOLD_CARD_SCALE
@@ -374,6 +453,14 @@ func _build_test_decks() -> void:
 # =============================================================================
 func _show_dice_roll() -> void:
 	"""Lanza el Duelo de Dados D20 en 3D en tiempo real — al terminar llama _start_mulligan_phase()."""
+	if _match_cancelled:
+		return
+	# En línea el Anfitrión también valida su propio mazo (mismas reglas que el del Remoto).
+	if NetworkClient.room_code != "" and NetworkClient.is_host:
+		var own_errors: Array = DeckValidatorScript.validate(DeckLoader.get_deck_data(0))
+		if not own_errors.is_empty():
+			_cancel_online_match("host", own_errors)
+			return
 	print("[Bootstrap] _show_dice_roll: iniciando duelo D20 en 3D")
 	var loading_overlay := get_node_or_null("/root/MatchLoadingOverlay")
 	if loading_overlay:
@@ -381,12 +468,9 @@ func _show_dice_roll() -> void:
 	UIManager.set_phase_text("Sorteo D20")
 
 	var dice_duel = DiceDuel3D.new()
-	# 2026-09-20, a pedido del usuario: en sala online, cada pantalla tiraba
-	# sus propios 2 dados al azar por separado — 4 dados sin relación entre
-	# sí, cada lado podía "ganar" su propia tirada. El Anfitrión manda el
-	# resultado REAL apenas lo decide (result_decided, antes de la animación)
-	# — RemoteMirrorController.gd escucha "dice_roll" y reproduce la MISMA
-	# tirada del otro lado, en vez de tirar la suya.
+	# En sala online el Anfitrión manda el resultado real de los dados apenas lo decide
+	# (result_decided, antes de la animación), y RemoteMirrorController reproduce la misma tirada
+	# ("dice_roll").
 	if NetworkClient.room_code != "" and NetworkClient.is_host:
 		dice_duel.result_decided.connect(func(r1: int, r2: int, _w: int):
 			NetworkClient.send_message({"op": "dice_roll", "result1": r1, "result2": r2})

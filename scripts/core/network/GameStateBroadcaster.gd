@@ -1,29 +1,14 @@
 extends Node
 class_name GameStateBroadcaster
-## GameStateBroadcaster — instanciado siempre en Main.gd, pero SOLO activo
-## cuando esta instancia es el Anfitrión de una sala de red activa
-## (NetworkClient.room_code != "" and NetworkClient.is_host). Traduce las
-## señales que EffectController YA emite en cada transición de zona real
-## (on_card_entered_play/on_card_left_play) a instrucciones de red
-## ({"op":"move_card"/"remove_card",...}) para que RemoteMirrorController
-## (del lado del cliente Remoto) pueda reflejar el tablero.
-##
-## Alcance original (2026-09-11, Fase B): las 5 zonas PÚBLICAS "en juego"
-## (Constants.ZONES_IN_PLAY — Reserva de Oro, Oro Pagado, Línea de Defensa/
-## Ataque/Apoyo), las únicas con Nodos Card visibles en el tablero
-## (Cementerio/Destierro solo muestran un contador de texto, sin cartas
-## individuales visibles — no hace falta streaming para eso todavía).
-## Castillo (privado) queda fuera a propósito — ver GameManager/ZoneManager,
-## no tiene Nodos persistentes que mostrar de todos modos (solo un contador).
-##
-## 2026-10-08 (ver arquitectura.md §45, a pedido del usuario — "revisa la
-## mano para que se pueda ver durante toda la partida"): la Mano del
-## jugador 1 YA se transmite también, para que el Remoto tenga su propia
-## mano real y persistente (player_hand poblado todo el tiempo), no solo
-## una fila de cartas dentro de cada prompt puntual. La mano del Anfitrión
-## NUNCA viaja por aquí (fog of war real, no solo visual) — solo se
-## escuchan las señales de _opponent_fan (jugador 1), nunca las de
-## player_hand.
+## GameStateBroadcaster — instanciado siempre en Main.gd, pero solo activo en el Anfitrión de una
+## sala (NetworkClient.room_code != "" and NetworkClient.is_host). Traduce las transiciones de zona
+## (EffectController.on_card_entered_play/on_card_left_play y los contenedores en juego) a
+## instrucciones de red ({"op":"move_card"/"remove_card",...}) para que RemoteMirrorController
+## refleje el tablero.
+## Zonas: las 5 públicas en juego (Constants.ZONES_IN_PLAY: Reserva, Oro Pagado, Línea de
+## Defensa/Ataque/Apoyo). Castillo/Cementerio/Destierro van como contadores. La Mano del jugador 1
+## también viaja, para que el Remoto tenga su mano persistente (arquitectura.md §45); la mano del
+## Anfitrión nunca viaja (solo se escuchan las señales de _opponent_fan).
 
 var _active: bool = false
 var _main: Node = null
@@ -46,6 +31,9 @@ func setup(main: Node) -> void:
 	# en ActionReturnDiscard.gd).
 	EffectController.on_card_returned_to_deck.connect(_on_card_returned_to_deck)
 	KeywordManager.abilities_changed.connect(_queue_disabled_sync)
+	# Aliados en la Línea de Ataque que no atacan (CardInteractionModule, se crea después): tono azul
+	# hielo en el Remoto.
+	_connect_idle_attack.call_deferred()
 	# Recién tras game_started, no en setup() — _opponent_fan.add_card()/
 	# remove_card() YA se llaman durante el mulligan (RemotePlayerController.
 	# run_mulligan() dibuja ahí mismo mientras el jugador decide mantener/
@@ -87,13 +75,9 @@ func _on_castillo_counts_changed(player_deck_size: int, opponent_deck_size: int)
 	})
 
 
-## Cartas que YA estaban en juego antes de conectarnos (2026-10-11, bug real
-## reportado por el usuario: "no puedo ver los oros iniciales"): el Oro
-## Inicial se coloca con add_child() directo en GameBootstrap._setup_oro_
-## inicial(), sin pasar por EffectController.on_card_entered_play, así que
-## nunca viajaba al Remoto. Snapshot de las 5 zonas en juego de ambos lados
-## al empezar la partida — move_card es idempotente por card_id del lado
-## Remoto, así que no duplica nada si alguna ya se había enviado.
+## Snapshot de las 5 zonas en juego de ambos lados al empezar la partida: el Oro Inicial se coloca
+## con add_child() directo (GameBootstrap._setup_oro_inicial()), sin pasar por on_card_entered_play.
+## move_card es idempotente por card_id del lado Remoto.
 func _sync_cards_already_in_play() -> void:
 	var containers := {
 		0: ["player_gold", "player_oro_pagado", "player_field", "player_linea_ataque", "player_linea_apoyo"],
@@ -109,15 +93,10 @@ func _sync_cards_already_in_play() -> void:
 					_on_card_entered_play(player_id, child, int(child.current_zone))
 
 
-## Contenedor en juego -> (jugador, zona). 2026-10-12, bug real reportado por
-## el usuario ("jugué una carta desde el jugador 2 y ni siquiera se pagaron
-## los Oros"): pagar mueve el Oro de Reserva a Oro Pagado con add_child()
-## directo (GoldManager.pagar_coste()/EasyBotController._pay_oro_for_bot()),
-## sin pasar por on_card_entered_play — el Remoto nunca se enteraba, ni de
-## sus Oros ni de los del Anfitrión (lo mismo al recuperarlos en la
-## Agrupación). Vigilar child_entered_tree de los 10 contenedores cubre
-## CUALQUIER movimiento entre zonas en juego, venga del código que venga;
-## move_card es idempotente del lado Remoto.
+## Contenedor en juego → (jugador, zona). Se vigila child_entered_tree de los 10 contenedores para
+## cubrir cualquier movimiento entre zonas en juego (p.ej. pagar mueve el Oro de la Reserva al Oro
+## Pagado con add_child() directo, y la Agrupación lo devuelve). move_card es idempotente del lado
+## Remoto.
 const WATCHED_CONTAINERS := {
 	"player_gold": [0, Constants.Zone.RESERVA_ORO], "player_oro_pagado": [0, Constants.Zone.ORO_PAGADO],
 	"player_field": [0, Constants.Zone.LINEA_DEFENSA], "player_linea_ataque": [0, Constants.Zone.LINEA_ATAQUE],
@@ -167,9 +146,8 @@ func _on_hand_card_removed(card: Node) -> void:
 func _on_card_entered_play(player_id: int, card: Node, zone: int) -> void:
 	if not is_instance_valid(card) or zone not in Constants.ZONES_IN_PLAY:
 		return
-	# "own" es relativo al RECEPTOR (el Remoto, que del lado del Anfitrión
-	# siempre es el jugador 1) — ver "perspectiva relativa al receptor" en
-	# docs/plans/2026-09-09-multiplayer-remoto-design.md.
+	# "own" es relativo al RECEPTOR (el Remoto, que del lado del Anfitrión es siempre el jugador 1);
+	# ver docs/plans/2026-09-09-multiplayer-remoto-design.md.
 	var own_for_remote: bool = (player_id == 1)
 	var card_data: Dictionary = card.card_data.duplicate() if card.get("card_data") != null else {}
 	NetworkClient.send_message({
@@ -202,11 +180,26 @@ func _send_remove_card(card: Node) -> void:
 	NetworkClient.send_message({"op": "remove_card", "card_id": card_id})
 
 
-## Cartas sin habilidad (silenciadas, con el nombre bloqueado o convertidas)
-## — 2026-10-13 (§63, Alicia en Wonderland): el Remoto no tiene esos
-## bloqueos (viven en el KeywordManager del Anfitrión), así que nunca veía
-## el gris de "sin habilidad". Se manda la lista completa (mesa + la mano
-## del Remoto; nunca la del Anfitrión) solo cuando cambia.
+## Cartas sin habilidad (silenciadas, con nombre bloqueado o convertidas; §63): el Remoto no tiene
+## esos bloqueos (viven en el KeywordManager del Anfitrión). Se manda la lista completa (mesa + mano
+## del Remoto, nunca la del Anfitrión) solo cuando cambia.
+var _last_idle_attack_ids: Array = []
+
+
+func _connect_idle_attack() -> void:
+	if _main and _main.get("_card_interaction") and _main._card_interaction.has_signal("idle_attack_changed"):
+		_main._card_interaction.idle_attack_changed.connect(_on_idle_attack_changed)
+
+
+func _on_idle_attack_changed(card_ids: Array) -> void:
+	var ids: Array = card_ids.duplicate()
+	ids.sort()
+	if ids == _last_idle_attack_ids:
+		return
+	_last_idle_attack_ids = ids
+	NetworkClient.send_message({"op": "idle_attack_cards", "card_ids": ids})
+
+
 func _queue_disabled_sync() -> void:
 	if _disabled_sync_queued:
 		return

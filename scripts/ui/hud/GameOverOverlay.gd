@@ -7,6 +7,7 @@ signal rematch_requested
 signal menu_requested
 
 const FONT_TITLE = preload("res://assets/fonts/Cinzel-Bold.ttf")
+const MatchConnectionWatcherScript = preload("res://scripts/core/network/MatchConnectionWatcher.gd")
 const FONT_REGULAR = preload("res://assets/fonts/Marcellus-Regular.ttf")
 
 var _backdrop: ColorRect = null
@@ -439,12 +440,18 @@ func _create_ghost_button(text: String) -> Button:
 func _on_rematch_pressed() -> void:
 	emit_signal("rematch_requested")
 	get_tree().paused = false
+	# En línea la sala ya no sirve para otra partida: se sale y se vuelve al menú.
+	if MatchConnectionWatcherScript.is_online():
+		MatchConnectionWatcherScript.leave_match()
+		get_tree().change_scene_to_file("res://scenes/menu/MainMenu.tscn")
+		return
 	get_tree().change_scene_to_file("res://scenes/game/Main.tscn")
 
 
 func _on_menu_pressed() -> void:
 	emit_signal("menu_requested")
 	get_tree().paused = false
+	MatchConnectionWatcherScript.leave_match()
 	get_tree().change_scene_to_file("res://scenes/menu/MainMenu.tscn")
 
 

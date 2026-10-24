@@ -3,7 +3,8 @@ extends Control
 ## Permite crear una sala privada (Anfitrión) o unirse con código (Invitado)
 ## usando cartas medievales ilustradas con ranuras interactivas para el código.
 
-const DEFAULT_RELAY_URL := "wss://mitos-relay-server-production.up.railway.app"
+# Relay local mientras no haya un hosting nuevo (2026-10-21: se cortó Railway por un aviso de seguridad).
+const DEFAULT_RELAY_URL := "ws://localhost:8080"
 const TEX_HOST := preload("res://assets/ui/menu/online/card_host.png")
 const TEX_HOST_HOVER := preload("res://assets/ui/menu/online/card_host_hover.png")
 const TEX_HOST_CREATED := preload("res://assets/ui/menu/online/card_host_created.png")
@@ -60,6 +61,7 @@ func _ready() -> void:
 	NetworkClient.room_joined.connect(_on_room_joined)
 	NetworkClient.peer_joined.connect(_on_peer_ready)
 	NetworkClient.peer_disconnected.connect(_on_peer_disconnected)
+	NetworkClient.connection_lost.connect(_on_connection_lost)
 	NetworkClient.relay_error.connect(_on_relay_error)
 
 
@@ -237,6 +239,12 @@ func _on_peer_ready() -> void:
 
 func _on_peer_disconnected() -> void:
 	status_label.text = "El contrincante se ha desconectado."
+
+
+func _on_connection_lost() -> void:
+	waiting_peer_label.text = ""
+	status_label.text = "Se perdió la conexión con el servidor."
+	_set_busy_done()
 
 
 func _on_relay_error(message: String) -> void:

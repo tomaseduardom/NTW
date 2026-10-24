@@ -6,6 +6,7 @@ class_name PauseMenuOverlay
 
 const FONT_TITLE := preload("res://assets/fonts/Cinzel-Bold.ttf")
 const FONT_TEXT := preload("res://assets/fonts/Marcellus-Regular.ttf")
+const MatchConnectionWatcherScript = preload("res://scripts/core/network/MatchConnectionWatcher.gd")
 
 signal resume_requested
 signal conceded
@@ -527,8 +528,7 @@ func _on_concede_pressed() -> void:
 func _execute_concede() -> void:
 	close_menu()
 	conceded.emit()
-	if GameManager:
-		GameManager.player_loses(0, "Concesión de la partida")
+	MatchConnectionWatcherScript.concede()
 
 
 func _on_menu_pressed() -> void:
@@ -543,6 +543,7 @@ func _execute_main_menu() -> void:
 	get_tree().paused = false
 	Engine.time_scale = 1.0
 	main_menu_requested.emit()
+	MatchConnectionWatcherScript.leave_match()
 	get_tree().change_scene_to_file("res://scenes/menu/MainMenu.tscn")
 
 
