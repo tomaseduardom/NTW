@@ -57,17 +57,95 @@ const CASES := [
 		"? shuffle_from_cemetery(2)"],
 	["En tu Fase Final, si no fue declarado atacante este turno, destrúyelo.",
 		"if(not_attacked_this_turn)[self(destroy)]"],
+	["Cuando entra en juego, Destierra hasta dos cartas de los Cementerios.",
+		"cemetery_cleanup"],
+	# --- Fuerza para todos los Aliados de un lado y pérdida de habilidad ---
+	["Cuando entra o salga del juego, tus Aliados ganan 2 de Fuerza permanentemente.",
+		"mass_buff(own,+2,perm)"],
+	["Cuando ataca, tus demás Aliados ganan 1 de Fuerza e Indestructible por el turno.",
+		"mass_buff(own,demas,+1,turno,indestructible)"],
+	["Cuando ataca tus Aliados ganan 1 de Fuerza.",
+		"mass_buff(own,+1,-)"],
+	["Cuando entra en juego, si controlas Armas tus Aliados ganan 2 de Fuerza por el turno.",
+		"if({ \"kind\": \"controls\", \"count\": 1, \"type\": \"arma\", \"race\": \"\", \"other\": false, \"min_strength\": -1, \"attack_line\": false })[mass_buff(own,+2,turno)]"],
+	["Una vez por turno, los Aliados oponentes pierden 1 de Fuerza permanentemente y una carta pierda su habilidad por el turno.",
+		"mass_buff(opponent,-1,perm) target(silence,1,*,any)[turn]"],
+	["Cuando entra en juego, una carta de coste 2 o menos pierde su habilidad.",
+		"target(silence,1,*,any,coste<=2)[permanent]"],
+	["Cuando entra en juego, una carta pierde su habilidad hasta tu próximo turno.",
+		"FAIL"],
+	["Los Aliados oponentes pierden Furia.",
+		"FAIL"],
 	# --- Deben rechazarse (que siga la cadena vieja) ---
 	["Cuando entra en juego, tu oponente convierte una carta que controle que no sea Oro en un Tótem "
 		+ "sin habilidad y tú ganas su control.",
-		"FAIL"],
-	["Cuando entra en juego, Destierra hasta dos cartas de los Cementerios.",
 		"FAIL"],
 	["Cuando entra en juego, Roba una carta y Baraja una carta oponente de coste igual o menor a la "
 		+ "cantidad de Aliados que controles.",
 		"FAIL"],
 	["Cuando entra en juego, busca un Aliado y ponlo en tu mano.",
 		"FAIL"],
+	# --- "A o B" sin coma, Anular, Talismán sin efecto, elegir qué gana (2026-10-21) ---
+	["Baraja una carta de coste 3 o menos o Anula un Talismán oponente.",
+		"choice[target(shuffle,1,*,any,coste<=3) | annul(anula un talismán oponente)]"],
+	["En tu Vigilia, una vez por turno, puedes Destruir una carta de coste 2 o menos o hacer que el próximo "
+		+ "Talismán que juegue tu oponente este turno se resuelva sin efecto.",
+		"? choice[target(destroy,1,*,any,coste<=2) | talisman_fizzle]"],
+	["Una vez por turno, un Aliado gana Indestructible, Indesterrable o \"No puede ser Barajado\", hasta tu próximo turno.",
+		"choice[buff(indestructible,hasta_prox) | buff(indesterrable,hasta_prox) | buff(no_barajar,hasta_prox)]"],
+	["Cuando entra en juego, puedes robar dos cartas o tu oponente bota tres cartas.",
+		"? choice[draw(2) | mill(opponent,3)]"],
+	["Anula una carta de coste 1 o menos o mira la mano de tu oponente y Descarta una carta de coste 1 o menos de ahí.",
+		"choice[annul(anula una carta de coste 1 o menos) | hand_peek]"],
+	# La "o" de "3 o menos" no parte nada.
+	["Destruye una carta de coste 3 o menos.",
+		"target(destroy,1,*,any,coste<=3)"],
+	# Efecto antes de mirar el Castillo: lo de "mira" lo ejecuta CastleLook (paso castle_look).
+	["Cuando entra en juego, Destierra hasta una carta de coste 2 o menos y mira las primeras cuatro cartas de tu Castillo. Pon dos en tu Destierro y el resto en tu mano.\nLas cartas de coste 0 pierden su habilidad y cuestan un Oro adicional.",
+		"target(banish,hasta 1,*,any,coste<=2) castle_look"],
+	["En tu Fase Final, Destierra hasta dos cartas de un Cementerio, mira tantas cartas del tope de tu Castillo como Aliados controles y ordénalas.",
+		"cemetery_cleanup castle_look"],
+	# Disparador sin coma.
+	["Cuando entra en juego baraja hasta cuatro cartas de los Cementerios y roba una carta.",
+		"cemetery_cleanup draw(1)"],
+	# Búsquedas con raza, varias cartas y "y jugarlo".
+	["Cuando entra en juego, puedes buscar un Aliado, un Talismán y un Tótem en tu Castillo y ponerlos en tu mano.",
+		"? search(castillo,aliado,1) search(castillo,talisman,1) search(castillo,totem,1)"],
+	["Cuando entra en juego, puedes buscar en tu Castillo un Aliado Dragón de coste 3 o más y jugarlo reduciendo su coste en un Oro.",
+		"? search(castillo,*,1)"],
+	["Cuando entra en juego, puedes subir hasta un Aliado y un Arma de tu Cementerio a tu mano.",
+		"? search(cementerio,aliado,1,hasta) search(cementerio,arma,1,hasta)"],
+	["Cuando entra en juego, pon un Oro de tu mano o Cementerio en tu Oro Pagado.", "gold_to_paid"],
+	["Cuando entra en juego, pon dos cartas del fondo de tu Castillo en tu mano.", "deck_to_hand"],
+	["Cuando entra en juego, no recibes daño de combate hasta tu próximo turno.", "no_damage"],
+	# Costes de las activadas antes de "para (que)".
+	["Puedes Descartarlo para que un Aliado de Fuerza 3 o menos gane 2 de Fuerza este turno.",
+		"? cost(self_discard) buff(+2)"],
+	["Puedes Desterrarlo de tu Cementerio y pagar un Oro para subir hasta dos cartas que no sean Talismán de tu Cementerio a tu mano.",
+		"? cost(self_banish) pay(1) search(cementerio,*,2,hasta)"],
+	["Una vez por turno, puedes Descartar un Oro o Talismán para Robar una carta.", "? cost(discard,1) draw(1)"],
+	["En tu Vigilia, una vez por turno, puedes Botar dos cartas para que tu oponente Bote tres cartas.",
+		"? cost(mill,2) mill(opponent,3)"],
+	["Una vez en tu turno, puedes mostrar un Aliado de tu mano para que tu oponente Bote tres cartas.",
+		"? cost(reveal) mill(opponent,3)"],
+	["Puedes pagarlo y convertirlo en un Oro sin habilidad para robar dos cartas.",
+		"? cost(self_pay) cost(self_convert) draw(2)"],
+	["Puedes Desterrarlo para Anular un Talismán o Tótem de coste 2 o menos.",
+		"? cost(self_banish) annul(anula un talismán o tótem de coste 2 o menos)"],
+	["Una vez por turno, puedes hacer que un Aliado gane o pierda 2 de Fuerza por el turno.",
+		"? choice[buff(+2) | buff(-2)]"],
+	["Una vez por turno, tu oponente Destierra dos cartas del tope de su Castillo y tu oponente Descarta una carta de su mano.",
+		"castle_exile discard(opponent,1)"],
+	["Una vez por turno, un Aliado de coste 2 o menos tiene Fuerza 0 hasta tu próximo turno.", "buff(=0,hasta_prox)"],
+	["Una vez por turno, un Aliado tiene Fuerza 0 o duplica su Fuerza por el turno.", "choice[buff(=0) | buff(x2)]"],
+	["Puedes Desterrarlo de tu Cementerio para cancelar el ataque de un Aliado oponente.", "? cost(self_banish) cancel_attack"],
+	["En tu Vigilia, una vez por turno, puedes hacer que un Aliado haga el doble de daño este turno.", "? buff(doble_dano)"],
+	["Una vez en tu turno, un Aliado Bandido gana Imbloqueable y hace daño al Destierro este turno.", "buff(imbloqueable,bandido)"],
+	# Otra habilidad activada pegada a un Talismán: corta el bloque.
+	["Destruye un Aliado oponente. Puedes Desterrarlo de tu Cementerio y pagar un Oro para robar una carta.",
+		"target(destroy,1,aliado,opponent)"],
+	# Sin efecto previo no se compila: lo resuelve CastleLook solo.
+	["Cuando entra en juego, mira las primeras tres cartas de tu Castillo y ordénalas.", "FAIL"],
 ]
 
 
@@ -131,6 +209,41 @@ static func _step_summary(st: Dictionary) -> String:
 				s += "+silencio"
 			if st.has("replace_if_keyword"):
 				s += "+si_%s:%s" % [st.replace_if_keyword.keyword, st.replace_if_keyword.verb]
+			if st.verb == "silence":
+				s += "[%s]" % st.duration
+		"mass_buff":
+			var mb: Array = [st.side]
+			if st.others:
+				mb.append("demas")
+			mb.append("%+d" % st.amount)
+			mb.append("perm" if st.permanent else ("turno" if st.turn_only else "-"))
+			mb.append_array(st.keywords)
+			s = "mass_buff(%s)" % ",".join(mb)
+		"annul":
+			s = "annul(%s)" % st.text
+		"buff":
+			var gains: Array = st.keywords.duplicate()
+			if st.get("no_shuffle", false):
+				gains.append("no_barajar")
+			if int(st.amount) != 0:
+				gains.append("%+d" % st.amount)
+			if st.has("set_strength"):
+				gains.append("=%d" % st.set_strength)
+			if st.get("double", false):
+				gains.append("x2")
+			if st.get("double_damage", false):
+				gains.append("doble_dano")
+			if st.get("no_damage", false):
+				gains.append("sin_dano")
+			if st.target.has("race"):
+				gains.append(st.target.race)
+			if st.get("duration", "") == "until_next_turn":
+				gains.append("hasta_prox")
+			s = "buff(%s)" % ",".join(gains)
+		"cost":
+			s = "cost(%s%s)" % [st.kind, (",%d" % st.amount) if st.kind in ["discard", "mill"] else ""]
+		"pay":
+			s = "pay(%d)" % st.amount
 		"choice":
 			var opts: Array = []
 			for o in st.options:

@@ -1,0 +1,152 @@
+{
+    "slug":  "preset-eterno",
+    "nombre":  "eterno estandar (publico)",
+    "arquetipo":  "Eterno",
+    "formato":  "imp",
+    "entries":  [
+                    {
+                        "myl_id":  "20584",
+                        "quantity":  1
+                    },
+                    {
+                        "myl_id":  "20585",
+                        "quantity":  1
+                    },
+                    {
+                        "myl_id":  "20591",
+                        "quantity":  2
+                    },
+                    {
+                        "myl_id":  "20637",
+                        "quantity":  1
+                    },
+                    {
+                        "myl_id":  "20480",
+                        "quantity":  2
+                    },
+                    {
+                        "myl_id":  "20487",
+                        "quantity":  1
+                    },
+                    {
+                        "myl_id":  "custom_mid_21",
+                        "quantity":  1
+                    },
+                    {
+                        "myl_id":  "custom_mid_24",
+                        "quantity":  1
+                    },
+                    {
+                        "myl_id":  "custom_mid_25",
+                        "quantity":  2
+                    },
+                    {
+                        "myl_id":  "custom_mid_26",
+                        "quantity":  1
+                    },
+                    {
+                        "myl_id":  "custom_mid_27",
+                        "quantity":  2
+                    },
+                    {
+                        "myl_id":  "custom_mid_31",
+                        "quantity":  2
+                    },
+                    {
+                        "myl_id":  "custom_mid_34",
+                        "quantity":  1
+                    },
+                    {
+                        "myl_id":  "custom_mid_35",
+                        "quantity":  1
+                    },
+                    {
+                        "myl_id":  "custom_mid_38",
+                        "quantity":  2
+                    },
+                    {
+                        "myl_id":  "custom_mid_39",
+                        "quantity":  2
+                    },
+                    {
+                        "myl_id":  "custom_mid_41",
+                        "quantity":  1
+                    },
+                    {
+                        "myl_id":  "custom_mid_42",
+                        "quantity":  1
+                    },
+                    {
+                        "myl_id":  "custom_mid_44",
+                        "quantity":  1
+                    },
+                    {
+                        "myl_id":  "custom_mie_02",
+                        "quantity":  2
+                    },
+                    {
+                        "myl_id":  "custom_mie_15",
+                        "quantity":  2
+                    },
+                    {
+                        "myl_id":  "custom_mie_19",
+                        "quantity":  1
+                    },
+                    {
+                        "myl_id":  "custom_mie_20",
+                        "quantity":  2
+                    },
+                    {
+                        "myl_id":  "custom_mie_21",
+                        "quantity":  2
+                    },
+                    {
+                        "myl_id":  "custom_mie_28",
+                        "quantity":  2
+                    },
+                    {
+                        "myl_id":  "custom_mie_31",
+                        "quantity":  2
+                    },
+                    {
+                        "myl_id":  "custom_mie_35",
+                        "quantity":  1
+                    },
+                    {
+                        "myl_id":  "custom_mie_41",
+                        "quantity":  1
+                    },
+                    {
+                        "myl_id":  "custom_drac_122",
+                        "quantity":  1
+                    },
+                    {
+                        "myl_id":  "custom_drac_113",
+                        "quantity":  1
+                    },
+                    {
+                        "myl_id":  "custom_drac_p008",
+                        "quantity":  2
+                    },
+                    {
+                        "myl_id":  "custom_drac_p020",
+                        "quantity":  1
+                    },
+                    {
+                        "myl_id":  "custom_drac_p021",
+                        "quantity":  1
+                    },
+                    {
+                        "myl_id":  "custom_drac_p035",
+                        "quantity":  1
+                    },
+                    {
+                        "myl_id":  "custom_drac_p047",
+                        "quantity":  1
+                    },
+                    {
+                        "myl_id":  "custom_drac_p060",
+                        "quantity":  1
+                    }
+                ]
+}

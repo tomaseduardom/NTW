@@ -83,3 +83,4 @@ Toda interfaz debe seguir los principios visuales reflejados en `Configuracion.j
 2. **Navegación por Teclado y Foco**: Los estilos `focus` deben heredar la apariencia de `hover` con borde dorado sutil, evitando el marco punteado por defecto de Godot.
 3. **Manejo de Tecla Escape (`ESC`)**: Cualquier diálogo modal o popup debe implementar el cierre seguro mediante la tecla `ESC`.
 4. **100% Funcionalidad**: Ningún botón puede ser un elemento decorativo sin acción asignada; todos deben estar conectados a señales o métodos reales del flujo de juego.
+

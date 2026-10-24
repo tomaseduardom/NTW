@@ -15,8 +15,8 @@
   nada de "acá" (usar "aquí"), nada de "recién" en el sentido rioplatense de "no antes de
   ahora" (esa palabra en sentido normal de "hace poco" sí es neutra y está bien). Instrucción
   explícita y repetida del usuario (2026-09 en adelante) — no es una preferencia de estilo
-  opcional, es una regla dura. Si encontrás código o texto que la viola (propio o de una
-  sesión anterior), corregilo de paso, no lo dejes pasar.
+  opcional, es una regla dura. Si encuentras código o texto que la viola (propio o de una
+  sesión anterior), corrígelo de paso, no lo dejes pasar.
 
 ---
 
@@ -6385,3 +6385,506 @@ Cementerio o Castillo").
 - Quedan con clic en el Castillo del tablero (no es búsqueda, no hay nada que ver):
   Asmodeus, Belcebú, Cetro Demoniaco, Aho, Espada del Juicio, Infernum Vox y los
   "convierte del tope de un Castillo".
+
+---
+
+## Turnos: `turn_serial` vs `current_turn` (2026-10-18)
+
+- `GameManager.current_turn` sube una vez por **ronda** (cuando vuelve a jugar el jugador 0): tu turno y el del
+  rival comparten número. Solo sirve para mostrar ("Turno N") y estadísticas.
+- `GameManager.turn_serial` sube en **cada turno de jugador**. Todo lo que sea "este turno", "una vez por turno",
+  "hasta tu próximo turno" o "tu turno anterior" se cuenta con `turn_serial`:
+  - tu próximo turno = `turn_serial + 2` si es tu turno, `+ 1` si es el del rival (`RuleState.next_own_turn(pid)`);
+  - tu turno anterior = `turn_serial - 2` en tu turno, `- 1` en el del rival.
+- Estado de reglas especiales (contadores por turno, efectos con vencimiento, pendientes): `RuleState` (autoload),
+  no metadatos sobre Main.
+
+## Palabras clave: `KeywordParser` (2026-10-20)
+
+- Las palabras clave impresas (Furia, Imbloqueable, Indestructible, Indesterrable, Única, Exhumar, Errante,
+  Retador) salen de **un solo lugar**: `scripts/core/cards/KeywordParser.gd`, que lee el texto **por oración**
+  (antes se buscaba la palabra en todo el texto y unas 370 cartas tenían palabras clave que no eran suyas).
+  - **Propias** (`own_keywords`): una oración que es solo una lista de palabras clave ("Furia.", "Furia e
+    Imbloqueable.", "Exhumar:"). "Tus Aliados ganan Furia", "un Aliado gana Indestructible por el turno" o
+    `con la habilidad "Furia"` no cuentan: son efectos o habilidades otorgadas. Las citas se quitan antes.
+  - **Del portador** (`wielder_keywords`, solo Armas): las propias del Arma (menos Única/Exhumar) y las de
+    "El portador gana..." sin condición. Las lee `Card.has_keyword()`, salvo que el Arma haya perdido su
+    habilidad; `GoldManager._register_weapon_strength_bonus()` ya solo registra la Fuerza.
+  - **Condicionales** (`conditional_keywords`): "Si <condición>, gana X" y "El portador gana X y, si es un
+    Ángel, gana Y". Cada una queda como `{keyword, who: "self" | "wielder", cond: {kind, ...}}` y la evalúa
+    `KeywordConditions.holds()` en el momento: `Card.has_keyword()` (de la carta, salvo que esté silenciada,
+    y del portador según su Arma) y `ExhumarSystem` (Exhumar en el Cementerio). Condiciones: porta Arma,
+    Raza del portador o propia, N o más Aliados en juego / Cementerio / Destierro, N tipos de cartas en el
+    Destierro, menos cartas en la mano que el rival, N o menos cartas en la mano, controlas Aliados de una
+    Raza, atacaste en tu turno anterior, el turno que entra en juego. Una condición que no se reconoce no da
+    la palabra clave.
+- `CardDatabase` llena `keywords` de cada carta con `own_keywords` al cargar (bundled, caché o API; el campo
+  `keywords` de `cards.json` no se usa). `KeywordManager.parse_keywords_from_text()` delega en el parser.
+- Cubiertas: honda tadakatsu, date masamune, toyotomi hideyoshi, yaj, hanzaki, Antipas, alicanto, Demonios
+  del Abismo, Los Señalados, kanabo bestial, odachi, Alas de Ángel, ono, Cuervo Nocturno y macu.
+- **Consulta única:** `KeywordManager.has_keyword(carta, kw)`; `Card.has_keyword()` delega ahí. Orden: quitadas
+  (`remove_keyword()`, silencio, o un aura con `keywords_remove` vía `ContinuousEffectManager.
+  aura_removes_keyword()`) → otorgadas (`grant_keyword()`) → las de la carta si no perdió su habilidad
+  (`is_silenced()`: silencio, bloqueo por nombre o por instancia), leídas del texto **actual** cada vez (sin
+  caché por instancia; Reina Nyssara o una conversión se ven al instante) → las de sus Armas → auras. No hay
+  banderas `has_furia`/`is_unblockable` ni otro parseo de texto.
+- **Auras que quitan** ("Los Aliados de coste 1 o menos pierden Furia", "Los Aliados oponentes pierden
+  Indestructible e Indesterrable"): `KeywordParser.removals()` las lee y `KeywordAuras.removes()` las evalúa
+  en vivo dentro de `has_keyword()`, recorriendo las fuentes activas (en juego y sin perder su habilidad; "Si
+  está en tu Reserva" solo desde la Reserva; "Si está en tu Destierro" desde el Destierro; "De lo contrario"
+  de dotaku con la condición negada). Sin modificadores que registrar ni limpiar. Diadema Celestial ya no
+  tiene caso aparte en `KeywordManager.can_be_blocked()`.
+- **Fuerza impresa con condición o zona:** `StrengthAuras.gd` (lee por oración con `KeywordParser.sentences()` y
+  las condiciones de `KeywordConditions`) y `ModifierRegistry._get_modified_stat()` las suma en cada cálculo como
+  modificadores virtuales (misma capa, negativos al final). Cubre "Si <condición>, gana N de Fuerza" (de la carta
+  o del portador), auras con tope de coste o "con <keyword>", "Si está en tu Reserva / Oro Pagado / Cementerio /
+  Destierro, ..." y "De lo contrario, ...". `ContinuousEffectParser` ya no registra como aura fija las oraciones
+  condicionales o de zona (`_in_conditional_sentence()`), salvo Trono del Dragón, que resuelve él mismo.
+- **Frases disparadas no son auras:** `ContinuousEffectParser._in_static_sentence()` solo registra como aura fija
+  las oraciones sin condición, sin disparador/activación ("Cuando…", "Una vez por turno…", "En tu…") y sin
+  duración ("por el turno", "permanentemente"). Esas las resuelve su disparador: el compilador tiene
+  `mass_buff` ("Tus (demás) Aliados ganan… / Los Aliados oponentes pierden…", a todos los de ese lado en ese
+  momento) y `AllyEventTriggers.gd` cubre los eventos que el sistema de disparadores no ve (ogun: entra un
+  Aliado bajo tu control; troll soberano: juegas un Aliado; santos pincheira: lo Anulan o Cancelan).
+- **Tests:** `tools/test_keywords_strength.tscn` (escena, no `-s`: los scripts del juego necesitan los autoloads)
+  arma escenarios con cartas reales sobre `Main` y revisa palabras clave, auras, Fuerza condicional, Exhumar y
+  los disparadores de `AllyEventTriggers` (con Ventana de Respuesta contra el bot). `tools/test_effect_compiler.gd`
+  cubre `mass_buff` y `silence`. Uso: `--headless --path . res://tools/test_keywords_strength.tscn` y
+  `--headless --path . -s tools/test_effect_compiler.gd`.
+- **Auras que dan palabras clave** ("Tus Aliados ganan Furia", "Tus Aliados que porten Armas ganan Furia", "Si
+  está en tu Oro Pagado, tus Aliados ganan... Indestructible"): `KeywordAuras.grants()`, en vivo dentro de
+  `has_keyword()`. Antes casi ninguna funcionaba (el parser viejo le daba la palabra clave a la propia carta).
+- **"Por cada …"** en auras de Fuerza (Tótem, tipos o Talismanes en tu Destierro, copias de este Oro, Aliados de
+  coste N o de coste distinto, otros Aliados del controlador): `StrengthAuras._parse_per()` / `_count()`.
+- `ContinuousEffectParser` solo registra "Tus Aliados (de coste N o más) (que controlas) ganan N", "Los Aliados
+  oponentes pierden N" y "Los Aliados en juego pierden N"; "tus demás", "que controles" y "tus Aliados pierden"
+  los resuelve `StrengthAuras` (`handles_sentence()`).
+- `ContinuousEffectManager.request_strength_badge_refresh()` refresca los contadores de Fuerza cuando cambia algo
+  de lo que dependen las condiciones (zonas, Cementerio, Destierro, mano, turno, fase).
+- Auditoría: `res://tools/test_keywords_strength.tscn -- --audit` pone en juego cada carta con un aura estática
+  simple de Fuerza o de palabras clave y compara lo medido con el texto.
+
+## Restricciones de Castillo, mano e impuestos: `ProtectionRules` (2026-10-21)
+- **"Tu oponente no puede Desterrar cartas de tu Castillo"** (Cetro Demoniaco) y **nehushtan** en Línea de
+  Defensa ("no pueden Desterrar cartas del Castillo de su oponente ni Botar cartas"):
+  `ProtectionRules.castle_banish_blocked(dueño, actor)` / `mill_blocked()`. `actor` sale del `EffectContext` en
+  curso. Lo respetan `ActionMill.mill()` (Botar y Desterrar del tope por efectos; el daño no pasa por ahí),
+  `CardManager.banish_from_deck()` (helper nuevo para los patrones que Desterraban del tope a mano),
+  `CastleLook.look()` (la caja "Destierro" vuelve al tope) y `ActionSearch` (el Castillo no es elegible).
+- **Jinete de la Peste** ("si controlas cuatro Aliados Jinete, tu oponente no puede poner cartas en su mano por
+  efectos"; "Jinete" es por nombre, no tienen Raza): `hand_by_effects_blocked(pid)`, en `ActionSearch` (buscar →
+  mano) y la caja "a tu mano" de `CastleLook`. Robar no cuenta. Falta: devolver a la mano y los patrones viejos.
+- **"Oro adicional por afectar"** (Sake: tus demás Oros; manuel rodriguez: tus Aliados hasta tu próximo turno, vía
+  `grant_ally_affect_tax`): `affect_tax(carta, quien_elige)`. Se cobra al elegir objetivos en
+  `CardInteractionModule.await_target` / `await_multi_target` (envoltorios de `_await_*_raw`): si no alcanza el Oro,
+  la carta no es elegible. Los efectos masivos sin elección no lo cobran. `reset_game_state()` en
+  `GameManager.start_game()`.
+- **Crono Diamante**, "la primera habilidad de Oro que utilices cada turno no puede ser cancelada":
+  `ActionPipeline.activate_ability()` marca `context._first_gold_ability` (`note_gold_ability_use`) y
+  `StackAnnul.protected_from_cancel()` lo respeta (`first_gold_ability_protected`).
+- Arreglo: el fallback de `EffectController.mill_cards()` al Destierro sacaba del fondo (`pop_back`); el tope es el
+  índice 0.
+
+## Compilador ampliado y habilidades sueltas (2026-10-21)
+- **`EffectCompiler`**, piezas nuevas:
+  - "A o B" sin coma: si ", o " no parte la oración, se prueba cada " o " y vale si los dos lados compilan enteros.
+  - `annul` ("Anula un Talismán oponente", "Cancela la habilidad de una carta"): usa `StackAnnul.try_from_text`;
+    en una elección la opción no se ofrece si no hay nada que Anular (`try_from_text(..., dry_run)`).
+  - `talisman_fizzle` (kotoku-in).
+  - `grant_choice` ("un Aliado gana Indestructible, Indesterrable o "No puede ser Barajado", hasta tu próximo
+    turno", Sarcófago Impío): `buff` con `duration: "until_next_turn"` y `no_shuffle`.
+  - `regroup_cards` ("agrupa dos cartas": Oro Pagado → Reserva y Línea de Ataque → Defensa, DAR 5.1,
+    `GoldManager.agrupar_cartas`).
+  - verbo `cost_shift` ("una carta en juego aumenta o reduce su coste en un Oro", Titán Abismal; permanente).
+  - Regla: "pagar un Oro para subir esta carta de tu Cementerio a tu mano" no es parte del efecto.
+- Intérprete: "de coste N" nunca incluye Oros; una elección con una sola opción posible no pregunta; el bot da
+  palabras clave a sus propios Aliados.
+- `KeywordManager.grant_keyword(..., "until_next_turn")`: vale este turno y el del rival (`until_serial`).
+- Cambios de camino (el auditor los lista): unas 25 cartas con "A o B" sin coma pasan de patrones viejos al
+  intérprete. Sombrerero Loco se mantiene con su patrón (elección en el tablero), que ahora va antes del intérprete.
+  `try_annul_on_stack` deja "Anula X o Y" (Mala Flecha) al intérprete.
+- **"Puedes Descartar / Destruir / Desterrar <qué> para reducir su coste en N Oros"** (genérico en
+  `GoldManagerTax._get_discard_cost_reduction_pattern`, antes solo voragh): colaborador titan, "un Aliado Bestia",
+  "una carta que controles", "un Aliado Sacerdote de tu mano"... (20 de 25 textos; Botar/mostrar/"tantos Oros como" no).
+- Botones nuevos (`InPlayAbilities`, `AbilityButtonPatternsD`): Armadura Celestial (Destruir al portador para Anular /
+  Cancelar) y kabutowari (Guerra de Talismanes; `AbilityButtonSupport._validate_ability` valida la fase).
+- iga ryu: elige entre agrupar dos cartas y ganar el control. contra el caos: pagar un Oro para repetir (una vez).
+  Ofrendas al Dragón: genera un Oro si las cuatro cartas eran de tipos distintos
+  (`_resolve_armeria_barajar_desterrar` devuelve lo que movió).
+
+## Correcciones de reglas y pendientes cerrados (2026-10-21, segunda parte)
+
+- **Oro adicional por afectar (manuel rodriguez, Sake):** elegir el objetivo (Pasos A-B) no lo afecta todavía. `CardInteractionModule._pay_affect_tax()` abre primero la ventana de respuesta del efecto en curso (`EffectContext.ensure_window()`) y cobra recién cuando el rival cede la prioridad. Si el efecto se anula o no se puede pagar, esa carta no se ve afectada. Lo que no se puede pagar sigue sin ser elegible.
+- **Crono Diamante:** cuenta habilidades de Oro activadas (`ActionPipeline.activate_ability()`) y disparadas (`TriggerSystem.open_response_window()` con `kind == "disparada"`).
+- **Fachada ActionModule:** los parámetros `source`/`source_card` van sin tipo y pasan por `_live()`: una carta fuente liberada durante el efecto llega como null en vez de romper la llamada ("previously freed", SearchOwnZonePatterns).
+- **Usable desde el Destierro:** `CardInspectionLayer._ability_is_destierro_usable()` (sandraudiga: Desterrar una carta de la mano para Barajarlo en tu Castillo). El Remoto la ve con `RemotePlayerController._exile_proxies()`, igual que las del Cementerio.
+- **iga ryu:** `InPlayAbilities.iga_ryu_on_ally_enters()` silencia al primer Aliado que entra bajo el control del rival cada turno (desde `_collect_triggers_for_event("on_enter_play")`, antes de recolectar sus disparadores). `TotemAbilityPatterns.try_execute_iga_ryu_convert_totems_pattern()` convierte hasta tres Tótem en Aliados de Fuerza 4, que vuelven a ser Tótem al comenzar el turno siguiente (`_convert_totem_to_ally`/`_revert_ally_to_totem`, compartido con metropolitan). Se despacha con el texto aislado de la activada.
+- **Estación Fantasma:** `InPlayAbilities.estacion_fantasma_on_attack()` desde `GameManager.confirm_attackers()`. La meta `no_damage_turn` hace que `BattleManager` no sume el daño de ese Aliado ni destruya a su bloqueador.
+- **atenea en wonderland:** meta `double_exile_damage_turn` (solo este turno) en vez de la bandera permanente que se limpiaba en el turno siguiente del dueño.
+- **Bloqueo (Anfitrión):** clickear un bloqueador ya declarado quita el bloqueo, como en el Remoto. Los bloqueos forzados (Cañón Helios, meta `forced_block_turn`) no se quitan.
+- **corte letal:** "...para reducir su coste en dos Oros y no pueda ser Anulado" (`no_annul` del patrón de GoldManagerTax).
+- **Compilador:** paso `castle_look` (`EffectCompiler._compile_with_castle_look`). Un efecto antes de "mira N cartas de tu Castillo..." se compila como siempre, y desde "mira" hasta el fin del párrafo lo ejecuta `CastleLook.try_execute_text()`. `EffectInterpreter.try_execute()` lo valida antes con dry_run. Lo usan camilo henriquez y Carro Szgany. Átomo `cemetery_banish`/`cemetery_shuffle` con "de un Cementerio" (`one_zone`). Con "hasta N" o "puedes", el bot del intérprete no elige cartas propias para efectos que perjudican.
+- **Ya estaban hechos (notas viejas corregidas):** cuervo nocturno (por el camino de Tyet), Ngenechén (MechanicPatterns y el registro de prevenciones), amazona desafiante en Fase Final (`on_turn_end`). `PaymentUI._pay_with_sacrifice_async`/`_pay_with_discard_async` son inalcanzables: ninguna carta trae `alternative_cost`.
+
+## Detector de cartas sin efecto (2026-10-21)
+
+- `tools/probe_handlers.tscn` es la vara exacta. Resuelve cada disparador, Talismán y activada del catálogo con el bot, en un tablero de relleno, y anota `resuelto`, `sin_handler` o `espera`:
+  - Disparadores: el `no_handler` de `TriggerResolution._execute_trigger_effect()`. Si da `sin_handler`, reintenta con el rival como jugador activo ("al comienzo del turno oponente").
+  - Talismanes: `_resolve_look_and_play_patterns()`.
+  - Activadas: los botones especiales (`try_build`) y el registro de prevenciones reactivas de EffectController; si ninguno aplica, `resolve_ability_effect()`.
+  - Uso: `-- salida.md [desde] [hasta] [nombre]`. El catálogo completo tarda unos 30 minutos en 6 procesos en paralelo.
+  - Informe: `docs/cobertura-handlers.md`.
+- `tools/audit_uncovered.gd` es una aproximación estática, más rápida. Cruza los bloques no compilados de `audit_cards.gd` con las frases y RegEx de detección que hay en `scripts/`. Sirve para ver familias; no reemplaza a la sonda.
+- `audit_cards.gd` ahora reconoce los disparadores sin coma, igual que `EffectCompiler._strip_trigger_prefix()` (`NO_COMMA_EFFECT_STARTS`).
+- Bugs reales que encontró la sonda:
+  - Ngenechén: `BanishOpponentPatterns` leía `main._targeted_executor`, que no existe en Main, y se caía al entrar en juego. Ahora acepta también la errata "cuyos coste".
+  - Cuervo Nocturno: la impresión nueva ("Destierra seis cartas del tope del Castillo oponente") no la reconocía nadie.
+
+## Compilador: piezas para la lista de "al entrar en juego" (2026-10-21)
+
+- **Búsquedas** (átomo `search`). El objeto es `OBJS`: tipos con raza ("un Aliado Dragón", "un Ángel, Eterno o Tótem") y listas con " y " ("un Aliado, un Talismán y un Tótem").
+  - Cada grupo de la lista es una búsqueda aparte: `_object_groups()` arma los grupos y `_search_steps()` los devuelve como `{"op": "multi"}`, que `_compile_sequence()` despliega en varios pasos. El "hasta" del primer grupo vale para todos.
+  - La raza va como filtro `alts` de `ActionModule._apply_card_filter()`: se compara sin tildes y por los primeros 5 caracteres.
+  - Destinos: mano, Oro Pagado y Cementerio. También "y jugarlo sin pagar su coste" (`dest -1` y `play_card_for_free`) y "reduciendo su coste en N / por N Oros menos" (`may_play` con `cost_reduction`).
+  - `ActionSearch._put_found_card_into_play()`: el bot local ahora juega el Aliado encontrado si puede pagarlo.
+- **Átomos nuevos:**
+  - `raise`: "sube X de tu Cementerio a tu mano" (búsqueda en el Cementerio).
+  - `gold_to_paid`: "pon un Oro de tu mano o Cementerio en tu Oro Pagado" y "poner un Oro en juego desde…".
+  - `deck_to_hand`: fondo, tope, o primera y última carta del Castillo.
+  - `no_damage`: usa RuleState `no_combat_damage` / `no_direct_damage`.
+  - `play_from`: "jugar X de tu mano o Cementerio sin pagar / reduciendo / pagando su coste (y Destiérralo)". Con coste, la carta pasa por la mano y, si no se juega, vuelve al Cementerio.
+  - `peek_hand` y `show_hand`.
+  - `reveal_until`: acepta "de tu Castillo" sin "del tope", raza, "que no sea X", "mostar" (errata del texto) y "y juégalo sin pagar su coste".
+- **"de coste N" exacto**: `TARGET_RX` con `cmp "=="`.
+- **Disparadores combinados** en `TRIGGER_PREFIXES`: "…o ataques con un solo Aliado", "…o haga daño", "…o bloquee", "…y al comienzo de tu Vigilia", etc.
+- **"Puede atacar cuando entra en juego"**: `KeywordManager.can_attack_immediately()`, igual que Furia.
+
+## Compilador: costes de las activadas y piezas de la lista de activadas (2026-10-21)
+
+- **Costes** (`EffectCompiler.COST_PIECES`, `_parse_costs()`): uno o más costes unidos por " y " antes de "para (que) …".
+  - El Oro sale como `{op: "pay"}`. El resto sale como `{op: "cost", kind}`:
+    - la carta misma: `self_banish` (de donde esté), `self_discard`, `self_pay` (un Oro a tu Oro Pagado), `self_convert` (pierde su habilidad), `self_bounce` (de juego a la mano);
+    - otras cartas: `discard` (N cartas o "un Oro o Talismán"), `mill`, `reveal` ("mostrar un Aliado de tu mano"), `sacrifice` ("destruir otro Aliado que controles"), `shuffle_hand`.
+  - Tras "para que" o "hacer que", el subjuntivo pasa a indicativo (`SUBJUNCTIVE`, `_indicative()`: solo el primer verbo y su alternativa "gane o pierda").
+  - "elegir un Aliado oponente para que pierda…" se compila como "un Aliado oponente pierde…".
+- **`EffectInterpreter.execute_plan()`**: revisa todos los costes (`_cost_unpayable()`) y después los paga (`_pay_cost()`), antes de declarar objetivos.
+  - Sin ataque que cancelar o sin nada que Anular en la pila, no cobra.
+  - Si pagar liberó el Nodo de la carta (Descartarla, Desterrarla de la mano), el resto del efecto corre con una copia fuera del tablero (`_execute_plan_steps()`).
+  - Si llega con contexto `"activada"`, no vuelve a preguntar "¿Usar la habilidad?".
+- **Doble cobro corregido.** En "Puedes pagar un Oro para…" sin dos puntos (`CostType.GOLD`), la Pila cobraba en el Paso B y el paso `pay` volvía a cobrar. Ahora `StackStepResolver._resolve_ability()` deja `gold_paid` en el `EffectContext` y el intérprete lo descuenta.
+- **Parser:**
+  - `UniversalCardParser._fold_usage_qualifiers()`: "Sólo puedes utilizar esta habilidad de X una vez por turno" convierte la oración anterior en "Una vez por turno, …" (Belial), salvo que sea un disparador ("Cuando…", el horla). "Puedes utilizar esta habilidad más de una vez por turno" se descarta. Antes las dos quedaban como botones vacíos.
+  - `CostType.EFFECT_COST`: "Puedes <coste> para <efecto>" con un coste de `COST_PIECES` es una activada propia, no la continuación de la anterior (hem hem real). No aplica a costes alternativos ("para reducir su coste", "para jugarlo") ni a "para prevenir".
+- **Bloques**:
+  - Una oración posterior que empieza con "Una vez por turno, …" / "En tu Vigilia, …" o "Puedes X para Y" corta el bloque: es otra habilidad (danza del cuchillo, Descubrir Disfraz).
+  - "Puedes pagar un Oro para subirlo de tu Cementerio a tu mano. Destruye…" (voces de hielo): la primera oración se salta si viene seguida de más (`_is_cemetery_self_ability()`).
+- **Átomos nuevos:**
+  - `discard_opp` ("tu oponente Descarta N (al azar)");
+  - `castle_exile` ("Destierra N del tope/fondo del Castillo oponente", `CardManager.banish_from_deck()`);
+  - `cancel_attack` (como Drácula: saca de `GameManager.attackers`, respeta `attack_uncancellable`);
+  - `set_strength` ("tiene Fuerza 0", "o duplica su Fuerza"; capa 7A `set`, "hasta tu próximo turno" = `TIMED`);
+  - `combat_flag` y los ítems "hace el doble de daño" / "no hace daño de combate" (metas `double_combat_damage_turn` / `no_damage_turn` de BattleManager);
+  - `self_raise` ("subirlo de tu Cementerio a tu mano");
+  - `mill_x` ("tantas cartas como Fuerza tenga un Aliado que controles / que porte Armas", "igual a la Fuerza del portador", "como Aliados tenga en su mano");
+  - `revive_blank` ("pon en juego un Aliado de tu Cementerio como un Aliado sin habilidad", como Alto Prime);
+  - `opp_gold_to_paid` (Legión de Honor).
+- **Ampliados:**
+  - `annul` acepta "anular/cancelar" y "un Talismán o Tótem(,) de coste N"; `StackAnnul.try_from_text()` acepta los dos tipos.
+  - `buff` y `grant_choice` aceptan "de coste/Fuerza N o menos", raza ("un Aliado Bandido", que `_matches()` filtra), "gana o pierde" (elección) y "hasta la Fase Final".
+  - `play_from` acepta "por N Oros menos".
+  - `cemetery_banish` acepta la forma sin "hasta".
+  - "de coste dos" con número en palabras; razas orco y dinosaurio.
+- **Prevenciones con coste** (`CompiledPrevention.gd`): dos entradas genéricas al final de `EffectController._prevention_registry`, "Anular / Cancelar" y "afectada por un efecto oponente", para "Puedes <coste> para prevenir que <un Aliado / Tótem / carta / uno o más Oros> sea…" (Ángel Gadreel, Serafín, wendy, orden del águila negra, lucifer, ciudad subterranea).
+  - Las entradas escritas a mano tienen prioridad.
+  - El objetivo del ofrecimiento llega por `_last_applies_arg`.
+- **`CardInspectionLayer`**:
+  - usables desde la mano: "Puedes Descartarlo para…" y "Desterrarlo de tu mano";
+  - usables desde el Cementerio: "desde tu Cementerio" y "para subirlo de tu Cementerio a tu mano".
+
+## "Cuando sea Destruido" de la propia carta (2026-10-22)
+
+- **El riesgo:** `EffectController.destroy_card()` emite `on_card_destroyed` después de `CardManager.destroy_card()`, que ya hizo `queue_free()` del Nodo. Resolver el disparador sobre ese Nodo depende de que siga vivo durante toda la resolución, con ventanas de respuesta de por medio. No se llegó a reproducir un fallo; el cambio evita depender del Nodo. (Para "Al salir del juego" se probó por el camino real, también con otro efecto resolviéndose, y funciona: `on_card_left_play` se emite antes de mover la carta.)
+- **Comprobado por el camino real** (`EffectController.destroy_card()` con una prueba headless temporal): simurg roba dos y descarta una, y La Serpiente del Edén hace Botar tres al rival.
+- **Ahora:** `CemeteryTriggers.on_card_destroyed()`, conectado a `CardManager.card_destroyed` (que se emite con el Nodo todavía válido, justo después de agregar la carta al Cementerio), encola el disparador como los de "puesta en tu Cementerio". Lo controla quien controlaba la carta al ser Destruida. Se resuelve con un proxy por `_execute_trigger_effect(proxy, "on_destroyed")`, con los mismos peajes que la cola (Matriz V, Mecha-Daikaiju).
+  - `TriggerSystem._collect_triggers_for_event()` ya no registra el `on_destroyed` de la propia carta por el camino directo; `on_ally_dies` sigue igual.
+  - Rama `on_destroyed` nueva en `TriggerResolution._execute_trigger_effect()`: aísla la oración y va a `_resolve_look_and_play_patterns()`. "si hay N o más cartas en tu Destierro, …" (dis pater) se chequea antes; los patrones no ven la condición.
+  - "súbelo a tu mano" (caicai vilu): caso propio en `CemeteryTriggers._destruido()`, solo si la carta sigue en el Cementerio.
+  - `EffectCompiler.TRIGGER_PREFIXES`: "cuando sea destruido", "al ser destruido".
+- **Sonda:** La Serpiente del Edén, simurg y dis pater quedan resueltos. caicai vilu aparece como sin_handler, pero es un falso negativo: se resuelve en `CemeteryTriggers`. Siguen pendientes cahuelche ("Bota cartas igual a la Fuerza de un Aliado en juego") y tesoro del santiaguillo (convertirse en Aliado).
+- Exhumar: una carta exhumada va al Destierro y no emite `card_destroyed`, así que su "Cuando sea Destruido" no dispara. Hoy ninguna de estas cartas tiene Exhumar.
+
+## "Cuando bloquee" según a quién bloquea (2026-10-22)
+
+- `GameManager.confirm_blockers_and_collect_triggers()` agrupa `blockers` ({atacante: bloqueador}) como {bloqueador: [atacantes]}. Cada bloqueador dispara una sola vez y su `event_data.blocked` trae los atacantes que bloquea.
+- `BlockPatterns.gd` (antes del camino genérico en la rama `on_block` de `TriggerResolution`):
+  - arthur gordon pym: "los Aliados que hayan sido bloqueados no hacen daño de combate este turno" → meta `no_damage_turn` en `blocked`, como Estación Fantasma.
+  - Elías: "puedes Robar una carta por cada Aliado al que bloquee" → `blocked.size()` cartas, con confirmación (el bot acepta).
+  - al-ahmar, la regla estática "Los Aliados bloqueados por este Aliado no hacen daño de combate este turno": `apply_static_on_blockers()`, al confirmar los bloqueos y sin ventana de respuesta (no es una habilidad disparada).
+- `EffectCompiler` `discard_opp`: acepta "tu oponente debe Descartar…" (el disparador de al-ahmar).
+- **Bloquear a varios** (Elías: "puede bloquear hasta dos Aliados"): `BlockPatterns.max_blocks()` / `blocks_of()` / `can_block_more()`. `GameManager.blockers` sigue siendo {atacante: bloqueador}, así que un bloqueador puede aparecer dos veces como valor.
+  - Gesto, igual en el Anfitrión (`CardInteractionModule._declare_blocker()`) y en el Remoto (`RemoteMirrorController._on_board_block_click()`): clic en un bloqueador con lugar y atacantes libres = suma un bloqueo; si no tiene lugar (o, en el Remoto, si estaba eligiendo atacante), el clic quita todos sus bloqueos. Para un Aliado normal (máximo 1) no cambia nada.
+  - Red: `RemotePlayerController._block_options()` manda `max_blocks`, y `_apply_remote_blocks()` acepta a un bloqueador repetido mientras `can_block_more()`. En el Remoto, `_block_pairs` pasa a ser blocker_id -> [attacker_id].
+  - `BattleManager`: cada par se resuelve aparte, pero el bloqueador se destruye una sola vez. "No recibes daño de Aliados bloqueados por este Aliado" (`shields_castle()`) deja el excedente en 0.
+
+## "Al comienzo del turno": Oros, piezas del compilador, kamidana y Medalla (2026-10-22)
+
+- **Los Oros no disparaban al comienzo del turno.** `TriggerSystem.resolve_agrupacion_triggers()` solo recorría las líneas. Ahora también recorre la Reserva y el Oro Pagado de los dos jugadores: `on_turn_start` (Medalla de Santa Muerte, kamidana, kagura suzu) y `on_agrupacion` del jugador del turno (torii, que tampoco disparaba).
+- **Compilador:**
+  - `TRIGGER_PREFIXES`: "al comienzo de tu turno", "al comienzo del turno oponente", "al comienzo del turno de tu oponente".
+  - Coste `self_destroy` ("puedes Destruirlo para que…", Cementerio de Kingstead), con `EffectController.destroy_card()`; con Exhumar va al Destierro.
+  - Átomo `draw_to_match` (virgo: "Roba cartas hasta tener la misma cantidad de cartas en la mano que tu oponente").
+  - `castle_exile` con `per: "opp_reserve"` (leng: "como Oros tenga en su Reserva", `GameState.get_oro_reserva()`).
+  - `discard_self` acepta "de tu mano" (kagura suzu).
+- **kamidana** ("si no jugó Aliados en su turno anterior, ese jugador Bota cuatro cartas"): `TurnManager.ally_played_serial` (jugador -> último `turn_serial` en que jugó un Aliado en su turno) se anota en `GoldManager._trigger_enter_play()`. `played_ally_in_previous_turn()` compara con `turn_serial - 2`. En el primer turno de cada jugador no hay turno anterior y no Bota. Se limpia en `GameManager.start_game()`. Patrón en `TurnStartPatterns.kamidana()`.
+- **Medalla de Santa Muerte** (`TurnStartPatterns.medalla()`): confirma, nombra con `CardNameSearchDialog` (en paridad con el Remoto) y rechaza un Oro. Después elige el descarte; descartar abre la ventana única del efecto. `KeywordManager.lock_name_this_turn(nombre, -1)`: con `player` -1 el candado vale para las cartas de los dos jugadores. El bot nombra la carta rival en juego de mayor coste y descarta la de menor coste.
+- `tools/probe_handlers.gd`: vuelve a poner la carta si salió del juego en el disparador anterior (Kingstead se Destruía y la sonda se caía).
+- Pendientes:
+  - trapezoedro: "Si al comienzo del turno no tenías Oros en Reserva, cuando tu oponente ponga en juego su tercera carta…" es un disparador diferido, no de comienzo de turno; queda sin handler.
+  - La segunda línea de Medalla ("hasta tres habilidades de Oros, cartas de coste 0… por turno").
+  - El "Cuando entra en juego" de Cementerio de Kingstead.
+
+## Sexta pasada, "Al comienzo del Ataque" y "Al salir del juego" (2026-10-22)
+
+- **Sexta pasada de la sonda** (`docs/cobertura-handlers.md`): en cuatro tramos en paralelo. Sin duplicados: sin_handler 685 → 647, espera 191 → 194. Los logs muestran errores "previously freed" en `GoldManager._trigger_enter_play()` y `put_gold_directly_in_pagado()`; parecen de la sonda (libera las cartas al agotar la espera), sin confirmar.
+- **ambrosio ohiggins** (`TurnStartPatterns.ambrosio_on_ataque_start()`): "Al comienzo del Ataque, puedes Desterrarlo de tu mano o Cementerio para que un Aliado no pueda ser declarado atacante este turno". `on_ataque_start` se resuelve después de declarar atacantes (`GameManager.confirm_attackers()`), así que esto lo ofrece `PhaseFlowController` al entrar al Ataque, antes de declarar. Primero el defensor; el bot lo usa solo como defensor. Se paga desde el Cementerio si está ahí. Ventana del rival con una carta temporal; después, la meta `no_attack_turn`, que respeta `TurnManager.can_attack()`. En juego, su "Al comienzo del Ataque" no hace nada (rama `on_ataque_start`).
+- **odiseo**: "al comienzo del ataque" en `TRIGGER_PREFIXES`.
+- **"Al salir del juego" no tiene un fallo de fondo**: se probó por el camino real (`EffectController.destroy_card()`), también con otro efecto resolviéndose, y shikhandi roba. `on_card_left_play` se emite antes de mover la carta.
+- **Cartas de "Al salir del juego":**
+  - Compilador: "en la fase final oponente o cuando salga del juego" (Hospital San José) y el disparador de moraleda en `TRIGGER_PREFIXES`. `mill_per` "por cada Tótem en juego y en tu Destierro" (Dr. Van Helsing). `raise` con "…a tu mano que no sea X" al final (strut). `hand_show_discard`: "tu oponente muestra su mano y tú Descartas un Talismán de ahí" (camahueto), como `hand_peek`. `grant_choice` con "un Aliado o Tótem" y ", mientras esté en juego" = permanente (Mina Murray).
+  - `_split_sentences()`: "…hasta mostrar X. Ponlo en tu mano…" se une en una oración (mochizuki chiyome).
+  - `TriggerResolution` (`on_leave_play`): usa el bloque completo, como `on_enter_play`, si el compilador lo entiende entero; si no, la oración sola, como antes.
+  - `CemeteryTriggers.on_card_destroyed()`: también "Cuando salga del juego, (puedes) (Descartar una carta para) ponlo en juego como un Aliado (Sombra) sin habilidad" (mahishi, futakuchi-onna, onryo, los umbras) y "cuando salga del juego, Destiérralo" (ryujin). Solo si salió por Destrucción (desde el Cementerio); si sale subida a la mano o barajada, no. `handles_leave_clause()` hace que la cola no los cuente como sin handler.
+  - Reglas en juego (`TriggerRestrictions._blocked_by_rule_in_play()`, por texto): el fantasma ("las cartas oponentes no disparan sus habilidades al salir del juego") y agentes de killbird (Aliados oponentes de Fuerza 2 o menos, al entrar y al salir). También para "Cuando sea Destruido" (`CemeteryTriggers`).
+  - Comprobado por el camino real: mahishi, onryo, los umbras, ryujin, mochizuki chiyome, Hospital San José, strut, shikhandi.
+- Pendientes de "Al salir del juego" (17): Marchosias, espada de magog, ryugu-jo, dulgruss, Vâlva Apei (control), momotaro, kintaro, kato tsune, urashima taro (condiciones de turno/efecto oponente), zennyo ryuo, orikalon (convertirse), antu, chinivilu, yekamus, los farsarios, transilvania, Isla de Poveglia.
+
+## "Al salir del juego" (las 17 restantes) y "Cuando ataca" (2026-10-22)
+
+- **`LeavePlayPatterns.gd`** (triggers): las 17 de "Al salir del juego" que faltaban. Se llama desde `TriggerResolution` en `on_leave_play` y, para las de "entra o sale" (Marchosias, Isla de Poveglia, transilvania, antu), también en `on_enter_play`.
+  - La salida se resuelve con la carta todavía en su zona y el Nodo se libera en cuanto el efecto espera algo. Por eso se copia todo de la carta al empezar y la ventana del rival se abre sobre un Nodo temporal con sus datos. "Desterrarlo"/"convertirlo" (momotaro, yekamus, zennyo ryuo, orikalon) esperan a que llegue a su Cementerio o Destierro (`_landed()`, solo entradas nuevas); si volvió a la mano o se barajó, no hacen nada.
+  - Control: ryugu-jo y dulgruss con `ContinuousEffectManager.gain_control_of_card()`; Vâlva Apei devuelve cada carta que no sea Oro a su dueño.
+  - Convertir: Marchosias (de un Cementerio a Aliado Bestia de Fuerza 2 con Furia), Isla de Poveglia (tope de un Castillo a Aliado de Fuerza 2), con `ConvertPatterns._finish_conversion()`. transilvania: una carta en juego a Oro sin habilidad en tu Oro Pagado (no sale del juego). zennyo ryuo: él mismo a Oro sin habilidad (`put_gold_directly_in_pagado()`). orikalon: un Arma con la habilidad nueva en sus datos, portada por un Aliado propio.
+  - espada de magog: `EffectController.add_leave_play_immunity_this_turn()` (vence sola al cambiar de turno; cubre Destruir y Desterrar).
+  - urashima taro: `PaymentManager.add_first_ally_discount()`; "reduce su coste" (coste impreso, piso 1) mientras ese jugador no haya jugado un Aliado en ese turno.
+  - kato tsune: "por un efecto oponente". `TriggerSystem` anota la causa de la salida en `event_data.cause` (`CemeteryTriggers._cause()`, ahora estático).
+  - los farsarios: "activar la habilidad de un Aliado en tu Destierro" = una habilidad activada ("(Una vez por turno,) puedes…") que el compilador entiende entera, ejecutada por `EffectInterpreter` sobre un Nodo temporal. Las que no compilan no se ofrecen.
+- **"Cuando ataca"** (sonda del grupo: 54 de 68 disparos on_attack resuelven; antes, las 65 cartas estaban sin handler):
+  - El fallo común: `TriggerResolution` no aislaba "Cuando entra en juego o **ataca**" (solo "o ataque"). Jabberwocky, Viejo del Saco, Vlad, Antonio Pincheira… tenían handler y no llegaban. Además, si la cadena de ataque no lo resuelve, se usa la de "entra en juego" (`_resolve_look_and_play_patterns`) con el bloque entero (`_attack_block()`, Papa Legba).
+  - **"Cuando ataques" es del jugador**: `TriggerSystem.resolve_player_attack_triggers()` (desde `GameManager.confirm_attackers()`) dispara una vez por ataque en las cartas que no atacan (Oros como bullnax o amuleto de oso, Armas como espada colmillo, Aliados que se quedan). Los atacantes ya lo disparan con su "cuando ataque".
+  - Condiciones (`TriggerResolution._attack_condition_met()`): "con un sólo Aliado"/"ataque solo" (un único atacante), "por primera vez en el juego" (meta por carta), "si porta Armas" (fasolt).
+  - Compilador: prefijos "cuando ataques (con un solo aliado)", "cuando ataque solo", "cuando ataque por primera vez en el juego", "cuando ataque, entre o salga del juego"; `mill_both` "los jugadores Botan"; `reveal_until` "un Arma coste 1" y la errata "de de"; `self_buff_per` (udug, brujo mendigo); `mill_per` "por cada Oro que controles"; `buff` "y su daño es enviado al Destierro" (juan jose carrera).
+  - **`AttackPatterns.gd`** (mechanics): bloqueos elegidos por el atacante a `GameManager.forced_blocks` (príncipe orión, Amo de las Cadenas, Los Szgany, Cochero de Sombras, bullnax; hacha de perun por `_check_wielder_attack_triggers()`), elemental de magma (`CANT_BLOCK` por el turno), na tuk kong y Mártires (`set_no_more_cards_this_turn()`; Mártires además `ContinuousEffectManager.no_abilities_turn`), arturo prat (Fuerza doble y Destruido en la Fase Final con `schedule_next_final_phase_effect()`), fuma kotaro (`PaymentManager.add_next_card_surcharge()`), toyotomi hideyoshi (`block_gold_next_turn()`), ryujin el atormentador y lupin (selector con presupuesto de costes), sandokan (lo de Sable sin mínimo de atacantes), amuleto de oso, Apofis del Caos (`KeywordManager.lock_name_until_next_turn()` + `CANT_ATTACK`/`CANT_BLOCK` TIMED 2), y las de "entra en juego o ataca" sin handler en ningún lado: Capitán del Demeter, El Bandido Egipcio, tenebris, Paladín Harker.
+  - `tools/probe_handlers.gd`: en `on_attack` la carta es el único atacante; el filtro de nombre acepta "a|b|c".
+- Pendientes de "Cuando ataca" (8): andras, hombre invisible (declarar otro atacante), Dhampir Feroce (protección en la Batalla), uriko-hime (tope de Agrupación; el reagrupamiento del jugador 1 va por otro camino), capitan daisuke (recargo a habilidades de Oro), Lady Mina Harker (recargo por nombre), jose miguel carrera y huaso bueras ("nombra/elige un coste" sin efecto que lo use en el texto), colmillo arcano (texto con comillas rotas).
+- Sin regenerar `docs/cobertura-handlers.md` (la sonda completa es larga); los números de arriba son de la sonda del grupo.
+
+## jose miguel carrera, huaso bueras y punto 3: "Cuando entra en juego" y Talismanes (2026-10-22)
+
+- **Recargo por utilizar habilidades** (`TriggerTollPatterns.ability_toll()` / `pay_toll()`), "hasta tu próximo turno" en `RuleState`:
+  - jose miguel carrera: "nombra un coste… a tu oponente le cuesta un Oro adicional utilizar habilidades de Aliados de ese coste" (`ally_cost_toll:<coste>`, por el coste impreso).
+  - capitan daisuke: "…utilizar habilidades de Oro" (`gold_ability_toll`).
+  - Disparadas: `blocks_trigger()` suma este recargo al de Mecha-Daikaiju y lo cobra una vez. Activadas: `CardInspectionLayer.activate_ability_for()` lo cobra antes (es el camino del Remoto); en el Anfitrión, el botón de una habilidad con recargo pasa por ahí, y el botón de la lista de habilidades usables lo cobra antes de la Pila.
+- **huaso bueras**: "elige un coste. Baraja todas las cartas oponentes de ese coste (en juego) y no se puede jugar cartas de ese coste hasta tu próximo turno" (los dos jugadores: `cost_play_lock:<coste>` en `GoldManager._card_play_locked()`; los Oros no se juegan).
+- Ambas en `AttackPatterns._named_cost()`; el bot elige el coste más repetido entre las cartas rivales.
+- **Falso disparo**: "Puede atacar cuando entra en juego" (brujo mendigo, Guardia Real, Sir Galahad) se registraba como "Cuando entra en juego". `CardTriggerRuntime.parse_triggers_from_ability()` la quita antes de buscar disparadores (la regla la aplica `KeywordManager`).
+- **Compilador**:
+  - `RULE_SKIP_RX`: oraciones de coste y de cuándo se puede jugar ("Sólo puedes jugar…", "Reduce su coste…", "cuesta un Oro menos…", "en respuesta a… juégalo…", "Este Talismán no puede ser Anulado", "no puedes tener más de tres copias"). Frenaban la compilación del resto del Talismán.
+  - `search_named`: "Busca un Leyaden/una Empanada en tu Castillo y ponlo en tu mano" (filtro `name_contains`).
+- **`EnterPatterns.gd`** (mechanics, desde la rama `on_enter_play`): ~36 cartas con piezas existentes: inmunidad a salir del juego (garfio pirata, abd-el-kerim; Turiel con la meta `no_leave_turn` que mira `EffectController._try_consume_leave_play_prevention()`), Oros sin habilidad (Ángel Barachiel, draig wych, sibila saint germain, la muerte, Zmeu Abismal, lucy), Botar/Desterrar/Descartar (minamoto yoritomo, honengyo, Garras de Dragón, Lamec, jangseung, Baphomet, mr smee, mina maldita, smaragos, los almas, Diabolista de Ébano, abadon, acuario, Auguste Dupin, Paladín Arthur Holmwood), control y convertir (regan liberator, esfinge antartica, Lucy Westenra, jack, Rugiaevit, kokudaka, isabel riquelme, hitotsume kozo) y Monjas de Budapest, heracles, veela, kuzuryu. También `bounce_to_owner_hand()`: "sube X a la mano de su dueño" con Prevención, Armas al Cementerio y su "cuando salga del juego" (no había uno así).
+- **`TalismanPatterns.gd`** (mechanics, al principio de `_resolve_look_and_play_patterns()` para Talismanes, sin ventana propia): cacería de brujas, caminar el tablón (mostrar la mano y elegir de una lista, como `EffectInterpreter._hand_peek()`), Abducción del Cabo, maestro de go, justa, renace la fe, artillería pesada, el juicio, semilla de destrucción (con el "puedes pagar un Oro para repetir"), Miedo en Whitby (lo mostrado se baraja de vuelta), desembarco orco, momificar, de rodillas, Gusano Vampiro, choque de colosos, Juramento, bojutsu, festín orco, r l stevenson, Falso Profeta, Conocimiento Prohibido, combate naval de iquique.
+- nodachi: `WeaponAbilityPatterns` llamaba `get_cards()` sobre la mano del Anfitrión (no existe); ahora `PlayerSide.hand_cards()`.
+- Sonda de los grupos: "Cuando entra en juego" 15 → 46 resueltas (82 sin handler, 8 en espera); Talismanes 1 → 24 (78 sin handler). Lo que queda son mecánicas propias de cada carta.
+
+### Segundo lote del punto 3 (2026-10-22)
+
+- **`EnterPatterns.gd`**, ~44 cartas más: mahishi (entrada), shikhandi, eurytus, los umbras, Hospital San José, escudo de energía, templo de uppsala, orcus, libra (también al salir), calchona, hastur, yodo-dono, vaku custodio, escorpio, chon chon, Samael, tauro, Barón Vordenburg, wyrm de la plaga, randolph carter, Serafín, Cam, el cazador, abdul alhazred, Altar del Juramento, casimiro marco del pont, Plaga Inmunda, luthairon, peacemaker, pipin el breve, morro de arica, solomon el cazador, roderick usher, erlik, fujibayashi nagato, Daga del Bandido, directorium inquisitorum, Trentren Vilu, Polvo de Hadas, nombre de horus, koromodako, amaterasu, armadura imperial, zmeoaica (también al salir: `handles_leave()`).
+  - directorium inquisitorum: siempre busca el Oro; "si entró desde tu Cementerio, en vez de eso Roba dos" no se distingue (no se sabe de qué zona entró).
+- **`TalismanPatterns.gd`**, 24 más: Favor de la Corte, los descarnados, batalla de trafalgar, aliento letal, cadena negra, cacería impía, ritual de la bestia, duelo en ganryu, kabuki, ubagabi, aplastar, luz desafiante, rugido del origen, depredar, oriflama, conan doyle, elemental, Murciélagos del Caos, Atacar al Vampiro, comité de animales (la Raza se elige de una lista fija), Sombra Etérea, cancha rayada, descanso solar, abordaje (un Aliado con la habilidad nueva en sus datos, en la Línea de Defensa oponente).
+- `TriggerTollPatterns.ability_toll()`: también `any_ability_toll` (randolph carter, por el turno) y `name_ability_toll:<nombre>` (Serafín, hasta tu próximo turno).
+- `ContinuousEffectManager.gain_control_of_card()` respeta la meta `no_control_change_until` (duelo en ganryu).
+- Sonda de los grupos: "Cuando entra en juego" 46 → 89 (38 sin handler); Talismanes 24 → 48 (53 sin handler). Lo que queda necesita mecánicas nuevas (turno extra, límites por tipo de carta, copiar o ganar habilidades, efectos "en respuesta a", reemplazos de daño…).
+- Cartas con nombre repetido en `data/cards.json`: **Trentren Vilu** `20479` ("Furia. Cuando entra en juego, pon las demás cartas…") no es el texto real; se ignora (el real es el de `custom_mid_19`/`20313`). **Zmeoaica** son dos cartas jugables distintas; la de `custom_drac_038` ("muestra un Aliado de coste 3 de tu mano para Robar dos cartas") está en `EnterPatterns._zmeoaica_drac()`.
+
+### Tercer lote del punto 3 (2026-10-22)
+
+- Mecánicas nuevas: meta `silenced_until` en `KeywordManager.is_silenced()` (sin habilidad por varios turnos); meta `entered_from_hand` en `GoldManager.play_card()` (kiyohime, ikuchi); Perugia (`one_per_type` + contador `played_type:<tipo>` en `GoldManager._card_play_locked()`); argos y plaza de armas (`PaymentManager._static_type_and_cheap_surcharge()`); `register_kotoku_in_talisman_fizzle()` con coste máximo (nuckelavee); haquika/jupitris reutilizan `no_combat_damage`/`no_direct_damage` de RuleState.
+- `EnterPatterns.gd`, 23 más: Angelus, Daga Bebedora, Dr. Van Helsing (solo al entrar; "no puede ser Anulado" no), Paladín de la Esperanza, calfucura, haquika tasherit, jupitris, tadg, Vâlva Bailor, Cráneos Vivos (Destierra todo lo mostrado), illapa, tukuturi, Cementerio de Kingstead, argos, plaza de armas, Perugia, nuckelavee, Monjes Ortodoxos y rey de los pájaros (vuelven a disparar el "cuando entra en juego" de otra carta), shakuhachi, felipe augusto, kiyohime, ikuchi.
+- `RULE_SKIP_RX`: "Esta habilidad no puede ser cancelada ni prevenida".
+- Sonda del grupo "Cuando entra en juego": 89 → 114 (13 sin handler). Talismanes sin cambios en este lote (48 resueltos, 53 sin handler).
+
+### Tercer lote de Talismanes (2026-10-22)
+
+- `TalismanPatterns.gd`, 13 más: silenciar mundo (meta `silenced_until` hasta el final de tu próximo turno), aklo sabaoth (`two_per_type` en `GoldManager._card_play_locked()`), cancer, corrupción del alma (el descuento del próximo Aliado; "no puede ser Anulado ni sus habilidades canceladas" no se aplica), desafío de humpty dumpty, Remate mortal (ambos efectos si Descanso Solar está en tu Cementerio o Destierro), Transformación de Lucy (la segunda opción, en la Fase Final del turno), Hijos de la Noche, Avistamientos (la segunda opción, en la próxima Fase Final oponente), Ataque Bandido, vigilia de armas, proteger botín, Amarre de Bruja (el Aliado oponente vuelve a su dueño cuando tu Aliado sale del juego).
+- Sonda de los Talismanes: 48 → 58 resueltos (40 sin handler). Lo que queda necesita mecánicas que no existen: turno extra, Talismanes en respuesta a algo, reemplazos de daño, copiar o ganar habilidades, límites por el resto del juego, prevenir "un efecto".
+
+## Mecánicas nuevas (2026-10-22)
+
+- **Inmunidad a efectos oponentes:**
+  - Por carta: meta `opp_immune_until` (último turn_serial), en `EffectController.offer_prevention()` vía `opp_immune_card()`; Anular no cuenta. Revólver Webley (el portador), Fuego Purificador y Rugido de Titán (una carta, por el turno: sin el efecto puntual al que responden).
+  - Por jugador: RuleState `opp_effect_immune` (`player_opp_immune()`): lo mismo que Fisión Nuclear para el jugador (Descartar/Botar, buscar o mirar su mano y su Castillo, daño directo en `DamageManager`), sin el peaje sobre sus cartas. peter pan.
+  - Jugando con el Demonio: Imbloqueable, +1 y `attack_uncancellable_turn` en tus Aliados.
+- **Oros con habilidad nueva:** `EnterPatterns.set_ability()` (Card.card_ability reparsea los disparadores; las auras se leen del texto). tres pascualas (reemplaza), Canaán (suma la del Oro oponente). gokin sigue pendiente: el pago no sabe restringir un Oro físico.
+- **Valac:** `GoldManager.play_card()` anota lo pagado en la meta `gold_paid`.
+- **Turno extra:** viaje temporal deja `RuleState` pendiente "extra_turn"; `GameManager.end_turn()` no cambia de jugador. El rival no recibe daño hasta que termina el turno extra. Lo que cuenta "tu turno anterior" con `turn_serial - 2` no ve el turno extra.
+- **Talismanes en respuesta a algo** (la carta rival en la pila, `StackAnnul.find_target()`): expulsión (Talismán: `register_kotoku_in_talisman_fizzle`; otra carta: entra sin habilidad por el turno), descubrir al zorro, Iluminar el Camino (turn_data `iluminar:<jugador>` en `_card_play_locked()`), Ofrenda a los Abuelos (turn_data `castle_search_block:<jugador>` en `fision_hides_zones_of()`).
+- **Reemplazos de daño:** `DamageShields.gd` (puertas grandes y pequeñas: el próximo daño del turno a 0; arlequín: todo el daño del turno prevenido y el rival Destierra esa cantidad del tope de su Castillo), en `BattleManager._apply_castle_damage()` y `DamageManager`.
+- **Límites:** `GameManager.attack_cap()` en `declare_attacker()` (Pereza: ninguno; sabiduría de la oruga: uno; Concilio de los Eternos: dos); `ActionModule.draw()` con tope de tres robos por efectos por turno (sabiduría de la oruga); Pereza "una carta por turno" (`one_card_turn` + contador `played_any`); aklo sabaoth (`two_per_type`); No Más Magia (Talismanes +1 en `PaymentManager`, jugar gratis cuesta un Oro en `play_card_for_free()`); Escudo Estelar (`zones_hidden` en `fision_hides_zones_of()`, también las zonas propias).
+- **"Prevén un efecto"** (Concilio de los Eternos, Camino del Guerrero): el efecto rival más cercano al tope de la pila no ocurre (`StackAnnul.apply`).
+- **Textos nuevos:** a través del espejo (suma la habilidad del Aliado del Cementerio), aquí están todos locos (`load_from_data` con los datos del otro Aliado), captura colosal (habilidad reemplazada + no ataca ni bloquea; empate: los dos), Día de los Muertos (Fuerza 1 + "No puede portar Armas", que ahora mira `GoldManagerRestrictions._max_weapons_for()`).
+- Otras: identidad secreta (la Anulada pasa del Cementerio al Destierro con un oyente de `card_put_in_cemetery`), julio verne (los vuelve a jugar al empezar tu próximo turno, +1 permanente).
+- Sonda de los grupos: "Cuando entra en juego" 114 → 118 (7 sin handler, más la Trentren `20479` que se ignora); Talismanes 58 → 82 (16 sin handler).
+
+### Correcciones del usuario y últimas mecánicas (2026-10-22)
+
+- **Prevenir en el momento** (Fuego Purificador, Rugido de Titán): la carta elegida no es afectada por el efecto rival que está en la pila (meta `prevent_effect_of` = {source_id, turn}, en `EffectController.opp_immune_card()`, comparando con la fuente o el `EffectContext` en curso). Rugido de Titán además protege de Anular/cancelar a sus cartas Ignis/Titán que estén en la pila (`protected_from_annul_this_turn`, `protected_from_cancel_turn` en `StackAnnul.protected_from_cancel()`).
+- **"Prevén un efecto" no es Cancelar** (`StackAnnul.prevent()`/`find_preventable()`): el efecto no se resuelve aunque "no pueda ser cancelado" (y al revés). Habilidad: `was_cancelled` sin pasar por las protecciones; Talismán: se resuelve sin efecto.
+- **identidad secreta**: la carta Anulada va directo al Destierro con la meta `annul_to_exile` (la de Red de Plata), sin buscarla por nombre.
+- **"Los próximos dos turnos"** = el del rival y tu próximo: `RuleState.set_window(key, pid, desde, hasta)` (`active()` mira el inicio). Pereza y Perugia.
+- **gokin**: el Oro queda en tu Reserva con la meta `only_cost_min` = 3; `GoldManager.gold_usable_for()` lo excluye al elegir Oros físicos y `unusable_physical_golds()` lo descuenta en `puede_pagar()` y en `PaymentManager.puede_jugar_carta()`.
+- **Marca de los Justos**: desde que se juega, `ContinuousEffectManager.register_modifier()` duplica las ganancias de Fuerza de Aliados (máximo 4 por vez) e ignora cualquier otra modificación (fijar, perder) por el turno. Lo registrado antes no cambia.
+- **Obligar a combatir** (juzumaru tsunetsugu, Marca de la Bestia): meta `must_fight_turn`; al confirmar atacantes, `GameManager._declare_forced_attackers()` los declara con el mismo aspecto que un click; al confirmar bloqueos, `_declare_forced_blockers()` los pone a bloquear al primer atacante libre que puedan.
+- **Manicomio**: `GoldManager._roll_manicomio_die()` tira el dado al jugar un Aliado de coste 2 o menos (con un Manicomio en juego de cualquiera); impar → meta `skip_enter_triggers`, que el camino directo de `TriggerSystem` respeta.
+- **corazón de muerte**: meta `affect_toll_until`; afectar esa carta le cuesta un Oro al rival (`offer_prevention`, con `TriggerTollPatterns.pay_toll`). Solo si entró desde la mano (meta `entered_from_hand`).
+- `tools/probe_handlers.gd`: entre carta y carta limpia `RuleState`, los candados de nombre del turno y `GameManager.attack_strength_caps`. Sin eso, lo que dejaba una carta (topes, recargos "por el resto del juego") afectaba a la siguiente: corazón de muerte figuraba sin handler por eso.
+- **Lanza del Juramento**: `no_regroup_turn` (el próximo turno) en un Oro rival y `silenced_on_turn` (solo ese turno, en `KeywordManager.is_silenced`) en una carta.
+- **trofeo de cazador / anillo de tierra / Amuleto de Serpiente**: un Talismán en esta Vigilia (`one_talisman:<jugador>`); "una carta más o una habilidad más" (`one_more_action:<jugador>` + contador `abilities_used` en `CardInspectionLayer` y bloqueo en `AbilityButtonSupport._validate_ability`); Talismanes repetidos en el turno +1 (`talisman_repeat_tax`).
+- **Niebla de Muerte**: lo que llega al Cementerio este turno lleva `_silenced_turn` (`CardManager.is_cemetery_card_silenced`).
+- **Comer Insectos**: `unpreventable_damage:<jugador>` (turn_data) salta inmunidades y escudos en `BattleManager._apply_castle_damage()`.
+- **duelo mágico**: `mill_cap_10` en `ActionModule.mill()` y `hand_loss_cap_1` en `ActionModule.discard()` y `EnterPatterns._exile_from_hand()`; otras formas de Desterrar de la mano no lo miran.
+- **Sesión Espiritista**: `DamageShields.permanent_reduction()` (-2 al daño de combate para siempre) y, hasta tu próximo turno, `TalismanPatterns.on_opponent_effect_draw()` desde `ActionModule.draw()` (solo robos por efecto; buscar u otras formas de "poner en la mano" no se cuentan).
+- **terremoto** (`GameManager._terremoto_mill()` al declarar atacantes y confirmar bloqueos), **furia de titán** (`GameManager.attack_strength_caps`, en `TurnManager.can_attack()`), **ta kona** (pendiente `extra_battle`: `PhaseFlowController._on_battle_combat_finished()` agrupa a los atacantes y vuelve al Ataque), **nuevas tierras** (los Oros pasan a ser Aliados de Fuerza 3 y vuelven al Oro Pagado en la Fase Final), **alma del viento** (al llegar al Cementerio sale como Oro en el Oro Pagado rival, meta `never_regroup` en las dos agrupaciones), **Estaca en el Corazón** (como los farsarios + cada jugador recupera sus cartas), **Corromper**.
+- **Marca de la Bestia**: `no_convert_until` (`ConvertPatterns.cannot_be_converted()`, en las conversiones de `ConvertPatterns` y `EnterPatterns._blank`).
+- Sonda de los grupos: "Cuando entra en juego" 124 resueltas (solo queda la Trentren `20479`, que se ignora); Talismanes 98 (quedan invocar ángeles y liberar esclavos); "Cuando ataca" 57 (quedan andras, colmillo arcano, Dhampir Feroce, hombre invisible, Lady Mina Harker, uriko-hime).
+
+### Cierre de "Cuando ataca", invocar ángeles y corazón de muerte (2026-10-22)
+
+- **corazón de muerte** (Vigilia): `play_from` entiende "...una carta que no sea X de tu Cementerio..." y nunca ofrece Oros (un Oro no se juega). Se resuelve por el compilador: costo `self_pay` + jugar con un Oro menos (mínimo 0).
+- **Mano descubierta** (`HandReveal.gd`): Lady Mina Harker en juego ("Tu oponente juega con su mano descubierta") o invocar ángeles (RuleState `hand_revealed`, por el resto del juego). La mano del jugador 1 se ve boca arriba en el Anfitrión (`OpponentFan.add_card` y al empezar cada turno); al Remoto, que no recibe la mano del Anfitrión, se le muestra con `SelectionManager.open_reveal` al empezar cada turno.
+- **Disparadores**: el texto entre comillas no cuenta (`CardTriggerRuntime`): es la habilidad que la carta da o gana. colmillo arcano ya no tiene un "Cuando ataca" falso.
+- **Atacantes de reemplazo** (`GameManager.replacement_attackers`): el bucle de "cuando ataque" de `confirm_attackers()` va sobre una copia, tolera que un Aliado deje de atacar y dispara el "cuando ataque" de los que se suman. `CardInteractionModule.mark_attacker_visual()` les da el aspecto de atacante sin la validación (entran atacando). hombre invisible (se agrupa, el rival Bota su Fuerza, otro Aliado ataca en su lugar) y andras (sube un Aliado de coste 2 o menos y juega gratis otro del mismo coste, atacando).
+- **uriko-hime**: Desterrarlo es el costo (`EffectController.exile_card` con bypass); pendiente `regroup_cap` = 4 para la próxima Agrupación del rival (`GoldManager._reset_gold` y `EasyBotController.reset_gold`).
+- **Dhampir Feroce**: meta `opp_immune_battle_turn`; `opp_immune_card()` la respeta solo en las fases de la Batalla Mitológica.
+- **Lady Mina Harker** ("Cuando ataques con un solo Aliado"): nombrar una carta que no sea Oro → `name_ability_toll` y `name_play_toll` (este en `PaymentManager`) para los dos jugadores, hasta tu próximo turno.
+- `tools/probe_handlers.gd`: limpia `RuleState` y los candados del turno entre carta y carta (antes, efectos de una carta afectaban a la siguiente; por eso corazón de muerte figuraba sin handler).
+- Sonda de los grupos: "Cuando entra en juego" 124 (solo la Trentren `20479`, ignorada); Talismanes 99 (queda liberar esclavos); "Cuando ataca" 61 de 61 resueltos o en espera.
+
+### Séptima pasada de la sonda (2026-10-22)
+
+- `docs/cobertura-handlers.md` regenerado (cuatro tramos en paralelo, unidos con un script). Sin duplicados: sin_handler 647 → 302, espera 194 → 222 (más cartas tienen handler y esperan una elección). "Cuando entra en juego", Talismanes, "Cuando ataca" y "Al salir del juego" quedan sin pendientes reales (salvo liberar esclavos, baneada, y la Trentren `20479`, ignorada). Lo que más queda: habilidades activadas (249) y "En tu Fase Final" (22).
+- `DynamicHand.get_cards()` (la mano del Anfitrión), con el mismo nombre que `OpponentFan.get_cards()`: varios patrones lo llamaban sobre "la mano del oponente" y fallaban cuando el oponente era el Anfitrión (LookRevealPatternsA/B, BanishOpponentPatterns, TotemAbilityPatterns hangar de la ciudadela, DSR_ShuffleDrawCombos, PhaseFlowController).
+- el fantasma y agentes de killbird: su "al salir del juego" es una regla (`TriggerRestrictions`), no un disparador; la rama `on_leave_play` ya no los cuenta como sin handler.
+
+## Habilidades activadas: `ActivatedPatterns.gd` (2026-10-23)
+
+- `scripts/core/effects/mechanics/ActivatedPatterns.gd`: habilidades activadas que el compilador no entiende, armadas con piezas existentes. `KINDS` (subcadena del texto normalizado → handler). Se engancha en `TriggerResolution._resolve_look_and_play_patterns()` (no Talismanes, antes de Azi), el camino de `TriggerSystem.resolve_ability_effect` que usa la Pila para las activadas: la ventana de respuesta ya está abierta y el Oro de "puedes pagar N Oros para..." ya lo cobró el Paso B (`_pay_gold()` lo respeta con `EffectContext.gold_paid`). Los demás costos (Descartar, Desterrarlo, pagarlo, Botar, Destruirlo) los paga cada handler.
+- Ayudas: `_take_from_pools()` (elegir de mano/Cementerio/Destierro/Castillo con `pick_in_zones` y sacarla de su zona; `_give_back()` la devuelve si no se pudo jugar), `_play_taken()` (juega pagando `TalismanPatterns._play_paying`), `_put_into_play()`, `_castle_top_to_ally()`, `_swap_control()`, `_banish_from_a_castle()`, `_each_castle()`, `_reveal_until_to_hand()`, `_hand_to_bottom()`, `_totem_to_ally_until_final()` (usa `_convert_totem_to_ally` de `TotemAbilityPatterns` y su lista de reversión en la Fase Final), `_interp()` (delega una frase al compilador, p.ej. "cancela el ataque de...").
+- Mecánicas nuevas:
+  - koto: meta `ability_toll_turn` en la carta elegida → `TriggerTollPatterns.ability_toll()` suma un Oro ese turno.
+  - castillo edo: RuleState `type_play_toll:<tipo>` en `PaymentManager._static_type_and_cheap_surcharge()`, hasta tu próximo turno.
+  - fusil patriota: turn_data `fusil_patriota:<jugador>` + contador `ally2_played` (en `GoldManager._trigger_enter_play`): los dos siguientes Aliados de coste 2 o más cuestan un Oro menos. "No pueden ser Anulados" queda pendiente.
+  - taka no me: `GoldManager.lock_card_from_playing()` sobre la carta de la mano rival.
+  - Exhumar por el turno (animita, laboratorio maldito, arturo de bretaña, Zagovornik...): `_exhumar_until` en los datos de la carta del Cementerio (`ExhumarSystem._card_has_exhumar`). La reducción de coste de Zagovornik no está.
+  - Pnyx: la carta en juego con `silenced_until`; la del Cementerio/Destierro con `_silenced_until` (`CardManager.is_cemetery_card_silenced`).
+- Parser: la continuación de una activada se corta en "cuando ", "al comienzo", "al final", "en tu/la fase final", "si está en tu", "sólo puedes"; las reglas estáticas (Exhumar, "el portador", "sólo puedes utilizar", "no se puede", "cada jugador sólo puede") no son habilidades.
+- Sonda del grupo de activadas: 48/248/8 → 213 resueltas, 17 sin handler, 27 en espera.
+
+### Disparadores por evento con cupo por turno: `LimitedEventTriggers.gd` (2026-10-23)
+
+- "(Hasta N veces / Una vez) por turno, cuando <evento>, ..." no son activadas: el parser las marca TRIGGER con `trigger_event` "EVENT" (`UniversalCardParser._is_event_sentence()`, con las frases de `LimitedEventTriggers.ENTRIES`, ogun, troll soberano, Escudo de Vlad III, Dhampir, Los Siete Sellos y uriko-hime), así que ya no tienen botón.
+- `scripts/core/effects/triggers/LimitedEventTriggers.gd`: `fire(evento, datos)` anota; se resuelve en cola cuando no queda nada resolviéndose (`CemeteryTriggers._wait_until_idle()`), con ventana de respuesta si la fuente es una carta en juego. Cupo en RuleState `evt:<handler>:<carta>` (por turno). Solo en el Anfitrión.
+- Eventos y desde dónde llegan:
+  - `ally_entered` / `gold_entered` (EffectController.on_card_entered_play): dato paroi, mr hyde, oniwaban, lluhay, gusano blanco.
+  - `card_played` y `talisman_resolved` (`GoldManager._trigger_enter_play`): yaldabaoth, jane eyre, baron de gossler.
+  - `damage` (`BattleManager._apply_castle_damage` y `DamageManager.damage_dealt`): yamabushi.
+  - `castle_searched` (`ActionSearch.pick_in_zones`, por donde pasa toda búsqueda en un Castillo): Lilith, calchona, invunche, hanuch.
+  - `effect_draw` (`ActionModule.draw`): berserker z. `hand_loss` (`ActionModule.discard` con EffectContext, `EnterPatterns._exile_from_hand`): inari.
+  - `strength_gain` (`ContinuousEffectManager._note_strength_gain`; las auras, PERMANENT con otra carta como fuente, no cuentan): pirata wokou, lobo malvado, Dinosaurio Megalosaurus.
+  - `ally_annulled` (`AllyEventTriggers.on_stopped`): el mundo perdido.
+  - `to_zone` / `self_exiled` (CardManager.card_put_in_cemetery / card_put_in_exile): azathoth (queda con su Raza), ereshkigal (también desde tu Destierro), kushinada-hime, nefertiti de corazones, lady madeline, carnacki y Perugia ("por un Aliado": la carta del EffectContext en curso es un Aliado).
+  - `weapon_destroyed` (CardManager.card_destroyed): Paladín Arthur Holmwood (también desde tu Cementerio).
+- La sonda no simula estos eventos: solo comprueba que dejaron de figurar como activadas.
+
+### Activadas desde la mano, el Cementerio o el Oro Pagado (2026-10-23)
+
+- `CardInspectionLayer._ability_is_hand_usable()` / `_ability_is_cementerio_usable()` amplían sus listas: andras, iki balam, los korgors, Baphomet, alicia (mano); hikari no ga, el carro, los korgors, Daikaiju Furioso, orco alpino, Los Marcados (Cementerio). palo del caos se usa desde el Oro Pagado (zona en juego).
+- `ActivatedPatterns._take_self()` saca la propia carta de su zona; `_exile_self_cost()` paga "Desterrarlo" si el Paso B no lo pagó; `_play_self()` la juega pagando lo que diga.
+- Mecánicas nuevas:
+  - Gusano de Haftvad: turn_data `cancel_next_ability:<jugador>`; `TriggerTollPatterns.consume_cancel_next()` en los dos caminos de activar (`activate_ability_for` y el botón genérico del Anfitrión; con el efecto pendiente, los botones de patrones especiales también pasan por `activate_ability_for`).
+  - Los Marcados: turn_data `block_cap:<jugador>` en `GameManager.declare_blocker()`.
+  - Jafet y Jared: meta `no_leave_until` (último turn_serial) en `EffectController`.
+  - pablo pincheira: un Pincheira no puede ser Anulado (`_alicanto_paid_pending`, el mismo camino que Alicanto) ni sus habilidades canceladas este turno (`protected_from_cancel_turn`).
+- Pendientes: lord john roxton (cambiar de portador un Arma); el Oro adicional de el carro se cobra además de su coste.
+
+### Últimas activadas (2026-10-23)
+
+- **Oros que pasan a ser Aliado o Arma hasta tu próximo turno** (colmillo arcano, gema del grifo, amuleto de cazador, arpon sagrado): `ActivatedPatterns._gold_to_ally_until_next_turn()` (Fuerza fija y la habilidad entre comillas con `EnterPatterns.set_ability`) y, para arpon sagrado, `GoldManager._equip_weapon(..., false)`. `_revert_on_next_turn()` (un `turn_started` de un solo uso) la devuelve a Oro en el Oro Pagado con su habilidad original.
+- **Mover a la Línea de Ataque** (akashi, batallon de ovejas): `_to_attack_line()` reubica el Aliado; "no puede bloquear" es la restricción CANT_BLOCK de elemental de magma. Los Aliados en la Línea de Ataque que no atacan ni bloquean se ven en azul hielo (`CardInteractionModule.IDLE_ATTACK_TINT`, `_refresh_idle_attack_tint()`); el Remoto recibe la lista con el op "idle_attack_cards".
+- **Habilidades que se ganan en el Cementerio** (tundra viva, isla de gigantes): se agregan al texto de la carta del Cementerio (permanentes). El parser las reconoce como activadas (`granted_by_tundra_isla`), `CardInspectionLayer._ability_is_cementerio_usable()` las permite y `_tundra_granted()` / `_isla_granted()` cobran Desterrar las otras cartas.
+- **Prevenciones nuevas** en `EffectController._prevention_registry`: naves de shaggai (el Arma del Aliado que va a salir), mesa del te (dos por turno: lo sube a la mano y Roba), Chestnut Hill (dado: par previene, impar el rival Destierra dos del tope), Romualdito (Destruir / cambiar de control / ser convertido: etiqueta "convert" desde `ConvertPatterns.conversion_prevented()`, que usan `_blank`, `_take_and_convert_in_play` y `convert_in_play_to_totem`) y Polvo de Hadas (nueva etiqueta "mill" en `ActionModule.mill()`, por un efecto oponente).
+- **en las montañas de la locura**: evento `ally_affected` de `LimitedEventTriggers`, desde `offer_prevention()` cuando un efecto rival afecta a tu Aliado.
+- **Báculo de los Eternos**: `CastleLook.look` (tantas como Armas y Tótem controles, incluidas las portadas), Robar opcional con la bandera de torii (`register_torii_skip_final_draw`), y su tope de atacantes en `GameManager.attack_cap()`.
+- **ayyappan**: vuelve a activar (`CardInspectionLayer.activate_ability_for`) una habilidad de Arma ya usada este turno (`turn_registry.was_used`).
+- **Caos**: el Oro elegido gana el texto y la meta `caos_gold`; al pagarlo, `GoldManager._mover_oro_a_pagado()` lo convierte (`caos_to_ally`, Fuerza 3) y cuenta como desviado; si hace daño en combate (`unblocked_damage` / `combat_pair_resolved`, al terminar el combate) o daño directo propio (DAR: daño directo = Botar; `ActionModule.mill()` cuando el efecto en curso es del propio Aliado y Bota al rival; el de su Arma no cuenta), vuelve a ser Oro en el Oro Pagado (`caos_back_to_gold`).
+- **Fase Final, Vigilia y Destruido (séptimo lote)**: "agrupa al portador" (hacha de perun) y "agrupa tus Aliados" (espada de akmallah) usan `_regroup()` → `CardInteractionModule.unmark_attackers()` (de la Línea de Ataque a la de Defensa). ayyappan: en tu Fase Final eliges qué Aliados con Armas agrupar, y `BattleManager._destroy_cards_with_indestructible_check()` no los Destruye en Asignación de Daño (`ayyappan_protects`). martillo mjlnir lee la meta `combat_damage_turn` (GoldManager la pone con `unblocked_damage` / `combat_pair_resolved`). cahuelche: `_cahuelche_destroyed`. pulsera de energia (desde el Cementerio) y París ("Al comienzo de la Vigilia oponente") no están en el campo del jugador activo: `ActivatedPatterns.vigilia_start_extras()` al final de `TriggerSystem.resolve_vigilia_triggers()`; el camino on_vigilia normal las salta.
+- Sonda del grupo de activadas: 233 resueltas, 0 sin handler, 23 en espera. Pruebas del compilador 64/64.
+
+### DAR abril 2026: Portar y mulligan gratis (2026-10-23)
+- **Talismán con Exhumar jugado desde el Cementerio por cualquier vía** (decisión del usuario; el DAR no aclara si Exhumar es habilidad continua o condición de juego): se Destierra aunque se juegue con La Ouija, Miguel u otro efecto, incluso si es Anulado. `CardManager.remove_from_cemetery()` marca los datos con `_from_cemetery_turn` (lo borra `PlayerSide.put_in_hand()`), y `GoldManager._mark_cemetery_exhumar()` (en `play_card()` y `play_card_for_free()`) pone `is_exhumed` si es un Talismán con Exhumar y sin perder su habilidad. Uno sin Exhumar sigue yendo al Cementerio.
+
+- **Costes adicionales afectan al jugador** (Glosario, Coste Adicional): un jugador que no puede ser afectado por efectos oponentes (Fisión Nuclear, peter pan, Jugando con el Demonio) no paga los recargos que le puso el rival. `RuleState.set_until()` guarda quién lo impuso (controlador del `EffectContext`; `source_of()`), y `EffectController.opp_cost_waived()` / `rule_cost_waived()` lo consultan en `PaymentManager.calcular_coste_real()` (oros_mas_modifiers, fuma kotaro, plaza de armas, `_static_type_and_cheap_surcharge`), `TriggerTollPatterns.ability_toll()` (koto, randolph carter, Serafín...) y el recargo de corazón de muerte en `offer_prevention()`. Sin dato de origen se asume que lo puso el rival.
+- **Cancelar un ataque afecta a los Aliados** (Glosario, Afectar): `EffectController.filter_attack_cancel()` pasa cada atacante elegido por `offer_prevention(ally, source, "cancel_attack")` (inmunidad a efectos oponentes, mesa del te, Dos de Cada Uno...). Lo usan `EffectInterpreter._cancel_attack()` (y por él flor de lis, pulsera) y Drácula.
+
+- **Arma sin portador válido** (Glosario, Portar: portar es estar anexada, no solo el acto de equiparla). `GoldManagerRestrictions._max_weapons_for()` devuelve 0 con Sariel en juego del rival ("Los Aliados oponentes no pueden portar Armas") o si el propio Aliado dice "No puede portar Armas" / "ni portar Armas" (udug, Los Señalados, Día de los Muertos), también para las Armas que ya portaba. `GoldManager._enforce_weapon_capacity()` (cada 0,3 s, solo el Anfitrión) manda las sobrantes con `EffectController.send_to_cemetery_by_rule()`: salen del juego al Cementerio de su dueño **sin ser Destruidas** (ni prevención, ni Indestructible, ni "cuando sea Destruida"; `CardManager.destroy_card(..., as_destroy = false)` no emite `card_destroyed`).
+- **Mulligan gratis** (4.3): una vez por partida, con 0 o 1 Oros en la mano de mulligan, el jugador la muestra al rival y la cambia Robando la misma cantidad. `MulliganController` crea el botón ("FreeMulliganButton") junto a los otros dos; el del Anfitrión manda el op "hand_shown" al Remoto (lo abre con `SelectionManager.open_reveal`). El del Remoto llega como intent `mulligan_choice` con `free: true` (`RemotePlayerController.run_mulligan()` le muestra la mano al Anfitrión y no resta carta); el prompt trae `free_available` y `golds`. **Nunca se muestran dos manos a la vez**: `MulliganController._acquire_reveal()` es un turno que coordina el Anfitrión (si los dos lo piden, primero el Anfitrión). La mano queda mostrada hasta que el rival cierra la ventana (local: `SelectionManager.selection_completed`; Remoto: intent `hand_shown_closed`) y recién ahí se cambia. La pantalla de espera del mulligan se oculta mientras está la ventana para que se pueda cerrar.
+
+### Octavo lote: los últimos sin handler (2026-10-23)
+
+- **Claves nuevas en `ActivatedPatterns.KINDS`** para Fase Final (amuleto de thor, atlatl, cañón naval, Cráneo de Cristal, dietrich von bern, reino de midgard, fujin/raijin, Guadaña de Santa Muerte, katana kogitsunemaru, leo, odachi, rostam, Shakar Raj, Snagov, vorpal, zmeu, armadura imperial, guitarra andaluza, el Oro de Azi Demoniaco), activadas (Azi Demoniaco, chamuel, cueva de montesinos, ebikame, Gehena, guitarra andaluza, Gurzil, hrunting, Lanza de Exorcista, yelmo vendel → `_seth_destructor`), daño (escorpio, malafar sp, nagaraja, vinci y yang; `on_damage_dealt` ahora también prueba `ActivatedScript.try_execute`), Vigilia de Oros (salmon del saber, shakuhachi, armadura imperial, Amuleto de Serpiente: `resolve_vigilia_triggers()` recorre también Reserva y Oro Pagado), incienso sagrado, Armería del Guerrero y Destruido (caicai vilu, tesoro del santiaguillo).
+- **Fuera del campo**: `vigilia_cemetery_extras()` (compendium maleficarum y gumyocho desde el Cementerio; veinte mil leguas en cualquier Vigilia, en juego o en el Cementerio), `agrupacion_cemetery_extras()` (origenes) y `turn_end_extras()` (miroku desde el Destierro; Los Señalados con "En la Fase Final", sin "tu", y la meta `castle_damage_turn`).
+- **Momentos para jugar que no son disparadores**: "Puedes jugarlo al comienzo de la Vigilia" (Guerrillero Rodriguez) y "Puedes jugarla ... en la Fase Final oponente" (Kukri, Diabolista de Ébano) se saltan en `TriggerResolution` (los maneja `PhaseStartWindow`).
+- **Ganchos**: nagaraja (`RuleState` pending "nagaraja_steal"; `nagaraja_on_entered()` gana el control del primer Aliado o Tótem que entra bajo el rival en su próximo turno), trapezoedro (`trapezoedro_turn_start()` / `trapezoedro_on_put()`), vorpal (`no_regroup_turn` en Aliados: `PhaseFlowController` no los agrupa).
+- **Corrección**: `GameManager.confirm_attackers()` guardaba `declared_attacker_turn` con `current_turn` (uno por ronda) pero se compara con `turn_serial`; ahora usa `turn_serial`.
+
+### Respuestas y efectos sin superponerse (2026-10-23)
+
+- **Agrupación antes de la Vigilia**: `GameManager._process_agrupacion()` esperaba 1,5 s fijos y pasaba a la Vigilia aunque `PhaseFlowController` siguiera resolviendo la Agrupación ("Al comienzo del turno", "En tu Agrupación", con elecciones del jugador). La Vigilia del bot arrancaba encima y abría otra ventana de respuesta por detrás (Armería del Guerrero). Ahora espera `GameManager.agrupacion_busy`, que `PhaseFlowController` baja al terminar `resolve_agrupacion_triggers()`.
+- **El bot elige solo en todas las ventanas**: `SelectionDialogs.await_choice()` / `await_card_pair_choice()` / `await_castillo_pick()`, `SelectionManager.open_selection()` (`_auto_select_for_bot()`, mismas señales que la UI) y `CardInteractionModule.await_target_or_castillo_pick()` ya no le abren al Anfitrión una elección del bot.
+- **Responder solo si se puede** (DAR, Respuesta): un Talismán de Anular/Cancelar se rechaza antes de pagar si en la pila no hay nada del rival que pueda Anular o Cancelar (`Deck170Patterns.annul_response_has_target()`; `StackAnnul.try_from_text()` salta lo protegido).
+- **Recolección de disparadores trabada** (causa raíz del aviso "is_collecting/is_resolving atascado >3s"): `ActionModule._begin_trigger_collection()` (Destruir, Desterrar, Robar, Botar, Buscar, Descartar) llamaba a `TriggerSystem.begin_collecting()` y, sin nada que recolectar (siempre: `GameManager.game_board` no se asigna), nadie bajaba `is_collecting`. La siguiente carta en entrar en juego esperaba 3 s y `_collect_triggers_for_event()` forzaba un reset que también apagaba `is_resolving` (un efecto anidado podía resolverse encima de otro). La recolección vieja de ActionModule ya no toca TriggerSystem.
+- **La Pila esperaba 8 s y seguía sin la respuesta**: `ActionPipeline.add_triggered_ability_to_stack_and_await()` cortaba a los 8 s aunque el rival siguiera decidiendo en su ventana de respuesta. Ahora espera mientras el objeto siga en la Pila y haya ventana de prioridad abierta o la Pila esté resolviendo; solo si queda huérfano relanza `_process_stack()` una vez y después sigue.
+- **Sonda**: `tools/probe_handlers.gd` explica cada espera (`EffectContext.last_prompt`), espera 4 s reales además de 240 cuadros (sin pantalla, las animaciones con temporizador parecían esperas), pasa sola por el jugador 0 en las ventanas de prioridad y limpia el estado de TriggerSystem entre cartas.
+
+### Interacciones en la mesa y visor de mirar con pasos (2026-10-23)
+
+- **Elegir entre opciones sin ventana**: `SelectionDialogs.await_choice()` (y con ella `await_two_choice()`, ~220 llamadores) usa `scripts/ui/hud/BoardChoice.gd`: fichas sobre el tablero ancladas a lo que afecta cada opción (texto con "Roba/Castillo/tope/fondo/Bota/Baraja" → Castillo; "Cementerio" → Cementerio; "Destierro" → Destierro; "mano" → tu mano; con "oponente/rival", los del rival), con contorno dorado en el ancla; las demás junto a la carta del efecto en curso (`EffectContext.current().card`) o bajo la franja de arriba, que dice qué se resuelve. El Remoto usa las mismas fichas: el prompt "choose_option" trae `source_id`.
+- **Visor de mirar (CastleLookWindow) con pasos**: misma interfaz (`open`/`auto_pick`/`validate`, prompt "castle_look"), pero guiado: fila de cartas, arriba "A tu mano · toca una carta", al tocar se aparta (tocarla de nuevo la devuelve; "Deshacer"), luego el siguiente destino; los pasos completos se saltan solos. Al final, las que vuelven al Castillo se ordenan arrastrándolas solo en horizontal (izquierda = más arriba) y "Listo". Si no hay nada que ordenar, termina al elegir la última.
+- **Visor de mostrar (RevealWindow)**: `scripts/ui/zones/RevealWindow.gd`, mismo estilo y tamaño que el de mirar. Solo las cartas que indica el efecto. Modos: `show_cards` (van a tu mano / se juegan, "Listo"), `pick_one` (tocas una y se cierra) y `choose_order` (tocas en el orden en que se juegan; la última va sola). `RevealWindow.run()` resuelve solo para el bot y por red para el Remoto (prompt "reveal_window"). Lo usan `EffectInterpreter._reveal_until()`, `ActivatedPatterns._reveal_until_to_hand()`, LookRevealPatternsB (Cabeza de Mimir, metalmorfo, Diadema Celestial, Alicia, atenea, Activar Tenshi Z / Estrella de Kirin, akari, contra el caos, gran kraken) y fortaleza hoshi. Al jugar varias cartas dentro de un efecto, `SearchPatterns.reorder_new_triggers()` deja elegir el orden de sus "Cuando entra en juego".
+- **Visor de buscar (ZoneBrowsePicker)**: mismo estilo que el de mirar: fondo oscuro sin marco, instrucción grande arriba, cartas más grandes (escala 0,9–1,6) y botones "Cerrar"/"Confirmar" grandes.
+- **"A o B" en la mesa con objetivos**: en `EffectInterpreter._resolve_choices()`, las opciones que empiezan eligiendo una carta en juego (`target`, de a una) marcan sus candidatos con contorno dorado (BoardChoice `target_sets`); tocar uno elige esa opción Y ese objetivo (`_preselected_target`, que `_declare_targets()` usa y cobra su recargo de afectar).
+- **Esperas restantes de la sonda (45)**: casi todas legítimas (el texto hace elegir al rival humano: "tu oponente Descarta/elige", "cada jugador..."). Corregidas las que elegía el Anfitrión por el bot: `TargetedEffectExecutor._execute_targeted_convert()` (capitan obrien) elige el controlador de la carta; el Descarte de `TargetedEffectExecutor` elige quien Descarta (también el Remoto, por red; el bot al azar); `CardNameSearchDialog.open_and_wait()` sin quien elige toma al controlador del efecto en curso y el bot nombra solo (`_bot_name_pick()`: la carta de mayor coste del rival en juego) — Alicia en Wonderland, Malleus Maleficarum, contra el caos.
+
+### Auras de "pierden su habilidad" y regla de bucles (DAR 7.7, 2026-10-24)
+
+- **Faltaban casi todas**: solo existían "Los Oros oponentes pierden su habilidad" (registrado también para skofnung sin su condición) y Sariel. `scripts/core/effects/continuous/SilenceAuras.gd` lee del texto de cada carta en juego las oraciones continuas "... pierden su habilidad" / "... no pueden utilizar su habilidad" (tui, wayra tata, Daikaiju Furioso, Legendario Tenshi, tenshi x-2, oberon, Sariel, daidarabotchi, Xanadú, septimus, camilo henriquez, luthairon, skofnung con portador de coste 2 o más, manu tara en Reserva) y las de Cementerio/Destierro (torre de cristal, parche pirata en Reserva, lycon en Oro Pagado, antartica, La Catrina, Pricolici; Ajo Protector protege el propio Cementerio). Deja fuera las disparadas, activadas, con duración, las de un objetivo y las de nombrar (`lock_ability_by_name`).
+- **Dónde se consulta**: `KeywordManager.is_silenced()` → `SilenceAuras.silenced()` (en juego; respeta Abu Simbel, Manuel Bulnes, skofnung, "no puede perder su habilidad" y Terminal P-12 solo contra el rival) y `CardManager.is_cemetery_card_silenced()` → `zone_card_silenced()`. Una fuente sin habilidad no quita habilidades. Filtros de coste nunca alcanzan Oros; los de Fuerza usan la Fuerza modificada.
+- **Regla de bucles**: la evaluación lleva una pila de cartas; si vuelve a una que está en la pila y en el círculo hay auras, se reintenta con la última en entrar en juego del círculo (`entered_play_seq`, `SilenceAuras.mark_entered()` desde `ContinuousEffectManager`) apagada. Cuando otra carta del círculo sale, el círculo desaparece y vuelve a aplicar sola. Un círculo sin auras (una carta cuya Fuerza depende de su propia habilidad) no cuenta.
+- **Visual y Remoto**: cada `ContinuousEffectManager._invalidate_cache()` agenda `KeywordManager.queue_aura_refresh()` (una vez por frame): si cambió el conjunto de cartas sin habilidad por aura, gira las que cambiaron y emite `abilities_changed` (Fuerza y op "disabled_cards" al Remoto). El registro avisa qué carta apagó la regla de bucles.
+
+### Seguridad antes de distribuir el paquete (2026-10-24)
+
+- **Relay** (`relay-server/server.js`): mensajes de hasta 1 MB (`maxPayload`), código de sala de 6 caracteres con `crypto.randomInt`, 10 intentos fallidos de unirse por conexión (30 por IP en 10 min), máximo 8 conexiones por IP y 2000 salas, límite de mensajes por segundo, ping cada 30 s (cierra conexiones muertas), sala sin Remoto se borra a los 30 min, una conexión en una sola sala. Un peer ya no puede mandar las ops de control (`peer_disconnected`, `room_created`, `error`...): se descartan. Todo configurable por variable de entorno.
+- **El Anfitrión valida al Remoto**: en la Vigilia, `place_gold`/`play_card` solo aceptan cartas que estaban entre las candidatas que se le ofrecieron (antes valía cualquier `instance_id`, incluida una carta de la mano del Anfitrión).
+- **Mano del Anfitrión privada**: en los prompts de objetivo al Remoto (`CardInteractionModule._remote_candidate_entry()`), una carta de la mano del Anfitrión viaja solo con su id y `host_hand_hidden` (se dibuja boca abajo); `_delegate_target_or_castillo_to_remote()` ya no junta la mano del Anfitrión.
+- **Imágenes por red**: `CardImageLoader` solo carga rutas `res://`/`user://` de imagen (png, webp, jpg, svg, sin `..`) y solo si el recurso es `Texture2D`; antes un `imagen` recibido por red podía hacer `load()` de cualquier recurso.
+- **Exportación**: `export_presets.cfg` excluye `tools/*`, `archive/*` y `test_scene.tscn`. El ejecutable no contiene rutas de la máquina ni el nombre del archivo de credenciales.
+- **Validación de mazos en línea** (`scripts/core/cards/DeckValidator.gd`, DAR 4.1): exactamente 50 cartas; hasta 3 copias por nombre, Única 1, sin límite para Oros sin habilidad y cartas con "puedes tener más de tres copias"; sin baneadas (`BANNED`: liberar esclavos); un id que no existe en CardDatabase es error. El Remoto valida su mazo antes de mandarlo; el Anfitrión valida el del Remoto (`_apply_network_opponent_deck()`) y el suyo (`_show_dice_roll()`). Si falla, `{"op":"match_cancelled","who","errors"}` al otro lado y ambos ven "Partida cancelada" con el motivo y vuelven al menú.
+- **Pendiente (decisiones)**: la contraseña de ShadowForge se guarda en texto plano en `user://shadowforge_credentials.json` para reautenticar sola; el Anfitrión es autoritativo (dados, barajar, Castillo del Remoto), así que un Anfitrión modificado puede hacer trampa.
+
+## Partidas en línea: desconexión, versión y reloj de turno (2026-10-24)
+
+- **Desconexión** (`scripts/core/network/MatchConnectionWatcher.gd`): `NetworkClient.connection_lost` (socket propio cerrado) es distinto de `peer_disconnected` (el relay avisa que el otro se fue). Con la partida en curso, si el rival se va gana el que queda; antes de empezar, o si se cae la conexión propia, diálogo y vuelta al menú. El Anfitrión manda `{"op":"game_over","winner"}` (winner de su lado) y el Remoto muestra la misma pantalla de Victoria/Derrota. Conceder en el Remoto manda `{"op":"concede"}`. Salir por el menú de pausa o por la pantalla de fin de partida llama a `leave_match()` (cierra el socket; "Revancha" en línea vuelve al menú).
+- **Versión** (`GameBootstrap._local_hello()`): los dos mandan `{"op":"hello","version","protocol","cards"}` (versión de `project.godot`, `NET_PROTOCOL`, MD5 de `res://data/cards.json`) antes del mazo. Si no coinciden, `match_cancelled` con `who: "version"`. Subir `NET_PROTOCOL` cuando cambie el protocolo de red.
+- **Reloj de turno** (`scripts/core/network/TurnClock.gd`, lo lleva el Anfitrión; el Remoto lo muestra con `{"op":"clock"}` en el panel `TurnTimer`): jugador activo 60 s por turno, +2 s por acción (carta u Oro que entra en juego, pago de Oro), corre siempre (también en sus efectos y búsquedas) salvo mientras decide el rival; el rival tiene 30 s por turno para sus decisiones en el turno ajeno. Sin tiempo todo se resuelve solo: pasar prioridad, cancelar lo opcional, primeras opciones válidas en lo obligatorio y ¿Paso? hasta terminar el turno. En el Anfitrión: `_auto_resolve_host()` (selección de objetivo, Castillo, SelectionManager.force_default()) y las ventanas con `NetworkClient.ui_forced()` (RevealWindow, CastleLookWindow, BoardChoice, ZoneBrowsePicker, CardNameSearchDialog, elección de 2 cartas), que además cuentan en `NetworkClient.local_waits`. Para el Remoto: `NetworkClient.forced_intent` arma el intent por defecto desde `last_prompt` y se le manda `{"op":"force_close"}`; el Remoto cierra lo abierto (`force_gen`) y descarta el intent que mande esa ventana. En la Fase Final del jugador activo sin tiempo hay 10 s para descartar por límite de mano; después, las primeras de la izquierda.
+- **Límite de mano del Remoto en línea**: ahora elige él qué descartar (`PhaseFlowController._remote_discard_excess()`); antes se descartaban sus cartas más caras sin preguntarle.
+- **Cartas mostradas** (`scripts/core/effects/mechanics/RevealedCards.gd`): lo mostrado del Castillo que el efecto no mueve vuelve al Castillo y se Baraja (`shuffle_back()`), salvo que el texto diga otra cosa (sable corto/Prendick: al Cementerio; gurzil: al Destierro; el último hombre y hrunting: "devuélvelas en cualquier orden"). Corregidos los que dejaban el resto en el tope: veela, la rueda de la fortuna (Activada y Tótem), garshasp, amuleto de la serpiente, Avistamientos. Gurzil no tenía su "Cuando ataques" (`AttackPatterns._gurzil_attack()`). Cada grupo mostrado queda en el historial (`record()`: entrada "reveal" con enlace "Ver cartas", que abre RevealWindow en modo mostrar con `browse`, sin contar como decisión); en línea viaja al Remoto con `{"op":"reveal_log"}`. Reemplaza las ventanas que se le abrían al rival con las cartas mostradas. "Mira" (privado) no entra.
+- **Historial en el Remoto**: `CombatLog.add_entry()` en el Anfitrión manda cada entrada (`{"op":"log","type","message","level","time_string"}`, salvo `NOT_SYNCED`: "parse" y "reveal") y el Remoto la agrega con `add_net_entry()`, cambiando "Jugador 1"/"Jugador 2" para que quien mira sea siempre el Jugador 1. En el Remoto `CombatLog.remote_mirror` (lo pone `RemoteMirrorController.setup()`) descarta lo que se registraría localmente, salvo los grupos de cartas mostradas. Las entradas no llevan cartas ocultas por nombre (jugadas, costes, daño, fases, prioridad).

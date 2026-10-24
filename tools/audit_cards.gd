@@ -170,6 +170,9 @@ static func _has_trigger_prefix(s: String) -> bool:
 	for p in EffectCompilerScript.TRIGGER_PREFIXES:
 		if s.begins_with(p + ", ") or s.begins_with(p + " y "):
 			return true
+		# Sin coma ("cuando entra en juego baraja..."): mismo criterio que el compilador.
+		if s.begins_with(p + " ") and EffectCompilerScript._strip_trigger_prefix(s) != s:
+			return true
 	return false
 
 

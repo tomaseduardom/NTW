@@ -44,3 +44,4 @@ Todo menú, panel, diálogo modal, overlay, selector, popup o componente de inte
 - **NO TEST RUNS**: Nunca ejecutar tests CLI ni GUT sin permiso explícito del usuario.
 - **GIT COMMITS**: Cada cambio funcional completado se commitea con un mensaje limpio en español o inglés siguiendo conventional commits.
 - **COMUNICACIÓN**: Enlaces cliqueables en formato `file:///...` para todos los archivos modificados.
+
