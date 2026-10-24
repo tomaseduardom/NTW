@@ -1,4 +1,4 @@
-# Arquitectura — El Grimorio / MitosOnline
+# Arquitectura — NTW (antes MitosOnline)
 
 > Unifica dos fuentes: la auditoría técnica `docs/audit-2026-08-13.html` (snapshot del
 > 2026-08-13/15, cuando el proyecto todavía vivía en `game/` dentro del repo Nuxt) y las
@@ -309,13 +309,13 @@ siendo git-clon de `Divaxz/Grimorio_NUXT` (app Nuxt), pero casi todos sus archiv
 `git status` los muestra como deleted, pero nada se commiteó ni se hizo `git restore`,
 así queda a propósito.
 
-El proyecto activo real es `NosTaw/MitosOnline/` — un juego Godot 4.6 con **su
-propio repo separado** (`github.com/tomaseduardom/MitosOnline`), sin relación con el
-repo Nuxt (no es submódulo). `MitosOnline/mitos-online/` es una subcarpeta casi vacía
+El proyecto activo real es `NosTaw/NTW/` (antes `NosTaw/MitosOnline/`) — un juego Godot 4.6 con **su
+propio repo separado** (`github.com/tomaseduardom/NTW`, antes MitosOnline), sin relación con el
+repo Nuxt (no es submódulo). `NTW/mitos-online/` es una subcarpeta casi vacía
 con un `project.godot` suelto — dejada sin revisar a propósito.
 
 **No proponer** `git restore`/`checkout` para el repo Nuxt, ni comitear esas
-eliminaciones, ni tocar `MitosOnline/mitos-online/` sin preguntar — las tres cosas
+eliminaciones, ni tocar `NTW/mitos-online/` sin preguntar — las tres cosas
 fueron diferidas explícitamente por el usuario.
 
 ---
