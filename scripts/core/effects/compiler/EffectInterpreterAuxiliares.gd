@@ -140,7 +140,9 @@ static func describe_steps(steps: Array) -> String:
 					"reveal": "Mostrar una carta de tu mano", "sacrifice": "Destruir otro Aliado",
 					"self_bounce": "Subir esta carta a tu mano", "self_destroy": "Destruir esta carta",
 					"shuffle_hand": "Barajar %d de tu mano" % st.amount,
-					"banish_hand": "Desterrar %d de tu mano" % st.amount}.get(st.kind, st.kind))
+					"banish_hand": "Desterrar %d de tu mano" % st.amount,
+					"sacrifice_any": "%s %d que controles" % [{"destroy": "Destruir", "banish": "Desterrar",
+						"shuffle": "Barajar"}.get(str(st.get("verb", "")), ""), st.amount]}.get(st.kind, st.kind))
 			"hand_peek":
 				var peek_verbs := {"banish": "Desterrar", "discard": "Descartar", "shuffle": "Barajar"}
 				parts.append("Mirar la mano rival y %s %d" % [str(peek_verbs.get(st.verb, "")).to_lower(), st.count])

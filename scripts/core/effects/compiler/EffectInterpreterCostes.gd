@@ -31,7 +31,38 @@ func _cost_candidates(main: Node, c: Dictionary, card: Node, controller_id: int)
 					if is_instance_valid(a) and a != card and a.get("card_type") == Constants.CardType.ALIADO:
 						out.append(a)
 			return out
+		"sacrifice_any":
+			return _controlled_in_play(main, controller_id).filter(func(x: Node) -> bool:
+				if not c.get("types", []).is_empty() and _type_word(int(x.card_type)) not in c.types:
+					return false
+				if int(c.get("cost_val", -1)) >= 0:
+					var cost := int(x.get("card_cost"))
+					var cv := int(c.cost_val)
+					if (c.cost_cmp == "mas" and cost < cv) or (c.cost_cmp == "menos" and cost > cv) \
+							or (c.cost_cmp == "" and cost != cv):
+						return false
+				return true)
 	return []
+
+
+func _controlled_in_play(main: Node, pid: int) -> Array:
+	"""Cartas en juego que controla 'pid': Líneas, Armas portadas, Reserva y Oro Pagado."""
+	var out: Array = []
+	for cont in PlayerSideScript.line_containers(main, pid):
+		for x in cont.get_children():
+			if not is_instance_valid(x) or x.get("card_type") == null:
+				continue
+			out.append(x)
+			if x.get("equipped_weapons") is Array:
+				for w in x.equipped_weapons:
+					if is_instance_valid(w) and not (w in out):
+						out.append(w)
+	for cont in [PlayerSideScript.gold_reserva(main, pid), PlayerSideScript.oro_pagado(main, pid)]:
+		if cont:
+			for g in cont.get_children():
+				if is_instance_valid(g) and g.get("card_type") != null:
+					out.append(g)
+	return out
 
 
 func _cost_unpayable(main: Node, c: Dictionary, card: Node, controller_id: int) -> String:
@@ -66,7 +97,7 @@ func _cost_unpayable(main: Node, c: Dictionary, card: Node, controller_id: int) 
 		"mill":
 			if CardManager.get_deck_count(controller_id) < int(c.amount):
 				return "no tienes %d cartas en tu Castillo" % int(c.amount)
-		"discard", "reveal", "sacrifice", "banish_hand":
+		"discard", "reveal", "sacrifice", "banish_hand", "sacrifice_any":
 			if _cost_candidates(main, c, card, controller_id).size() < int(c.amount):
 				return "no tienes con qué pagar el coste"
 	return ""
@@ -134,7 +165,7 @@ func _pay_cost(main: Node, c: Dictionary, card: Node, controller_id: int) -> boo
 		"mill":
 			await ActionModule.mill(controller_id, int(c.amount), false, "coste", true)
 			return true
-		"discard", "reveal", "sacrifice", "banish_hand":
+		"discard", "reveal", "sacrifice", "banish_hand", "sacrifice_any":
 			var pool := _cost_candidates(main, c, card, controller_id)
 			var n: int = int(c.amount)
 			var picked: Array = []
@@ -144,8 +175,10 @@ func _pay_cost(main: Node, c: Dictionary, card: Node, controller_id: int) -> boo
 			elif c.kind == "discard":
 				picked = await _ts._targeted_executor._select_hand_cards_for_discard(pool, n, controller_id)
 			else:
+				var sac_verb := {"destroy": "Destruye", "banish": "Destierra", "shuffle": "Baraja"}
 				var what := {"reveal": "muestra una carta de tu mano", "sacrifice": "Destruye otro Aliado que controles",
-					"banish_hand": "Destierra %d carta(s) de tu mano" % n}
+					"banish_hand": "Destierra %d carta(s) de tu mano" % n,
+					"sacrifice_any": "%s %d carta(s) que controles" % [sac_verb.get(str(c.get("verb", "")), ""), n]}
 				var prompt := "%s: %s" % [name, what.get(c.kind, "")]
 				picked = await main._card_interaction.await_multi_target(prompt, pool, n, Callable(), Callable(),
 					false, null, controller_id)
@@ -159,6 +192,18 @@ func _pay_cost(main: Node, c: Dictionary, card: Node, controller_id: int) -> boo
 					load("res://scripts/core/effects/mechanics/RevealedCards.gd").record(controller_id, picked.map(func(p): return p.card_data), name)
 				"sacrifice":
 					await ActionModule.destroy(picked, card, false, true)
+				"sacrifice_any":
+					match str(c.get("verb", "destroy")):
+						"destroy":
+							await ActionModule.destroy(picked, card, false, true)
+						"banish":
+							for p in picked:
+								var p_owner: int = p.owner_id if p.get("owner_id") != null else controller_id
+								await EffectController.exile_card(p_owner, p, true)
+						"shuffle":
+							for p in picked:
+								var s_owner: int = p.owner_id if p.get("owner_id") != null else controller_id
+								await ActionModule.return_to_deck(p, s_owner, true, card)
 				"banish_hand":
 					for p in picked:
 						var data: Dictionary = PlayerSideScript.take_from_hand(main, controller_id, p)

@@ -169,6 +169,10 @@ const COST_PIECES := [
 	["mill", "botar (?<n>" + NUM + ")(?: cartas?)?"],
 	["reveal", "mostrar (?:un|una) (?<types>" + T1 + ")(?: (?<race>" + RACE + "))? de tu mano"],
 	["sacrifice", "destruir otro aliado que controles"],
+	# "Destruir/Desterrar/Barajar un Oro / una carta / un Aliado de coste 1 o más que controles para..."
+	# (veles, piedra de la iglesia, dodomeki, molotok, arco patagon...). Puede ser la carta misma.
+	["sacrifice_any", "(?<sv>destruir|desterrar|barajar) (?<sn>un|una|dos|tres) (?<types>" + TALT + ")" \
+		+ "(?: de coste (?<cval>\\d+) o (?<ccmp>mas|menos))? que controles"],
 	# "subir este Oro a tu mano" (hem hem real): la carta misma, de juego a la mano.
 	["self_bounce", "(?:subir (?:este oro|esta carta|este aliado|esta arma|este totem)|subirlo|subirla) a tu mano"],
 	["shuffle_hand", "barajar (?<n>" + NUM + ") cartas? de tu mano(?: en tu castillo)?"],
@@ -917,6 +921,13 @@ static func _cost_step(kind: String, m: RegExMatch) -> Dictionary:
 			return {"op": "cost", "kind": "discard", "amount": 1, "types": _type_list(m.get_string("types"))}
 		"mill", "shuffle_hand":
 			return {"op": "cost", "kind": kind, "amount": parse_amount(m.get_string("n"))}
+		"sacrifice_any":
+			var sv: String = m.get_string("sv")
+			return {"op": "cost", "kind": "sacrifice_any", "amount": parse_amount(m.get_string("sn")),
+				"types": _type_list(m.get_string("types")),
+				"verb": "destroy" if sv == "destruir" else ("banish" if sv == "desterrar" else "shuffle"),
+				"cost_val": int(m.get_string("cval")) if not m.get_string("cval").is_empty() else -1,
+				"cost_cmp": m.get_string("ccmp")}
 		"banish_hand":
 			if not m.get_string("bn").is_empty():
 				return {"op": "cost", "kind": "banish_hand", "amount": parse_amount(m.get_string("bn")), "types": []}

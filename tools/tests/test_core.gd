@@ -240,6 +240,8 @@ func _compiler() -> void:
 		"Cuando entra en juego, muestra cartas del tope de tu Castillo hasta mostrar un Oro. Pon esa carta en tu mano y Baraja el resto.",
 		"Cuando entra en juego, Baraja hasta cinco cartas de tu Cementerio y Roba una carta.",
 		"Cuando entra en juego, mira la mano de tu oponente y Descarta una carta de ahí de coste 1.",
+		"Una vez por turno, puedes Destruir una carta que controles para Robar una carta.",
+		"Una vez por turno, puedes Desterrar un Oro que controles para Destruir una carta de coste 2 o menos.",
 	]:
 		check("compila: %s" % text, EffectCompilerScript.compile_clause(text).get("ok", false), true)
 	var c: Dictionary = EffectCompilerScript.compile_clause("Una vez por turno, puedes Desterrar una carta de tu mano para Robar una carta.")
