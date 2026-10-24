@@ -246,6 +246,8 @@ func _compiler() -> void:
 		"Cuando entra en juego, busca en tu Castillo un Aliado que no sea Ahab y ponlo en tu mano.",
 		"Cuando entra en juego, busca en tu Castillo un Aliado de Fuerza 2 o menos y ponlo en tu mano.",
 		"Cuando entra en juego, busca en tu Castillo un Aliado Sacerdote y destiérralo.",
+		"Cuando sea destruido, tu oponente Bota cartas igual a la Fuerza de un Aliado en juego.",
+		"Cuando entra en juego, tu oponente Bota tantas cartas como coste tenga otra carta que controles y tú Robas dos cartas.",
 	]:
 		check("compila: %s" % text, EffectCompilerScript.compile_clause(text).get("ok", false), true)
 	var c: Dictionary = EffectCompilerScript.compile_clause("Una vez por turno, puedes Desterrar una carta de tu mano para Robar una carta.")

@@ -572,6 +572,11 @@ func _revive_blank(main: Node, st: Dictionary, card: Node, controller_id: int) -
 	return picked.size() >= int(st.amount) or st.get("up_to", false)
 
 
+func _cards_in_play_of(main: Node, pid: int) -> Array:
+	"""Cartas en juego de 'pid' (Líneas, Armas portadas, Reserva, Oro Pagado); ver _controlled_in_play()."""
+	return _controlled_in_play(main, pid)
+
+
 func _mill_x(main: Node, st: Dictionary, card: Node, controller_id: int) -> bool:
 	"""Botar (o Desterrar del tope del Castillo rival) tantas cartas como: la Fuerza de un Aliado que
 	controles / que porte Armas (se elige; el bot, el de más Fuerza), la del portador de esta Arma, o
@@ -608,6 +613,32 @@ func _mill_x(main: Node, st: Dictionary, card: Node, controller_id: int) -> bool
 			if bearer == null:
 				return false
 			n = ContinuousEffectManager.get_modified_strength(bearer)
+		"self_strength":
+			n = int(ContinuousEffectManager.get_modified_strength(card)) if is_instance_valid(card) else 0
+		"own_paid_gold":
+			var paid = PlayerSideScript.oro_pagado(main, controller_id)
+			n = paid.get_children().filter(func(g): return is_instance_valid(g) and g.get("card_type") != null).size() if paid else 0
+		"any_ally", "any_card_cost", "own_other_card_cost":
+			var pool: Array = []
+			for pid in ([controller_id] if st.src == "own_other_card_cost" else [0, 1]):
+				pool.append_array(_cards_in_play_of(main, pid))
+			if st.src == "any_ally":
+				pool = pool.filter(func(x): return x.get("card_type") == Constants.CardType.ALIADO)
+			elif st.src == "own_other_card_cost":
+				pool = pool.filter(func(x): return x != card)
+			if pool.is_empty():
+				main._update_debug("%s: no hay una carta para contar" % _card_name(card))
+				return false
+			var measure := func(x: Node) -> int:
+				return int(ContinuousEffectManager.get_modified_strength(x)) if st.src == "any_ally" else int(x.get("card_cost"))
+			pool.sort_custom(func(a: Node, b: Node) -> bool: return measure.call(a) > measure.call(b))
+			var pick: Node = pool[0]
+			if not _is_bot(controller_id) and pool.size() > 1 and main.get("_card_interaction"):
+				var chosen: Node = await main._card_interaction.await_target("%s: elige la carta (cuenta su %s)" % [_card_name(card),
+					"Fuerza" if st.src == "any_ally" else "coste"], func(c: Node) -> bool: return c in pool, false, controller_id)
+				if chosen and is_instance_valid(chosen):
+					pick = chosen
+			n = measure.call(pick)
 		"own_allies_count":
 			for cont in PlayerSideScript.ally_containers(main, controller_id):
 				for a in cont.get_children():

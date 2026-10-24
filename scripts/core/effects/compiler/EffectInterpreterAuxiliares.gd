@@ -196,7 +196,9 @@ static func describe_steps(steps: Array) -> String:
 				parts.append("%s tantas cartas como %s" % ["Desterrar del Castillo rival" if st.get("exile", false) else "Botar",
 					{"own_ally": "la Fuerza de un Aliado tuyo", "armed_ally": "la Fuerza de un Aliado con Arma",
 					"bearer": "la Fuerza del portador", "opp_hand_allies": "Aliados en la mano rival",
-					"own_allies_count": "Aliados que controles"}.get(st.src, "")])
+					"own_allies_count": "Aliados que controles", "self_strength": "la Fuerza de esta carta",
+					"any_ally": "la Fuerza de un Aliado en juego", "any_card_cost": "el coste de una carta en juego",
+					"own_other_card_cost": "el coste de otra carta tuya", "own_paid_gold": "Oros en tu Oro Pagado"}.get(st.src, "")])
 			"cancel_attack":
 				parts.append("Cancelar el ataque de %d Aliado%s" % [st.count, "" if st.count == 1 else "s"])
 			"castle_exile":
