@@ -2,10 +2,12 @@ extends Node
 ## ExternalApiClient — cliente de la API de cartas/mazos de ShadowForge. El frontend
 ## (shadow-forge-deck.vercel.app) es Angular; el backend es Django/DRF en
 ## https://iterva.pythonanywhere.com/api.
-## CREDENCIALES: nunca en el código. Al arrancar se lee user://shadowforge_credentials.json
-## ({"username": "...", "password": "..."}); si no existe, se crea una plantilla vacía y se avisa
-## por consola. El token va a user://shadowforge_token.json y se reusa hasta que vence (7 días) o da
-## 401, y entonces se reautentica solo.
+## CREDENCIALES: la contraseña nunca se guarda (ni en el código ni en disco). La pantalla de login
+## (ShadowForgeLogin.gd) la pasa con save_credentials(), queda solo en memoria mientras dura el login
+## y se borra al terminar. En disco queda solo el token (user://shadowforge_token.json), que se reusa
+## hasta que vence (7 días) o da 401: entonces hay que volver a iniciar sesión.
+## El archivo viejo user://shadowforge_credentials.json (contraseña en texto plano) se usa una última
+## vez para entrar si no hay token y se borra al arrancar.
 ## Respuestas: cartas con myl_id, name, cost, damage, ability, race, type, image_url; mazos en
 ## /api/decks/* (ver cada función).
 
@@ -36,40 +38,46 @@ const CREDENTIALS_PATH: String = "user://shadowforge_credentials.json"
 const TOKEN_PATH: String = "user://shadowforge_token.json"
 
 var _token: String = ""
+## Solo en memoria, hasta el próximo login() (ver save_credentials()).
+var _pending_username: String = ""
+var _pending_password: String = ""
 var _is_logging_in: bool = false
 
 
 func _ready() -> void:
 	_load_saved_token()
-	if _token.is_empty():
-		_ensure_credentials_template()
+	_migrate_plaintext_credentials()
 	print("[ExternalApiClient] Inicializado (token guardado: %s)" % (not _token.is_empty()))
 
 
 # =============================================================================
 # CREDENCIALES Y TOKEN (persistidos en user://, nunca en el repo)
 # =============================================================================
-func _ensure_credentials_template() -> void:
-	if FileAccess.file_exists(CREDENTIALS_PATH):
+func _migrate_plaintext_credentials() -> void:
+	"""Versiones anteriores guardaban la contraseña en texto plano: se lee una última vez (para entrar
+	si todavía no hay token), se sobrescribe y se borra."""
+	if not FileAccess.file_exists(CREDENTIALS_PATH):
+		return
+	var file = FileAccess.open(CREDENTIALS_PATH, FileAccess.READ)
+	var json = JSON.parse_string(file.get_as_text()) if file else null
+	if file:
+		file.close()
+	_wipe_credentials_file()
+	if _token.is_empty() and json is Dictionary and str(json.get("username", "")) != "" \
+			and str(json.get("password", "")) != "":
+		save_credentials(str(json.username), str(json.password))
+		login()
+
+
+func _wipe_credentials_file() -> void:
+	if not FileAccess.file_exists(CREDENTIALS_PATH):
 		return
 	var file = FileAccess.open(CREDENTIALS_PATH, FileAccess.WRITE)
-	if not file:
-		push_error("[ExternalApiClient] No se pudo crear la plantilla de credenciales")
-		return
-	file.store_string(JSON.stringify({"username": "", "password": ""}, "\t"))
-	file.close()
-	push_warning("[ExternalApiClient] Completa tus credenciales en: %s/shadowforge_credentials.json" % OS.get_user_data_dir())
-
-
-func _load_credentials() -> Dictionary:
-	if not FileAccess.file_exists(CREDENTIALS_PATH):
-		return {}
-	var file = FileAccess.open(CREDENTIALS_PATH, FileAccess.READ)
-	if not file:
-		return {}
-	var json = JSON.parse_string(file.get_as_text())
-	file.close()
-	return json if json is Dictionary else {}
+	if file:
+		file.store_string("{}")
+		file.close()
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(CREDENTIALS_PATH))
+	print("[ExternalApiClient] Se borró el archivo de credenciales en texto plano")
 
 
 func _load_saved_token() -> void:
@@ -101,15 +109,10 @@ func is_authenticated() -> bool:
 
 
 func save_credentials(username: String, password: String) -> void:
-	"""Escribe user://shadowforge_credentials.json desde la pantalla de login
-	real (ShadowForgeLogin.gd) — mismo archivo que _load_credentials() ya
-	leía cuando había que editarlo a mano, ahora con una UI de verdad."""
-	var file = FileAccess.open(CREDENTIALS_PATH, FileAccess.WRITE)
-	if not file:
-		push_error("[ExternalApiClient] No se pudieron guardar las credenciales")
-		return
-	file.store_string(JSON.stringify({"username": username, "password": password}, "\t"))
-	file.close()
+	"""Credenciales para el próximo login() (ShadowForgeLogin.gd). Solo en memoria: login() las usa y
+	borra la contraseña al terminar, salga bien o mal."""
+	_pending_username = username
+	_pending_password = password
 
 
 func logout() -> void:
@@ -118,29 +121,35 @@ func logout() -> void:
 	pedir login (con credenciales vacías, así que falla hasta que el
 	jugador inicie sesión de nuevo desde ShadowForgeLogin.gd)."""
 	_token = ""
-	if FileAccess.file_exists(TOKEN_PATH):
-		DirAccess.remove_absolute(TOKEN_PATH)
+	_remove_token_file()
 	save_credentials("", "")
+	_wipe_credentials_file()
 	print("[ExternalApiClient] Sesión cerrada")
+
+
+func _remove_token_file() -> void:
+	if FileAccess.file_exists(TOKEN_PATH):
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(TOKEN_PATH))
 
 
 # =============================================================================
 # LOGIN
 # =============================================================================
 func login() -> void:
-	"""Inicia sesión con las credenciales de user://shadowforge_credentials.json.
+	"""Inicia sesión con las credenciales que pasó save_credentials() (solo en memoria).
 	Si ya hay un login en curso, no hace nada — quien llamó login() debe
 	escuchar login_succeeded/login_failed (ver _authed_request) en vez de
-	asumir que esta llamada en particular resuelve su propia petición."""
+	asumir que esta llamada en particular resuelve su propia petición.
+	Sin contraseña en memoria (p.ej. el token venció): falla y hay que volver a iniciar sesión."""
 	if _is_logging_in:
 		return
 
-	var creds = _load_credentials()
-	var username: String = str(creds.get("username", ""))
-	var password: String = str(creds.get("password", ""))
+	var username: String = _pending_username
+	var password: String = _pending_password
+	_pending_password = ""
 
 	if username.is_empty() or password.is_empty():
-		var msg = "Faltan credenciales en %s/shadowforge_credentials.json" % OS.get_user_data_dir()
+		var msg = "Inicia sesión en ShadowForge para ver tus mazos"
 		push_warning("[ExternalApiClient] %s" % msg)
 		emit_signal("login_failed", msg)
 		return
@@ -230,8 +239,9 @@ func _authed_request(path: String, on_success: Callable, on_failure: Callable, r
 			http.queue_free()
 
 			if code == 401 and not retried:
-				print("[ExternalApiClient] Token vencido (401), reautenticando...")
+				print("[ExternalApiClient] Token vencido (401): hay que volver a iniciar sesión")
 				_token = ""
+				_remove_token_file()
 				var retry := func(): _authed_request(path, on_success, on_failure, true)
 				var fail := func(reason: String): on_failure.call(reason)
 				login_succeeded.connect(retry, CONNECT_ONE_SHOT)
