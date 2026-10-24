@@ -1,7 +1,7 @@
 [gd_scene format=3 uid="uid://online_connect_001"]
 
 [ext_resource type="Script" path="res://scripts/menu/OnlineConnect.gd" id="1_script"]
-[ext_resource type="Texture2D" path="res://fondo_inicio.png" id="2_background"]
+[ext_resource type="Texture2D" path="res://assets/ui/backgrounds/fondo_inicio.png" id="2_background"]
 [ext_resource type="FontFile" uid="uid://c4o8my2eqi3aj" path="res://assets/fonts/Cinzel-Bold.ttf" id="3_font_title"]
 [ext_resource type="FontFile" uid="uid://bamah0jf3ujug" path="res://assets/fonts/Marcellus-Regular.ttf" id="4_font_medieval"]
 [ext_resource type="Texture2D" path="res://assets/ui/menu/play_mode/btn_back.png" id="5_btn_back"]

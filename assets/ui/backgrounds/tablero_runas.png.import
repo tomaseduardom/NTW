@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://bwenvsds15g4y"
-path="res://.godot/imported/fondo_inicio.png-d58bf66ea974ebd8bfcc105ff64635e6.ctex"
+uid="uid://duvkj0xir0ncf"
+path="res://.godot/imported/tablero_runas.png-1b39a48995235d4c35260bb2bbce84a4.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://fondo_inicio.png"
-dest_files=["res://.godot/imported/fondo_inicio.png-d58bf66ea974ebd8bfcc105ff64635e6.ctex"]
+source_file="res://assets/ui/backgrounds/tablero_runas.png"
+dest_files=["res://.godot/imported/tablero_runas.png-1b39a48995235d4c35260bb2bbce84a4.ctex"]
 
 [params]
 

@@ -1,7 +1,7 @@
 [gd_scene load_steps=4 format=3 uid="uid://back_selector_001"]
 
 [ext_resource type="Script" path="res://scripts/menu/BackSelector.gd" id="1_script"]
-[ext_resource type="Texture2D" path="res://fondo_inicio.png" id="2_background"]
+[ext_resource type="Texture2D" path="res://assets/ui/backgrounds/fondo_inicio.png" id="2_background"]
 [ext_resource type="FontFile" uid="uid://cinzel_bold" path="res://assets/fonts/Cinzel-Bold.ttf" id="3_font_title"]
 [ext_resource type="FontFile" uid="uid://marcellus_reg" path="res://assets/fonts/Marcellus-Regular.ttf" id="4_font_medieval"]
 

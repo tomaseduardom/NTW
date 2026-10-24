@@ -7,7 +7,7 @@
 [ext_resource type="FontFile" uid="uid://bamah0jf3ujug" path="res://assets/fonts/Marcellus-Regular.ttf" id="font_medieval"]
 [ext_resource type="FontFile" uid="uid://c4o8my2eqi3aj" path="res://assets/fonts/Cinzel-Bold.ttf" id="font_title"]
 [ext_resource type="Script" uid="uid://doaih45qt3qs1" path="res://scripts/ui/hand/MulliganHand.gd" id="mulligan_hand"]
-[ext_resource type="Texture2D" uid="uid://duvkj0xir0ncf" path="res://tablero_runas.png" id="tablero_runas"]
+[ext_resource type="Texture2D" uid="uid://duvkj0xir0ncf" path="res://assets/ui/backgrounds/tablero_runas.png" id="tablero_runas"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_castillo"]
 bg_color = Color(0, 0, 0, 0)
