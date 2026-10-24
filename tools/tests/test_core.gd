@@ -237,6 +237,9 @@ func _compiler() -> void:
 		"En tu Fase Final, busca una carta en tu Castillo, ponla en tu mano y Roba una carta.",
 		"Cuando entra en juego, busca un Aliado en tu Castillo o Cementerio, ponlo en tu mano y tus Aliados ganan 1 de Fuerza permanentemente.",
 		"Busca en tu Castillo un Aliado, ponlo en tu mano y Roba dos cartas.",
+		"Cuando entra en juego, muestra cartas del tope de tu Castillo hasta mostrar un Oro. Pon esa carta en tu mano y Baraja el resto.",
+		"Cuando entra en juego, Baraja hasta cinco cartas de tu Cementerio y Roba una carta.",
+		"Cuando entra en juego, mira la mano de tu oponente y Descarta una carta de ahí de coste 1.",
 	]:
 		check("compila: %s" % text, EffectCompilerScript.compile_clause(text).get("ok", false), true)
 	var c: Dictionary = EffectCompilerScript.compile_clause("Una vez por turno, puedes Desterrar una carta de tu mano para Robar una carta.")

@@ -303,7 +303,8 @@ const ATOMS := [
 		+ "|(?:destierra|desterrar) (?<n2>" + NUM + ") cartas? del (?<pos2>tope|fondo) del castillo oponente)"],
 	["discard_self", "descarta(?:s|r)? (?<n>" + NUM + ") cartas?(?: de tu mano)?(?! de la mano)"],
 	["shuffle_from_hand", "baraja(?:r)? (?<upto>hasta )?(?<n>" + NUM + ") cartas? de tu mano(?: en tu castillo)?"],
-	["shuffle_from_cemetery", "baraja(?:r)? (?<upto>hasta )?(?<n>" + NUM + ") cartas? de tu cementerio en tu castillo"],
+	# "Baraja (hasta) N cartas de tu Cementerio" ya es en tu Castillo (Barajar = al Castillo de su dueño).
+	["shuffle_from_cemetery", "baraja(?:r)? (?<upto>hasta )?(?<n>" + NUM + ") cartas? de tu cementerio(?: en tu castillo)?"],
 	# Buscar: varios tipos, "que no sea X ni Y", "de coste N o más/menos". El destino va tras "y" o tras una
 	# coma ("busca un Aliado, ponlo en tu mano y roba una carta").
 	# "...y jugarlo sin pagar su coste / reduciendo su coste en un Oro / por dos Oros menos".
@@ -352,7 +353,8 @@ const ATOMS := [
 	# Oro) de ahí".
 	["hand_peek", "mira(?:r)? la mano de tu oponente(?:,| y) (?<v>destierra|desterrar|descarta|descartar|baraja|barajar)" \
 		+ " (?<det>" + NUM + ") (?<type>" + TALT + ")(?: de coste (?<cval>\\d+)(?: o (?<ccmp>menos|mas))?)?" \
-		+ "(?: de ahi)?(?: que no sean? (?:un |una )?(?<n1>" + T1 + ")(?: ni (?:un |una )?(?<n2>" + T1 + "))?)?(?: de ahi)?"],
+		+ "(?: de ahi)?(?: de coste (?<cval2>\\d+)(?: o (?<ccmp2>menos|mas))?)?" \
+		+ "(?: que no sean? (?:un |una )?(?<n1>" + T1 + ")(?: ni (?:un |una )?(?<n2>" + T1 + "))?)?(?: de ahi)?"],
 	# "Tu oponente muestra su mano y tú Descartas un Talismán de ahí" (camahueto): como hand_peek.
 	["hand_show_discard", "tu oponente muestra su mano y tu descartas (?<det>" + NUM + ") (?<type>" + TALT + ") de ahi"],
 	# "Muestra cartas del tope de tu Castillo hasta mostrar un Oro y un Aliado
@@ -360,7 +362,7 @@ const ATOMS := [
 	# También "puedes mostrar cartas de tu Castillo hasta mostrar dos Aliados Guerrero y ponerlos en tu
 	# mano", "...que no sean Talismán" y "...un Tótem de coste 1 y juégalo sin pagar su coste".
 	["reveal_until", "(?:muestra|mostrar) cartas (?:del tope |de la parte superior )?de tu castillo hasta mos(?:tr|t)a(?:r|s) (?<specs>" \
-		+ REVEAL_SPEC + "(?: y " + REVEAL_SPEC + ")*)(?:,? y |, )(?:(?:ponlos|ponlas|ponlo|ponla|ponerlos|ponerlas|ponerlo|ponerla)" \
+		+ REVEAL_SPEC + "(?: y " + REVEAL_SPEC + ")*)(?:,? y |, )(?:(?:ponlos|ponlas|ponlo|ponla|ponerlos|ponerlas|ponerlo|ponerla|pon esa carta|pon esas cartas)" \
 		+ " en tu mano(?:,? y baraja el resto)?|(?<play>juegalo|juegala|jugarlo|jugarla|juegalos|jugarlos) sin pagar su coste)"],
 	["mass", "(?<verb>destruye|destierra) todos los (?<kind>aliados|totems|armas)(?<opp> oponentes)?(?: en juego)?" \
 		+ "(?: de (?<stat>fuerza|coste) (?<val>\\d+) o (?<cmp>menos|mas))?"],
@@ -438,7 +440,8 @@ const ATOMS := [
 	# Barajar/Desterrar sin zona explícita = en juego (ver
 	# DSR_ShuffleDrawCombos.try_execute_draw_and_shuffle_opponent_card_pattern()); por eso se rechaza
 	# si sigue "de tu/los...".
-	["target", "(?<verb>destruye|destruir|destierra|desterrar|baraja|barajar) " + TARGET_RX + "(?! de (?:tu|los|un|su) )"],
+	# (?![a-z]): sin cortar una palabra ("hasta cinco carta|s de tu Cementerio").
+	["target", "(?<verb>destruye|destruir|destierra|desterrar|baraja|barajar) " + TARGET_RX + "(?![a-z])(?! de (?:tu|los|un|su) )"],
 ]
 
 ## Piezas que EffectInterpreter sabe ejecutar HOY. Viven aquí (y no en el
@@ -631,7 +634,7 @@ static func _split_sentences(t: String) -> Array:
 		# "...hasta mostrar un Aliado de coste 2. Ponlo en tu mano y Baraja el resto" (mochizuki
 		# chiyome): el destino de reveal_until en la oración siguiente va con la anterior.
 		if not out.is_empty() and "hasta mostrar" in out.back() \
-				and RegEx.create_from_string("^(?:ponlos|ponlas|ponlo|ponla) en tu mano").search(s) != null:
+				and RegEx.create_from_string("^(?:ponlos|ponlas|ponlo|ponla|pon esa carta|pon esas cartas) en tu mano").search(s) != null:
 			out[out.size() - 1] = out.back() + " y " + s
 			continue
 		out.append(s)
@@ -1259,8 +1262,10 @@ static func _build(atom_name: String, m: RegExMatch) -> Dictionary:
 			return {"op": "hand_peek", "verb": "banish" if hv.begins_with("destierra") or hv.begins_with("desterrar")
 					else ("discard" if hv.begins_with("descarta") else "shuffle"),
 				"count": parse_amount(m.get_string("det")), "types": _type_list(m.get_string("type")), "types_not": hp_not,
-				"cost_val": int(m.get_string("cval")) if not m.get_string("cval").is_empty() else -1,
-				"cost_cmp": m.get_string("ccmp")}
+				# "de coste N" antes o después de "de ahí" (rogue mecha: "una carta de ahí de coste 1").
+				"cost_val": int(m.get_string("cval")) if not m.get_string("cval").is_empty()
+					else (int(m.get_string("cval2")) if not m.get_string("cval2").is_empty() else -1),
+				"cost_cmp": m.get_string("ccmp") if not m.get_string("cval").is_empty() else m.get_string("ccmp2")}
 		"hand_show_discard":
 			return {"op": "hand_peek", "verb": "discard", "count": parse_amount(m.get_string("det")),
 				"types": _type_list(m.get_string("type")), "types_not": [], "cost_val": -1, "cost_cmp": ""}

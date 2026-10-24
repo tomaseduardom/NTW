@@ -197,9 +197,11 @@ func _spawn_gold_token(nombre: String, label: String, target_list: Array, player
 
 func _despawn_gold_token(target_list: Array, player_id: int = 0) -> void:
 	"""Retira un token con animación mágica de disolución y elevación."""
-	if target_list.is_empty():
-		return
-	var token: Node = target_list.pop_back()
+	# Sin tipo al sacarla: una ficha ya liberada (fin de turno, cambio de escena) no se puede asignar a
+	# una variable Node. Se saltan las liberadas y se retira la última que sigue viva.
+	var token = null
+	while not target_list.is_empty() and not is_instance_valid(token):
+		token = target_list.pop_back()
 	if not is_instance_valid(token):
 		return
 	var reserva_container: HBoxContainer = _main.player_gold if player_id == 0 else _main.opponent_gold

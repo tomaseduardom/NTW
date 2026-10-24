@@ -296,7 +296,8 @@ static func _cmp(value: int, op: String, target: int) -> bool:
 
 ## La spec de 'src' alcanza a 'card' (en juego), sin mirar si 'src' tiene habilidad.
 static func _applies(src: Node, spec: Dictionary, card: Node) -> bool:
-	if spec.zones != "in_play":
+	# Ajo Protector ({protect_own_cemetery}) no es un aura: no tiene zones.
+	if spec.get("zones", "") != "in_play":
 		return false
 	if spec.exclude_self and card == src:
 		return false
@@ -446,7 +447,7 @@ static func zone_card_silenced(data: Dictionary, owner: int, in_exile: bool) -> 
 					return false
 	for src in sources:
 		for spec in specs_of(src):
-			if spec.zones != "out" or not _source_ready(src, spec):
+			if spec.get("zones", "") != "out" or not _source_ready(src, spec):
 				continue
 			if not (spec.get("exile", false) if in_exile else spec.get("cemetery", false)):
 				continue

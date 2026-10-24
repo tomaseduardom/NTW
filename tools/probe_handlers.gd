@@ -128,6 +128,9 @@ func _probe_card(d: Dictionary) -> Array:
 			continue
 		var raw: String = str(a.get("raw_text", ""))
 		var label := "sin_handler"
+		# Una activada anterior pudo sacar la carta del juego (y liberarla): se vuelve a poner.
+		if not is_instance_valid(card):
+			card = _place(d)
 		if _has_button_pattern(card, a) or _is_reactive_prevention(raw):
 			label = "resuelto"
 		else:
