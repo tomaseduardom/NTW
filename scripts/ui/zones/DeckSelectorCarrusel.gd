@@ -50,7 +50,7 @@ func _scroll_right() -> void:
 	tw.tween_property(_scroll_container, "scroll_horizontal", target_scroll, 0.22).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_CUBIC)
 
 
-func _unhandled_input(event: InputEvent) -> void:
+func _input(event: InputEvent) -> void:
 	if not _overlay or not is_instance_valid(_overlay): return
 	if not event.is_pressed() or event.is_echo(): return
 

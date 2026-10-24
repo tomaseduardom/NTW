@@ -96,6 +96,8 @@ func _input(event: InputEvent) -> void:
 				get_viewport().set_input_as_handled()
 				if _main._card_inspector and _main._card_inspector.inspected_card:
 					_main._card_inspector.close_card_inspection()
+				elif _main._zone_browse_picker and _main._zone_browse_picker.has_method("_close_viewer") and _main._zone_browse_picker._viewer and is_instance_valid(_main._zone_browse_picker._viewer):
+					_main._zone_browse_picker._close_viewer()
 				elif _main._action_log_drawer and _main._action_log_drawer.is_open():
 					_main._action_log_drawer.close_drawer()
 				elif _main._card_interaction and _main._card_interaction.is_selecting_target:

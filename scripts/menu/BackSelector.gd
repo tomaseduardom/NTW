@@ -51,6 +51,15 @@ func _ready() -> void:
 	_show_preview(current_selected_id)
 
 
+func _input(event: InputEvent) -> void:
+	if event is InputEventKey and event.pressed and not event.echo:
+		if event.keycode == KEY_ESCAPE:
+			var vp := get_viewport()
+			if vp:
+				vp.set_input_as_handled()
+			_on_back_pressed()
+
+
 func _load_config() -> void:
 	"""Carga la configuración guardada desde GameSettings"""
 	current_selected_id = GameSettings.get_card_back_id(0)  # Player 0

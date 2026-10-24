@@ -2,7 +2,7 @@ extends CanvasLayer
 class_name ControlsDialog
 ## ControlsDialog — Diálogo modal para reasignar atajos de teclado y controles.
 ## Diseñado con la estética medieval de tableta de piedra, pergamino envejecido
-## y botones de piedra cincelada basada fielmente en Configuracion.jpg.
+## y botones de piedra cincelada basada fielmente en docs/referencias/Configuracion.jpg.
 
 signal closed
 
