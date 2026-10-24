@@ -1,4 +1,4 @@
-# Corre las pruebas headless de NTW antes de exportar:
+﻿# Corre las pruebas headless de NTW antes de exportar:
 #   tools/tests/test_core.tscn          reglas y red sin tablero (mazos, texto, reloj, historial)
 #   tools/test_keywords_strength.tscn   palabras clave y Fuerza con cartas reales en el tablero
 # Uso:  powershell -File tools/run_tests.ps1 [-Godot "ruta\Godot_v4.6-stable_win64_console.exe"]
