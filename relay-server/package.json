@@ -1,7 +1,7 @@
 {
-  "name": "mitos-relay-server",
+  "name": "ntw-relay-server",
   "version": "1.0.0",
-  "description": "Relay WebSocket ciego para MitosOnline: junta 2 clientes Godot por codigo de sala y reenvia mensajes sin conocer nada de las reglas del juego.",
+  "description": "Relay WebSocket ciego para NTW: junta 2 clientes Godot por codigo de sala y reenvia mensajes sin conocer nada de las reglas del juego.",
   "type": "commonjs",
   "main": "server.js",
   "scripts": {

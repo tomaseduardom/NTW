@@ -14,8 +14,8 @@ compatibility/default_parent_skeleton_in_mesh_instance_3d=true
 
 [application]
 
-config/name="Mitos y Leyendas"
-config/description="Juego de cartas coleccionables basado en el TCG chileno Mitos y Leyendas"
+config/name="NTW"
+config/description="NTW: simulador en línea para jugar el TCG chileno Mitos y Leyendas"
 config/version="0.1.0"
 run/main_scene="res://scenes/menu/MainMenu.tscn"
 config/features=PackedStringArray("4.6", "Forward Plus")

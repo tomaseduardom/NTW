@@ -64,7 +64,7 @@ if (-not (Test-Path $credFile)) {
 . $credFile
 
 $apiBase = "https://iterva.pythonanywhere.com/api"
-$decksDir = Join-Path $env:APPDATA "Godot\app_userdata\Mitos y Leyendas\decks"
+$decksDir = Join-Path $env:APPDATA "Godot\app_userdata\NTW\decks"
 if (-not (Test-Path $decksDir)) {
     Write-Error "No se encontro la carpeta de mazos locales del juego en: $decksDir"
     exit 1

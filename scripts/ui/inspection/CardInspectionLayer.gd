@@ -2,6 +2,7 @@ class_name CardInspectionLayer
 extends Node
 
 const CardScene = preload("res://scenes/cards/Card.tscn")
+const CardTextScript = preload("res://scripts/core/cards/CardText.gd")  # comparar sin depender de tildes ni espacios
 const TurnLimits = preload("res://scripts/core/effects/mechanics/TurnLimits.gd")
 const TriggerTollScript = preload("res://scripts/core/effects/triggers/TriggerTollPatterns.gd")  # jose miguel carrera, capitan daisuke
 
@@ -489,34 +490,33 @@ func close_card_inspection() -> void:
 func _ability_is_hand_usable(full_text: String) -> bool:
 	"""Lista chica y explícita de habilidades usables desde la mano: la sola presencia de "tu mano" en
 	el texto no basta (ver _build_ability_buttons())."""
-	var lower := full_text.to_lower()
-	if "desterrarlo de tu mano o en juego" in lower:
+	if CardTextScript.has(full_text, "desterrarlo de tu mano o en juego"):
 		return true  # Ramón Freire
-	if "esta y otra carta de tu mano" in lower and "fondo de tu castillo" in lower:
+	if CardTextScript.has(full_text, "esta y otra carta de tu mano") and CardTextScript.has(full_text, "fondo de tu castillo"):
 		return true  # Tyet
-	if "desterrarlo de tu mano o cementerio" in lower:
+	if CardTextScript.has(full_text, "desterrarlo de tu mano o cementerio"):
 		return true  # Drácula
-	if "desterrar esta carta de tu mano para anular" in lower:
+	if CardTextScript.has(full_text, "desterrar esta carta de tu mano para anular"):
 		return true  # Espada Vikinga
-	if "barajar esta carta desde tu mano" in lower:
+	if CardTextScript.has(full_text, "barajar esta carta desde tu mano"):
 		return true  # Sacrificio Solar
-	if "ponerlo en el fondo de tu castillo para reducir a cero el próximo daño" in lower:
+	if CardTextScript.has(full_text, "ponerlo en el fondo de tu castillo para reducir a cero el próximo daño"):
 		return true  # Piruquina
-	if "puedes barajarla de tu mano para buscar un oro en tu castillo" in lower:
+	if CardTextScript.has(full_text, "puedes barajarla de tu mano para buscar un oro en tu castillo"):
 		return true  # skofnung
-	if "puedes pagar un oro para desterrar este y otro aliado sacerdote de tu mano" in lower:
+	if CardTextScript.has(full_text, "puedes pagar un oro para desterrar este y otro aliado sacerdote de tu mano"):
 		return true  # sandraudiga
 	# Coste = descartar esta carta / desterrarla de la mano (basan, lurulu, Jafet, pablo pincheira):
 	# EffectCompiler.COST_PIECES self_discard / self_banish.
-	if "puedes descartarlo para" in lower or "puedes descartarla para" in lower \
-			or "desterrarlo de tu mano" in lower or "desterrarla de tu mano" in lower:
+	if CardTextScript.has(full_text, "puedes descartarlo para") or CardTextScript.has(full_text, "puedes descartarla para") \
+			or CardTextScript.has(full_text, "desterrarlo de tu mano") or CardTextScript.has(full_text, "desterrarla de tu mano"):
 		return true
 	# andras, iki balam, los korgors ("pagar un Oro para jugarlo sin pagar su coste"), Baphomet (Descartar
 	# otra carta para jugarlo por un Oro menos), alicia (ponerlo desde tu mano en tu Oro Pagado).
-	if "si atacaste en tu anterior turno puedes pagar" in lower \
-			or "para jugar este aliado sin pagar su coste desde tu mano" in lower \
-			or "descartar una carta de tu mano para para reducir su coste" in lower \
-			or "para ponerlo desde tu mano en tu oro pagado" in lower:
+	if CardTextScript.has(full_text, "si atacaste en tu anterior turno puedes pagar") \
+			or CardTextScript.has(full_text, "para jugar este aliado sin pagar su coste desde tu mano") \
+			or CardTextScript.has(full_text, "descartar una carta de tu mano para para reducir su coste") \
+			or CardTextScript.has(full_text, "para ponerlo desde tu mano en tu oro pagado"):
 		return true
 	return false
 
@@ -525,42 +525,41 @@ func _ability_is_cementerio_usable(full_text: String) -> bool:
 	"""Lista chica y explícita de habilidades usables desde el Cementerio (p.ej. Espada del Juicio:
 	"Puedes Desterrarla de tu Cementerio para que un Aliado gane o pierda 2 de Fuerza
 	permanentemente"). Mismo criterio que _ability_is_hand_usable()."""
-	var lower := full_text.to_lower()
-	if "desterrarla de tu cementerio" in lower or "desterrarlo de tu cementerio" in lower \
-			or "desterrarlo desde tu cementerio" in lower or "desterrarla desde tu cementerio" in lower:
+	if CardTextScript.has(full_text, "desterrarla de tu cementerio") or CardTextScript.has(full_text, "desterrarlo de tu cementerio") \
+			or CardTextScript.has(full_text, "desterrarlo desde tu cementerio") or CardTextScript.has(full_text, "desterrarla desde tu cementerio"):
 		return true  # Espada del Juicio, wani
-	if "si está en tu cementerio y si tienes menos cartas en tu mano que tu oponente" in lower:
+	if CardTextScript.has(full_text, "si está en tu cementerio y si tienes menos cartas en tu mano que tu oponente"):
 		return true  # Envidia
-	if "en juego desde tu cementerio como un aliado sin habilidad" in lower:
+	if CardTextScript.has(full_text, "en juego desde tu cementerio como un aliado sin habilidad"):
 		return true  # Alto Prime, Belta
-	if "si está en tu cementerio, puedes desterrarlo para que un aliado gane" in lower:
+	if CardTextScript.has(full_text, "si está en tu cementerio, puedes desterrarlo para que un aliado gane"):
 		return true  # Ira
-	if "para subir esta carta de tu cementerio a tu mano" in lower:
+	if CardTextScript.has(full_text, "para subir esta carta de tu cementerio a tu mano"):
 		return true  # vision heroica
-	if "para subirlo de tu cementerio a tu mano" in lower or "para subirla de tu cementerio a tu mano" in lower \
-			or "para subir esta arma de tu cementerio a tu mano" in lower:
+	if CardTextScript.has(full_text, "para subirlo de tu cementerio a tu mano") or CardTextScript.has(full_text, "para subirla de tu cementerio a tu mano") \
+			or CardTextScript.has(full_text, "para subir esta arma de tu cementerio a tu mano"):
 		return true  # Belial, voces de hielo, sai (EffectCompiler self_raise)
-	if "desterrarlo de tu mano o cementerio" in lower:
+	if CardTextScript.has(full_text, "desterrarlo de tu mano o cementerio"):
 		return true  # Drácula
-	if "en tu cementerio" in lower and "gana la habilidad" in lower:
+	if CardTextScript.has(full_text, "en tu cementerio") and CardTextScript.has(full_text, "gana la habilidad"):
 		return true  # Duelo Espacial (habilidad que gana en el Cementerio)
 	# hikari no ga, el carro, los korgors (jugarlo desde el Cementerio), Daikaiju Furioso, orco alpino,
 	# Los Marcados ("Desterrarlo en juego o de tu Cementerio").
-	if "para jugarlo de tu cementerio" in lower or "para jugarlo desde tu cementerio" in lower \
-			or "sin pagar su coste desde tu mano o cementerio" in lower \
-			or ("está en tu cementerio" in lower and "convertirlo en un oro sin habilidad" in lower) \
-			or ("esta en tu cementerio" in lower and "convertirlo en un oro sin habilidad" in lower) \
-			or "si está en tu cementerio, puedes desterrarlo para que un aliado pierda" in lower \
-			or "desterrarlo en juego o de tu cementerio" in lower \
-			or "destierra dos cartas de tu cementerio para subirlo a tu mano" in lower \
-			or "destierra tres cartas de tu cementerio para jugarlo pagando su coste" in lower:  # tundra viva, isla de gigantes
+	if CardTextScript.has(full_text, "para jugarlo de tu cementerio") or CardTextScript.has(full_text, "para jugarlo desde tu cementerio") \
+			or CardTextScript.has(full_text, "sin pagar su coste desde tu mano o cementerio") \
+			or (CardTextScript.has(full_text, "está en tu cementerio") and CardTextScript.has(full_text, "convertirlo en un oro sin habilidad")) \
+			or (CardTextScript.has(full_text, "esta en tu cementerio") and CardTextScript.has(full_text, "convertirlo en un oro sin habilidad")) \
+			or CardTextScript.has(full_text, "si está en tu cementerio, puedes desterrarlo para que un aliado pierda") \
+			or CardTextScript.has(full_text, "desterrarlo en juego o de tu cementerio") \
+			or CardTextScript.has(full_text, "destierra dos cartas de tu cementerio para subirlo a tu mano") \
+			or CardTextScript.has(full_text, "destierra tres cartas de tu cementerio para jugarlo pagando su coste"):  # tundra viva, isla de gigantes
 		return true
 	return false
 
 
 func _ability_is_destierro_usable(full_text: String) -> bool:
 	"""Habilidades usables desde el Destierro propio (mismo criterio que _ability_is_cementerio_usable())."""
-	return "si está en tu destierro, puedes desterrar una carta de tu mano para barajarlo en tu castillo" in full_text.to_lower()  # sandraudiga
+	return CardTextScript.has(full_text, "si está en tu destierro, puedes desterrar una carta de tu mano para barajarlo en tu castillo")  # sandraudiga
 
 
 func _ability_is_hand_or_cementerio_only(full_text: String) -> bool:
@@ -571,7 +570,7 @@ func _ability_is_hand_or_cementerio_only(full_text: String) -> bool:
 	ambas."""
 	if not (_ability_is_hand_usable(full_text) or _ability_is_cementerio_usable(full_text) or _ability_is_destierro_usable(full_text)):
 		return false
-	return not ("en juego" in full_text.to_lower())
+	return not (CardTextScript.has(full_text, "en juego"))
 
 
 func activate_ability_for(source_card: Node, ability: Dictionary, controller_id: int) -> void:

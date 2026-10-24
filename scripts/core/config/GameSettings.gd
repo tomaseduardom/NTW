@@ -69,11 +69,51 @@ var _opponent_back_texture: Texture2D = null
 
 
 func _ready() -> void:
+	_migrate_user_data()
 	_load_config()
 	_load_back_textures()
 	_apply_all_audio_settings()
 	_apply_animation_speed()
 	print("[GameSettings] Initialized - Player back: ", player_card_back, ", Opponent back: ", opponent_card_back, ", Speed: ", animation_speed)
+
+
+## Carpeta de datos con el nombre anterior del proyecto (antes de llamarse NTW).
+const OLD_USER_DIR := "Godot/app_userdata/Mitos y Leyendas"
+## Lo que se regenera solo y no vale la pena copiar.
+const MIGRATE_SKIP := ["shader_cache", "vulkan", "logs", "objectdb_snapshots"]
+
+
+func _migrate_user_data() -> void:
+	"""El proyecto pasó a llamarse NTW y Godot guarda user:// en una carpeta con el nombre del
+	proyecto: la primera vez se copian los mazos, ajustes, caché de cartas y sesión de ShadowForge
+	de la carpeta anterior. Una marca evita repetirlo."""
+	var marker := "user://.migrado_nombre_anterior"
+	if FileAccess.file_exists(marker):
+		return
+	var old_dir := OS.get_data_dir().path_join(OLD_USER_DIR)
+	if DirAccess.dir_exists_absolute(old_dir) and not FileAccess.file_exists(CONFIG_PATH):
+		var copied := _copy_dir(old_dir, ProjectSettings.globalize_path("user://"))
+		print("[GameSettings] Datos migrados desde '%s': %d archivo(s)" % [old_dir, copied])
+	var f := FileAccess.open(marker, FileAccess.WRITE)
+	if f:
+		f.store_string("ok")
+		f.close()
+
+
+func _copy_dir(from: String, to: String) -> int:
+	var count := 0
+	DirAccess.make_dir_recursive_absolute(to)
+	var dir := DirAccess.open(from)
+	if not dir:
+		return 0
+	for f in dir.get_files():
+		if DirAccess.copy_absolute(from.path_join(f), to.path_join(f)) == OK:
+			count += 1
+	for d in dir.get_directories():
+		if d in MIGRATE_SKIP:
+			continue
+		count += _copy_dir(from.path_join(d), to.path_join(d))
+	return count
 
 
 func _load_config() -> void:

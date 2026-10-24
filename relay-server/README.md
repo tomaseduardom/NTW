@@ -1,4 +1,4 @@
-# Relay server — MitosOnline multiplayer
+# Relay server — NTW multiplayer
 
 Servidor WebSocket chico y ciego: junta a 2 clientes de Godot por un código de sala corto y
 reenvía cualquier mensaje de un lado al otro. No sabe nada de las reglas de Mitos y Leyendas —

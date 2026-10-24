@@ -22,7 +22,7 @@ tools/shadowforge_credentials.local.ps1
 relay-server/node_modules/
 
 # Builds exportados (portable Windows, ~2GB con Embed PCK) — se regeneran con
-# Godot --headless --export-release "Windows Desktop" build/windows/MitosOnline.exe
+# Godot --headless --export-release "Windows Desktop" build/windows/NTW.exe
 build/
 
 # Reporte generado por tools/lint.ps1 — se regenera, no versionar

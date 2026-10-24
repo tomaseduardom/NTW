@@ -5,7 +5,7 @@
 
 .DESCRIPTION
     2026-10-12: el juego cargaba las cartas del cache de CADA PC
-    (%APPDATA%\Godot\app_userdata\Mitos y Leyendas\card_cache\cards.json), así
+    (%APPDATA%\Godot\app_userdata\NTW\card_cache\cards.json), así
     que el Anfitrión y el Remoto podían tener catálogos distintos (p.ej. uno
     con Drácula y el otro sin) y cada jugador tenía que sincronizar por su
     cuenta. Con data/cards.json en el proyecto, CardDatabase.load_cards_from_
@@ -18,7 +18,7 @@
 $ErrorActionPreference = "Stop"
 
 $here = Split-Path -Parent $MyInvocation.MyCommand.Path
-$cacheFile = Join-Path $env:APPDATA "Godot\app_userdata\Mitos y Leyendas\card_cache\cards.json"
+$cacheFile = Join-Path $env:APPDATA "Godot\app_userdata\NTW\card_cache\cards.json"
 $bundleFile = Join-Path (Split-Path -Parent $here) "data\cards.json"
 
 if (-not (Test-Path $cacheFile)) {

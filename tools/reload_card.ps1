@@ -42,7 +42,7 @@ if (-not (Test-Path $credFile)) {
 . $credFile
 
 $apiBase = "https://iterva.pythonanywhere.com/api/external"
-$cacheFile = Join-Path $env:APPDATA "Godot\app_userdata\Mitos y Leyendas\card_cache\cards.json"
+$cacheFile = Join-Path $env:APPDATA "Godot\app_userdata\NTW\card_cache\cards.json"
 
 if (-not (Test-Path $cacheFile)) {
     Write-Error "No se encontro el cache local del juego en: $cacheFile"

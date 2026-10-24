@@ -1,4 +1,4 @@
-// Relay WebSocket ciego para MitosOnline (Fase A del multiplayer remoto).
+// Relay WebSocket ciego para NTW (Fase A del multiplayer remoto).
 //
 // No sabe NADA de las reglas de Mitos y Leyendas. Su unico trabajo:
 //   1. Agrupar 2 conexiones bajo un codigo de sala corto.

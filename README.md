@@ -1,6 +1,6 @@
-# Mitos y Leyendas - El Juego
+# NTW
 
-Juego de cartas coleccionables digital basado en el TCG chileno Mitos y Leyendas.
+Simulador en línea para jugar el TCG chileno Mitos y Leyendas.
 
 ## Requisitos
 

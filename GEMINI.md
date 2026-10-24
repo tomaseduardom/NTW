@@ -1,4 +1,4 @@
-# Reglas del Proyecto Mitos y Leyendas (NosTaw / MitosOnline)
+# Reglas del Proyecto NTW
 
 ## 1. REGLA OBLIGATORIA DE DISEÑO DE INTERFAZ (UI DESIGN SYSTEM)
 Todo menú, panel, diálogo modal, overlay, selector, popup o componente de interfaz de usuario que se cree, rediseñe o modifique en este proyecto DEBE construirse obligatoriamente sobre la base visual del sistema medieval oscuro y dorado ("Configuracion.jpg" / "ControlsDialog"):

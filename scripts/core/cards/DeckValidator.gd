@@ -68,7 +68,4 @@ static func _copy_limit(data: Dictionary) -> int:
 
 
 static func _norm(s: String) -> String:
-	s = s.to_lower().strip_edges()
-	for pair in [["á", "a"], ["é", "e"], ["í", "i"], ["ó", "o"], ["ú", "u"], ["ü", "u"], ["ñ", "n"]]:
-		s = s.replace(pair[0], pair[1])
-	return s
+	return preload("res://scripts/core/cards/CardText.gd").fold(s).strip_edges()

@@ -257,6 +257,8 @@ const TEXT_CORRECTIONS: Dictionary = {
 
 
 func _corrected_text(nombre: String, habilidad: String) -> String:
+	# Tipografía y erratas generales primero (CardText.clean()), después las de cada carta.
+	habilidad = CardTextScript.clean(habilidad)
 	var fixes = TEXT_CORRECTIONS.get(nombre.strip_edges().to_lower())
 	if fixes == null:
 		return habilidad
@@ -301,6 +303,7 @@ func _parse_keywords(habilidad: String) -> Array:
 # CARGA DE CARTAS — BUNDLED (res://) y CACHE (user://)
 # =============================================================================
 const BUNDLED_CARDS_PATH: String = "res://data/cards.json"
+const CardTextScript = preload("res://scripts/core/cards/CardText.gd")
 
 func load_cards_from_bundled() -> bool:
 	"""Carga cartas desde el archivo bundleado res://data/cards.json.

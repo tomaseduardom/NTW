@@ -599,12 +599,7 @@ static func is_executable(steps: Array) -> bool:
 static func normalize(text: String) -> String:
 	"""Minúsculas, sin tildes ni ñ, espacios colapsados, sin punto
 	final. Los saltos de línea de la API valen como fin de oración."""
-	var t := text.to_lower().replace("\r", "").replace("\n", ". ")
-	for pair in [["á", "a"], ["é", "e"], ["í", "i"], ["ó", "o"], ["ú", "u"], ["ü", "u"], ["ñ", "n"]]:
-		t = t.replace(pair[0], pair[1])
-	var ws := RegEx.new()
-	ws.compile("\\s+")
-	t = ws.sub(t, " ", true).strip_edges()
+	var t: String = preload("res://scripts/core/cards/CardText.gd").fold(text.replace("\r", "").replace("\n", ". ")).strip_edges()
 	t = t.replace(" de de ", " de ")  # erratas impresas ("del tope de de tu Castillo", fat-frumos)
 	var dots := RegEx.new()
 	dots.compile("(?:\\.\\s*){2,}")

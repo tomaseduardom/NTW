@@ -117,10 +117,7 @@ func on_card_put_in_exile(player_id: int, card_data: Dictionary) -> void:
 
 
 static func normalize(t: String) -> String:
-	var s := t.to_lower().replace("\n", " ").replace("\r", "")
-	for pair in [["ñ", "n"], ["�", "n"], ["á", "a"], ["é", "e"], ["í", "i"], ["ó", "o"], ["ú", "u"]]:
-		s = s.replace(pair[0], pair[1])
-	return s
+	return preload("res://scripts/core/cards/CardText.gd").fold(t.replace("\r", "").replace("\n", " "))
 
 
 func _is_talisman(d: Dictionary) -> bool:
