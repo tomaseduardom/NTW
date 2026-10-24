@@ -20,12 +20,71 @@
 
 ---
 
+## 🗺️ Mapa del sistema (vigente al 2026-10-24 — empieza por aquí)
+
+Lo de abajo de este mapa es la **bitácora**: decisiones y arreglos en orden cronológico. El mapa dice cómo
+es el sistema hoy; la bitácora, por qué quedó así.
+
+### Carpetas
+
+| Carpeta | Qué hay |
+|---|---|
+| `scripts/core/config` | `Constants` (enums, tamaños), `GameState` (Oro), `GameSettings` (ajustes en `user://`) |
+| `scripts/core/cards` | Datos de cartas: `CardDatabase` (carga `data/cards.json`), `CardText` (limpiar/comparar texto), `UniversalCardParser` (habilidades por oración), `KeywordParser`/`KeywordAuras`/`StrengthAuras`, `DeckLoader`, `DeckValidator` |
+| `scripts/core/managers` | Reglas del juego: `GameManager` (turnos), `TurnManager`, `PriorityManager` (ventanas de prioridad), `BattleManager`, `PaymentManager`, `CardManager` (zonas en datos), `RuleState` (reglas "hasta tu próximo turno") |
+| `scripts/core/effects` | Motor de efectos: `compiler/` (EffectCompiler + EffectInterpreter, el camino genérico), `triggers/` (TriggerSystem y patrones por familia), `mechanics/` (patrones armados con piezas existentes: Activated/Enter/Talisman/Attack…), `continuous/` (modificadores, auras de habilidad), `actions/` (robar, botar, destruir, la Pila) |
+| `scripts/core/game` | La partida en escena: `Main`, `GameBootstrap` (cartas → mazos → dados → mulligan), `PhaseFlowController` (máquina de fases), `GoldManager` (jugar cartas y pagar), `ZoneManager`, `MatchReset` |
+| `scripts/core/network` | En línea: `NetworkClient` (WebSocket al relay), `RemotePlayerController` (el Anfitrión le pregunta al Remoto), `RemoteMirrorController` (el Remoto refleja y responde), `GameStateBroadcaster`, `TurnClock`, `MatchConnectionWatcher` |
+| `scripts/ui` | HUD, mano, inspección de cartas (botones de habilidades), visores (`zones/`: RevealWindow, CastleLookWindow, ZoneBrowsePicker), selección |
+| `relay-server/` | Relay Node ciego (salas por código, reenvía JSON) |
+| `tools/` | Pruebas (`run_tests.ps1`, `tests/`), sondas y auditorías de cartas, `split_gd.py`, scripts de cartas/mazos |
+| `docs/` | Bitácora de código, cobertura de handlers, reglas de diseño de UI, planes, `referencias/` (bocetos) |
+| `archive/` | Código y assets viejos fuera de uso (no se exportan) |
+
+### Una partida, de punta a punta
+
+1. `Main._ready()` → `MatchReset.reset_all()` (estado de partida en cero) → crea los módulos de escena.
+2. `GameBootstrap`: carga cartas → selector de mazos → (en línea: `hello` de versión, mazo del Remoto, `DeckValidator`) → dados → mulligan → `GameManager.start_game()`.
+3. `GameManager` emite `turn_started`/`phase_changed`; `PhaseFlowController` orquesta cada fase (Agrupación → Vigilia → Batalla → Fase Final).
+4. Jugar una carta: `GoldManager.play_card()` → pago (`PaymentManager`) → Pila (`ActionPipeline`, ventana de respuesta) → efecto.
+5. Fin: `GameManager.game_ended` → `GameOverOverlay` (en línea, `MatchConnectionWatcher` avisa al Remoto).
+
+### Cómo se resuelve el texto de una carta
+
+`TriggerResolution._resolve_look_and_play_patterns()` prueba, en orden: patrones de Talismán →
+`ActivatedPatterns` → patrones sueltos (Azi, Dagon, Vampiros, Noé, Mechanic…) → **`EffectInterpreter`**
+(el compilador genérico: `EffectCompiler.compile_clause()` arma pasos y costes, `COST_PIECES`) → mirar el
+Castillo, búsquedas… La primera que la toma, la resuelve. Las disparadas entran por `TriggerSystem`; las
+continuas por `ContinuousEffectManager` y las auras (`SilenceAuras`, `KeywordAuras`, `StrengthAuras`).
+**Para una carta nueva**: primero ver si el compilador ya la entiende (`tools/probe_handlers.gd`); si no,
+preferir una pieza nueva del compilador a un handler suelto; si hace falta un handler, va en la familia
+que corresponda de `mechanics/`.
+
+### En línea (Anfitrión autoritativo)
+
+El Anfitrión corre toda la partida; el Remoto no tiene `GameManager`: recibe `{"op":"prompt"}`, muestra la
+misma UI y responde `{"op":"intent"}`. Las cartas se identifican por `instance_id`. El relay solo reenvía.
+`TurnClock` (60 s + 2 s por acción; 30 s el rival) responde por defecto cuando se acaba el tiempo.
+
+### Reglas del usuario que valen siempre
+
+Español neutro · paridad con el Remoto en todo · los Oros nunca "se juegan" y no tienen coste salvo
+como Aliados · duración por defecto (Fuerza: por el turno; lo demás: permanente) · "daño" = combate +
+directo de la propia carta · lo mostrado del Castillo que no se mueve se baraja · liberar esclavos
+baneada · interacciones sobre el tablero; visores solo para mirar/buscar/mostrar.
+
+### Antes de exportar
+
+`powershell -File tools/run_tests.ps1` (las dos suites en verde) → exportar `build/windows/NTW.exe`.
+
+---
+
 ## 📑 Tabla de Contenidos
 
 1. [Cómo está organizado hoy](#1-cómo-está-organizado-hoy-verificado-2026-08-28)
 2. [El patrón de bug más repetido: `_main.<propiedad>` inexistente](#2-el-patrón-de-bug-más-repetido-de-esta-sesión-_mainpropiedad-inexistente)
 3. [Sistemas de efectos de cartas](#3-sistemas-de-efectos-de-cartas-construidosextendidos-2026-08-28)
-4. [Pantallas de mazos y Selector `boceto2.jpg`](#4-pantallas-de-mazos-y-selector-boceto2jpg)
+4. [Pantallas de mazos y Selector `boceto2.jpg` (docs/referencias)](#4-pantallas-de-mazos-y-selector-boceto2jpg)
 5. [Estándares de UI, Paleta Visual y Razas/Arquetipos](#5-estándares-de-ui-paleta-visual-y-razasarquetipos)
 6. [Infraestructura y Scripts de Test](#6-infraestructura-y-scripts-de-test)
 7. [Workspace y estado del repositorio](#7-workspace--por-qué-la-raíz-del-repo-nuxt-tiene-todo-borrado)

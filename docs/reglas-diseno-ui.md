@@ -2,7 +2,7 @@
 
 Este documento establece la **regla de diseño mandatoria** para todas las interfaces de usuario del proyecto (menús principales, paneles de pausa, modales de configuración, selectores de mazo/cartas, inspección de cartas y avisos).
 
-Toda interfaz debe seguir los principios visuales reflejados en `Configuracion.jpg` / `ControlsDialog.gd`.
+Toda interfaz debe seguir los principios visuales reflejados en `docs/referencias/Configuracion.jpg` / `ControlsDialog.gd`.
 
 ---
 

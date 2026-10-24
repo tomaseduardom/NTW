@@ -1,7 +1,7 @@
 # Reglas del Proyecto NTW
 
 ## 1. REGLA OBLIGATORIA DE DISEÑO DE INTERFAZ (UI DESIGN SYSTEM)
-Todo menú, panel, diálogo modal, overlay, selector, popup o componente de interfaz de usuario que se cree, rediseñe o modifique en este proyecto DEBE construirse obligatoriamente sobre la base visual del sistema medieval oscuro y dorado ("Configuracion.jpg" / "ControlsDialog"):
+Todo menú, panel, diálogo modal, overlay, selector, popup o componente de interfaz de usuario que se cree, rediseñe o modifique en este proyecto DEBE construirse obligatoriamente sobre la base visual del sistema medieval oscuro y dorado ("docs/referencias/Configuracion.jpg" / "ControlsDialog"):
 
 ### Base Visual de Contenedores y Modales (Paneles)
 - **Fondo / Lienzo**: Obsidiana / Azul marino pizarra muy oscuro (`#0B0E14` a `#121721` o `Color(0.07, 0.09, 0.13, 0.96)`).
