@@ -78,9 +78,13 @@ func _execute_step(main: Node, st: Dictionary, targets: Array, card: Node, contr
 			for z in st.zones:
 				zones.append(Constants.Zone.CASTILLO if z == "castillo" else Constants.Zone.CEMENTERIO)
 			var filter := _search_filter(st)
+			if str(st.get("name", "")) == "@self":
+				# "una copia de esta carta": mismo nombre que la carta del efecto.
+				filter.erase("name_contains")
+				filter["names_in"] = [str(card.card_data.get("nombre", "")).to_lower()] if card and card.get("card_data") != null else []
 			var play: Dictionary = st.get("play", {})
-			var dest: int = {"pagado": Constants.Zone.ORO_PAGADO, "cementerio": Constants.Zone.CEMENTERIO}.get(
-				st.get("dest", "mano"), Constants.Zone.MANO)
+			var dest: int = {"pagado": Constants.Zone.ORO_PAGADO, "cementerio": Constants.Zone.CEMENTERIO,
+				"destierro": Constants.Zone.DESTIERRO}.get(st.get("dest", "mano"), Constants.Zone.MANO)
 			if play.get("free", false):
 				dest = -1  # "y jugarlo sin pagar su coste": se juega desde los datos, sin pasar por la mano
 			var res: Dictionary = await ActionModule.search_zones(controller_id, zones, filter, st.amount, true, false,
@@ -309,6 +313,13 @@ func _search_filter(st: Dictionary) -> Dictionary:
 		filter["no_ability"] = true
 	if str(st.get("name", "")) != "":
 		filter["name_contains"] = str(st.name)  # "busca un Leyaden..."
+	if str(st.get("name_not", "")) != "":
+		filter["name_not"] = str(st.name_not)  # "un Aliado que no sea Ahab"
+	if st.has("str_val"):
+		if st.get("str_cmp", "") == "menos":
+			filter["strength_max"] = int(st.str_val)
+		elif st.get("str_cmp", "") == "mas":
+			filter["strength_min"] = int(st.str_val)
 	if st.has("alts"):
 		filter["alts"] = st.alts.map(func(a): return {"type": _type_enum(a.type) if a.type != "" else -1, "race": a.race})
 	return filter

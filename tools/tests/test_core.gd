@@ -242,11 +242,18 @@ func _compiler() -> void:
 		"Cuando entra en juego, mira la mano de tu oponente y Descarta una carta de ahí de coste 1.",
 		"Una vez por turno, puedes Destruir una carta que controles para Robar una carta.",
 		"Una vez por turno, puedes Desterrar un Oro que controles para Destruir una carta de coste 2 o menos.",
+		"Cuando entra en juego, busca en tu Castillo una copia de esta carta y ponla en tu mano.",
+		"Cuando entra en juego, busca en tu Castillo un Aliado que no sea Ahab y ponlo en tu mano.",
+		"Cuando entra en juego, busca en tu Castillo un Aliado de Fuerza 2 o menos y ponlo en tu mano.",
+		"Cuando entra en juego, busca en tu Castillo un Aliado Sacerdote y destiérralo.",
 	]:
 		check("compila: %s" % text, EffectCompilerScript.compile_clause(text).get("ok", false), true)
 	var c: Dictionary = EffectCompilerScript.compile_clause("Una vez por turno, puedes Desterrar una carta de tu mano para Robar una carta.")
 	var costs: Array = c.get("steps", []).filter(func(s): return s.get("op") == "cost")
 	check("coste: desterrar de la mano", costs[0].get("kind", "") if not costs.is_empty() else "", "banish_hand")
+	# "una carta del mismo tipo" no es un nombre de carta.
+	check("no compila: una carta del mismo tipo",
+		EffectCompilerScript.compile_clause("Busca en tu Castillo una carta del mismo tipo y ponla en tu mano.").get("ok", false), false)
 	# "de tu mano o Cementerio" sigue en su patrón (no es solo de la mano).
 	check("no compila: de tu mano o Cementerio",
 		EffectCompilerScript.compile_clause("Una vez por turno, puedes Desterrar una carta de tu mano o Cementerio para Desterrar una carta oponente de coste 3 o menos.").get("ok", false), false)

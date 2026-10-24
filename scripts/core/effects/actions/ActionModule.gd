@@ -453,6 +453,9 @@ func _apply_card_filter(cards: Array, filter: Dictionary) -> Array:
 			var strength = card_data.get("fuerza", 0)
 			if strength < filter.strength_min:
 				matches = false
+		if matches and filter.has("strength_max"):
+			if int(card_data.get("fuerza", 0)) > int(filter.strength_max):
+				matches = false
 
 		# Filtro por nombre (contiene)
 		if matches and filter.has("name_contains"):

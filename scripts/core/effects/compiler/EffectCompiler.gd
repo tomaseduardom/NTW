@@ -313,18 +313,26 @@ const ATOMS := [
 	# coma ("busca un Aliado, ponlo en tu mano y roba una carta").
 	# "...y jugarlo sin pagar su coste / reduciendo su coste en un Oro / por dos Oros menos".
 	["search", "busca(?:r)? (?:en tu (?<z1>castillo|cementerio)(?: (?:o|y/o) (?:tu )?(?<z2>castillo|cementerio))?,? )?" \
-		+ "(?<objs>" + OBJS + ")" \
+		+ "(?:(?<copy>una copia de (?:esta carta|este oro|este aliado|esta arma|este totem|este talisman))" \
+		+ "|(?<objs>" + OBJS + ")(?: (?!(?:de|del|que|y|o|u|en|con|sin|al|a)\\b)(?<nm>[a-z]+))?)" \
 		+ "(?: que no sean? (?:un |una )?(?<n1>" + T1 + ")(?: ni (?:un |una )?(?<n2>" + T1 + "))?)?" \
+		+ "(?:,? que no sean? (?<nnot>(?!un |una )[a-z]+(?: [a-z]+){0,3}?))?" \
 		+ "(?:,? de coste (?<cval>" + NUM + ")(?: o (?<ccmp>menos|mas))?)?" \
+		+ "(?:,? de fuerza (?<sval>\\d+) o (?<scmp>menos|mas))?" \
 		+ "(?<nohab> sin habilidad)?" \
 		+ "(?: en tu (?<z3>castillo|cementerio)(?: (?:o|y/o) (?:tu )?(?<z4>castillo|cementerio))?)?" \
 		+ "(?:,? y |, )(?:(?:ponla|ponlo|ponerla|ponerlo|ponlas|ponlos|ponerlas|ponerlos) en tu (?<dest>mano|oro pagado|cementerio)" \
+		+ "|(?<exile>destierralo|destierrala|destierralos|destierralas)" \
 		+ "|(?<play>jugarlo|jugarla|juegalo|juegala|jugarlos|jugarlas|juegalos|juegalas)(?: (?<free>sin pagar su coste)" \
 		+ "| reduciendo su coste en (?<red>" + NUM + ") oros?(?:, hasta un minimo de (?<floor>\\d+))?" \
 		+ "| por (?<red2>" + NUM + ") oros? menos))"],
 	# "Busca un Leyaden/una Empanada en tu Castillo y ponlo en tu mano": una carta por su nombre (leyaden,
 	# empanada, yekamus).
 	["search_named", "busca(?:r)? (?:un|una) (?<name>[a-z' -]+?) en tu castillo y (?:ponlo|ponla|ponerlo|ponerla) en tu mano"],
+	# "Busca en tu Castillo un Pincheira y ponlo en tu mano" (rosa pincheira): el nombre después de la zona.
+	# Un nombre, no un tipo ("una carta del mismo tipo", "un Aliado Mochizuki" son otra cosa).
+	["search_named", "busca(?:r)? en tu castillo (?:un|una) (?!(?:aliados?|armas?|totems?|talisman(?:es)?|oros?|cartas?|copia)\\b)" \
+		+ "(?<name>[a-z' -]+?)(?:,? y |, )(?:ponlo|ponla|ponerlo|ponerla) en tu mano"],
 	# "Sube un Aliado y un Arma de tu Cementerio a tu mano": búsqueda en el Cementerio propio.
 	# "...a tu mano que no sea Talismán" (strut): la exclusión también puede ir al final (nt).
 	["raise", "sub(?:e|ir) (?<objs>" + OBJS + ")(?: que no sean? (?:un |una )?(?<n1>" + T1 + "))?" \
@@ -1122,7 +1130,29 @@ static func _build(atom_name: String, m: RegExMatch) -> Dictionary:
 					var red: String = m.get_string("red") if not m.get_string("red").is_empty() else m.get_string("red2")
 					play = {"reduce": parse_amount(red), "floor": int(m.get_string("floor")) if not m.get_string("floor").is_empty() else 1}
 			var dest_word: String = m.get_string("dest")
-			return _search_steps(m, zones, {"oro pagado": "pagado", "cementerio": "cementerio"}.get(dest_word, "mano"), play)
+			var dest_key: String = {"oro pagado": "pagado", "cementerio": "cementerio"}.get(dest_word, "mano")
+			if not m.get_string("exile").is_empty():
+				dest_key = "destierro"
+			var found: Dictionary = _search_steps(m, zones, dest_key, play)
+			# "una copia de esta carta": su propio nombre (lo resuelve el intérprete). Nombre suelto tras el
+			# tipo ("una carta Drácula", "un Aliado Azi"), "que no sea Ahab", "de Fuerza 2 o menos".
+			if not m.get_string("copy").is_empty():
+				found = {"op": "search", "zones": zones, "card_type": "", "card_types": [], "types_not": [],
+					"cost_val": -1, "cost_cmp": "", "no_ability": false, "dest": dest_key, "amount": 1, "up_to": false,
+					"name": "@self"}
+				if not play.is_empty():
+					found["play"] = play
+			for fs in (found.steps if found.get("op", "") == "multi" else [found]):
+				if fs.is_empty():
+					continue
+				if not m.get_string("nm").is_empty() and not TYPE_WORDS.has(m.get_string("nm")):
+					fs["name"] = m.get_string("nm")
+				if not m.get_string("nnot").is_empty():
+					fs["name_not"] = m.get_string("nnot")
+				if not m.get_string("sval").is_empty():
+					fs["str_val"] = int(m.get_string("sval"))
+					fs["str_cmp"] = m.get_string("scmp")
+			return found
 		"raise":
 			var raised: Dictionary = _search_steps(m, ["cementerio"], "mano", {})
 			var tail_not: String = TYPE_WORDS.get(m.get_string("nt"), "")
