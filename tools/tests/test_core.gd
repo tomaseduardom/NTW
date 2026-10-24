@@ -1,6 +1,7 @@
 extends Node
 ## Suite mínima de reglas y red, sin tablero: CardText, datos de cartas, DeckValidator, auras de
-## "pierden su habilidad", respuestas por defecto de TurnClock, historial (CombatLog, RevealedCards).
+## "pierden su habilidad", respuestas por defecto de TurnClock, historial (CombatLog, RevealedCards) y
+## MatchReset.
 ## Uso (o tools/run_tests.ps1, que corre también test_keywords_strength):
 ##   Godot_v4.6-stable_win64_console.exe --headless --path . res://tools/tests/test_core.tscn
 ## Sale con código 1 si algún caso falla.
@@ -12,6 +13,8 @@ const RevealedCardsScript = preload("res://scripts/core/effects/mechanics/Reveal
 const CombatLogScript = preload("res://scripts/core/logging/CombatLog.gd")
 const SilenceAurasScript = preload("res://scripts/core/effects/continuous/SilenceAuras.gd")
 const EffectCompilerScript = preload("res://scripts/core/effects/compiler/EffectCompiler.gd")
+const MatchResetScript = preload("res://scripts/core/game/MatchReset.gd")
+const PhaseStartWindowScript = preload("res://scripts/core/game/PhaseStartWindow.gd")
 
 var failed := 0
 var passed := 0
@@ -30,6 +33,7 @@ func _ready() -> void:
 	_silence_parse()
 	_turn_clock_defaults()
 	_history()
+	_match_reset()
 	print("Core: %d/%d casos OK" % [passed, passed + failed])
 	get_tree().quit(1 if failed > 0 else 0)
 
@@ -196,3 +200,29 @@ func _history() -> void:
 	check("cartas mostradas: se ven boca arriba", g.get("cards", [{}])[0].get("esta_oculta", true), false)
 	var entries: Array = CombatLog.get_entries(1)
 	check("cartas mostradas: entrada en el historial", entries[0].get("type", "") if not entries.is_empty() else "", "reveal")
+
+
+func _match_reset() -> void:
+	# Estado que una partida cortada a la mitad dejaba vivo.
+	PriorityManager.suppress_human_autopass = true
+	PriorityManager.priority_window_active = true
+	AnimationQueue.is_running = true
+	AnimationQueue.command_queue.append({"x": 1})
+	TurnManager.ally_played_serial[123] = 4
+	GameManager.turn_serial = 9
+	PhaseStartWindowScript._running = true
+	SilenceAurasScript._disabled[1] = true
+	CombatLog.add_entry("play", "entrada de la partida anterior")
+	var registry_size: int = EffectController._prevention_registry.size()
+	var count: int = MatchResetScript.reset_all()
+	check("reset: variables reiniciadas", count > 50, true)
+	check("reset: prioridad", [PriorityManager.suppress_human_autopass, PriorityManager.priority_window_active], [false, false])
+	check("reset: cola de animaciones", [AnimationQueue.is_running, AnimationQueue.command_queue.size()], [false, 0])
+	check("reset: turno y Aliados jugados", [GameManager.turn_serial, TurnManager.ally_played_serial.size()], [0, 0])
+	check("reset: ventana de comienzo de fase", PhaseStartWindowScript._running, false)
+	check("reset: auras", SilenceAurasScript._disabled.size(), 0)
+	check("reset: historial vacío", CombatLog.get_entries().size(), 0)
+	check("reset: Array tipado sigue tipado", AnimationQueue.command_queue.is_typed(), true)
+	check("reset: se conserva lo armado en _ready", EffectController._prevention_registry.size(), registry_size)
+	check("reset: submódulos siguen vivos", is_instance_valid(TriggerSystem._effect_interpreter), true)
+	check("reset: las cartas no se tocan", CardDatabase.cards.is_empty(), false)

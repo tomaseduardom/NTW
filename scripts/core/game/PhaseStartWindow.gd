@@ -24,6 +24,12 @@ static var _running: bool = false
 static var _phase: int = -1
 
 
+static func reset_match() -> void:
+	"""MatchReset: una ventana de comienzo de fase que quedó abierta no bloquea la partida siguiente."""
+	_running = false
+	_phase = -1
+
+
 static func _main_node() -> Node:
 	return (Engine.get_main_loop() as SceneTree).root.get_node_or_null("Main")
 

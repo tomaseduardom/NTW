@@ -27,6 +27,13 @@ static var _reported: Dictionary = {}
 static var last_prompt: Dictionary = {}
 
 
+static func reset_match() -> void:
+	"""MatchReset: estado de partida en cero (los cachés por texto se conservan)."""
+	_stack = []
+	_reported = {}
+	last_prompt = {}
+
+
 static func push(card: Node, controller_id: int, kind: String, window: String = "done") -> int:
 	"""Devuelve un token para pop(): los efectos pueden anidarse y, como son
 	coroutines, terminar en otro orden — pop() saca SU entrada, no la de

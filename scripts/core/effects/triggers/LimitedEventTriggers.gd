@@ -64,6 +64,12 @@ var _pending: Array = []
 var _running: bool = false
 
 
+static func reset_match() -> void:
+	"""MatchReset: cola nueva (una resolución a medias de la partida anterior no queda trabada)."""
+	_inst = null
+	_suppress_megalosaurus = false
+
+
 static func _main() -> Node:
 	return (Engine.get_main_loop() as SceneTree).root.get_node_or_null("Main")
 

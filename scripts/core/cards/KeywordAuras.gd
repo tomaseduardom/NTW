@@ -72,6 +72,11 @@ static var _rx_skip: RegEx = null
 static var _rx_kw: RegEx = null
 
 
+static func reset_match() -> void:
+	"""MatchReset: estado de partida en cero (los cachés por texto se conservan)."""
+	_grant_busy = {}
+
+
 static func grant_entries(text: String) -> Array:
 	"""[{keywords, who: "allies" | "opponents" | "all", others_only, races, max_cost, min_cost,
 	with_keyword, armed_target, zone, cond}] — auras estáticas que dan palabras clave."""

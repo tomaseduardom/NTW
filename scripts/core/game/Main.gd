@@ -25,6 +25,7 @@ const _DebugInputScript       = preload("res://scripts/ui/hud/DebugInputModule.g
 const _ActionLogDrawerScript  = preload("res://scripts/ui/hud/ActionLogDrawer.gd")
 const MatchConnectionWatcherScript = preload("res://scripts/core/network/MatchConnectionWatcher.gd")
 const TurnClockScript = preload("res://scripts/core/network/TurnClock.gd")
+const MatchResetScript = preload("res://scripts/core/game/MatchReset.gd")
 
 # =============================================================================
 # REFERENCIAS A NODOS
@@ -121,6 +122,9 @@ const INITIAL_HAND_SIZE: int = 8  # DAR 4.3
 # =============================================================================
 func _ready() -> void:
 	print("[Main] Escena principal cargada")
+	# Estado de partida en cero antes de crear módulos y cargar mazos (los autoloads sobreviven al
+	# cambio de escena).
+	print("[Main] Estado de partida reiniciado (%d variables)" % MatchResetScript.reset_all())
 	GameManager.game_started.connect(_on_game_started)
 	GameManager.game_ended.connect(_on_game_ended)
 

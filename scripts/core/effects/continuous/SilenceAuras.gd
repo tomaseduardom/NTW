@@ -41,6 +41,21 @@ static var last_silenced: Dictionary = {}
 static var _entry_seq: int = 0
 
 
+static func reset_match() -> void:
+	"""MatchReset: estado de partida en cero (los cachés por texto se conservan)."""
+	_sources = []
+	_sources_gen = -1
+	_gen += 1
+	_sources_frame = -1
+	_depth = 0
+	_stack = []
+	_memo = {}
+	_cycle = []
+	_disabled = {}
+	last_silenced = {}
+	_entry_seq = 0
+
+
 ## Orden de entrada en juego (la regla de bucles mira la última en entrar).
 static func mark_entered(card: Node) -> void:
 	_entry_seq += 1

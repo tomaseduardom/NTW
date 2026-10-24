@@ -101,6 +101,11 @@ static func reset_game_state() -> void:
 	_ally_affect_tax_until.clear()
 
 
+static func reset_match() -> void:
+	"""MatchReset: los plazos son por turn_serial, que vuelve a empezar en cada partida."""
+	reset_game_state()
+
+
 static func grant_ally_affect_tax(pid: int, until_serial: int) -> void:
 	_ally_affect_tax_until[pid] = maxi(int(_ally_affect_tax_until.get(pid, -1)), until_serial)
 

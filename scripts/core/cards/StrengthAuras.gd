@@ -38,6 +38,11 @@ static var _rx_per_copy: RegEx = null
 static var _rx_per_cost: RegEx = null
 
 
+static func reset_match() -> void:
+	"""MatchReset: estado de partida en cero (los cachés por texto se conservan)."""
+	_busy = false
+
+
 static func entries(text: String) -> Array:
 	"""[{amount, who: "self" | "wielder" | "allies" | "opponents" | "all", zone, cond, min_cost,
 	max_cost, with_keyword, others_only}] de un texto."""

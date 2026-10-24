@@ -14,6 +14,10 @@ extends RefCounted
 
 static var last_target: Node = null
 
+
+static func reset_match() -> void:
+	last_target = null
+
 const FONT_TITLE := preload("res://assets/fonts/Cinzel-Bold.ttf")
 const FONT_BODY := preload("res://assets/fonts/Marcellus-Regular.ttf")
 const GOLD := Color(0.85, 0.72, 0.28)

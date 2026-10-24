@@ -11,6 +11,11 @@ static var _groups: Dictionary = {}  # id -> {title, owner, cards}
 static var _next_id: int = 1
 
 
+static func reset_match() -> void:
+	"""MatchReset: los grupos eran del historial de la partida anterior (_next_id sigue subiendo)."""
+	_groups = {}
+
+
 static func record(owner: int, cards: Array, title: String) -> void:
 	"""owner: jugador cuyas cartas se mostraron (del lado de este cliente)."""
 	if cards.is_empty():

@@ -97,6 +97,17 @@ var _modifier_registry: ModifierRegistry
 var _effect_parser: ContinuousEffectParser
 
 
+func _init_type_index() -> void:
+	"""Índices por tipo de modificador, una lista vacía por tipo."""
+	for type in ModifierType.values():
+		_modifiers_by_type[type] = []
+
+
+func _after_match_reset() -> void:
+	"""MatchReset vació los índices: se vuelven a armar."""
+	_init_type_index()
+
+
 func _ready() -> void:
 	_keyword_query = KeywordQuery.new()
 	_keyword_query.setup(self)
@@ -107,9 +118,7 @@ func _ready() -> void:
 	_effect_parser = ContinuousEffectParser.new()
 	_effect_parser.setup(self)
 
-	# Inicializar índices por tipo
-	for type in ModifierType.values():
-		_modifiers_by_type[type] = []
+	_init_type_index()
 
 	call_deferred("_get_references")
 	call_deferred("_connect_signals")
