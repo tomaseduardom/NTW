@@ -1,11 +1,8 @@
 extends RefCounted
-## Noé (2026-10-17, a pedido del usuario):
-##   "Cuando entra en juego o bloquee, muestra cartas del tope de tu Castillo
-##   hasta mostras dos Aliados y ponlos en tu mano. Si tenían costes
-##   distintos, puedes jugar uno reduciendo su coste en un Oro, hasta un
-##   mínimo de 1."  ("mostras" es errata de la carta)
-##   "Una vez por turno, un Aliado gana Furia." (por el turno)
-## Se usa con preload.
+## Noé: "Cuando entra en juego o bloquee, muestra cartas del tope de tu Castillo hasta mostras dos
+## Aliados y ponlos en tu mano. Si tenían costes distintos, puedes jugar uno reduciendo su coste en
+## un Oro, hasta un mínimo de 1." ("mostras" es errata de la carta) "Una vez por turno, un Aliado
+## gana Furia." (por el turno) Se usa con preload.
 
 const PlayerSideScript = preload("res://scripts/core/game/PlayerSide.gd")
 const StackAnnulScript = preload("res://scripts/core/effects/StackAnnul.gd")
@@ -24,12 +21,12 @@ static func try_execute(card: Node, text: String, controller_id: int) -> bool:
 	if "hasta mostra" in lower and "dos aliados y ponlos en tu mano" in lower and REVEAL_TEXT in card_lower:
 		await _reveal_two_allies(card, controller_id)
 		return true
-	# Kai Piloto Prodigio (2026-10-17): "puedes hacer que un Aliado gane 1 de
-	# Fuerza, Furia y haga doble daño de combate este turno".
+	# Kai Piloto Prodigio: "puedes hacer que un Aliado gane 1 de Fuerza, Furia y haga doble daño de
+	# combate este turno".
 	if "hacer que un aliado gane 1 de fuerza, furia y haga doble daño de combate este turno" in lower:
 		await _kai_piloto(card, controller_id)
 		return true
-	# Javiera Carrera (2026-10-17).
+	# Javiera Carrera.
 	if "un aliado duplica su fuerza por el turno" in lower:
 		await _javiera_double(card, controller_id, "si es un carrera, en vez de eso triplica su fuerza" in lower)
 		return true
@@ -38,43 +35,42 @@ static func try_execute(card: Node, text: String, controller_id: int) -> bool:
 			Constants.Zone.DESTIERRO, false, true)
 		await ActionModule.draw(controller_id, 1, str(card.get("card_name")) if is_instance_valid(card) else "", true)
 		return true
-	# Antonio Pincheira (2026-10-17): "En tu Fase Final, agrupa hasta dos
-	# Aliados" — vuelven de la Línea de Ataque a la de Defensa.
+	# Antonio Pincheira: "En tu Fase Final, agrupa hasta dos Aliados" — vuelven de la Línea de Ataque a
+	# la de Defensa.
 	if "agrupa hasta dos aliados" in lower:
 		await _regroup_up_to(card, controller_id, 2)
 		return true
-	# Ira (2026-10-17): "Un Aliado gana Furia, Imbloqueable, 3 de Fuerza y
-	# hace daño al Destierro por el turno."
+	# Ira: "Un Aliado gana Furia, Imbloqueable, 3 de Fuerza y hace daño al Destierro por el turno."
 	if "un aliado gana furia, imbloqueable, 3 de fuerza y hace daño al destierro por el turno" in lower:
 		await _ira(card, controller_id)
 		return true
-	# el monstruo (2026-10-18): "puedes Botar dos cartas para que hasta dos
-	# Aliados ganen Furia y 1 de Fuerza por el turno."
+	# El monstruo: "puedes Botar dos cartas para que hasta dos Aliados ganen Furia y 1 de Fuerza por el
+	# turno."
 	if "botar dos cartas para que hasta dos aliados ganen furia y 1 de fuerza por el turno" in lower:
 		await _el_monstruo(card, controller_id)
 		return true
-	# Maldición Vudú (2026-10-18).
+	# Maldición Vudú.
 	if "cancela una habilidad o una carta en juego pierde su habilidad por el turno" in lower:
 		await _maldicion_vudu(card, controller_id, "en tu fase final mueve tus oros a tu oro pagado" in lower)
 		return true
-	# Seducción (2026-10-18).
+	# Seducción.
 	if "cada jugador roba hasta tres cartas. por cada carta que robe tu oponente de esta forma" in lower:
 		await _seduccion(card, controller_id)
 		return true
-	# el huascar (2026-10-18): al entrar, un Oro no se agrupa el próximo turno;
-	# una vez por turno, Desterrar hasta un Arma o Tótem en juego y Robar dos.
+	# El huascar: al entrar, un Oro no se agrupa el próximo turno; una vez por turno, Desterrar hasta
+	# un Arma o Tótem en juego y Robar dos.
 	if "elige un oro para que no pueda ser agrupado el próximo turno" in lower:
 		await _huascar_gold_lock(card, controller_id)
 		return true
 	if "desterrar hasta un arma o tótem en juego y robar dos cartas" in lower:
 		await _banish_weapon_or_totem_draw(card, controller_id)
 		return true
-	# Linaje Maldito (2026-10-18).
+	# Linaje Maldito.
 	if "lanza una dado de seis caras" in lower or "lanza un dado de seis caras" in lower:
 		await _linaje_maldito(card, controller_id)
 		return true
-	# Abu Simbel (2026-10-18): "Cuando entra en juego, cada jugador gana el
-	# control de todas las cartas de las que sea dueño."
+	# Abu Simbel: "Cuando entra en juego, cada jugador gana el control de todas las cartas de las que
+	# sea dueño."
 	if "cada jugador gana el control de todas las cartas de las que sea dueño" in lower:
 		_everyone_regains_control()
 		return true
@@ -100,8 +96,7 @@ static func _reveal_two_allies(card: Node, controller_id: int) -> void:
 		revealed.append(top)
 		if int(top.get("tipo", -1)) == Constants.CardType.ALIADO:
 			allies.append(top)
-	if not revealed.is_empty():
-		SelectionManager.open_reveal(revealed.duplicate(), "%s: cartas mostradas" % card_name, controller_id)
+	load("res://scripts/core/effects/mechanics/RevealedCards.gd").record(controller_id, revealed, card_name)
 	for a in allies:
 		revealed.erase(a)
 	for c in revealed:
@@ -167,8 +162,8 @@ static func _grant_furia(card: Node, controller_id: int) -> void:
 		target = await main._card_interaction.await_target("Un Aliado gana Furia", filter, true, controller_id)
 	if not target or not is_instance_valid(target):
 		return
-	# Permanente (2026-10-17, regla del usuario: sin duración escrita, solo
-	# los cambios de Fuerza son "por el turno"; lo demás es permanente).
+	# Permanente (regla del usuario: sin duración escrita, solo los cambios de Fuerza son "por el
+	# turno"; lo demás es permanente).
 	KeywordManager.grant_keyword(target, Constants.Keyword.FURIA, card, "permanent")
 	main._update_debug("%s gana Furia" % str(target.get("card_name")))
 
@@ -207,7 +202,7 @@ static func _kai_piloto(card: Node, controller_id: int) -> void:
 		"description": "Kai Piloto Prodigio +1",
 	})
 	KeywordManager.grant_keyword(target, Constants.Keyword.FURIA, card, "turn")
-	target.set_meta("double_combat_damage_turn", GameManager.current_turn)
+	target.set_meta("double_combat_damage_turn", GameManager.turn_serial)
 	main._update_debug("%s gana 1 de Fuerza, Furia y hace doble daño de combate este turno" % str(target.get("card_name")))
 
 
@@ -321,7 +316,7 @@ static func _ira(card: Node, controller_id: int) -> void:
 	_turn_strength(target, 3, "Ira +3")
 	KeywordManager.grant_keyword(target, Constants.Keyword.FURIA, card, "turn")
 	KeywordManager.grant_keyword(target, Constants.Keyword.IMBLOQUEABLE, card, "turn")
-	target.set_meta("damage_to_exile_turn", GameManager.current_turn)  # BattleManager._accumulate_castle_damage
+	target.set_meta("damage_to_exile_turn", GameManager.turn_serial)  # BattleManager._accumulate_castle_damage
 	main._update_debug("%s gana Furia, Imbloqueable, 3 de Fuerza y hace daño al Destierro por el turno" % str(target.get("card_name")))
 
 
@@ -346,7 +341,7 @@ static func ira_from_cemetery(source_card: Node) -> void:
 	data["esta_oculta"] = false
 	CardManager.append_to_exile(owner_id, data)
 	_turn_strength(target, 1, "Ira +1")
-	target.set_meta("attack_uncancellable_turn", GameManager.current_turn)
+	target.set_meta("attack_uncancellable_turn", GameManager.turn_serial)
 	main._update_debug("%s gana 1 de Fuerza y su ataque no puede ser cancelado por el turno" % str(target.get("card_name")))
 
 
@@ -419,11 +414,11 @@ static func _maldicion_vudu(card: Node, controller_id: int, move_golds_at_final:
 
 
 static func _move_golds_to_paid_at_final(main: Node, controller_id: int) -> void:
-	var turn: int = GameManager.current_turn
+	var turn: int = GameManager.turn_serial
 	var gm = main._gold_manager
 	var on_phase: Callable
 	on_phase = func(new_phase) -> void:
-		if GameManager.current_turn != turn:
+		if GameManager.turn_serial != turn:
 			if GameManager.phase_changed.is_connected(on_phase):
 				GameManager.phase_changed.disconnect(on_phase)
 			return
@@ -551,7 +546,7 @@ static func _huascar_gold_lock(card: Node, controller_id: int) -> void:
 	if not target or not is_instance_valid(target):
 		return
 	var gold_ctrl: int = target.controller_id if target.get("controller_id") != null else 1 - controller_id
-	var next_turn: int = GameManager.current_turn + (1 if gold_ctrl != GameManager.active_player_id else 2)
+	var next_turn: int = GameManager.turn_serial + (1 if gold_ctrl != GameManager.active_player_id else 2)
 	target.set_meta("no_regroup_turn", next_turn)  # GoldManager._reset_gold / EasyBot.reset_gold
 	main._update_debug("%s no podrá ser agrupado el próximo turno" % str(target.get("card_name")))
 
@@ -585,19 +580,13 @@ static func _linaje_maldito(card: Node, controller_id: int) -> void:
 		return
 	var card_name: String = str(card.get("card_name")) if is_instance_valid(card) else "Linaje Maldito"
 	var roll: int = randi_range(1, 6)
-	var until: int = GameManager.current_turn + 2  # hasta tu próximo turno
-	var immunity: Dictionary = main.get_meta("damage_immunity", {})
-	var mine: Dictionary = immunity.get(controller_id, {})
+	var until: int = RuleState.next_own_turn(controller_id)  # hasta tu próximo turno
 	if roll % 2 == 0:
-		mine["combat"] = until
-		immunity[controller_id] = mine
-		main.set_meta("damage_immunity", immunity)
+		RuleState.set_until("no_combat_damage", controller_id, until)
 		main._update_debug("%s: el dado sale %d (par) — no recibes daño de combate hasta tu próximo turno" % [card_name, roll])
 		await ActionModule.mill(1 - controller_id, 4, true, card_name)
 		return
-	mine["direct"] = until
-	immunity[controller_id] = mine
-	main.set_meta("damage_immunity", immunity)
+	RuleState.set_until("no_direct_damage", controller_id, until)
 	main._update_debug("%s: el dado sale %d (impar) — no recibes daño directo hasta tu próximo turno" % [card_name, roll])
 	var candidates: Array = []
 	for container in PlayerSideScript.ally_containers(main, controller_id):
@@ -617,12 +606,8 @@ static func _linaje_maldito(card: Node, controller_id: int) -> void:
 
 
 static func damage_immune(player_id: int, kind: String) -> bool:
-	"""kind: "combat" o "direct". Linaje Maldito."""
-	var main := _main_node()
-	if not main:
-		return false
-	var mine: Dictionary = main.get_meta("damage_immunity", {}).get(player_id, {})
-	return GameManager.current_turn < int(mine.get(kind, -1))
+	"""kind: "combat" o "direct". Linaje Maldito, Quicaví (RuleState)."""
+	return RuleState.active("no_%s_damage" % kind, player_id)
 
 
 static func _everyone_regains_control() -> void:

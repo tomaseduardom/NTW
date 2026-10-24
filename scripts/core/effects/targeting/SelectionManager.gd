@@ -351,6 +351,10 @@ func open_selection(card_data_list: Array, mode: int, config: Dictionary = {}, c
 	if chooser_id == 1 and NetworkClient.room_code != "" and NetworkClient.is_host:
 		_delegate_selection_to_remote(card_data_list, mode, config)
 		return
+	# El bot elige solo (las primeras que pasen el filtro), con las mismas señales que la UI.
+	if load("res://scripts/core/game/PlayerSide.gd").is_bot(chooser_id):
+		_auto_select_for_bot(card_data_list, mode, config)
+		return
 
 	# Configurar
 	current_mode = mode
@@ -466,6 +470,30 @@ func _delegate_selection_to_remote(card_data_list: Array, mode: int, config: Dic
 			emit_signal("card_selected", chosen_data[0])
 	else:
 		emit_signal("selection_completed", chosen_data)
+
+
+func _auto_select_for_bot(card_data_list: Array, mode: int, config: Dictionary) -> void:
+	# Diferido: el llamador recién después hace "await" de la señal.
+	await get_tree().process_frame
+	if mode == SelectionMode.REVEAL:
+		emit_signal("selection_completed", [])
+		return
+	var max_sel: int = int(config.get("max_selections", 1))
+	var filter = config.get("filter", Callable())
+	var chosen: Array = []
+	for d in card_data_list:
+		if max_sel > 0 and chosen.size() >= max_sel:
+			break
+		if filter is Callable and filter.is_valid() and not filter.call(d):
+			continue
+		chosen.append(d)
+	if max_sel == 1:
+		if chosen.is_empty():
+			emit_signal("selection_cancelled")
+		else:
+			emit_signal("card_selected", chosen[0])
+	else:
+		emit_signal("selection_completed", chosen)
 
 
 ## Los 5 diálogos modales (implementación en SelectionDialogs.gd) — la API
@@ -827,6 +855,30 @@ func _on_confirm_pressed() -> void:
 	emit_signal("selection_completed", selected_data)
 
 	print("[SelectionManager] Selección confirmada: %d cartas" % selected_data.size())
+
+
+func force_default() -> void:
+	"""Tiempo agotado (TurnClock): cancela si se puede; si no, elige las primeras cartas válidas hasta
+	el mínimo y confirma."""
+	if not is_open:
+		return
+	if current_mode == SelectionMode.REVEAL:
+		_on_confirm_pressed()
+		return
+	if _cancel_button and _cancel_button.visible:
+		_on_cancel_pressed()
+		return
+	var need: int = maxi(min_selections, 1)
+	for card in displayed_cards:
+		if selected_cards.size() >= need:
+			break
+		if card in selected_cards or not _card_data_map.has(card):
+			continue
+		if _is_card_selectable(_card_data_map[card], current_mode):
+			_select_card(card)
+	_on_confirm_pressed()
+	if is_open:
+		_on_cancel_pressed()
 
 
 func _on_cancel_pressed() -> void:

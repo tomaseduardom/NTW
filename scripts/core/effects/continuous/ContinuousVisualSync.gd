@@ -109,16 +109,9 @@ func update_all_card_visuals() -> void:
 			if _main._modifiers.has(mod_id):
 				var mod = _main._modifiers[mod_id]
 				var target = mod.target
-				# 2026-09-19, bug real reportado por el usuario: "Left operand
-				# of 'is' is a previously freed instance" — is_instance_valid()
-				# DEBE ir primero: 'is' se evalúa antes que el 'and' de la
-				# derecha (orden de evaluación normal, sin cortocircuito a
-				# favor), y a diferencia de is_instance_valid(), el operador
-				# 'is' de GDScript revienta si el objeto ya fue liberado, no
-				# devuelve false. Un modificador cuyo target salió de juego sin
-				# limpiarse de _modifiers/_modifiers_by_target (carta destruida/
-				# desterrada con un buff/debuff activo todavía registrado) deja
-				# exactamente esa referencia colgante aquí.
+				# is_instance_valid() PRIMERO: el operador 'is' falla con una instancia ya liberada (no devuelve
+				# false). Un modificador cuyo target salió de juego sin limpiarse deja esa referencia colgante
+				# aquí.
 				if is_instance_valid(target) and target is Node:
 					if target not in all_cards:
 						all_cards.append(target)

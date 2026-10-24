@@ -12,27 +12,17 @@ func setup(main: Node) -> void:
 
 
 func banish(targets: Array, source: Node = null, skip_validation: bool = false, can_be_prevented: bool = true) -> Dictionary:
-	"""Destierra cartas, enviándolas al Destierro (zona de exilio)
-	Las cartas desterradas no pueden ser recuperadas por medios normales
-
+	"""Destierra cartas (al Destierro).
+	
 	Args:
-		targets: Array de cartas a desterrar
-		source: Carta/efecto que causa el destierro
-		skip_validation: Si omitir validación previa
-		can_be_prevented: Si puede ser prevenida por Estaca — false cuando
-			el llamador YA resolvió su propia Prevención específica antes
-			de llegar aquí (2026-09-09, p.ej. TargetedEffectExecutor.
-			_execute_targeted_annul(): Anular solo lo previene Drácula, no
-			Estaca, así que pasa false para no volver a preguntar aquí).
-			AL FINAL a propósito, no antes de skip_validation: los ~15
-			llamadores existentes ya pasan 'true' como tercer argumento
-			posicional para skip_validation — insertar un parámetro ANTES
-			de esa posición correría ese 'true' a can_be_prevented sin que
-			ningún llamador lo pidiera, dejando skip_validation=false en
-			todos ellos por accidente.
-
-	Returns: {success, banished, failed}
-	"""
+	targets: Array de cartas a desterrar
+	source: carta/efecto que causa el destierro
+	skip_validation: omitir la validación previa
+	can_be_prevented: si Estaca puede prevenirlo; false cuando el llamador ya resolvió su propia
+	Prevención (p.ej. TargetedEffectExecutor._execute_targeted_annul(): Anular solo lo previene
+	Drácula). Va al final para no correr el 'true' posicional de skip_validation de los llamadores.
+	
+	Returns: {success, banished, failed}"""
 	var result = {
 		"success": true,
 		"banished": [],
@@ -62,11 +52,14 @@ func banish(targets: Array, source: Node = null, skip_validation: bool = false, 
 			result.failed.append({"card": target, "reason": "invalid"})
 			continue
 
-		# Prevención reactiva real (2026-09-09 — Estaca), mismo chequeo que
-		# destroy(). can_be_prevented=false cuando el llamador ya resolvió
-		# su propia Prevención específica (ver docstring de arriba).
+		# Prevención reactiva (Estaca), como destroy(). can_be_prevented = false si el llamador ya
+		# resolvió la suya.
 		if can_be_prevented and await EffectController.offer_prevention(target, source, "exile"):
 			result.failed.append({"card": target, "reason": "prevented"})
+			continue
+		# Indesterrable, Nefandos, dulce canasta.
+		if load("res://scripts/core/effects/mechanics/ProtectionRules.gd").cannot_be_banished(target):
+			result.failed.append({"card": target, "reason": "unbanishable"})
 			continue
 
 		var from_zone = target.current_zone if target.get("current_zone") != null else -1

@@ -114,17 +114,9 @@ func _execute_step_d(stack_obj: Dictionary) -> Dictionary:
 	# ─────────────────────────────────────────────────────────────────────────
 	# Abrir ventana de prioridad (oponente primero)
 	# ─────────────────────────────────────────────────────────────────────────
-	# 2026-09-11 (bug real reportado por el usuario: la consola mostraba
-	# "Guerra de Talismanes" al resolver Paso D de una habilidad cualquiera,
-	# sin relación con esa fase). El número mágico "1" no es RESPONSE_WINDOW
-	# — el enum real es NONE=0, GUERRA_TALISMANES=1, RESPONSE_WINDOW=2,
-	# DISCARD_PHASE=3, BLOCK_DECLARATION=4 (PriorityManager.gd) — así que esta
-	# ventana se abría con el contexto equivocado. Sin impacto en quién tiene
-	# prioridad primero (aquí siempre se pasa starting_player explícito) ni en
-	# valid_actions (sin llamadores reales hoy), pero sí rompía el auto-pase
-	# "no hay nada que decidir" del humano (PhaseFlowController._on_priority_
-	# changed_glow()), que a propósito solo actúa en RESPONSE_WINDOW real para
-	# no auto-pasar una Guerra de Talismanes genuina.
+	# Contexto PriorityContext.RESPONSE_WINDOW (no un número: el enum es NONE = 0, GUERRA_TALISMANES =
+	# 1, RESPONSE_WINDOW = 2, DISCARD_PHASE = 3, BLOCK_DECLARATION = 4). El auto-pase del humano
+	# (PhaseFlowController._on_priority_changed_glow()) solo actúa en RESPONSE_WINDOW.
 	PriorityManager.start_priority_window(PriorityManager.PriorityContext.RESPONSE_WINDOW, opponent_id, controller_id)
 
 	# ─────────────────────────────────────────────────────────────────────────
@@ -154,10 +146,7 @@ func _execute_step_d(stack_obj: Dictionary) -> Dictionary:
 				"had_response": false
 			})
 
-	# 2026-09-25, a pedido del usuario ("elimina logs redundantes"): "Ambos
-	# pasaron" es el resultado normal en casi TODA resolución (el bot nunca
-	# responde nada todavía) — no aporta información nueva repetido en cada
-	# carta. Una respuesta real sí es noticia y se mantiene visible.
+	# "Ambos pasaron" no se loguea (es el resultado normal casi siempre); una respuesta real sí.
 	if result.had_response:
 		print("[ActionPipeline] [%s] Respuesta recibida" % stack_obj.name)
 	elif Constants.VERBOSE_DIAG_LOGS:
@@ -281,9 +270,8 @@ func _execute_step_e(stack_obj: Dictionary) -> Dictionary:
 	# Resolver según tipo
 	# ─────────────────────────────────────────────────────────────────────────
 	match stack_obj.type:
-		# CARD_PLAYED/RESPONSE_CARD ya no llegan aquí (2026-08-27, limpieza —
-		# ver ActionPipeline.gd: play_card()/add_response_to_stack() se
-		# eliminaron, nada los crea más).
+		# CARD_PLAYED/RESPONSE_CARD ya no llegan aquí (limpieza — ver ActionPipeline.gd:
+		# play_card/add_response_to_stack se eliminaron, nada los crea más).
 		_main.StackObjectType.TRIGGERED_ABILITY, _main.StackObjectType.ACTIVATED_ABILITY:
 			result = await _resolve_ability(stack_obj)
 
@@ -333,17 +321,11 @@ func _validate_targets(stack_obj: Dictionary) -> bool:
 
 func _resolve_ability(stack_obj: Dictionary) -> Dictionary:
 	"""Resuelve una habilidad disparada o activada: parsea el texto del efecto
-	(stack_obj.card_data.habilidad, que activate_ability() ya dejó como el
-	effect_text de la habilidad) y lo ejecuta vía el mismo resolutor que usan
-	los triggers 'al entrar en juego' y los Talismanes (2026-08-27): primero
-	los patrones compuestos ("mira/muestra N... elige qué hacer con una de
-	ahí"), y si ninguno matchea, extract_action() simple como antes. Antes
-	esto último era lo ÚNICO que se probaba aquí — una habilidad ACTIVADA con
-	un efecto compuesto nunca resolvía bien, a diferencia de una disparada
-	con el mismo texto. Reutiliza selección de objetivo y todos los tipos de
-	acción ya conectados (DRAW, DESTROY, BANISH, DISCARD, SHUFFLE, MILL,
-	SEARCH, LOOK, REVEAL, BUFF, DEBUFF, SILENCE, ANNUL, PREVENT_DAMAGE) sin
-	duplicar nada."""
+	(stack_obj.card_data.habilidad, el effect_text que dejó activate_ability()) y lo ejecuta con el
+	mismo resolutor que los triggers y los Talismanes: primero los patrones compuestos
+	("mira/muestra N...") y, si ninguno calza, extract_action(). Reusa la selección de objetivo y
+	todas las acciones conectadas (DRAW, DESTROY, BANISH, DISCARD, SHUFFLE, MILL, SEARCH, LOOK,
+	REVEAL, BUFF, DEBUFF, SILENCE, ANNUL, PREVENT_DAMAGE)."""
 	var result = {"success": true, "effects_resolved": []}
 
 	var ability_data = stack_obj.card_data
@@ -356,6 +338,10 @@ func _resolve_ability(stack_obj: Dictionary) -> Dictionary:
 		return result
 
 	var ctx_token: int = EffectContextScript.push(source_card_node, controller_id, "activada")
+	# Oro ya cobrado en el Paso B (CostType.GOLD, "Puedes pagar un Oro para..."): el intérprete no lo
+	# vuelve a cobrar por el paso "pay" del mismo texto.
+	EffectContextScript.current()["gold_paid"] = int(context.get("ability_cost_paid", 0)) \
+		if int(ability_data.get("_ability_meta", {}).get("cost_type", -1)) == UniversalCardParser.CostType.GOLD else 0
 	var resolved: bool = await TriggerSystem.resolve_ability_effect(source_card_node, effect_text, controller_id)
 	EffectContextScript.pop(ctx_token)
 	if resolved:

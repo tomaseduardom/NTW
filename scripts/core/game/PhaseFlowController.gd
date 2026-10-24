@@ -71,6 +71,7 @@ func _on_phase_state_machine(new_phase: Constants.Phase) -> void:
 	match new_phase:
 
 		Constants.Phase.AGRUPACION:
+			GameManager.agrupacion_busy = true
 			_main._game_hud.show_phase_announcement("AGRUPACIÓN")
 			# Línea de Ataque → Línea de Defensa (DAR): un Aliado que atacó en
 			# el turno anterior de este jugador se queda "comprometido" en
@@ -79,20 +80,21 @@ func _on_phase_state_machine(new_phase: Constants.Phase) -> void:
 			# que _start_batalla() ya vació al llegar el Ataque del rival).
 			var atk_line: HBoxContainer = _main.player_linea_ataque if GameManager.active_player_id == 0 else _main.opponent_linea_ataque
 			if _main._card_interaction and atk_line:
-				await _main._card_interaction.unmark_attackers(atk_line.get_children().duplicate())
+				# vorpal: "no pueda ser agrupado ... hasta tu próximo turno" (meta "no_regroup_turn").
+				await _main._card_interaction.unmark_attackers(atk_line.get_children().filter(func(c): return is_instance_valid(c) \
+					and int(c.get_meta("no_regroup_turn", -1)) != GameManager.turn_serial))
 			if GameManager.active_player_id == 0:
 				await _main._gold_manager._reset_gold()
 			else:
 				await _main._easy_bot.reset_gold()
-			# "En tu Agrupación" (2026-08-30, p.ej. Espada del Juicio) —
-			# mismo patrón que resolve_turn_end_triggers() para Fase Final.
+			# "En tu Agrupación" (p.ej. Espada del Juicio): mismo patrón que resolve_turn_end_triggers().
 			await TriggerSystem.resolve_agrupacion_triggers(GameManager.active_player_id)
+			GameManager.agrupacion_busy = false  # recién ahora GameManager pasa a la Vigilia
 
 		Constants.Phase.VIGILIA:
 			_main._game_hud.show_phase_announcement("VIGILIA")
 			TurnManager._reset_oro_tracking()
-			# "En tu Vigilia" (2026-09-03, p.ej. Mariano Osorio) — mismo
-			# patrón que Agrupación/Fase Final.
+			# "En tu Vigilia" (p.ej. Mariano Osorio): mismo patrón que Agrupación/Fase Final.
 			await TriggerSystem.resolve_vigilia_triggers(GameManager.active_player_id)
 			if _main._card_inspector:
 				_main._card_inspector.refresh_activatable_glows()
@@ -101,12 +103,12 @@ func _on_phase_state_machine(new_phase: Constants.Phase) -> void:
 
 		Constants.Phase.ATAQUE:
 			_main._game_hud.show_phase_announcement("BATALLA MITOLÓGICA")
-			# "Al comienzo del Ataque" (2026-09-04, p.ej. almirante akari) —
-			# mismo patrón que Agrupación/Vigilia/Fase Final.
-			# "Al comienzo del Ataque" se resuelve al confirmar atacantes
-			# (GameManager.confirm_attackers(), 2026-10-17): sin ataque, no hay.
-			# Sin ningún Aliado que pueda atacar, directo a la Fase Final
-			# (2026-10-17, a pedido del usuario).
+			# "Al comienzo del Ataque" (p.ej. almirante akari) se resuelve al confirmar atacantes
+			# (GameManager.confirm_attackers()): sin ataque, no hay. Sin ningún Aliado que pueda atacar,
+			# directo a la Fase Final.
+			# ambrosio ohiggins (desde la mano o el Cementerio): antes de declarar atacantes.
+			if _active_player_can_attack():
+				await load("res://scripts/core/effects/mechanics/TurnStartPatterns.gd").ambrosio_on_ataque_start()
 			if GameManager.current_phase == Constants.Phase.ATAQUE and not _active_player_can_attack():
 				_main._update_debug("Ningún Aliado puede atacar — pasas a la Fase Final")
 				await get_tree().create_timer(0.4).timeout
@@ -133,16 +135,7 @@ func _on_phase_state_machine(new_phase: Constants.Phase) -> void:
 
 func _active_player_can_attack() -> bool:
 	"""¿Tiene el jugador activo al menos un Aliado que pueda declarar ataque?"""
-	var pid: int = GameManager.active_player_id
-	for container in [_main.player_field, _main.player_linea_ataque] if pid == 0 \
-			else [_main.opponent_field, _main.opponent_linea_ataque]:
-		if not container:
-			continue
-		for ally in container.get_children():
-			if is_instance_valid(ally) and ally.get("card_type") == Constants.CardType.ALIADO \
-					and TurnManager.can_attack(ally).get("can_attack", false):
-				return true
-	return false
+	return TurnManager.player_can_attack(GameManager.active_player_id)
 
 
 func _on_turn_started(player_id: int, turn_number: int) -> void:
@@ -157,24 +150,26 @@ func _on_priority_changed_bot_autopass(player_id: int) -> void:
 	y pasa solo. El humano sigue viendo/usando el botón ¿Paso? normalmente
 	cuando la prioridad es suya. Cuando exista una IA real, este auto-pase
 	se reemplaza por su lógica de decisión."""
+	# Comienzo de fase: el bot juega o pasa, el Anfitrión tiene 5 s; el Remoto decide por
+	# RemotePlayerController (abajo).
+	if PriorityManager.priority_window_active \
+			and PriorityManager.current_priority_context == PriorityManager.PriorityContext.PHASE_START \
+			and not (player_id == 1 and _main._easy_bot is RemotePlayerController):
+		load("res://scripts/core/game/PhaseStartWindow.gd").on_priority(player_id)
+		return
 	if player_id != 1:
 		return
 	if not PriorityManager.priority_window_active:
 		return
-	# 2026-10-11: contra un jugador Remoto real, el J2 NO es un bot — antes
-	# este auto-pase le pasaba la prioridad a los 0.2s en CUALQUIER ventana
-	# (respuesta, Bloqueo, Guerra de Talismanes), así que el Remoto nunca
-	# alcanzaba a responder. Ahora decide RemotePlayerController.
+	# Contra un Remoto real, el jugador 1 no es un bot: decide RemotePlayerController (con auto-pase no
+	# alcanzaba a responder).
 	if _main._easy_bot is RemotePlayerController:
 		_main._easy_bot.on_priority_received()
 		return
-	# 2026-09-15: se captura la generación de ESTA ventana (ver
-	# PriorityManager._window_generation) ANTES del await — mismo motivo
-	# que _human_pass_after()/_bot_pass_after(), ver esos comentarios.
+	# Se captura la generación de esta ventana (PriorityManager._window_generation) antes del await,
+	# como en _human_pass_after()/_bot_pass_after().
 	var scheduled_for_generation: int = PriorityManager._window_generation
-	# 0.2s (2026-09-11, bajado de 0.6s — a pedido del usuario: las cadenas de
-	# varias cartas entrando en juego seguidas acumulaban demasiado con 0.6s
-	# por ventana). Sigue siendo perceptible, no instantáneo/confuso.
+	# 0.2 s: perceptible pero corto, para que las cadenas de cartas entrando seguidas no se acumulen.
 	await get_tree().create_timer(0.2).timeout
 	if PriorityManager._window_generation != scheduled_for_generation:
 		return  # la ventana para la que se programó este timer ya no es la actual
@@ -187,20 +182,11 @@ func _on_priority_changed_bot_autopass(player_id: int) -> void:
 
 
 func _try_recover_stuck_phase_priority_window() -> bool:
-	"""Reabre la ventana de prioridad de FASE (Guerra de Talismanes/Bloqueo)
-	si quedó clobbereada (2026-09-04, bug reportado: 'se queda estancado
-	en guerra de talismanes') — una ventana anidada de Paso D
-	(StackStepResolver._execute_step_d(), que abre su PROPIA
-	RESPONSE_WINDOW sobre la misma instancia de PriorityManager cuando algo
-	pasa por la pila del ActionPipeline durante la fase) a veces no la
-	restaura al cerrar, dejando priority_window_active=false sin que nadie
-	vuelva a abrir nada — ni el botón ¿Paso? (gateado a
-	priority_window_active) con qué reaccionar. Extraído a función propia
-	(2026-09-06, bug reportado: el mismo estancamiento en Bloqueo, esta vez
-	SIN pasar por el auto-pase del bot — el botón ¿Paso? del humano caía
-	directo en el aviso 'Sin ventana de prioridad activa' sin intentar
-	recuperarse) para poder llamarla también desde ahí. Returns true si
-	reabrió una ventana."""
+	"""Reabre la ventana de prioridad de fase (Guerra de Talismanes/Bloqueo) si quedó pisada: una
+	ventana anidada de Paso D (StackStepResolver._execute_step_d(), que abre su propia
+	RESPONSE_WINDOW sobre el mismo PriorityManager) a veces no la restaura al cerrar y queda
+	priority_window_active = false sin nada que reaccione. Se llama desde el auto-pase del bot y
+	desde el botón ¿Paso?. Devuelve true si reabrió una ventana."""
 	var phase = GameManager.current_phase
 	if GameManager.is_game_active and not PriorityManager.priority_window_active \
 			and not ActionPipeline.is_stack_processing() and not TriggerSystem.awaiting_response \
@@ -227,71 +213,36 @@ func _on_priority_changed_glow(player_id: int) -> void:
 	el juego parecía trabado. Si la prioridad pasa al oponente (bot) dentro
 	de la misma ventana, el brillo se apaga hasta que vuelva a ser el turno
 	del humano de actuar."""
-	# La visibilidad del botón depende de quién tiene la prioridad AHORA
-	# (ver update_paso_button_state(), 2026-09-03) — no solo se recalcula
-	# al cambiar de fase, también hay que refrescarla cada vez que la
-	# prioridad cambia de jugador DENTRO de la misma fase (p.ej. el bot
-	# pasa en Guerra de Talismanes y la prioridad vuelve al humano).
+	# La visibilidad del botón depende de quién tiene la prioridad ahora (update_paso_button_state()):
+	# se refresca en cada cambio de prioridad dentro de la fase, no solo al cambiar de fase.
 	_main._game_hud.update_paso_button_state()
 	if player_id == 0:
 		_main._game_hud.start_paso_glow()
-		# 2026-09-11 (bug real reportado por el usuario: quedaba bloqueado
-		# jugando otra carta — "Resuelve la respuesta pendiente (¿Paso?)" —
-		# después de que el bot pasara en una ventana que arrancó CON ÉL,
-		# p.ej. tu propia habilidad entrando a la pila, donde el oponente
-		# responde primero). Punto único de auto-pase para el humano en
-		# RESPONSE_WINDOW: cubre tanto que la ventana arranque contigo como
-		# que la prioridad te llegue apenas a mitad de camino — priority_
-		# changed se emite en ambos casos, así que no hace falta duplicar
-		# esta lógica en _on_step_d_waiting()/_on_stack_resolved(). Ver
-		# ResponseWindowHandler._offer_signo_amarillo_for_step_d() para la
-		# única decisión real que puede haber aquí (Signo Amarillo), que
-		# suprime este auto-pase mientras espera tu click (PriorityManager.
-		# suppress_human_autopass). Restringido a RESPONSE_WINDOW a propósito:
-		# la Guerra de Talismanes y el Bloqueo REALES (fase, no la reutilización
-		# de esta misma etiqueta para el Paso D) sí deben esperar tu decisión
-		# real, nunca auto-pasar.
+		# Punto único de auto-pase del humano en RESPONSE_WINDOW, arranque la ventana contigo o te llegue
+		# a mitad (priority_changed se emite en ambos casos). La única decisión real aquí es Signo
+		# Amarillo (ResponseWindowHandler._offer_signo_amarillo_for_step_d()), que lo suprime con
+		# PriorityManager.suppress_human_autopass. Solo RESPONSE_WINDOW: la Guerra de Talismanes y el
+		# Bloqueo de fase esperan tu decisión.
 		if PriorityManager.current_priority_context == PriorityManager.PriorityContext.RESPONSE_WINDOW \
 				and not (_main._easy_bot is RemotePlayerController):
-			# 2026-09-19 (arquitectura.md §10.51/§10.52): la espera real de 5s
-			# (has_response == true, ver refresh_activatable_glows()/
-			# _human_has_instant_response_talisman_in_hand() más abajo) queda
-			# construida para cuando el oponente sea un jugador REMOTO de
-			# verdad (esta rama ya excluye RemotePlayerController arriba, así
-			# que en ese caso ni se llega aquí) — pero contra el EasyBot local,
-			# a pedido explícito del usuario ("de momento, jugando contra el
-			# bot, que pase de inmediato"), se mantiene el pase rápido de
-			# siempre: no tiene sentido hacer esperar al humano 5s reales por
-			# una decisión del BOT cuando puede decidir con solo mirar el
-			# tablero. refresh_activatable_glows() se sigue llamando igual
-			# (glow celeste de qué carta podría responder — informativo, sin
-			# costo) pero el delay real quedó fijo en 0.2s, como antes de
-			# §10.52. Si más adelante se conecta un oponente remoto por esta
-			# misma rama, revisar si corresponde variar el delay según
-			# `_main._easy_bot is RemotePlayerController` en vez de la
-			# exclusión total de arriba.
+			# Contra el bot local, pase rápido (0.2 s): no tiene sentido esperar 5 s por una decisión del
+			# bot. refresh_activatable_glows() igual marca qué carta podría responder (§10.51/§10.52). El
+			# Remoto va por la rama de abajo.
 			if _main._card_inspector:
 				_main._card_inspector.refresh_activatable_glows()
-			# 2026-10-17, a pedido del usuario ("no alcancé a responder" con
-			# Ciempiés/Dragón Dorado al Yomiel del bot): si la ventana es sobre
-			# algo del rival y tienes un Talismán de respuesta que puedes
-			# pagar, se espera como online (5s con cuenta regresiva); si no,
-			# el pase rápido de siempre.
+			# Si la ventana es sobre algo del rival y tienes un Talismán de respuesta que puedes pagar, se
+			# espera como online (5 s con cuenta regresiva); si no, el pase rápido.
 			if PriorityManager.needs_real_decision(0) and _human_has_instant_response_talisman_in_hand():
 				_main._game_hud.start_paso_countdown(int(PriorityManager.ONLINE_RESPONSE_TIMEOUT))
 				_human_pass_after(PriorityManager.ONLINE_RESPONSE_TIMEOUT, PriorityManager._window_generation)
 				return
-			# 2026-09-15: se captura la generación de ESTA ventana (ver
-			# PriorityManager._window_generation) para que el timer no actúe
-			# sobre una ventana NUEVA si esta ya cerró sola antes de que pase el delay.
-			_human_pass_after(0.2, PriorityManager._window_generation)  # bajado de 0.5s, 2026-09-11
+			# Se captura la generación de esta ventana para que el timer no actúe sobre una ventana nueva si
+			# esta ya cerró.
+			_human_pass_after(0.2, PriorityManager._window_generation)
 		elif _main._easy_bot is RemotePlayerController:
-			# 2026-10-11, botón de paso simétrico online (ver PriorityManager.
-			# needs_real_decision()): si esta ventana no te pide nada (p.ej. la
-			# respuesta a TU propia carta, o eres el atacante en Bloqueo), se
-			# pasa sola; en una Ventana de Respuesta real tienes 5s para
-			# responder antes de que pase sola; Bloqueo y Guerra de Talismanes
-			# esperan tu click sin límite.
+			# Botón de paso simétrico online (PriorityManager.needs_real_decision()): si la ventana no te
+			# pide nada (respuesta a TU carta, o eres el atacante en Bloqueo), se pasa sola; en una Ventana
+			# de Respuesta real tienes 5 s; Bloqueo y Guerra de Talismanes esperan tu click sin límite.
 			var gen: int = PriorityManager._window_generation
 			if not PriorityManager.needs_real_decision(0):
 				_main._game_hud.stop_paso_glow()
@@ -309,19 +260,9 @@ func _on_priority_changed_glow(player_id: int) -> void:
 
 
 func _on_priority_window_closed_glow() -> void:
-	"""Apaga el brillo del botón ¿Paso? al cerrarse la ventana de prioridad.
-
-	2026-09-11 (bug real reportado por el usuario: después de jugar Tyet —
-	Oro con búsqueda — el botón de pasar dejaba de aparecer del todo, sin
-	forma de seguir jugando). update_paso_button_state() solo se llamaba en
-	dos momentos: al cambiar de fase, o cuando cambia de jugador la
-	prioridad (_on_priority_changed_glow) — ninguno de los dos coincide
-	necesariamente con el cierre real de la ventana. Si la última vez que
-	se recalculó la visibilidad fue con current_priority_player == 1 (bot),
-	_paso_button.visible quedaba en false, y como cerrar la ventana no
-	recalculaba nada, se quedaba así para siempre aunque siguiera siendo tu
-	Vigilia — la regla de respaldo (¿es tu turno en una fase relevante?) de
-	update_paso_button_state() nunca llegaba a aplicarse."""
+	"""Al cerrarse la ventana de prioridad: apaga el brillo del botón ¿Paso? y recalcula su
+	visibilidad. Si la última vez se calculó con la prioridad en el bot, el botón quedaba oculto
+	aunque siguiera siendo tu Vigilia."""
 	_main._game_hud.stop_paso_glow()
 	_main._game_hud.stop_paso_countdown()
 	_main._game_hud.update_paso_button_state()
@@ -345,11 +286,9 @@ func _on_battle_combat_finished(result: Dictionary) -> void:
 	if result.get("game_ended", false):
 		return
 
-	# NO se desmarca a los atacantes aquí (2026-08-21): DAR — un Aliado que
-	# atacó se queda en Línea de Ataque (tinte naranja incluido) hasta la
-	# Agrupación del próximo turno de su controlador, igual que el Oro
-	# Pagado no vuelve a la Reserva hasta entonces. Ver el caso AGRUPACION
-	# en _on_phase_state_machine(), que ahora hace ese trabajo.
+	# No se desmarca a los atacantes aquí (DAR): un Aliado que atacó queda en Línea de Ataque hasta la
+	# Agrupación del próximo turno de su controlador (como el Oro Pagado). Lo hace el caso AGRUPACION
+	# de _on_phase_state_machine().
 	_main._zone_manager._update_castillo_counts()
 
 	# DAR: tras Asignación de Daño, las habilidades 'cuando inflija daño'/
@@ -358,6 +297,20 @@ func _on_battle_combat_finished(result: Dictionary) -> void:
 	# código muerto que nadie llama (el daño real lo aplica BattleManager,
 	# que no disparaba ningún trigger al terminar).
 	await _fire_damage_dealt_triggers(result.get("damage_sources", []))
+
+	# ta kona: "Al final de esta Batalla Mitológica agrupa tus Aliados y ganas una Batalla Mitológica
+	# adicional." Los atacantes vuelven a la Línea de Defensa y se vuelve al paso de Ataque.
+	var active: int = GameManager.active_player_id
+	if RuleState.has_pending("extra_battle", active):
+		RuleState.take_pending("extra_battle", active)
+		var fought: Array = GameManager.attackers.filter(func(a): return is_instance_valid(a))
+		GameManager.attackers.clear()
+		GameManager.blockers.clear()
+		if _main._card_interaction and _main._card_interaction.has_method("unmark_attackers") and not fought.is_empty():
+			await _main._card_interaction.unmark_attackers(fought)
+		_main._update_debug("ta kona: tus Aliados se agrupan y ganas una Batalla Mitológica adicional")
+		GameManager.advance_to_phase(Constants.Phase.ATAQUE)
+		return
 
 	GameManager.advance_to_phase(Constants.Phase.FINAL)
 
@@ -379,21 +332,13 @@ func _fire_damage_dealt_triggers(damage_sources: Array) -> void:
 # PASO D — PRIORIDAD Y PILA
 # =============================================================================
 func _on_priority_both_passed_main() -> void:
-	"""Ambos jugadores pasaron con la pila vacía — avanza la fase según contexto.
-	DAR Sección 5.C3: Pila vacía + ambos pasan → la fase termina.
-
-	GUARDIA (2026-08-17): TriggerSystem._wait_for_response_window() abre su
-	propia ventana de prioridad (p.ej. para poder cancelar el 'cuando entra
-	en juego' de un Aliado) y espera a que se cierre sondeando
-	priority_window_active directamente — no necesita que ESTE handler
-	haga nada. Pero como es un listener global de la misma señal
-	both_players_passed, antes reaccionaba igual: si esa ventana se cerraba
-	mientras la fase actual era VIGILIA, se interpretaba como 'el jugador
-	pasó su turno de batalla' y saltaba directo a Fase Final — aunque el
-	jugador solo había pasado para resolver el trigger pendiente, nunca
-	llegó a declarar su ataque. Si TriggerSystem sigue esperando una
-	respuesta, esta ventana es suya, no una señal de fin de fase — no tocar
-	nada aquí."""
+	"""Ambos jugadores pasaron con la pila vacía: avanza la fase según contexto (DAR 5.C3).
+	Guardia: si TriggerSystem sigue esperando una respuesta (awaiting_response), la ventana es del
+	trigger, no un fin de fase. Si no, resolver un "cuando entra en juego" en Vigilia saltaba a
+	Fase Final."""
+	# La ventana de comienzo de fase no termina la fase: la maneja PhaseStartWindow.run().
+	if load("res://scripts/core/game/PhaseStartWindow.gd").is_running():
+		return
 	if TriggerSystem.awaiting_response:
 		if Constants.VERBOSE_DIAG_LOGS:
 			print("[DIAG] _on_priority_both_passed_main: BLOQUEADO por awaiting_response=true (fase=%s, is_collecting=%s, is_resolving=%s)" % [
@@ -426,67 +371,36 @@ func _on_priority_both_passed_main() -> void:
 
 		Constants.Phase.BLOQUEO:
 			_main._update_debug("Bloqueadores confirmados → GT")
-			# 2026-09-20 (arquitectura.md "539 cartas sin cobertura", libro de
-			# thoth): antes esto llamaba advance_to_phase() directo, sin
-			# recolectar 'cuando bloqueas' — primer uso real de ese trigger,
-			# ver GameManager.confirm_blockers_and_collect_triggers() (mismo
-			# criterio que ATAQUE arriba, que sí espera confirm_attackers()).
+			# Bloqueo: GameManager.confirm_blockers_and_collect_triggers() recolecta los "cuando bloquee"
+			# (libro de thoth) antes de avanzar, como ATAQUE espera confirm_attackers().
 			await GameManager.confirm_blockers_and_collect_triggers()
 
-		# Constants.Phase.VIGILIA (eliminado 2026-08-17): este caso era
-		# redundante con _on_paso_pressed()'s propio manejo de VIGILIA (que
-		# hoy es el botón "Atacar" — GameManager.proceed_to_battle() —, ver
-		# 2026-08-28 más arriba). Este handler, en cambio,
-		# reacciona a CUALQUIER ventana que se cierre con ambos pasados
-		# mientras la fase siga siendo VIGILIA — incluida una ventana de
-		# respuesta anidada de un trigger 'cuando entra en juego' (o la que
-		# abre _on_stack_resolved() al vaciarse la pila). Eso hacía que
-		# resolver un trigger pendiente con ¿Paso? saltara la batalla entera
-		# sin que el jugador llegara a declarar ningún atacante.
+		# Sin caso VIGILIA a propósito: este handler reacciona a cualquier ventana que se cierre con ambos
+		# pasados (también las anidadas de un trigger o la de _on_stack_resolved()), y saltaba la batalla
+		# sin declarar atacantes. Vigilia termina con el botón "Atacar" (_on_paso_pressed() →
+		# GameManager.proceed_to_battle()).
 		_:
 			_main._update_debug("Ambos pasaron en %s" % Constants.PHASE_NAMES.get(phase, "?"))
 
 
 func _on_stack_resolved() -> void:
-	"""La pila LIFO (ActionPipeline) quedó vacía — abrir ventana de prioridad si no hay una activa.
-
-	2026-09-11 (bug real reportado por el usuario: bloqueo silencioso de
-	10-30s tras resolver la pila, "Drácula en Vigilia") — esta ventana se abre
-	llamando a PriorityManager directo, sin pasar por StackStepResolver.
-	_execute_step_d(), pero eso ya alcanza: start_priority_window() emite
-	'priority_changed', que _on_priority_changed_glow() (conectado en setup())
-	ya escucha para mostrar y hacer brillar el botón único ¿Paso?/Atacar del
-	HUD cuando le toca al humano — no hace falta ningún overlay separado."""
+	"""La pila (ActionPipeline) quedó vacía: abrir una ventana de prioridad si no hay una activa.
+	start_priority_window() emite priority_changed, que _on_priority_changed_glow() ya escucha para
+	mostrar el botón ¿Paso?/Atacar cuando le toca al humano."""
 	if not PriorityManager.priority_window_active:
 		PriorityManager.start_priority_window(
 			PriorityManager.PriorityContext.RESPONSE_WINDOW,
 			GameManager.active_player_id
 		)
-		# Si arranca contigo (jugador 0), _on_priority_changed_glow() de aquí
-		# abajo se encarga del auto-pase "no hay nada que decidir" — bug real
-		# reportado por el usuario: quedaba bloqueado jugando otra carta
-		# ("Resuelve la respuesta pendiente (¿Paso?)") hasta tocar el botón a
-		# mano, aunque no hubiera nada real que decidir aquí (esta ventana no
-		# tiene un stack_obj puntual que ofrecer para cancelar con Signo
-		# Amarillo, a diferencia del Paso D real — ver ResponseWindowHandler).
+		# Si arranca contigo (jugador 0), _on_priority_changed_glow() hace el auto-pase: esta ventana no
+		# tiene un objeto puntual que cancelar (a diferencia del Paso D, ver ResponseWindowHandler), así
+		# que no hay nada que decidir.
 
 
 func _human_has_instant_response_talisman_in_hand() -> bool:
-	"""¿Hay al menos un Talismán de respuesta instantánea (Red de Plata,
-	Sacrificio Solar, etc. — GoldManagerRestrictions._is_response_only_
-	talisman(), §10.50) en tu mano que además puedes pagar ahora mismo?
-
-	2026-09-19, §10.52: SIN LLAMADOR HOY A PROPÓSITO — junto con el valor de
-	retorno de refresh_activatable_glows(), estaba pensada para decidir si el
-	auto-pase de Paso D da 5s reales para decidir o pasa casi al toque, pero
-	el usuario pidió volver al pase rápido fijo contra el EasyBot local "de
-	momento" (no tiene sentido hacer esperar al humano por una decisión del
-	bot). Queda lista para cuando la rama de _on_priority_changed_glow() se
-	conecte a un oponente REMOTO de verdad (hoy esa rama excluye
-	RemotePlayerController por completo, así que ni se llega a llamar esto) —
-	no se borró para no perder el trabajo, pero no confundir "sin llamador"
-	con "código muerto sin dueño" como el cluster de TargetSelector.gd (§2):
-	aquí el dueño futuro ya está identificado."""
+	"""¿Hay en tu mano un Talismán de respuesta instantánea (Red de Plata, Sacrificio Solar...;
+	GoldManagerRestrictions._is_response_only_talisman(), §10.50) que puedas pagar ahora? Contra el
+	bot, decide si la ventana espera 5 s o pasa rápido (_on_priority_changed_glow())."""
 	if not _main.player_hand or not _main._gold_manager:
 		return false
 	for card in _main.player_hand.cards:
@@ -509,30 +423,19 @@ func _human_pass_after(delay: float, scheduled_for_generation: int) -> void:
 		# Con un objeto en la pila al que responder, no se pasa por abajo.
 		if PriorityManager.current_stack_controller >= 0:
 			return
-		# 2026-10-13, bug real reportado por el usuario (quimera voragh: "un
-		# paso de respuesta medio raro, no entiendo a qué responder"): la
-		# ventana vacía de "pila recién resuelta" (_on_stack_resolved()) se
-		# abría mientras elegía la carta del Cementerio — el auto-pase se
-		# cancelaba y la ventana quedaba abierta bloqueando la siguiente
-		# carta. Sin nada a qué responder, se espera a que termine la
-		# elección y se pasa igual.
+		# Sin nada a qué responder, si estás eligiendo (p.ej. la carta del Cementerio de quimera voragh),
+		# se espera a que termine la elección y se pasa igual; si no, la ventana vacía de
+		# _on_stack_resolved() quedaba abierta bloqueando la siguiente carta.
 		while PriorityManager.suppress_human_autopass:
 			if PriorityManager._window_generation != scheduled_for_generation or not PriorityManager.priority_window_active:
 				return
 			await get_tree().create_timer(0.1).timeout
-	# 2026-09-15, bug real reportado por el usuario ("se traba en Guerra de
-	# Talismanes", confirmado con diagnóstico en vivo: la ventana abría bien
-	# pero se cerraba sola sin ningún click): si la ventana de RESPONSE_
-	# WINDOW para la que se programó este timer ya cerró y se abrió una
-	# ventana NUEVA (p.ej. Guerra de Talismanes) antes de que pasen los
-	# 0.2s, _window_generation ya cambió — este timer viejo no debe tocar
-	# la ventana nueva, aunque técnicamente "priority_window_active=true y
-	# te toca a ti" siga siendo cierto (es cierto de la ventana NUEVA, no
-	# de la que este timer estaba mirando).
+	# Si la ventana para la que se programó este timer ya cerró y se abrió otra (p.ej. Guerra de
+	# Talismanes), _window_generation cambió: el timer viejo no toca la ventana nueva.
 	if PriorityManager._window_generation != scheduled_for_generation:
 		return
-	# Plazo largo (5s online): si al vencer estás en medio de elegir el
-	# objetivo de tu respuesta, no se te pasa por abajo (2026-10-11).
+	# Plazo largo (5 s online): si al vencer estás eligiendo el objetivo de tu respuesta, no se te pasa
+	# por abajo.
 	if delay > 1.0 and _main._card_interaction and _main._card_interaction.is_selecting_target:
 		return
 	if PriorityManager.priority_window_active and PriorityManager.current_priority_player == 0:
@@ -544,30 +447,21 @@ func _human_pass_after(delay: float, scheduled_for_generation: int) -> void:
 # =============================================================================
 func _on_paso_pressed() -> void:
 	"""El jugador presiona ¿Paso? — pasa prioridad o avanza fase."""
-	# 2026-10-11: con el selector de zonas abierto, el botón confirma la
-	# selección (en ambas pantallas — el Remoto también lo corre localmente).
+	# Con el selector de zonas abierto, el botón confirma la selección (en las dos pantallas; el Remoto
+	# también lo corre localmente).
 	if _main._zone_browse_picker and _main._zone_browse_picker.is_active():
 		_main._zone_browse_picker.on_paso_pressed()
 		return
-	# 2026-10-11: en el cliente Remoto no corre GameManager propio — el botón
-	# (y el atajo P) mandan la decisión al Anfitrión por red.
+	# En el cliente Remoto no hay GameManager propio: el botón (y el atajo P) manda la decisión al
+	# Anfitrión por red.
 	if NetworkClient.room_code != "" and not NetworkClient.is_host:
 		if _main._remote_mirror:
 			_main._remote_mirror.on_paso_pressed()
 		return
-	# 2026-09-14, bug real reportado por el usuario: con una selección de
-	# objetivo pendiente (p.ej. 'Elige un Oro o una carta de coste 2 o menos
-	# para Convertir', TargetedEffectExecutor._execute_targeted_convert())
-	# nada impedía presionar ¿Paso? y seguir jugando — el await_target() de
-	# esa selección queda esperando un click que nunca llega (correcto: una
-	# decisión humana NO debería tener timeout), pero TriggerSystem.
-	# awaiting_response/is_resolving se quedan atascados en true para
-	# siempre, bloqueando el fin de CUALQUIER fase futura (el guard de
-	# PhaseFlowController._on_priority_both_passed_main() hace su trabajo
-	# correctamente, pero nunca hay nada que destrabe la causa real). Se
-	# bloquea aquí en la raíz: mientras is_selecting_target sea true, el
-	# jugador tiene que resolver el objetivo (o cancelar con ESC, si la
-	# habilidad lo permite) antes de poder avanzar de fase.
+	# Con una selección de objetivo pendiente (is_selecting_target) no se puede avanzar: el
+	# await_target() esperaría para siempre y TriggerSystem.awaiting_response/is_resolving quedarían
+	# trabados, bloqueando el fin de cualquier fase. Hay que elegir (o cancelar con ESC, si se
+	# permite).
 	if _main._card_interaction and _main._card_interaction.is_selecting_target:
 		_main._update_debug("Resuelve la selección de objetivo pendiente antes de pasar (N para no hacerlo si es opcional)")
 		return
@@ -581,13 +475,14 @@ func _on_paso_pressed() -> void:
 
 	match phase:
 		Constants.Phase.VIGILIA:
-			# El botón en Vigilia dice "Atacar" (2026-08-28, reemplaza el
-			# diseño de 2026-08-23 a pedido del usuario): ya no se declaran
-			# atacantes apartados DURANTE Vigilia — este botón solo termina
-			# Vigilia y empieza la Batalla Mitológica. Declarar (o no) queda
-			# para la fase de Ataque; si nadie ataca, un segundo ¿Paso? ahí
-			# la salta igual (confirm_attackers() con la lista vacía llama a
-			# _end_batalla() directo a Fase Final).
+			# En Vigilia el botón dice "Atacar": termina Vigilia y empieza la Batalla Mitológica. Los
+			# atacantes se declaran en la fase de Ataque; si nadie ataca, un segundo ¿Paso? va a Fase Final
+			# (confirm_attackers() con la lista vacía llama a _end_batalla()). Sin ningún Aliado que pueda
+			# atacar, el botón dice "Fase Final" y va directo ahí.
+			if not _active_player_can_attack():
+				_main._update_debug("Ningún Aliado puede atacar — pasas a la Fase Final")
+				GameManager._end_batalla()
+				return
 			_main._update_debug("Atacar: empieza la Batalla Mitológica")
 			GameManager.proceed_to_battle()
 
@@ -619,23 +514,17 @@ func _resolve_fase_final(player_id: int) -> void:
 	"""Robo de fin de turno + límite de mano (DAR 5.D.3/5.D.4) + fin de turno.
 	Camino único compartido por jugador humano (vía _do_fase_final) y oponente
 	(vía _opponent_auto_pass), para que ambos apliquen exactamente las mismas reglas."""
-	# 'En tu Fase Final' (2026-08-30, p.ej. Espada de O'Higgins) — se
-	# dispara al ENTRAR a la fase, antes del robo/límite de mano normales
-	# (mismo orden que cualquier trigger de entrada de fase en el DAR).
+	# "En tu Fase Final" (p.ej. Espada de O'Higgins): al entrar a la fase, antes del robo/límite de
+	# mano.
 	await TriggerSystem.resolve_turn_end_triggers(player_id)
 
-	# Efectos suspendidos de un solo uso agendados para ESTA Fase Final en
-	# particular (2026-09-06, p.ej. Fisión Nuclear: 'En la próxima Fase
-	# Final oponente, Baraja una carta de coste 2 o menos o Roba dos
-	# cartas') — distinto de resolve_turn_end_triggers() de arriba, que
-	# consulta cartas EN JUEGO; esto resuelve algo que quedó pendiente de
-	# un Talismán ya Desterrado hace rato.
+	# Efectos suspendidos agendados para esta Fase Final (p.ej. Fisión Nuclear: "En la próxima Fase
+	# Final oponente, Baraja una carta de coste 2 o menos o Roba dos cartas"): quedaron pendientes de
+	# un Talismán ya Desterrado, no de cartas en juego.
 	await EffectController.consume_scheduled_final_phase_effects(player_id)
 
-	# torii (2026-09-20, arquitectura.md "539 cartas sin cobertura"): "Si lo
-	# haces, no Robas al finalizar tu turno" — bandera de una sola vez,
-	# consumida ANTES del robo normal de Fase Final (ver OroAbilityPatterns.
-	# gd, try_execute_torii_agrupacion_pattern()).
+	# torii: "Si lo haces, no Robas al finalizar tu turno" — bandera de una vez, consumida antes del
+	# robo normal (OroAbilityPatterns.gd, try_execute_torii_agrupacion_pattern()).
 	if TriggerSystem._oro_patterns.should_skip_final_draw(player_id):
 		_main._update_debug("Fase Final: jugador %d no roba (torii)" % (player_id + 1))
 	elif GameManager.is_first_turn:
@@ -671,19 +560,38 @@ func _enforce_hand_limit(player_id: int) -> void:
 		player_id + 1, hand_count, Constants.MAX_HAND_SIZE, excess
 	])
 
+	# TurnClock (en línea): con el tiempo agotado, el descarte tiene su plazo de Fase Final.
+	if _main.get("_turn_clock") and _main._turn_clock:
+		_main._turn_clock.hand_limit_pid = player_id
 	if player_id == 0:
 		await _discard_excess_by_click(excess)
+	elif NetworkClient.room_code != "" and NetworkClient.is_host:
+		await _remote_discard_excess(excess)
 	else:
 		_opponent_auto_discard(excess)
+	if _main.get("_turn_clock") and _main._turn_clock:
+		_main._turn_clock.hand_limit_pid = -1
+
+
+func _remote_discard_excess(amount: int) -> void:
+	"""Límite de mano del Remoto en línea: elige él qué descartar, igual que el Anfitrión."""
+	var fan = _main._opponent_fan
+	if not fan:
+		return
+	var hand_cards: Array = fan.get_cards().duplicate()
+	amount = mini(amount, hand_cards.size())
+	var to_discard: Array = await TriggerSystem._select_hand_cards_for_discard(hand_cards, amount, 1)
+	if to_discard.size() < amount:
+		# Respuesta incompleta: las primeras de la izquierda.
+		to_discard = hand_cards.filter(func(c): return is_instance_valid(c)).slice(0, amount)
+	await _discard_opponent_cards(to_discard)
+	_main._update_debug("Oponente descarta %d carta(s) por límite de mano" % to_discard.size())
 
 
 func _discard_excess_by_click(amount: int) -> void:
-	"""Descarte por límite de mano (DAR 5.D.4) — click directo sobre las
-	cartas reales de la mano (2026-09-13, a pedido del usuario, mismo
-	criterio ya usado para el resto de descartes de mano de la sesión, ver
-	arquitectura.md §10.16/§10.29), en vez del modal de lista viejo de
-	SelectionModule.open_discard_selection(). Reusa el helper compartido de
-	TargetedEffectExecutor (mandatorio, cancellable=false)."""
+	"""Descarte por límite de mano (DAR 5.D.4) con click directo sobre las cartas de la mano
+	(arquitectura.md §10.16/§10.29). Usa el helper compartido de TargetedEffectExecutor
+	(obligatorio, cancellable = false)."""
 	var hand_cards: Array = _main.player_hand.cards.duplicate()
 	if hand_cards.is_empty():
 		return
@@ -716,6 +624,12 @@ func _opponent_auto_discard(amount: int) -> void:
 	var hand_cards: Array = fan.get_cards().duplicate()
 	hand_cards.sort_custom(func(a, b): return a.card_cost > b.card_cost)
 	var to_discard: Array = hand_cards.slice(0, mini(amount, hand_cards.size()))
+	await _discard_opponent_cards(to_discard)
+	_main._update_debug("Oponente descarta %d carta(s) por límite de mano" % to_discard.size())
+
+
+func _discard_opponent_cards(to_discard: Array) -> void:
+	var fan = _main._opponent_fan
 	for card in to_discard:
 		var data: Dictionary = card.card_data.duplicate() if card.get("card_data") else {}
 		data["esta_oculta"] = false
@@ -729,4 +643,3 @@ func _opponent_auto_discard(amount: int) -> void:
 			fan.remove_card(card, false)
 		CardManager._disconnect_card_interaction_signals(card)
 		card.queue_free()
-	_main._update_debug("Oponente descarta %d carta(s) por límite de mano" % to_discard.size())

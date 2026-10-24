@@ -1,25 +1,12 @@
 extends Node
-## TurnManager - Autoload reducido a sus dos responsabilidades reales
-## dentro del flujo de turno/fase (DAR Sección 5).
-##
-## CONSOLIDACIÓN (2026-08-19): este archivo tenía una máquina de fases
-## completa propia (change_phase, prioridad, pila de efectos, atacantes/
-## bloqueadores declarados, robo y límite de mano) que solo se ejecutaba
-## una vez en toda la partida — el arranque del Turno 1 — y nunca volvía a
-## dispararse. GameManager._change_phase()/advance_to_phase() es y era el
-## único conductor real de fases (ver docs/audit-2026-08-13.html). Esa
-## máquina muerta se eliminó junto con active_player_id/current_turn_number,
-## que quedaban congelados en el valor del Turno 1 pero se leían como datos
-## en vivo desde TriggerSystem (orden APNAP) y AnimationQueue
-## (zone_entered_turn) — ahora esos lugares leen GameManager directamente.
-## El arranque del Turno 1 ya no pasa por este archivo: GameManager.start_game()
-## llama a _start_turn() directamente.
-##
-## Lo que queda es lo único que tenía llamadores reales:
-##   - Sistema de Oro (can_place_oro/on_card_played/_reset_oro_tracking),
-##     usado por GoldManager y CardInteractionModule.
-##   - Validación de enfermedad de invocación / Furia (can_attack), usada
-##     por GameManager.declare_attacker() y DropZone.
+## TurnManager — autoload reducido a dos responsabilidades del flujo de turno (DAR Sección 5).
+## GameManager._change_phase()/advance_to_phase() es el único conductor de fases; el turno activo y
+## su número se leen de GameManager (que también arranca el Turno 1 con _start_turn()). Aquí queda:
+## - el sistema de Oro (can_place_oro/on_card_played/_reset_oro_tracking), usado por GoldManager y
+## CardInteractionModule;
+## - la validación de enfermedad de invocación / Furia (can_attack), usada por
+## GameManager.declare_attacker() y DropZone;
+## - el contador de cartas jugadas por turno (Quinto Sello).
 
 # =============================================================================
 # SISTEMA DE OROS (DAR Sección 5.B)
@@ -30,16 +17,22 @@ var oro_placed_this_turn: bool = false      # ¿Ya se puso oro este turno?
 var any_card_played_this_turn: bool = false  # ¿Se jugó alguna carta? (bloquea oro)
 var oro_chance_lost: bool = false       # ¿Se perdió la oportunidad de poner oro?
 
-# 2026-09-20, Quinto Sello ("Si está en tu Cementerio, no se pueden jugar más
-# de cinco cartas por turno") — contador GLOBAL de cartas jugadas en el turno
-# actual, de CUALQUIER jugador (el texto no dice "tuyas"/"tu oponente", así
-# que es una restricción de regla, no un efecto sobre un jugador puntual).
-# A diferencia de any_card_played_this_turn (booleano, solo para la regla del
-# Oro y solo se marca en Vigilia), este cuenta TODA carta que entra en juego
-# en CUALQUIER fase — se incrementa en GoldManager._trigger_enter_play(), el
-# único choke point real por el que pasa toda carta jugada (arquitectura.md
-# §1), y se consulta en GoldManager.play_card() antes de pagar/mover nada.
+# Quinto Sello ("Si está en tu Cementerio, no se pueden jugar más de cinco cartas por turno"):
+# contador GLOBAL de cartas jugadas en el turno, de cualquier jugador. A diferencia de
+# any_card_played_this_turn (solo para la regla del Oro, solo en Vigilia), cuenta toda carta que
+# entra en juego en cualquier fase. Se incrementa en GoldManager._trigger_enter_play() (por donde
+# pasa toda carta jugada, arquitectura.md §1) y se consulta en GoldManager.play_card() antes de
+# pagar.
 var cards_played_count_this_turn: int = 0
+
+# kamidana ("si no jugó Aliados en su turno anterior"): jugador -> último turn_serial en que jugó un
+# Aliado en su propio turno. Se anota en GoldManager._trigger_enter_play(), junto al contador de arriba.
+var ally_played_serial: Dictionary = {}
+
+
+func played_ally_in_previous_turn(player_id: int) -> bool:
+	"""En el turno de 'player_id': ¿jugó un Aliado en su turno anterior (turn_serial - 2)?"""
+	return int(ally_played_serial.get(player_id, -1)) == GameManager.turn_serial - 2
 
 
 func _ready() -> void:
@@ -71,15 +64,10 @@ func can_place_oro(phase_override: int = -1, card: Node = null) -> bool:
 
 
 func ignores_oro_chance_lost(card: Node) -> bool:
-	"""'En tu Vigilia, si no pusiste Oros en juego este turno, ponlo de tu
-	mano en tu Reserva' (2026-08-30, p.ej. Infernum Vox) — a diferencia de
-	la regla general (DAR 5.B: el Oro debe ser la PRIMERA carta jugada; si
-	juegas cualquier otra cosa antes, se pierde la oportunidad para el resto
-	del turno), esta carta se puede colocar como Oro en cualquier momento
-	de tu Vigilia mientras tú mismo no hayas puesto un Oro todavía este
-	turno — no le importa si ya jugaste otra carta antes. Es una EXCEPCIÓN
-	puntual de ESTA carta, no el comportamiento general, así que se detecta
-	por texto en vez de agregar un flag nuevo al motor."""
+	""""En tu Vigilia, si no pusiste Oros en juego este turno, ponlo de tu mano en tu Reserva" (p.ej.
+	Infernum Vox). Excepción de esta carta a la regla general (DAR 5.B: el Oro debe ser la primera
+	carta jugada del turno): se puede colocar en cualquier momento de tu Vigilia mientras no hayas
+	puesto un Oro, aunque ya hayas jugado otra carta. Se detecta por texto."""
 	if not card or card.get("card_data") == null:
 		return false
 	var habilidad: String = str(card.card_data.get("habilidad", "")).to_lower()
@@ -112,6 +100,20 @@ func _reset_oro_tracking() -> void:
 # =============================================================================
 # ENFERMEDAD DE INVOCACIÓN / FURIA (DAR 3.1 y 8)
 # =============================================================================
+func player_can_attack(player_id: int) -> bool:
+	"""¿Tiene 'player_id' al menos un Aliado en juego que pueda declarar ataque? (botón "Atacar"/"Fase
+	Final" y salto del Ataque)."""
+	var main := get_node_or_null("/root/Main")
+	if not main:
+		return false
+	for container in load("res://scripts/core/game/PlayerSide.gd").ally_containers(main, player_id):
+		for ally in container.get_children():
+			if is_instance_valid(ally) and ally.get("card_type") == Constants.CardType.ALIADO \
+					and can_attack(ally).get("can_attack", false):
+				return true
+	return false
+
+
 func can_attack(ally: Node) -> Dictionary:
 	"""Verifica si un Aliado puede atacar (DAR 3.1 y 8)
 
@@ -119,12 +121,21 @@ func can_attack(ally: Node) -> Dictionary:
 	"""
 	var result = {"can_attack": true, "reason": "", "has_furia": false}
 
-	# Restricción explícita (2026-09-03, p.ej. Kuchiku Kan: 'no pueda
-	# atacar... mientras este Aliado esté en juego') — ContinuousEffect
-	# Manager.can_attack() ya existía pero nadie lo consultaba todavía.
+	# Restricción explícita (p.ej. Kuchiku Kan: 'no pueda atacar... mientras este Aliado esté en
+	# juego') — ContinuousEffect Manager.can_attack ya existía pero nadie lo consultaba todavía.
 	if ContinuousEffectManager and not ContinuousEffectManager.can_attack(ally):
 		result.can_attack = false
 		result.reason = "no puede atacar — efecto continuo se lo impide"
+		return result
+	# furia de titán: "tu oponente no puede atacar con Aliados de mayor Fuerza que ese Aliado".
+	if GameManager.attack_strength_cap_blocks(ally):
+		result.can_attack = false
+		result.reason = "furia de titán: no puede atacar con más Fuerza que ese Aliado"
+		return result
+	# ambrosio ohiggins: "para que un Aliado no pueda ser declarado atacante este turno".
+	if int(ally.get_meta("no_attack_turn", -1)) == GameManager.turn_serial:
+		result.can_attack = false
+		result.reason = "no puede ser declarado atacante este turno"
 		return result
 
 	# Verificar si entró este turno (enfermedad de invocación)
@@ -141,5 +152,5 @@ func can_attack(ally: Node) -> Dictionary:
 	return result
 
 
-# _has_furia_fallback() se eliminó aquí (2026-08-28, "módulos gordos" punto
-# 1): KeywordManager es autoload — siempre existe, esta rama nunca corría.
+# _has_furia_fallback se eliminó aquí ("módulos gordos" punto 1): KeywordManager es autoload —
+# siempre existe, esta rama nunca corría.

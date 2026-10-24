@@ -8,6 +8,8 @@ class_name ModifierRegistry
 ## lo consulta ahí). Extraído de ContinuousEffectManager.gd (Fase 4 de
 ## reestructuración).
 
+const StrengthAuras = preload("res://scripts/core/cards/StrengthAuras.gd")
+
 var _main: Node
 
 
@@ -104,14 +106,10 @@ func register_modifier(params: Dictionary) -> String:
 	_main.emit_signal("modifier_registered", modifier)
 	print("[ContinuousEffectManager] Modificador registrado: %s (%s)" % [modifier_id, modifier.description])
 
-	# Recalcular y actualizar visuales de las cartas afectadas. Con target
-	# dinámico (ALL/ALLIES/ENEMIES/OTHER, un String) _resolve_targets()
-	# devuelve vacío a propósito — se resuelve carta por carta en
-	# _get_applicable_modifiers(), no aquí — así que sin esto el badge de
-	# Fuerza de los Aliados YA en juego nunca se refrescaba al entrar un
-	# aura nueva (2026-08-25, confirmado con Patria Vieja: el bonus se
-	# calculaba bien pero no se veía hasta que algo más recalculaba esa
-	# carta puntual).
+	# Recalcular y refrescar las cartas afectadas. Con target dinámico (ALL/ALLIES/ENEMIES/OTHER, un
+	# String), _resolve_targets() devuelve vacío a propósito (se resuelve carta por carta en
+	# _get_applicable_modifiers()), así que aquí se refrescan explícitamente los Aliados ya en juego
+	# cuando entra un aura nueva (p.ej. Patria Vieja).
 	var visual_targets: Array = targets
 	if targets.is_empty() and modifier.target is String:
 		visual_targets = _main._get_all_cards_in_play()
@@ -254,13 +252,10 @@ func _get_modified_stat(card: Node, stat: String) -> int:
 	var previous_value: int = -999
 	if _main._previous_values.has(card_id) and _main._previous_values[card_id].has(stat):
 		var raw_prev = _main._previous_values[card_id][stat]
-		# 2026-09-15, bug real reportado por el usuario: "Invalid operands
-		# 'String' and 'int' in operator '!='" — algo dejó un valor no-int
-		# en _previous_values (probablemente vía _get_base_stat()'s rama
-		# genérica '_:', que devuelve card.get(stat) SIN castear a int para
-		# cualquier stat que no sea strength/cost/damage). Se castea aquí
-		# como salvaguarda y se deja rastro si pasa, en vez de romper la
-		# comparación de abajo.
+		# "Invalid operands 'String' and 'int' in operator '!='" — algo dejó un valor no-int en
+		# _previous_values (probablemente vía _get_base_stat's rama genérica '_:', que devuelve
+		# card.get(stat) SIN castear a int para cualquier stat que no sea strength/cost/damage). Se castea
+		# aquí como salvaguarda y se deja rastro si pasa, en vez de romper la comparación de abajo.
 		if raw_prev is String or raw_prev is StringName:
 			push_warning("[ModifierRegistry] previous_value no-int para card_id=%s stat=%s: %s (%s)" % [
 				str(card_id), stat, str(raw_prev), typeof(raw_prev)
@@ -275,6 +270,9 @@ func _get_modified_stat(card: Node, stat: String) -> int:
 
 	# Recolectar modificadores aplicables
 	var applicable_mods = _get_applicable_modifiers(card, stat)
+	# Fuerza de habilidades impresas con condición o zona, evaluadas en vivo (StrengthAuras).
+	if stat == "strength":
+		applicable_mods.append_array(StrengthAuras.virtual_modifiers(card, _main))
 
 	# Ordenar por capa y prioridad (Sección 7.4: negativos al final)
 	applicable_mods.sort_custom(_compare_modifiers)
@@ -301,13 +299,8 @@ func _get_modified_stat(card: Node, stat: String) -> int:
 		if mod_value != 0:
 			total_bonus += (current_value - old_value)
 			last_source_name = mod.description
-			# Debug — acumulado, no impreso todavía (2026-09-11, bug real
-			# reportado por el usuario: esta función recalcula TODOS los
-			# modificadores de la carta cada vez que CUALQUIER cosa dispara
-			# un recálculo global, no solo cuando esta carta cambia — sin
-			# este acumulador, cada modificador ya aplicado se reimprimía
-			# idéntico en cada pasada aunque el resultado final no cambiara).
-			# Se imprime más abajo solo si el valor final de verdad cambió.
+			# Debug acumulado: esta función recalcula todos los modificadores de la carta en cada recálculo
+			# global; se imprime más abajo solo si el valor final cambió.
 			debug_lines.append("[ContinuousEffectManager] %s: %s %d → %d (%s)" % [
 				stat, _main._get_card_name(card), old_value, current_value, mod.description
 			])
@@ -387,13 +380,11 @@ func _get_base_stat(card: Node, stat: String) -> int:
 		_:
 			var raw = card.get(stat)
 			if raw != null:
-				# 2026-09-15: cast defensivo — a diferencia de las ramas de
-				# arriba (strength/cost, que leen propiedades típicamente
-				# numéricas de Card), aquí 'stat' es un nombre arbitrario y
-				# card.get(stat) es Variant sin garantía de tipo; devolver
-				# un String directo aquí (declarado -> int) fue la causa real
-				# de "Invalid operands 'String' and 'int' in operator '!='"
-				# más adelante en _get_modified_stat()/ModifierRegistry.
+				# Cast defensivo — a diferencia de las ramas de arriba (strength/cost, que leen propiedades
+				# típicamente numéricas de Card), aquí 'stat' es un nombre arbitrario y card.get(stat) es
+				# Variant sin garantía de tipo; devolver un String directo aquí (declarado -> int) fue la causa
+				# real de "Invalid operands 'String' and 'int' in operator '!='" más adelante en
+				# _get_modified_stat/ModifierRegistry.
 				if raw is String or raw is StringName:
 					return int(raw) if String(raw).is_valid_int() else 0
 				return int(raw)
@@ -438,18 +429,9 @@ func _card_matches_global_target(card: Node, target_type: String, modifier: Dict
 			return _card_matches_filter(card, filter)
 
 		"ALLIES", "ALIADOS":
-			# Mismo controlador que la fuente (2026-08-24): antes esto comparaba
-			# mitologia/faccion, no dueno real -- "Tus Aliados" en el texto real
-			# de las cartas significa "los que tu controlas", sin importar su
-			# mitologia; con la comparacion vieja, un aura como la de Patria Vieja
-			# habria afectado a Aliados rivales de la misma mitologia y ninguno de
-			# los propios de otra.
-			# EN JUEGO (2026-09-02, bug reportado por el usuario: Sable de
-			# Napoleón le daba Fuerza a Aliados en la MANO) — "Tus Aliados"
-			# significa los que controlas EN JUEGO, nunca los de la mano/
-			# Castillo/Cementerio. _is_card_in_play() ya existía (usado solo
-			# para registrar/desregistrar la fuente al entrar/salir de juego
-			# ella misma) pero nunca se consultaba aquí, del lado del OBJETIVO.
+			# Mismo controlador que la fuente: "Tus Aliados" son los que controlas, sin importar
+			# mitología/facción. Y EN JUEGO (_is_card_in_play()): nunca los de la mano/Castillo/Cementerio
+			# (p.ej. Sable de Napoleón).
 			if source and card and _main._is_card_in_play(card):
 				if _main._get_card_owner(source) == _main._get_card_owner(card):
 					return _card_matches_filter(card, filter)
@@ -480,10 +462,9 @@ func _card_matches_filter(card: Node, filter: Dictionary) -> bool:
 
 	# Filtro por tipo
 	if filter.has("type"):
-		# 2026-10-17, bug real reportado por el usuario ("Invalid operands
-		# 'String' and 'int' in operator '!='"): _get_card_type() devuelve el
-		# nombre ("ALIADO") pero varios registros pasan el enum
-		# (Constants.CardType.ALIADO). Se comparan los dos como nombre.
+		# ("Invalid operands 'String' and 'int' in operator '!='"): _get_card_type devuelve el nombre
+		# ("ALIADO") pero varios registros pasan el enum (Constants.CardType.ALIADO). Se comparan los dos
+		# como nombre.
 		var card_type: String = str(_main._get_card_type(card))
 		var wanted = filter.type
 		if wanted is int:
@@ -514,19 +495,14 @@ func _card_matches_filter(card: Node, filter: Dictionary) -> bool:
 		if card_zone != filter.zone:
 			return false
 
-	# Filtro por keyword
-	if filter.has("has_keyword"):
-		if not _main._card_has_keyword(card, filter.has_keyword):
-			return false
-
 	# Filtro por nombre
 	if filter.has("name_contains"):
 		var card_name = _main._get_card_name(card).to_lower()
 		if not filter.name_contains.to_lower() in card_name:
 			return false
 
-	# Filtro por raza — admite una raza única o una lista (2026-09-04, p.ej.
-	# shedo titan: "Tus Aliados Ignis o Titán ganan...")
+	# Filtro por raza — admite una raza única o una lista (p.ej. shedo titan: "Tus Aliados Ignis o
+	# Titán ganan...")
 	if filter.has("raza"):
 		var card_raza: String = str(card.get("card_raza")) if card.get("card_raza") != null else ""
 		if filter.raza is Array:
@@ -618,9 +594,8 @@ func _is_modifier_active(modifier: Dictionary) -> bool:
 				return false
 			if source and not _main._is_card_in_play(source):
 				return false
-			# 2026-10-13 (§63, Alicia en Wonderland nombrando Patria Vieja):
-			# una fuente silenciada o con su nombre bloqueado pierde también
-			# sus habilidades estáticas, no solo los botones y los triggers.
+			# Una fuente silenciada o con su nombre bloqueado pierde también sus habilidades estáticas, no
+			# solo los botones y los triggers.
 			if modifier.get("static_ability", false) and source and KeywordManager.is_silenced(source):
 				return false
 

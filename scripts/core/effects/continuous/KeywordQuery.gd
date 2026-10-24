@@ -80,6 +80,14 @@ func has_keyword(card: Node, keyword) -> bool:
 	return false
 
 
+func aura_removes_keyword(card: Node, keyword: int) -> bool:
+	"""¿Un modificador activo le quita esta keyword ("los Aliados de coste 2 o menos pierden Furia")?"""
+	for mod in _main._get_applicable_modifiers(card, ""):
+		if mod.type == _main.ModifierType.KEYWORDS and _main._is_modifier_active(mod) and keyword in mod.keywords_remove:
+			return true
+	return false
+
+
 func has_protection(card: Node, protection_type: String = "") -> bool:
 	"""Verifica si una carta tiene protección
 

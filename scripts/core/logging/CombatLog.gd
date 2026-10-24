@@ -96,6 +96,13 @@ var _max_entries: int = 500
 var _auto_scroll: bool = true
 var _show_timestamps: bool = true
 var _log_level: int = 0  # 0=all, 1=important, 2=critical
+## Partida en línea, lado Remoto (RemoteMirrorController.setup()): el historial es el del Anfitrión,
+## que llega por red (add_net_entry()); lo que se registraría localmente se descarta, salvo los grupos
+## de cartas mostradas (RevealedCards, ya llegan por su propio mensaje).
+var remote_mirror: bool = false
+## Tipos que no viajan al Remoto: "parse" es de depuración y "reveal" tiene su propio mensaje
+## (RevealedCards, {"op":"reveal_log"}).
+const NOT_SYNCED := ["parse", "reveal"]
 
 ## Tracking de fase actual
 var _current_phase: int = -1
@@ -290,6 +297,8 @@ func add_entry(type: String, message: String, data: Dictionary = {}, level: int 
 	"""
 	if level < _log_level:
 		return
+	if remote_mirror and type != "reveal":
+		return
 
 	var entry = {
 		"timestamp": Time.get_unix_time_from_system(),
@@ -310,6 +319,12 @@ func add_entry(type: String, message: String, data: Dictionary = {}, level: int 
 		_log_entries.pop_front()
 
 	emit_signal("log_entry_added", entry)
+
+	# En línea, el Anfitrión le manda su historial al Remoto (todas las entradas son públicas: jugadas,
+	# costes, daño, fases; lo oculto no se registra con nombres).
+	if NetworkClient.room_code != "" and NetworkClient.is_host and not (type in NOT_SYNCED):
+		NetworkClient.send_message({"op": "log", "type": type, "message": message, "level": level,
+			"time_string": entry.time_string})
 
 	# Si es acción pública, broadcast a ambos clientes
 	if entry.is_public:
@@ -337,6 +352,33 @@ func get_entries(count: int = -1, type_filter: String = "") -> Array[Dictionary]
 		return result.slice(-count)
 
 	return result
+
+
+func add_net_entry(data: Dictionary) -> void:
+	"""Remoto: entrada del historial del Anfitrión. Los jugadores se cambian ("Jugador 1" es quien
+	mira, igual que en el Anfitrión)."""
+	var message := _swap_players(str(data.get("message", "")).left(2000))
+	var entry = {
+		"timestamp": Time.get_unix_time_from_system(),
+		"time_string": str(data.get("time_string", "")).left(8),
+		"type": str(data.get("type", "")).left(32),
+		"message": message,
+		"data": {},
+		"level": int(data.get("level", 0)),
+		"phase": _current_phase_name,
+		"turn": _current_turn,
+		"is_public": true,
+	}
+	_log_entries.append(entry)
+	while _log_entries.size() > _max_entries:
+		_log_entries.pop_front()
+	emit_signal("log_entry_added", entry)
+
+
+static func _swap_players(text: String) -> String:
+	for pair in [["Jugador 1", "Jugador 2"], ["JUGADOR 1", "JUGADOR 2"], ["J1", "J2"]]:
+		text = text.replace(pair[0], "\u0001").replace(pair[1], pair[0]).replace("\u0001", pair[1])
+	return text
 
 
 func clear() -> void:

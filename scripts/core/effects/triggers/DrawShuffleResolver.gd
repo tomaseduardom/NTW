@@ -1,25 +1,12 @@
 extends RefCounted
-## DrawShuffleResolver — Facade de Familia de patrones compuestos "roba N /
-## baraja M / busca..." que combinan más de una acción en una sola oración
-## (El Rey y el Verdugo, Aaru, Tempilcahue, Manuel Bulnes, Espada Vikinga,
-## Legión Paladín, Espada de O'Higgins). Cada uno detecta su propio texto por
-## regex y resuelve las acciones encadenadas que extract_action() no puede
-## manejar solo (esa función reconoce UNA acción por texto, la primera que
-## matchea). Opera sobre TriggerSystem via _executor._main (mismo Node que
-## TargetedEffectExecutor._main — ver ese archivo).
-## Extraído de TargetedEffectExecutor.gd (2026-08-30, "módulos gordos" —
-## mismo corte que ya separó LookAndPlayResolver.gd).
-##
-## Dividido en 4 archivos por tamaño (2026-09-06, "módulos gordos"):
-## DSR_ShuffleDrawCombos.gd (shuffle+draw), DSR_CemeteryBanishDraw.gd
-## (Cementerio-destierro/barajado + draw), DSR_SearchGoldCombos.gd
-## (buscar/subir carta + Oro Virtual) y DSR_DiscardChoicePatterns.gd
-## (descarte compuesto / dispatchers de elección A-B). Este archivo queda
-## como FACADE — cada función de abajo es un reenvío de una sola línea a la
-## mitad que corresponda, con el mismo nombre y firma de siempre, así que
-## TriggerResolution.gd (único llamador, vía
-## `_main._draw_shuffle_resolver.try_execute_X(...)`) no necesitó cambiar
-## una sola línea por este split.
+## DrawShuffleResolver — FACHADA de los patrones compuestos "roba N / baraja M / busca..." que
+## combinan varias acciones en una oración (lo que extract_action(), una sola acción por texto, no
+## resuelve). Cada función reenvía en una línea a una de sus partes, con el mismo nombre y firma
+## (TriggerResolution.gd la llama vía `_main._draw_shuffle_resolver.try_execute_X(...)`):
+## DSR_ShuffleDrawCombos.gd (barajar + robar), DSR_CemeteryBanishDraw.gd (Cementerios + robar),
+## DSR_SearchGoldCombos.gd (buscar/subir + Oro Virtual) y DSR_DiscardChoicePatterns.gd (descarte
+## compuesto / elecciones A-B). Opera sobre TriggerSystem vía _executor._main (ver
+## TargetedEffectExecutor.gd).
 
 const DSR_ShuffleDrawCombosScript = preload("res://scripts/core/effects/triggers/DSR_ShuffleDrawCombos.gd")
 const DSR_CemeteryBanishDrawScript = preload("res://scripts/core/effects/triggers/DSR_CemeteryBanishDraw.gd")

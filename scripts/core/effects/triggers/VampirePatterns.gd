@@ -1,18 +1,15 @@
 extends RefCounted
-## Vlad el Empalador y Dhampir (2026-10-17, a pedido del usuario). Se usa con
-## preload.
-##
+## Vlad el Empalador y Dhampir. Se usa con preload.
 ## Vlad el Empalador:
-##   "Cuando entra en juego o ataca, muestra cartas del tope de tu Castillo
-##   hasta mostrar un Aliado de coste 1 y juégalo sin pagar su coste."
-##   "Una vez en tu turno, cuando este u otro de tus Aliados salga del juego,
-##   Baraja hasta una carta de coste 3 o menos y tu oponente Bota tres
-##   cartas." — disparada (on_card_left_play), no un botón.
+## "Cuando entra en juego o ataca, muestra cartas del tope de tu Castillo hasta mostrar un Aliado de
+## coste 1 y juégalo sin pagar su coste."
+## "Una vez en tu turno, cuando este u otro de tus Aliados salga del juego, Baraja hasta una carta
+## de coste 3 o menos y tu oponente Bota tres cartas." — disparada (on_card_left_play), no un botón.
 ## Dhampir:
-##   "Cuando ataca, entra o sale del juego, muestra un Aliado de tu mano y
-##   Destierra hasta una carta de coste 3 o menos o Roba dos cartas."
-##   "Cuando tu oponente juegue una carta, hasta tres veces por turno, él Bota
-##   dos cartas. Si es tu turno, en vez de eso las Destierra." (on_card_played)
+## "Cuando ataca, entra o sale del juego, muestra un Aliado de tu mano y Destierra hasta una carta
+## de coste 3 o menos o Roba dos cartas."
+## "Cuando tu oponente juegue una carta, hasta tres veces por turno, él Bota dos cartas. Si es tu
+## turno, en vez de eso las Destierra." (on_card_played)
 
 const PlayerSideScript = preload("res://scripts/core/game/PlayerSide.gd")
 const VLAD_REVEAL := "hasta mostrar un aliado de coste 1 y juégalo sin pagar su coste"
@@ -68,8 +65,7 @@ static func _vlad_reveal_and_play(card: Node, controller_id: int) -> void:
 		if int(top.get("tipo", -1)) == Constants.CardType.ALIADO and int(top.get("coste", -1)) == 1:
 			found = top
 			break
-	if not revealed.is_empty():
-		SelectionManager.open_reveal(revealed.duplicate(), "%s: cartas mostradas" % _name(card, "Vlad el Empalador"), controller_id)
+	load("res://scripts/core/effects/mechanics/RevealedCards.gd").record(controller_id, revealed, _name(card, "Vlad el Empalador"))
 	if not found.is_empty():
 		revealed.erase(found)
 	# Las demás vuelven al Castillo y se Baraja (mismo criterio que el resto de
@@ -107,9 +103,9 @@ static func on_card_left_play(_pid: int, left) -> void:  # sin tipo: puede llega
 				vlads.append(c)
 	for v in vlads:
 		var key := "vlad_leave:%d" % v.get_instance_id()
-		if UniversalCardParser.turn_registry.was_used(key, 0, GameManager.current_turn):
+		if UniversalCardParser.turn_registry.was_used(key, 0, GameManager.turn_serial):
 			continue
-		UniversalCardParser.turn_registry.register(key, 0, GameManager.current_turn)
+		UniversalCardParser.turn_registry.register(key, 0, GameManager.turn_serial)
 		await _vlad_leave_effect(main, v, ctrl)
 
 
@@ -191,11 +187,11 @@ static func on_card_played(played: Node, player_id: int) -> void:
 			if not (DHAMPIR_PLAY in str(c.get("card_ability")).to_lower()):
 				continue
 			var used := 0
-			while used < 3 and UniversalCardParser.turn_registry.was_used("dhampir:%d" % c.get_instance_id(), used, GameManager.current_turn):
+			while used < 3 and UniversalCardParser.turn_registry.was_used("dhampir:%d" % c.get_instance_id(), used, GameManager.turn_serial):
 				used += 1
 			if used >= 3:
 				continue
-			UniversalCardParser.turn_registry.register("dhampir:%d" % c.get_instance_id(), used, GameManager.current_turn)
+			UniversalCardParser.turn_registry.register("dhampir:%d" % c.get_instance_id(), used, GameManager.turn_serial)
 			var to_exile: bool = GameManager.active_player_id == dhampir_ctrl
 			await ActionModule.mill(player_id, 2, to_exile, _name(c, "Dhampir"))
 			main._update_debug("%s: tu oponente %s dos cartas" % [_name(c, "Dhampir"), "Destierra" if to_exile else "Bota"])

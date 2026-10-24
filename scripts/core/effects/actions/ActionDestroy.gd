@@ -129,11 +129,10 @@ func _check_destruction_prevention(target: Node, source: Node) -> Dictionary:
 	"""Verifica si la destrucción puede ser prevenida"""
 	var result = {"prevented": false, "prevented_by": null}
 
-	# Verificar indestructible — vía KeywordManager.can_be_destroyed(),
-	# no card.has_keyword() directo (2026-09-02, refactor: mismo motivo ya
-	# documentado en ActionValidator._can_be_destroyed() — un silenciado
-	# que le quite Indestructible por KeywordManager no se respetaba aquí,
-	# porque card.has_keyword() no mira los overrides de KeywordManager).
+	# Verificar indestructible — vía KeywordManager.can_be_destroyed, no card.has_keyword directo
+	# (refactor: mismo motivo ya documentado en ActionValidator._can_be_destroyed — un silenciado que
+	# le quite Indestructible por KeywordManager no se respetaba aquí, porque card.has_keyword no mira
+	# los overrides de KeywordManager).
 	if not KeywordManager.can_be_destroyed(target):
 		result.prevented = true
 		result.prevented_by = target
@@ -146,8 +145,8 @@ func _check_destruction_prevention(target: Node, source: Node) -> Dictionary:
 			result.prevented_by = target
 			return result
 
-	# Prevención reactiva real (2026-09-09, "sistema de respuestas" —
-	# Estaca): se pregunta al jugador EN EL MOMENTO, no una carga previa.
+	# Prevención reactiva real ("sistema de respuestas" — Estaca): se pregunta al jugador EN EL
+	# MOMENTO, no una carga previa.
 	if await EffectController.offer_prevention(target, source, "destroy"):
 		result.prevented = true
 		result.prevented_by = target

@@ -73,9 +73,8 @@ func draw(player_id: int, amount: int, source: String = "", skip_validation: boo
 				result.triggered_loss = true
 				result.success = false
 				print("[ActionModule] DERROTA: Jugador %d intentó robar con mazo vacío" % player_id)
-				# (2026-08-28): 'GameManager.trigger_loss' nunca existió — el
-				# fallback de abajo era código muerto siempre (DamageManager
-				# es autoload garantizado y check_defeat_condition() sí existe).
+				# 'GameManager.trigger_loss' nunca existió — el fallback de abajo era código muerto siempre
+				# (DamageManager es autoload garantizado y check_defeat_condition sí existe).
 				DamageManager.check_defeat_condition(player_id)
 			break
 

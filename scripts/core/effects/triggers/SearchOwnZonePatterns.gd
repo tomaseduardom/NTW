@@ -1,12 +1,9 @@
 extends RefCounted
-## SearchOwnZonePatterns — 2 de 7 mitades de LookAndPlayResolver.gd, dividido
-## por tamaño el 2026-09-06 ("módulos gordos"). Cubre patrones de "busca en tu
-## Castillo/Cementerio (o el de cualquiera, sin apuntar al oponente)" que
-## relocalizan o convierten cartas sin banish/destierro dirigido: Kuchiku Kan,
-## La Torre, Dulce Canasta, Azi Sruvara, duelo espacial, alto prime, Belta,
-## Aurora de Chile, Danza de Dragones, asedio naval. Llamada solo desde
-## LookAndPlayResolver.gd (facade) — ver ese archivo para la lista completa de
-## las 7 mitades hermanas.
+## SearchOwnZonePatterns — una de las mitades de LookAndPlayResolver.gd (fachada; ahí está la lista
+## completa). Patrones de "busca en tu Castillo/Cementerio (o el de cualquiera)" que mueven o
+## convierten cartas sin destierro dirigido: Kuchiku Kan, La Torre, Dulce Canasta, Azi Sruvara,
+## duelo espacial, alto prime, Belta, Aurora de Chile, Danza de Dragones, asedio naval, la familia
+## Sello, Arturo de Bretaña.
 
 const CemeteryPopupScript = preload("res://scripts/ui/zones/CemeteryRevealPopup.gd")
 
@@ -39,7 +36,7 @@ func try_execute_search_ally_castillo_or_cementerio_then_buff_pattern(ability_te
 	if not main:
 		return true
 
-	var zones: Array = [Constants.Zone.CASTILLO, Constants.Zone.CEMENTERIO]  # selector de ambas zonas (2026-10-11)
+	var zones: Array = [Constants.Zone.CASTILLO, Constants.Zone.CEMENTERIO]  # selector de ambas zonas
 
 	if await TriggerSystem.open_response_window(card, str(card.card_name), controller_id):
 		return true
@@ -74,8 +71,6 @@ func try_execute_search_ally_castillo_or_cementerio_then_buff_pattern(ability_te
 	return true
 
 
-
-
 func try_execute_search_ally_cost_max_free_play_pattern(ability_text: String, card: Node, controller_id: int) -> bool:
 	"""'Cuando entra en juego, busca en tu Castillo o Cementerio un Aliado
 	de coste N o menos y juégalo sin pagar su coste' (La Torre, custom_
@@ -101,7 +96,7 @@ func try_execute_search_ally_cost_max_free_play_pattern(ability_text: String, ca
 		return true
 
 	var max_cost: int = int(m.get_string(1))
-	var zones: Array = [Constants.Zone.CASTILLO, Constants.Zone.CEMENTERIO]  # selector de ambas zonas (2026-10-11)
+	var zones: Array = [Constants.Zone.CASTILLO, Constants.Zone.CEMENTERIO]  # selector de ambas zonas
 
 	if await TriggerSystem.open_response_window(card, str(card.card_name), controller_id):
 		return true
@@ -128,13 +123,9 @@ func try_execute_search_ally_cost_max_free_play_pattern(ability_text: String, ca
 	return true
 
 
-
-
 func try_execute_search_oro_castillo_or_cementerio_pattern(ability_text: String, card: Node, controller_id: int) -> bool:
-	"""'Busca un Oro en tu Castillo o Cementerio y ponlo en tu mano'
-	(2026-09-04, p.ej. Dulce Canasta) — 'Castillo o Cementerio' es 'y/o'
-	entre zonas ([[project_y_o_means_choose_one_zone]]), el jugador elige
-	UNA."""
+	""""Busca un Oro en tu Castillo o Cementerio y ponlo en tu mano" (p.ej. Dulce Canasta): "Castillo
+	o Cementerio" = el jugador elige UNA zona."""
 	var lower := ability_text.to_lower()
 	if not ("busca un oro en tu castillo o cementerio" in lower and "ponlo en tu mano" in lower):
 		return false
@@ -142,7 +133,7 @@ func try_execute_search_oro_castillo_or_cementerio_pattern(ability_text: String,
 	var main := _main.get_node_or_null("/root/Main")
 	if not main:
 		return true
-	var zones: Array = [Constants.Zone.CASTILLO, Constants.Zone.CEMENTERIO]  # selector de ambas zonas (2026-10-11)
+	var zones: Array = [Constants.Zone.CASTILLO, Constants.Zone.CEMENTERIO]  # selector de ambas zonas
 	if await TriggerSystem.open_response_window(card, str(card.card_name), controller_id):
 		return true
 	await ActionModule.search_zones(controller_id, zones, {"type": Constants.CardType.ORO}, 1, true, false, false, card,
@@ -150,13 +141,10 @@ func try_execute_search_oro_castillo_or_cementerio_pattern(ability_text: String,
 	return true
 
 
-
-
 func try_execute_raise_up_to_one_ally_or_gold_from_cemetery_pattern(ability_text: String, controller_id: int, card: Node = null) -> bool:
-	"""'Prevén un efecto y puedes subir hasta un Aliado u Oro de tu
-	Cementerio a tu mano' (Danza de Dragones, 2026-09-06) — solo la parte
-	de subir a la mano; 'Prevén un efecto' y la condición de juego
-	'controlas y/o muestras al menos cinco Oros' NO implementadas."""
+	""""Prevén un efecto y puedes subir hasta un Aliado u Oro de tu Cementerio a tu mano" (Danza de
+	Dragones): solo la parte de subir. "Prevén un efecto" y la condición "controlas y/o muestras al
+	menos cinco Oros" no están implementadas."""
 	var lower := ability_text.to_lower()
 	if not ("prevén un efecto y puedes subir hasta un aliado u oro de tu cementerio a tu mano" in lower):
 		return false
@@ -171,8 +159,7 @@ func try_execute_raise_up_to_one_ally_or_gold_from_cemetery_pattern(ability_text
 	var eligible: Array = own_cemetery.filter(func(d): return d.get("tipo", -1) in [Constants.CardType.ALIADO, Constants.CardType.ORO])
 	if eligible.is_empty():
 		return true
-	# 2026-09-14, a pedido del usuario: click directo sobre el Cementerio
-	# propio (open_cemetery_target_picker) en vez del modal de lista viejo.
+	# Click directo sobre el Cementerio propio (open_cemetery_target_picker).
 	var eligible_filter := func(c: Node) -> bool:
 		return c.owner_id == controller_id and c.card_data.get("tipo", -1) in [Constants.CardType.ALIADO, Constants.CardType.ORO]
 	var picked_list: Array = await main._zone_viewer.open_cemetery_target_picker(
@@ -192,15 +179,10 @@ func try_execute_raise_up_to_one_ally_or_gold_from_cemetery_pattern(ability_text
 	return true
 
 
-
-
 func try_execute_raise_same_type_gold_and_search_banish_pattern(ability_text: String, card: Node, controller_id: int) -> bool:
-	"""'Sube una o dos cartas de un mismo tipo que no sea Talismán de tu
-	Cementerio a tu mano. Genera un Oro para jugar cartas del mismo tipo y
-	busca en un Castillo una carta y Destiérrala' (asedio naval,
-	2026-09-06) — el jugador elige el TIPO implícitamente al elegir las
-	cartas (deben compartir tipo); el Oro restringido queda atado a ese
-	mismo tipo."""
+	""""Sube una o dos cartas de un mismo tipo que no sea Talismán de tu Cementerio a tu mano. Genera
+	un Oro para jugar cartas del mismo tipo y busca en un Castillo una carta y Destiérrala" (asedio
+	naval): el tipo se elige al elegir las cartas; el Oro restringido queda atado a ese tipo."""
 	var lower := ability_text.to_lower()
 	if not ("sube una o dos cartas de un mismo tipo que no sea talismán de tu cementerio a tu mano" in lower):
 		return false
@@ -211,10 +193,8 @@ func try_execute_raise_same_type_gold_and_search_banish_pattern(ability_text: St
 	var eligible: Array = own_cemetery.filter(func(d): return d.get("tipo", -1) != Constants.CardType.TALISMAN)
 	var chosen_type: int = -1
 	var raised: Array = []
-	# 2026-09-14, a pedido del usuario: click directo sobre el Cementerio
-	# propio, con el candado de "mismo tipo que la primera" resuelto vía
-	# lock_group_key de await_multi_target() (mismo mecanismo que Hanta el
-	# Samurai usa para 'un solo Cementerio'), en vez del modal de lista viejo.
+	# Click directo sobre el Cementerio propio; "mismo tipo que la primera" con lock_group_key de
+	# await_multi_target() (como Hanta el Samurai).
 	if not eligible.is_empty() and main._card_interaction:
 		var popup_result: Dictionary = CemeteryPopupScript.open(main, eligible, controller_id)
 		var cemetery_popup: CanvasLayer = popup_result.popup
@@ -256,36 +236,18 @@ func try_execute_raise_same_type_gold_and_search_banish_pattern(ability_text: St
 	return true
 
 
-
-
 func try_execute_search_azi_ally_to_hand_pattern(ability_text: String, controller_id: int, card: Node = null) -> bool:
-	"""'Cuando entra en juego, busca en tu Castillo un Aliado Azi, ponlo en
-	tu mano y convierte una carta de coste 1 o menos en un Oro con la
-	habilidad "Cancelar la habilidad de tus Aliados de coste 4 o más
-	cuesta un Oro adicional" y muévelo a tu Oro Pagado' (Azi Sruvara,
-	2026-09-06/2026-09-30) — ambas mitades implementadas ahora:
-
-	1) Búsqueda del Aliado Azi (por nombre, ya que "Azi" es un prefijo
-	compartido entre estos Aliados, no una Raza impresa). 2026-09-30, bug
-	real reportado por el usuario: esto manipula CardManager.get_deck()
-	directo (sin pasar por ActionModule.search()) y barajaba los datos sin
-	disparar NUNCA la animación de barajado — se sentía como "aparece una
-	carta sola, automática", sin la retroalimentación visual que cualquier
-	otra búsqueda en el Castillo sí muestra (ver ActionSearch.search(),
-	'Barajar si buscó en el Castillo'). Agregado el mismo AnimationQueue.CUSTOM.
-
-	2) Conversión de una carta de coste 1 o menos EN JUEGO (propia — el
-	texto no dice "oponente") en un Oro con la habilidad de texto nueva, a
-	Oro Pagado — mismo mecanismo de conversión real que GoldManager.
-	convert_ally_to_gold_in_pagado() (Jormundgander): re-tipar los datos
-	('tipo' = ORO) y crear el nodo desde cero, no silenciar uno existente
-	(la carta original SALE del juego, no se queda silenciada ahí).
-	IMPORTANTE — límite conocido, mismo motivo que antes de esta sesión: el
-	TEXTO de la habilidad nueva queda bien asignado en la carta resultante,
-	pero no hay ningún chequeo funcional en el motor que de verdad cobre
-	ese Oro adicional al cancelar una habilidad (requeriría un hook nuevo
-	en el camino de "cancelar" que usa Drácula,
-	LinkedEffectRegistry._execute_cancel() — no auditado en esta sesión)."""
+	"""Azi Sruvara: "Cuando entra en juego, busca en tu Castillo un Aliado Azi, ponlo en tu mano y
+	convierte una carta de coste 1 o menos en un Oro con la habilidad 'Cancelar la habilidad de tus
+	Aliados de coste 4 o más cuesta un Oro adicional' y muévelo a tu Oro Pagado".
+	1) Búsqueda del Aliado Azi por nombre ("Azi" es un prefijo, no una Raza). Manipula
+	CardManager.get_deck() directo, así que agrega la misma animación de barajado
+	(AnimationQueue.CUSTOM) que ActionSearch.search().
+	2) Conversión de una carta propia en juego de coste ≤1 en un Oro con esa habilidad, al Oro
+	Pagado, como GoldManager.convert_ally_to_gold_in_pagado() (Jormundgander): se re-tipan los
+	datos y se crea el nodo de cero (la original sale del juego).
+	Límite: el texto de la habilidad nueva queda en la carta, pero el motor no cobra ese Oro
+	adicional al cancelar."""
 	var lower := ability_text.to_lower()
 	if not ("busca en tu castillo un aliado azi, ponlo en tu mano" in lower):
 		return false
@@ -344,15 +306,11 @@ func try_execute_search_azi_ally_to_hand_pattern(ability_text: String, controlle
 	return true
 
 
-
-
 func try_execute_search_castillo_or_cemetery_to_pagado_pattern(ability_text: String, card: Node, controller_id: int) -> bool:
-	"""'Busca una carta en un Castillo o Cementerio y ponlo en tu Oro
-	Pagado como un Oro sin habilidad. Este efecto no puede ser prevenido'
-	(duelo espacial, 2026-09-04) — 'un Castillo o Cementerio' es elegir
-	UNA zona ([[project_y_o_means_choose_one_zone]]), luego de quién. 'No
-	puede ser prevenido' ya se cumple: search() no pasa por el sistema de
-	prevención (solo destroy()/banish() lo consultan)."""
+	""""Busca una carta en un Castillo o Cementerio y ponlo en tu Oro Pagado como un Oro sin
+	habilidad. Este efecto no puede ser prevenido" (duelo espacial): se elige UNA zona y de quién.
+	"No puede ser prevenido" ya se cumple: search() no pasa por la prevención (solo
+	destroy()/banish())."""
 	var lower := ability_text.to_lower()
 	if not ("busca una carta en un castillo o cementerio y ponlo en tu oro pagado" in lower):
 		return false
@@ -360,10 +318,8 @@ func try_execute_search_castillo_or_cemetery_to_pagado_pattern(ability_text: Str
 	var main := _main.get_node_or_null("/root/Main")
 	if not main or not main._gold_manager:
 		return true
-	# 2026-10-13, a pedido del usuario: en vez de dos popups ("¿Castillo o
-	# Cementerio?" y "¿de quién?" — que además no dejaba elegir bien el
-	# Castillo rival), el selector del tablero con las 4 zonas a la vez
-	# (ActionModule.pick_in_zones(): Anfitrión, Remoto por red o bot).
+	# Selector del tablero con las 4 zonas a la vez (ActionModule.pick_in_zones(): Anfitrión, Remoto
+	# por red o bot), en vez de dos popups.
 	var pools: Array = []
 	var pool_src: Array = []  # [{owner, zone}] en el mismo orden que pools
 	for zone_owner in [controller_id, 1 - controller_id]:
@@ -375,8 +331,8 @@ func try_execute_search_castillo_or_cemetery_to_pagado_pattern(ability_text: Str
 				entries.append({"data": d, "eligible": true})
 			pools.append({"is_own": zone_owner == controller_id, "zone": zone, "cards": entries})
 			pool_src.append({"owner": zone_owner, "zone": zone})
-	# Abrir un Castillo ata la búsqueda a ese (ZoneBrowsePicker._locked_castle,
-	# 2026-10-14) y todo Castillo mirado se baraja, se tome o no la carta de ahí.
+	# Abrir un Castillo ata la búsqueda a ese (ZoneBrowsePicker._locked_castle), y todo Castillo mirado
+	# se baraja, se tome o no la carta.
 	var info: Dictionary = {}
 	var picks: Array = await ActionModule.pick_in_zones(controller_id,
 		"%s: busca una carta en un Castillo o Cementerio" % str(card.get("card_name")), pools, 0, 1, false, [], info)
@@ -420,13 +376,10 @@ func try_execute_search_castillo_or_cemetery_to_pagado_pattern(ability_text: Str
 	return true
 
 
-
-
 func try_execute_search_each_castillo_two_to_cemetery_pattern(ability_text: String, card: Node, controller_id: int) -> bool:
-	"""'Cuando entra o sale del juego, busca en cada Castillo dos cartas y
-	ponlas en el Cementerio' (alto prime, 2026-09-04) — 'cada Castillo' =
-	AMBOS jugadores, cada uno a su propio Cementerio (destino CEMENTERIO
-	nuevo en ActionModule.search())."""
+	""""Cuando entra o sale del juego, busca en cada Castillo dos cartas y ponlas en el Cementerio"
+	(alto prime): ambos jugadores, cada uno a su propio Cementerio (destino CEMENTERIO de
+	ActionModule.search())."""
 	var lower := ability_text.to_lower()
 	if not ("busca en cada castillo dos cartas y ponlas en el cementerio" in lower):
 		return false
@@ -434,17 +387,14 @@ func try_execute_search_each_castillo_two_to_cemetery_pattern(ability_text: Stri
 	if await TriggerSystem.open_response_window(card, str(card.card_name), controller_id):
 		return true
 	for player_id in [0, 1]:
-		# Elige quien controla la carta, también en el Castillo rival (2026-10-14).
+		# Elige quien controla la carta, también en el Castillo rival.
 		await ActionModule.search(player_id, Constants.Zone.CASTILLO, {}, 2, true, false, false, card, Constants.Zone.CEMENTERIO,
 			false, controller_id)
 	return true
 
 
-
-
 func try_execute_optional_search_totem_castillo_pattern(ability_text: String, card: Node, controller_id: int) -> bool:
-	"""'Puedes buscar un Tótem en tu Castillo y ponerlo en tu mano'
-	(2026-09-04, p.ej. Belta)."""
+	""""Puedes buscar un Tótem en tu Castillo y ponerlo en tu mano" (p.ej. Belta)."""
 	var lower := ability_text.to_lower()
 	if not ("puedes buscar un tótem en tu castillo y ponerlo en tu mano" in lower):
 		return false
@@ -459,14 +409,10 @@ func try_execute_optional_search_totem_castillo_pattern(ability_text: String, ca
 	return true
 
 
-
-
 func try_execute_search_two_oros_split_destination_pattern(ability_text: String, card: Node, controller_id: int) -> bool:
-	"""'Cuando salga del juego, busca en tu Castillo dos Oros que no sean
-	Aurora de Chile, pon uno en tu Oro Pagado y otro en tu mano' (Aurora de
-	Chile, 2026-09-04) — dos búsquedas secuenciales de a 1 (cada una remueve
-	la carta encontrada del Castillo, así que la segunda nunca puede repetir
-	la misma copia), con name_not para excluirse a sí misma."""
+	""""Cuando salga del juego, busca en tu Castillo dos Oros que no sean Aurora de Chile, pon uno en
+	tu Oro Pagado y otro en tu mano" (Aurora de Chile): dos búsquedas de a 1 (la segunda no puede
+	repetir la copia), con name_not para excluirse a sí misma."""
 	var lower := ability_text.to_lower()
 	if not ("busca en tu castillo dos oros que no sean" in lower and "oro pagado" in lower):
 		return false
@@ -480,16 +426,9 @@ func try_execute_search_two_oros_split_destination_pattern(ability_text: String,
 	return true
 
 
-
-
 # =============================================================================
-# FAMILIA "SELLO" (Ángeles y Demonios: Vigilantes) — 2026-09-20, auditoría de
-# cartas sin implementar del usuario. Ciclo completo de 7 Sellos + "Los Siete
-# Sellos" (un Oro, ver GoldManager._check_los_siete_sellos_trigger()) —
-# primera tanda (Primer/Segundo/Tercer Sello) a pedido explícito del usuario
-# ("Familia de los Sellos primero"), segunda tanda (Cuarto/Quinto/Sexto/
-# Séptimo Sello) a pedido explícito de seguir ("sigue con el resto de la
-# familia de sellos").
+# FAMILIA "SELLO" (Ángeles y Demonios: Vigilantes): los 7 Sellos + "Los Siete Sellos" (un Oro, ver
+# GoldManager._check_los_siete_sellos_trigger()).
 # =============================================================================
 func _search_sello_to_hand(card: Node, controller_id: int) -> void:
 	"""Búsqueda compartida por los 3 Sellos: 'Busca un Sello en tu Castillo y
@@ -592,16 +531,9 @@ func try_execute_segundo_sello_pattern(ability_text: String, card: Node, control
 				"description": "Segundo Sello",
 			})
 			ally.damage_goes_to_exile = true
-			# 2026-09-20, bug real encontrado en revisión de código (al revisar
-			# libro de thoth, que copió este mismo mecanismo): "este turno"
-			# debe expirar en la MISMA frontera que el modificador de Fuerza de
-			# arriba (UNTIL_END_TURN, que limpia en _on_turn_ended() sin
-			# filtrar por jugador — ver ContinuousEffectManager.gd). El filtro
-			# `started_player_id != owner_id` de abajo esperaba a que volviera
-			# a ser TU turno para limpiar, dejando el efecto vivo durante todo
-			# el turno del oponente de más (un turno extra de lo que dice el
-			# texto). Se limpia en el PRÓXIMO turn_started sin importar de
-			# quién sea, igual que cualquier otro efecto "este turno".
+			# "Este turno" vence en el próximo turn_started, sea de quien sea, igual que el modificador de
+			# Fuerza de arriba (UNTIL_END_TURN, ContinuousEffectManager). Esperar a que volviera tu turno lo
+			# dejaba vivo un turno de más.
 			var clear_it: Callable
 			clear_it = func(_started_player_id: int, _turn: int) -> void:
 				if is_instance_valid(ally):
@@ -719,30 +651,18 @@ func _shuffle_up_to_from_cemeteries(max_amount: int, title: String, chooser_id: 
 
 
 func try_execute_cuarto_sello_pattern(ability_text: String, card: Node, controller_id: int) -> bool:
-	"""'Puedes jugarlo al comienzo de cualquier Fase. Busca un Sello en tu
-	Castillo y ponlo en tu mano. Destruye hasta una carta de coste 4 o menos.
-	Puedes pagar un Oro y Descartarlo para que un Aliado pierda su habilidad
-	y 4 de Fuerza por el turno. Roba dos cartas.' (Cuarto Sello, 2026-09-20).
-	Primera cláusula ('Puedes jugarlo al comienzo de cualquier Fase') no
-	necesita código: no existe en el proyecto ninguna restricción de
-	horario/fase para jugar un Talismán (grep confirmado, sin resultados) —
-	el motor ya deja jugar cualquier Talismán en cualquier momento en que el
-	jugador tenga la palabra, así que esta cláusula ya se cumple sola.
-	Segunda: búsqueda compartida. Tercera: Destruye hasta una carta (0 o 1)
-	de coste ≤4, cualquier tipo/jugador en juego — mismo filtro de zona +
-	ContinuousEffectManager.get_modified_cost() que BanishOpponentPatterns.
-	try_execute_raise_opponent_cemetery_or_destroy_cost1_draw_pattern().
-	Cuarta: costo adicional OPCIONAL ('Puedes') — pagar 1 Oro y Descartarlo
-	(no existe en el proyecto un camino genérico para 'descartar un Oro de
-	Reserva', ver GoldManager._discard_oro_from_reserva(), nuevo) para que
-	UN Aliado (sin calificador 'tuyo'/'oponente' en el texto — se interpreta
-	como cualquier Aliado en juego de cualquier lado, igual que el objetivo
-	de Convertir de _select_convert_target()) pierda su habilidad (Keyword
-	Manager.silence_card(..., 'turn')) y 4 de Fuerza este turno. 'Roba dos
-	cartas' se interpretó como parte del mismo costo opcional (misma oración,
-	sin 'de todas formas' que la desligue) — no se resuelve si no se paga.
-	SIN ventana de respuesta propia a propósito (mismo motivo que el resto de
-	la familia — ya la abre resolve_talisman())."""
+	"""Cuarto Sello: "Puedes jugarlo al comienzo de cualquier Fase. Busca un Sello en tu Castillo y
+	ponlo en tu mano. Destruye hasta una carta de coste 4 o menos. Puedes pagar un Oro y
+	Descartarlo para que un Aliado pierda su habilidad y 4 de Fuerza por el turno. Roba dos
+	cartas."
+	- "al comienzo de cualquier Fase": lo habilita PhaseStartWindow.
+	- Destruye hasta una carta (0 o 1) de coste ≤4, de cualquier tipo y jugador (coste con
+	ContinuousEffectManager.get_modified_cost()).
+	- Costo opcional: pagar 1 Oro y Descartarlo (GoldManager._discard_oro_from_reserva()) para que
+	un Aliado cualquiera pierda su habilidad (KeywordManager.silence_card(..., 'turn')) y 4 de
+	Fuerza. "Roba dos cartas" es parte del mismo costo opcional (misma oración): no se resuelve si
+	no se paga.
+	Sin ventana de respuesta propia: la abre resolve_talisman()."""
 	var lower := ability_text.to_lower()
 	if not ("busca un sello en tu castillo y ponlo en tu mano" in lower
 			and "destruye hasta una carta de coste 4 o menos" in lower):
@@ -764,10 +684,7 @@ func try_execute_cuarto_sello_pattern(ability_text: String, card: Node, controll
 	if destroy_target and is_instance_valid(destroy_target):
 		await ActionModule.destroy([destroy_target], card, true, true)
 
-	# 2026-10-05, bug real encontrado al convertir más cartas: main.gold_cards
-	# es un Array GLOBAL con el Oro físico de AMBOS jugadores — sin filtrar
-	# por owner_id, "own_oros" en realidad devolvía cualquier Oro en Reserva
-	# de cualquiera de los dos (bug preexistente, no solo de red).
+	# main.gold_cards tiene el Oro físico de los dos jugadores: se filtra por owner_id.
 	var own_oros: Array = main.gold_cards.filter(func(g): return is_instance_valid(g) and g.get("current_zone") == Constants.Zone.RESERVA_ORO and g.get("owner_id") == controller_id)
 	if not own_oros.is_empty():
 		var pay: bool = await SelectionManager.await_two_choice(
@@ -813,24 +730,16 @@ func try_execute_cuarto_sello_pattern(ability_text: String, card: Node, controll
 
 
 func try_execute_quinto_sello_pattern(ability_text: String, card: Node, controller_id: int) -> bool:
-	"""'Busca un Sello en tu Castillo y ponlo en tu mano. Baraja hasta cinco
-	cartas de los Cementerios y juega un Aliado de tu Cementerio reduciendo
-	su coste en un Oro, hasta un mínimo de 0 o un Sello pagando su coste. Si
-	está en tu Cementerio, no se pueden jugar más de cinco cartas por turno.'
-	(Quinto Sello, 2026-09-20). Segunda cláusula: _shuffle_up_to_from_
-	cemeteries() (nueva, variante 'solo Barajar' de _resolve_armeria_
-	barajar_desterrar()) + elección A/B — jugar un Aliado del Cementerio a
-	-1 Oro (mínimo 0, allow_zero=true, mismo mecanismo que aku aku en
-	PlayFromCemeteryPatterns.gd pero con mínimo 0 en vez de 1) O jugar un
-	Sello del Cementerio pagando su coste completo (mismo camino de
-	búsqueda-a-mano + play_card() de GoldManager, sin descuento). Tercera
-	cláusula: habilidad DESDE EL CEMENTERIO, tope GLOBAL de cartas jugadas
-	por turno — ver TurnManager.cards_played_count_this_turn y GoldManager.
-	_quinto_sello_cap_violation() (gatea play_card(), NO play_card_from_
-	exile()/play_card_from_cemetery()/play_card_for_free() — limitación
-	conocida, ver arquitectura.md §12.5).
-	SIN ventana de respuesta propia a propósito (mismo motivo que el resto
-	de la familia — ya la abre resolve_talisman())."""
+	"""Quinto Sello: "Busca un Sello en tu Castillo y ponlo en tu mano. Baraja hasta cinco cartas de
+	los Cementerios y juega un Aliado de tu Cementerio reduciendo su coste en un Oro, hasta un
+	mínimo de 0 o un Sello pagando su coste. Si está en tu Cementerio, no se pueden jugar más de
+	cinco cartas por turno."
+	- Barajar: _shuffle_up_to_from_cemeteries(). Luego A/B: un Aliado del Cementerio a -1 Oro
+	(mínimo 0, allow_zero, como aku aku en PlayFromCemeteryPatterns.gd) o un Sello del Cementerio
+	pagando su coste.
+	- El tope desde el Cementerio: TurnManager.cards_played_count_this_turn y
+	GoldManager._quinto_sello_cap_violation() (solo en play_card(); ver arquitectura.md §12.5).
+	Sin ventana de respuesta propia: la abre resolve_talisman()."""
 	var lower := ability_text.to_lower()
 	if not ("busca un sello en tu castillo y ponlo en tu mano" in lower
 			and "baraja hasta cinco cartas de los cementerios" in lower):
@@ -894,21 +803,12 @@ func try_execute_quinto_sello_pattern(ability_text: String, card: Node, controll
 
 
 func try_execute_sexto_sello_pattern(ability_text: String, card: Node, controller_id: int) -> bool:
-	"""'No puede ser Anulado. Busca un Sello en tu Castillo y ponlo en tu
-	mano. Destruye o Destierra todas las cartas que no sean Oro. Cada
-	jugador Bota seis cartas y por cada Sello que se haya Botado de esta
-	forma, tu oponente Bota una carta adicional.' (Sexto Sello, 2026-09-20).
-	'No puede ser Anulado': protección estática incondicional agregada en
-	LinkedEffectRegistry._execute_annul() (nueva, mismo criterio que 'no
-	pueden ser canceladas' de Drácula en _execute_cancel()) — cubre esta
-	carta automáticamente, sin código aparte aquí. Elección A/B única para
-	TODAS las cartas (no por carta) — Destruir o Desterrar, ambos jugadores,
-	cualquier carta que no sea Oro en juego. Mill 6 a cada jugador (source
-	'Sexto Sello'); el bono 'una carta adicional por cada Sello Botado de
-	esta forma' cuenta los Sello entre las 12 cartas molidas en total (ambos
-	jugadores) — interpretación: 'de esta forma' se lee como 'por este
-	efecto', no solo del Cementerio del controlador, ya que el texto no dice
-	'tuyos'."""
+	"""Sexto Sello: "No puede ser Anulado. Busca un Sello en tu Castillo y ponlo en tu mano. Destruye
+	o Destierra todas las cartas que no sean Oro. Cada jugador Bota seis cartas y por cada Sello
+	que se haya Botado de esta forma, tu oponente Bota una carta adicional."
+	"No puede ser Anulado" lo cubre StackAnnul (protección por texto). Una sola elección
+	Destruir/Desterrar para todas las cartas que no son Oro, de ambos jugadores. El bono cuenta los
+	Sellos entre las 12 cartas Botadas (ambos jugadores): el texto no dice "tuyos"."""
 	var lower := ability_text.to_lower()
 	if not ("busca un sello en tu castillo y ponlo en tu mano" in lower
 			and "destruye o destierra todas las cartas que no sean oro" in lower):
@@ -963,18 +863,11 @@ func try_execute_sexto_sello_pattern(ability_text: String, card: Node, controlle
 
 
 func _apply_septimo_sello_convert(target: Node, source_card: Node) -> void:
-	"""Convertir + Fuerza 0 (Séptimo Sello, 2026-09-20) — 'Convertir'
-	estándar del proyecto (is_converted + KeywordManager.silence_card, ver
-	TargetedEffectExecutor._execute_targeted_convert()) NO fuerza Fuerza a 0
-	('conserva tipo/coste/Fuerza' según su propio docstring); esta carta
-	exige explícitamente 'de Fuerza 0' además, así que se agrega un
-	modificador STRENGTH separado con operation='set' (soportado por
-	ModifierRegistry._apply_operation(), no usado hasta ahora en el
-	proyecto) en vez de 'add'. Duración UNTIL_LEAVES (no PERMANENT — PERMANENT
-	dura 'mientras la FUENTE esté en juego', pero Séptimo Sello es un
-	Talismán que se va al Cementerio apenas resuelve; UNTIL_LEAVES ata la
-	duración al OBJETIVO, que es lo que corresponde a un Convertir de
-	verdad: dura hasta que la carta convertida sale de juego)."""
+	"""Convertir + Fuerza 0 (Séptimo Sello). El Convertir estándar (is_converted +
+	KeywordManager.silence_card, ver TargetedEffectExecutor._execute_targeted_convert()) conserva
+	la Fuerza; aquí se agrega un modificador STRENGTH con operation = 'set'. Duración UNTIL_LEAVES
+	(atada al objetivo): PERMANENT dura mientras la fuente esté en juego, y el Talismán se va al
+	Cementerio al resolver."""
 	if not is_instance_valid(target):
 		return
 	if TriggerSystem._targeted_executor._target_text_denies(target, ["no puede ser convertida", "no puede ser convertido"]):
@@ -995,20 +888,12 @@ func _apply_septimo_sello_convert(target: Node, source_card: Node) -> void:
 
 
 func try_execute_septimo_sello_pattern(ability_text: String, card: Node, controller_id: int) -> bool:
-	"""'No puede ser Anulado. Convierte un Oro y hasta una carta oponente de
-	cada coste en cartas del mismo tipo, de Fuerza 0 y sin habilidad. Una
-	carta que controles gana Indestructible e Indesterrable. Roba dos
-	cartas o tu oponente Bota una carta por cada Sello en tu Cementerio,
-	hasta siete.' (Séptimo Sello, 2026-09-20) — el único de los 7 SIN
-	cláusula 'busca un Sello'. 'No puede ser Anulado' — mismo motivo que
-	Sexto Sello (protección estática genérica, sin código aparte aquí).
-	'Hasta una carta oponente de CADA coste' — recorre los costes DISTINTOS
-	presentes entre las cartas oponentes en juego (no solo Aliados — el
-	texto no dice 'Aliado', cualquier tipo) y convierte hasta una por cada
-	valor de coste, eligiendo cuál si hay más de una al mismo coste — sin
-	precedente exacto en el proyecto (_select_convert_target() es de UN
-	objetivo, coste ≤N; aquí es potencialmente MUCHOS objetivos, uno por
-	cada coste exacto distinto)."""
+	"""Séptimo Sello: "No puede ser Anulado. Convierte un Oro y hasta una carta oponente de cada coste
+	en cartas del mismo tipo, de Fuerza 0 y sin habilidad. Una carta que controles gana
+	Indestructible e Indesterrable. Roba dos cartas o tu oponente Bota una carta por cada Sello en
+	tu Cementerio, hasta siete." Es el único sin "busca un Sello". "Hasta una carta oponente de
+	cada coste": recorre los costes distintos entre las cartas oponentes en juego (cualquier tipo)
+	y convierte hasta una por coste, eligiendo si hay varias."""
 	var lower := ability_text.to_lower()
 	if not ("convierte un oro y hasta una carta oponente de cada coste en cartas del mismo tipo" in lower):
 		return false
@@ -1017,8 +902,7 @@ func try_execute_septimo_sello_pattern(ability_text: String, card: Node, control
 	if not main or not main._card_interaction:
 		return true
 
-	# 2026-10-05, mismo bug que Cuarto Sello: gold_cards es global, hay que
-	# filtrar por owner_id para que "own_oros" sea de verdad el Oro propio.
+	# gold_cards es global: filtrar por owner_id, como en Cuarto Sello.
 	var own_oros: Array = main.gold_cards.filter(func(g): return is_instance_valid(g) and g.get("current_zone") == Constants.Zone.RESERVA_ORO and g.get("owner_id") == controller_id)
 	if not own_oros.is_empty():
 		var oro_target: Node = own_oros[0]
@@ -1087,13 +971,10 @@ func try_execute_septimo_sello_pattern(ability_text: String, card: Node, control
 
 func try_execute_search_up_to_n_castillo_and_or_cementerio_play_discount_pattern(ability_text: String, card: Node,
 		controller_id: int) -> bool:
-	"""'Puedes buscar en tu Castillo y/o Cementerio hasta dos Armas. Puedes
-	jugarlas reduciendo su coste en un Oro, hasta un mínimo de 1, y/o
-	ponerlas en tu mano' (Arturo de Bretaña, id 21135 — 2026-10-11, texto de
-	la API de ShadowForge vía cache). Antes no lo tomaba nadie: el regex
-	genérico de SEARCH dice 'busca en', no 'buscar en'. Selector de ambas
-	zonas a la vez, se pueden mezclar (a pedido del usuario); por cada carta,
-	jugarla con el descuento o dejarla en la mano."""
+	"""Arturo de Bretaña: "Puedes buscar en tu Castillo y/o Cementerio hasta dos Armas. Puedes
+	jugarlas reduciendo su coste en un Oro, hasta un mínimo de 1, y/o ponerlas en tu mano". El
+	regex genérico de SEARCH dice "busca en", no "buscar en". Selector de las dos zonas a la vez
+	(se pueden mezclar); por cada carta, jugarla con descuento o dejarla en la mano."""
 	var lower := ability_text.to_lower()
 	var rx := RegEx.new()
 	rx.compile("buscar en tu castillo y/o cementerio hasta (\\w+) (aliados|armas|t[oó]tems|talismanes|oros)\\.")

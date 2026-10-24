@@ -1,25 +1,13 @@
 extends Node
-## ExternalApiClient - Cliente para la nueva API de cartas/mazos (ShadowForge)
-##
-## Reemplaza la fuente vieja (localhost:3000, a la que ya no hay acceso).
-## El dominio que se usaba como referencia (shadow-forge-deck.vercel.app) es
-## solo el frontend Angular; el backend real es un Django/DRF aparte:
-##   https://iterva.pythonanywhere.com/api
-## (encontrado inspeccionando el bundle JS compilado del frontend).
-##
-## CREDENCIALES: nunca hardcodeadas. Al arrancar, este autoload busca
-##   user://shadowforge_credentials.json   →  {"username": "...", "password": "..."}
-## Si no existe, crea una plantilla vacía y avisa por consola dónde está
-## (fuera del repo — la carpeta de datos de usuario de Godot). El token
-## obtenido se guarda en user://shadowforge_token.json y se reutiliza hasta
-## que expire (7 días) o falle con 401, momento en que se reautentica solo.
-##
-## FORMA DE RESPUESTA: el endpoint de cartas se verificó en vivo (campos:
-## myl_id, name, cost, damage, ability, race, type, image_url). Los
-## endpoints de mazos (fetch_my_decks/fetch_public_decks/
-## fetch_public_deck_entries) usan /api/decks/*, confirmados 2026-09-22
-## leyendo el bundle JS compilado real del frontend Angular de ShadowForge
-## (no adivinados) — ver comentarios de cada función para el detalle.
+## ExternalApiClient — cliente de la API de cartas/mazos de ShadowForge. El frontend
+## (shadow-forge-deck.vercel.app) es Angular; el backend es Django/DRF en
+## https://iterva.pythonanywhere.com/api.
+## CREDENCIALES: nunca en el código. Al arrancar se lee user://shadowforge_credentials.json
+## ({"username": "...", "password": "..."}); si no existe, se crea una plantilla vacía y se avisa
+## por consola. El token va a user://shadowforge_token.json y se reusa hasta que vence (7 días) o da
+## 401, y entonces se reautentica solo.
+## Respuestas: cartas con myl_id, name, cost, damage, ability, race, type, image_url; mazos en
+## /api/decks/* (ver cada función).
 
 signal login_succeeded
 signal login_failed(reason: String)
@@ -27,21 +15,19 @@ signal decks_received(decks: Array)
 signal decks_failed(reason: String)
 signal cards_received(edicion: String, cards: Array)
 signal cards_failed(edicion: String, reason: String)
-# 2026-09-22, a pedido del usuario ("que te conectes con tu cuenta de
-# shadowforge y salgan tus mazos privados... mazos públicos también"):
-# señales nuevas para la pantalla de login real y el buscador de mazos
-# públicos — ver ShadowForgeLogin.gd y DeckSelector.gd.
+# ("que te conectes con tu cuenta de shadowforge y salgan tus mazos privados... mazos públicos
+# también"): señales nuevas para la pantalla de login real y el buscador de mazos públicos — ver
+# ShadowForgeLogin.gd y DeckSelector.gd.
 signal public_decks_received(results: Array, count: int)
 signal public_decks_failed(reason: String)
 signal public_deck_detail_received(deck_data: Dictionary)
 signal public_deck_detail_failed(reason: String)
 signal profile_received(profile: Dictionary)
 signal profile_failed(reason: String)
-# 2026-09-22, a pedido del usuario ("que el botón mis mazos te muestre los
-# mazos privados y públicos"): fetch_my_decks()/fetch_public_decks() solo
-# traen datos resumidos por mazo (sin "entries") — señales separadas de las
-# de mazos públicos para poder distinguir qué llamada resolvió qué, ver
-# DeckSelector._resolve_deck_entries().
+# ("que el botón mis mazos te muestre los mazos privados y públicos"):
+# fetch_my_decks/fetch_public_decks solo traen datos resumidos por mazo (sin "entries") — señales
+# separadas de las de mazos públicos para poder distinguir qué llamada resolvió qué, ver
+# DeckSelector._resolve_deck_entries.
 signal my_deck_detail_received(deck_data: Dictionary)
 signal my_deck_detail_failed(reason: String)
 
@@ -162,8 +148,8 @@ func login() -> void:
 	_is_logging_in = true
 	var http = HTTPRequest.new()
 	add_child(http)
-	# 2026-09-23: subido de 15s a 30s — ver nota completa en _authed_request()
-	# (el mismo backend gratuito puede tardar en "despertar").
+	# Subido de 15s a 30s — ver nota completa en _authed_request (el mismo backend gratuito puede
+	# tardar en "despertar").
 	http.timeout = 30.0
 	var body = JSON.stringify({"username": username, "password": password})
 	http.request_completed.connect(_on_login_completed.bind(http))
@@ -236,14 +222,8 @@ func _authed_request(path: String, on_success: Callable, on_failure: Callable, r
 
 	var http = HTTPRequest.new()
 	add_child(http)
-	# 2026-09-23, bug real: /decks/my/{id}/ se cuelga 20s exactos en partida
-	# real incluso con un solo pedido, sin concurrencia (ya descartada, ver
-	# arquitectura.md §13.15/§13.16) — sospecha: el backend gratuito de
-	# PythonAnywhere puede tardar en "despertar" tras estar inactivo, más de
-	# lo que alcanzaban a cubrir 20s. Subido a 60s para confirmar si es
-	# lentitud real (completa tarde) o un colgado de verdad (nunca completa
-	# ni con más margen) — ver también el ajuste correspondiente en
-	# DeckSelector._resolve_deck_entries().
+	# Timeout de 60 s: el backend gratuito de PythonAnywhere puede tardar en "despertar" tras estar
+	# inactivo (arquitectura.md §13.15/§13.16). Ver también DeckSelector._resolve_deck_entries().
 	http.timeout = 60.0
 	http.request_completed.connect(
 		func(result: int, code: int, _h: PackedStringArray, body: PackedByteArray) -> void:
@@ -281,12 +261,8 @@ func _authed_request(path: String, on_success: Callable, on_failure: Callable, r
 # MAZOS
 # =============================================================================
 func fetch_my_decks() -> void:
-	"""Trae los mazos propios del jugador logueado (privados y públicos que
-	haya creado). Endpoint real confirmado 2026-09-22 leyendo el DeckService
-	del frontend Angular compilado de ShadowForge (chunk-B2Q7O27F.js):
-	GET /api/decks/my/ → {results: [...], count: N} (paginación DRF
-	estándar) — reemplaza /external/my-decks/, que nunca se pudo verificar
-	sin credenciales reales y cuya forma de respuesta era una adivinanza."""
+	"""Mazos propios del jugador logueado (privados y públicos que haya creado): GET /api/decks/my/ →
+	{results: [...], count: N} (paginación DRF)."""
 	var on_success := func(json):
 		var raw_results = json.get("results") if json is Dictionary else null
 		var decks: Array = raw_results if raw_results is Array else []
@@ -298,26 +274,18 @@ func fetch_my_decks() -> void:
 
 
 func fetch_my_deck_entries(deck_id: int) -> void:
-	"""Trae uno de TUS propios mazos completo (con .entries[] para cargarlo
-	de verdad) — GET /api/decks/my/{id}/, requiere Bearer (vía
-	_authed_request(), mismo criterio que fetch_my_decks() de arriba: se
-	reautentica solo si el token venció). Mismo DeckService real del sitio
-	confirmado 2026-09-22 que fetch_public_deck_entries() — se espera el
-	mismo shape (.entries[].card_detail.myl_id + .quantity, .name), aunque
-	esta ruta puntual (/decks/my/{id}/, no /decks/public/{id}/) no se
-	verificó línea por línea contra una cuenta real."""
+	"""Uno de TUS mazos completo (con .entries[]): GET /api/decks/my/{id}/, con Bearer
+	(_authed_request(), se reautentica si el token venció). Se espera el mismo formato que
+	fetch_public_deck_entries() (.entries[].card_detail.myl_id + .quantity, .name)."""
 	var on_success := func(json): emit_signal("my_deck_detail_received", json if json is Dictionary else {})
 	var on_failure := func(reason): emit_signal("my_deck_detail_failed", reason)
 	_authed_request("/decks/my/%d/" % deck_id, on_success, on_failure)
 
 
 func fetch_public_decks(search: String = "", page: int = 1, formato: String = "", raza: String = "", ordering: String = "recent") -> void:
-	"""Busca/lista mazos públicos de ShadowForge, paginado. Endpoint real
-	confirmado 2026-09-22 (mismo DeckService que fetch_my_decks() de
-	arriba): GET /api/decks/public/?search=&page=&format=&race=&ordering=
-	→ {results: [...], count: N}. No requiere login (los mazos públicos son
-	públicos) — se manda el Bearer solo si ya hay uno disponible, mismo
-	criterio que fetch_cards()."""
+	"""Busca/lista mazos públicos, paginado: GET
+	/api/decks/public/?search=&page=&format=&race=&ordering= → {results: [...], count: N}. No
+	requiere login; se manda el Bearer si ya hay uno, como fetch_cards()."""
 	var query := PackedStringArray()
 	if not search.is_empty():
 		query.append("search=" + search.uri_encode())
@@ -333,7 +301,7 @@ func fetch_public_decks(search: String = "", page: int = 1, formato: String = ""
 
 	var http = HTTPRequest.new()
 	add_child(http)
-	http.timeout = 60.0  # 2026-09-23: subido de 20s, ver nota en _authed_request()
+	http.timeout = 60.0  # ver nota en _authed_request()
 	http.request_completed.connect(
 		func(result: int, code: int, _h: PackedStringArray, body: PackedByteArray) -> void:
 			http.queue_free()
@@ -365,7 +333,7 @@ func fetch_public_deck_entries(deck_id: int) -> void:
 	.quantity, .name, .owner_username)."""
 	var http = HTTPRequest.new()
 	add_child(http)
-	http.timeout = 60.0  # 2026-09-23: subido de 20s, ver nota en _authed_request()
+	http.timeout = 60.0  # ver nota en _authed_request()
 	http.request_completed.connect(
 		func(result: int, code: int, _h: PackedStringArray, body: PackedByteArray) -> void:
 			http.queue_free()
@@ -396,9 +364,8 @@ func fetch_my_profile() -> void:
 
 
 # =============================================================================
-# CARTAS — algunas ediciones (imp, esc) responden sin autenticación; otras
-# (pb, fx, confirmadas por el dueño de la API el 2026-08-18) devolvían 0
-# cartas sin token — se manda el Bearer si hay uno disponible, por las dudas.
+# CARTAS — algunas ediciones (imp, esc) responden sin autenticación; otras (pb, fx) devuelven 0 sin
+# token: se manda el Bearer si hay uno.
 # =============================================================================
 func fetch_cards(edicion: String) -> void:
 	var http = HTTPRequest.new()

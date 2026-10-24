@@ -1,14 +1,9 @@
 extends RefCounted
-## ConvertAndMiscResolver — Patrones compuestos de Convertir/transformar
-## cartas (Sherlock Holmes, Jormundgander), destierro por cantidad dinámica
-## de Aliados (Espada del Juicio), descarte+robo del oponente (Miguel) y
-## silencio por nombre (Alicia en Wonderland). Cada uno detecta su propio
-## texto por regex y resuelve lo que extract_action() no puede manejar solo
-## (esa función reconoce UNA acción por texto, la primera que matchea).
-## Opera sobre TriggerSystem via _executor._main (mismo Node que
-## TargetedEffectExecutor._main — ver ese archivo).
-## Extraído de TargetedEffectExecutor.gd (2026-08-30, "módulos gordos" —
-## mismo corte que ya separó LookAndPlayResolver.gd).
+## ConvertAndMiscResolver — patrones compuestos de Convertir/transformar cartas (Sherlock Holmes,
+## Jormundgander, Jabberwocky, Biblioteca de Caballería), destierro por cantidad (Espada del
+## Juicio), descarte + robo del oponente (Miguel) y silencio por nombre (Alicia en Wonderland). Cada
+## uno detecta su texto por regex y resuelve lo que extract_action() (una sola acción por texto) no
+## puede. Opera sobre TriggerSystem vía _executor._main (ver TargetedEffectExecutor.gd).
 
 var _executor: TargetedEffectExecutor
 
@@ -24,41 +19,24 @@ func setup(executor: TargetedEffectExecutor) -> void:
 # SALIR DEL JUEGO HASTA TU PRÓXIMO TURNO" (Sherlock Holmes)
 # =============================================================================
 func try_execute_mill_convert_to_ally_pattern(ability_text: String, card: Node, controller_id: int) -> bool:
-	"""Detecta el patrón único de Sherlock Holmes (2026-08-29, verificado
-	contra la API — 2 reimpresiones idénticas). Las cartas 'convertidas' NO
-	se juegan ni se pagan, aparecen directo en juego bajo el control del
-	jugador del efecto.
-
-	2026-09-06, a pedido del usuario — relectura de 'convierte hasta dos
-	cartas que no sean Oro O del tope de un Castillo': el 'o' separa DOS
-	fuentes alternativas (elección del jugador), no es un filtro de tipo
-	sobre una sola fuente como se había asumido el 2026-08-29:
-	- 'cartas en juego que no sean Oro': el jugador elige a mano hasta N
-	  cartas YA EN JUEGO (de cualquier lado, sin posesivo — ver
-	  [[project_no_zone_means_in_play]]) para convertir in-place.
-	- 'del tope de un Castillo': comportamiento original — se sacan a
-	  ciegas del tope del mazo elegido, sin filtrar por tipo.
-	SIN preguntar antes cuál (a pedido del usuario, 2026-09-06): ambas
-	fuentes quedan clickeables A LA VEZ — una carta en juego (no Oro) o
-	cualquiera de los dos Paneles de Castillo — y el PRIMER click real
-	decide la fuente para el resto de la resolución; la otra deja de ser
-	clickeable en cuanto se resuelve la carrera (SelectionManager.
-	start_castillo_pick()/cancel_castillo_pick() en carrera contra
-	CardInteractionModule.start_target_selection()/cancel_target_selection(),
-	mismo split ya usado por await_target()/await_castillo_pick()).
-
-	Ambas ramas terminan en el mismo Convertir real de DAR Sección 8
-	(is_converted + KeywordManager.silence_card — mismo mecanismo que
-	Capitán O'Brien/Signo Amarillo, giro visual 180°) y la misma Fuerza fija
-	como modificador CONTINUO (ContinuousEffectManager, capa
-	LAYER_7A_CHAR_SETTING, operación 'set', sin source real — permanente de
-	verdad, no atado a que Sherlock siga en juego) para que el badge de
-	Fuerza muestre el valor EFECTIVO aunque la carta impresa diga otra cosa.
-	Returns: true si el patrón aplicaba."""
+	"""Sherlock Holmes: "convierte hasta dos cartas que no sean Oro o del tope de un Castillo". Las
+	cartas convertidas no se juegan ni se pagan: aparecen en juego bajo el control de quien
+	resuelve. El "o" separa dos fuentes:
+	- cartas en juego que no sean Oro (de cualquier lado): se eligen hasta N y se convierten en su
+	lugar;
+	- del tope de un Castillo: se sacan a ciegas del mazo elegido.
+	Ambas fuentes quedan clickeables a la vez (una carta en juego o un Panel de Castillo) y el
+	primer click decide (SelectionManager.start_castillo_pick()/cancel_castillo_pick() contra
+	CardInteractionModule.start_target_selection()/cancel_target_selection()).
+	Las dos ramas terminan en el Convertir de DAR Sección 8 (is_converted +
+	KeywordManager.silence_card, giro de 180°) con Fuerza fija por modificador continuo
+	(LAYER_7A_CHAR_SETTING, 'set', sin source: permanente), para que el badge muestre el valor
+	efectivo.
+	Devuelve true si el patrón aplicaba."""
 	var lower := ability_text.to_lower()
 	if not ("del tope de un castillo" in lower and "gana su control" in lower):
 		return false
-	# Viejo del Saco (2026-10-18) tiene su propio patrón (PresetDeckPatterns).
+	# Viejo del Saco tiene su propio patrón (mechanics/ConvertPatterns.gd).
 	if "en un aliado de fuerza 2 con la habilidad furia, imbloqueable" in lower:
 		return false
 	if controller_id != 0 or not is_instance_valid(card):
@@ -109,19 +87,13 @@ func try_execute_mill_convert_to_ally_pattern(ability_text: String, card: Node, 
 
 	var picked: Array = []
 	var filter := func(c: Node) -> bool:
-		# Autorreferenciable (2026-09-06, a pedido del usuario: las cartas de
-		# Imperio SÍ pueden targetear/afectarse a sí mismas salvo que digan lo
-		# contrario) — Sherlock puede convertirse a sí mismo.
+		# Autorreferenciable: las cartas de Imperio SÍ pueden targetear/afectarse a sí mismas salvo que
+		# digan lo contrario) — Sherlock puede convertirse a sí mismo.
 		return c.get("card_type") != Constants.CardType.ORO and not (c in picked)
 
-	# Carrera: castillo activo en paralelo mientras se espera el primer
-	# click de carta. El que resuelva primero cancela al otro.
-	# 2026-09-23: guardado en un Dictionary, no en variables sueltas — un
-	# lambda de GDScript captura las locales por VALOR, así que
-	# "race_done = true" adentro del callback nunca se veía desde este
-	# bucle (ver misma causa raíz en arquitectura.md §13.17 y en
-	# CardInteractionModule.await_target_or_castillo_pick()). Un Dictionary
-	# sí se captura por referencia.
+	# Carrera: el Castillo queda activo en paralelo mientras se espera el primer click de carta; el
+	# primero que resuelve cancela al otro. Estado en un Dictionary: los lambdas capturan las locales
+	# por valor (arquitectura.md §13.17).
 	var _state := {"race_done": false, "castillo_picked_own": true}
 	SelectionManager.start_castillo_pick(main, card.card_name if card.get("card_name") else "Sherlock Holmes",
 		func(picked_own: bool) -> void:
@@ -225,36 +197,25 @@ func try_execute_mill_convert_to_ally_pattern(ability_text: String, card: Node, 
 # PAGADO" (Jormundgander)
 # =============================================================================
 func try_execute_convert_ally_to_gold_pattern(ability_text: String, card: Node, controller_id: int) -> bool:
-	"""Detecta 'puedes convertirlo en un Oro y moverlo a tu Oro Pagado'
-	(Jormundgander, 2026-08-29, verificado contra la API — única
-	reimpresión, sin discrepancias) — un Aliado en juego se transforma en
-	Oro y se reubica directo en Oro Pagado. La otra mitad de esta misma
-	carta ('si esta carta es un Oro, cuando lo pagues para jugar un
-	Aliado, conviértela en un Aliado y muévela a tu Línea de Defensa') se
-	resuelve del lado de GoldManager._mover_oro_a_pagado(), que revisa
-	card.revert_to_data al pagar cualquier Oro — no hace falta detectarla
-	aquí aparte.
-	Returns: true si el patrón aplicaba."""
+	"""Jormundgander: "puedes convertirlo en un Oro y moverlo a tu Oro Pagado" — el Aliado se
+	transforma en Oro y va directo al Oro Pagado. La otra mitad ("si esta carta es un Oro, cuando
+	lo pagues para jugar un Aliado, conviértela en un Aliado...") la resuelve
+	GoldManager._mover_oro_a_pagado() con card.revert_to_data.
+	Devuelve true si el patrón aplicaba."""
 	var lower := ability_text.to_lower()
 	if not ("convertirlo en un oro" in lower and "oro pagado" in lower):
 		return false
 	if controller_id != 0 or not is_instance_valid(card):
 		return true
-	# 2026-09-30, bug real reportado por el usuario: _executor._main acá es
-	# TriggerSystem (ver TargetedEffectExecutor.gd:441-445, mismo patrón de
-	# bug ya documentado en arquitectura.md §2), no el Main real del juego
-	# — _gold_manager/_card_interaction no existen ahí y tiraban "Invalid
-	# access to property or key". Mismo fix de indirección que ya usa
-	# try_execute_jabberwocky_convert_opponent_top_pattern() más abajo.
+	# _executor._main es TriggerSystem, no Main (arquitectura.md §2): se busca Main antes de usar
+	# _gold_manager/_card_interaction, como try_execute_jabberwocky_convert_opponent_top_pattern().
 	var main := _executor._main.get_node_or_null("/root/Main")
 	if not main or not main._gold_manager:
 		return true
 
-	# 2026-09-13, a pedido del usuario: en vez de un modal de confirmación
-	# con un solo candidato, clickear la carta misma (ya está en juego,
-	# visible) confirma; ESC declina — mismo mecanismo que cualquier otro
-	# await_target(), sin necesidad de un panel aparte para un "sí/no" de
-	# una sola carta conocida de antemano.
+	# En vez de un modal de confirmación con un solo candidato, clickear la carta misma (ya está en
+	# juego, visible) confirma; ESC declina — mismo mecanismo que cualquier otro await_target, sin
+	# necesidad de un panel aparte para un "sí/no" de una sola carta conocida de antemano.
 	if not main._card_interaction:
 		return true
 	var self_filter := func(c: Node) -> bool: return c == card
@@ -274,21 +235,12 @@ func try_execute_convert_ally_to_gold_pattern(ability_text: String, card: Node, 
 # CASTILLO OPONENTE EN UN ORO SIN HABILIDAD..." (Jabberwocky)
 # =============================================================================
 func try_execute_jabberwocky_convert_opponent_top_pattern(ability_text: String, card: Node, controller_id: int) -> bool:
-	"""'Cuando entra en juego o ataca, convierte la primera carta del
-	Castillo oponente en un Oro sin habilidad y ponlo en tu Oro Pagado'
-	(Jabberwocky, 2026-09-30) — mismo mecanismo de conversión real a Oro
-	que try_execute_no_allies_convert_castillo_top_pattern() (Biblioteca de
-	Caballería, más abajo) y convert_ally_to_gold_in_pagado() (Jormundgander,
-	arriba), pero sobre el tope del Castillo RIVAL y con destino Oro Pagado
-	en vez de Línea de Defensa. La carta nunca llega a existir como Node
-	con su habilidad real — 'tipo'/'habilidad' se pisan en los datos crudos
-	ANTES de crear el Node (mismo criterio que new_data['tipo'] = ORO de
-	la función hermana), así que 'sin habilidad' queda resuelto de forma
-	más simple que silence_card() (pensada para una carta que YA existe en
-	juego). Se registró también 'cuando entra en juego o ataca' (con
-	'ataca', no 'ataque') en Card.TRIGGER_KEYWORDS — el texto real de esta
-	carta usa esa conjugación, distinta de la plantilla DAR estándar que
-	ya cubrían esas listas."""
+	"""Jabberwocky: "Cuando entra en juego o ataca, convierte la primera carta del Castillo oponente
+	en un Oro sin habilidad y ponlo en tu Oro Pagado". Misma conversión a Oro que Biblioteca de
+	Caballería y convert_ally_to_gold_in_pagado() (Jormundgander), pero sobre el Castillo rival y
+	al Oro Pagado. 'tipo'/'habilidad' se pisan en los datos antes de crear el Node, así que "sin
+	habilidad" no necesita silence_card(). "cuando entra en juego o ataca" (con "ataca") está en
+	Card.TRIGGER_KEYWORDS."""
 	var lower := ability_text.to_lower()
 	if not ("convierte la primera carta del castillo oponente en un oro sin habilidad" in lower):
 		return false
@@ -314,24 +266,13 @@ func try_execute_jabberwocky_convert_opponent_top_pattern(ability_text: String, 
 
 
 func try_execute_no_allies_convert_castillo_top_pattern(ability_text: String, card: Node, controller_id: int) -> bool:
-	"""'En la Fase Final oponente, si no controlas Aliados o si en tu turno
-	anterior un Aliado fue Anulado o su habilidad fue cancelada, Roba una
-	carta y pon bajo tu control la primera carta de un Castillo como un
-	Aliado de Fuerza 2 sin habilidad' (Biblioteca de Caballería, 2026-09-04).
-
-	LIMITACIÓN CONOCIDA: solo se implementa la mitad 'si no controlas
-	Aliados' de la condición. La otra mitad ('en tu turno anterior un Aliado
-	fue Anulado o su habilidad fue cancelada') exigiría un historial de
-	eventos por turno que el motor no tiene todavía — no hay ningún registro
-	de 'a este jugador le anularon/cancelaron un Aliado el turno pasado' en
-	ninguna parte del código. Mientras no exista, esa rama del 'o' nunca se
-	evalúa como verdadera; el efecto solo dispara con el campo propio vacío
-	de Aliados.
-
-	Reusa el mecanismo de conversión real de try_execute_mill_convert_to_
-	ally_pattern (Sherlock Holmes): is_converted + KeywordManager.
-	silence_card + Fuerza fijada por modificador CONTINUO (LAYER_7A_CHAR_
-	SETTING, 'set'), no un token de datos en blanco."""
+	"""Biblioteca de Caballería: "En la Fase Final oponente, si no controlas Aliados o si en tu turno
+	anterior un Aliado fue Anulado o su habilidad fue cancelada, Roba una carta y pon bajo tu
+	control la primera carta de un Castillo como un Aliado de Fuerza 2 sin habilidad".
+	Límite: solo la mitad "si no controlas Aliados". La otra necesitaría un historial de
+	anulaciones/cancelaciones por turno que el motor no tiene.
+	Usa la conversión de Sherlock Holmes: is_converted + KeywordManager.silence_card + Fuerza
+	fijada por modificador continuo (LAYER_7A_CHAR_SETTING, 'set')."""
 	var lower := ability_text.to_lower()
 	if not ("si no controlas aliados" in lower and "pon bajo tu control la primera carta de un castillo" in lower):
 		return false
@@ -356,8 +297,7 @@ func try_execute_no_allies_convert_castillo_top_pattern(ability_text: String, ca
 	var deck: Array = CardManager.get_deck(zone_owner)
 	if deck.is_empty():
 		return true
-	# Sin ventana genérica aquí (2026-09-09): silence_card() (más abajo) ya
-	# consulta Prevención adentro por su cuenta.
+	# Sin ventana genérica aquí: silence_card (más abajo) ya consulta Prevención adentro por su cuenta.
 	var top_data: Dictionary = deck.pop_front()
 	var new_data: Dictionary = top_data.duplicate()
 	new_data["tipo"] = Constants.CardType.ALIADO
@@ -396,17 +336,11 @@ func try_execute_no_allies_convert_castillo_top_pattern(ability_text: String, ca
 
 
 func try_execute_banish_top_by_ally_count_and_draw_pattern(ability_text: String, controller_id: int, card: Node = null) -> bool:
-	"""Detecta 'Destierra N cartas del tope de un Castillo y Roba una
-	carta' (Espada del Juicio — dispara tanto en 'Cuando entra en juego'
-	como 'en tu Agrupación'). Cantidad FIJA, parseada del texto (2026-09-06,
-	a pedido del usuario: la carta real dice 'tantas cartas... como
-	Aliados controles' — cantidad dinámica —, pero se simplificó a un
-	número fijo para esta partida; ver [[feedback_api_is_source_of_truth]]
-	para el texto real si se revierte este cambio). 'un Castillo' sin
-	posesivo = a elección (mismo criterio ya confirmado para 'un
-	Cementerio' de Miguel). El 'Roba una carta' es independiente y
-	siempre ocurre.
-	Returns: true si el patrón aplicaba."""
+	"""Espada del Juicio: "Destierra N cartas del tope de un Castillo y Roba una carta" (en "Cuando
+	entra en juego" y "en tu Agrupación"). Cantidad fija, parseada del texto: la carta dice
+	"tantas... como Aliados controles", pero se simplificó a propósito. "un Castillo" = a elección.
+	El Robo siempre ocurre.
+	Devuelve true si el patrón aplicaba."""
 	var amount_rx := RegEx.new()
 	amount_rx.compile("(?i)destierra (\\w+) cartas? del tope de un castillo")
 	var m_amount := amount_rx.search(ability_text)
@@ -425,10 +359,8 @@ func try_execute_banish_top_by_ally_count_and_draw_pattern(ability_text: String,
 
 	var deck_owner: int = controller_id
 	if banish_amount > 0:
-		# 2026-10-07 (ver arquitectura.md §40): await_castillo_pick() ya
-		# tiene puente de red — antes esto se saltaba entero para el
-		# Remoto (controller_id == 0 fijo), asumiendo su propio Castillo
-		# sin preguntar en vez de ofrecerle la elección real.
+		# await_castillo_pick() tiene puente de red (arquitectura.md §40): el Remoto también elige el
+		# Castillo.
 		var look_own: bool = await SelectionManager.await_castillo_pick(main, "Espada del Juicio — destierra del tope", controller_id)
 		deck_owner = controller_id if look_own else (1 - controller_id)
 
@@ -436,11 +368,7 @@ func try_execute_banish_top_by_ally_count_and_draw_pattern(ability_text: String,
 		return true
 
 	if banish_amount > 0:
-		var deck: Array = CardManager.get_deck(deck_owner)
-		var amount: int = mini(banish_amount, deck.size())
-		for i in range(amount):
-			var card_data: Dictionary = deck.pop_front()
-			CardManager.add_to_exile(deck_owner, card_data)
+		CardManager.banish_from_deck(deck_owner, banish_amount, false, controller_id)
 
 	if draw_amount > 0:
 		await ActionModule.draw(controller_id, draw_amount, "etb_trigger", true)
@@ -449,13 +377,11 @@ func try_execute_banish_top_by_ally_count_and_draw_pattern(ability_text: String,
 
 
 func try_execute_opponent_discard_and_draw_pattern(ability_text: String, card: Node, controller_id: int) -> bool:
-	"""Detecta 'tu oponente Descarta N cartas y tú Robas [hasta] M cartas'
-	(2026-08-29, p.ej. Miguel) — dos acciones en una sola oración que
-	extract_action() no puede encadenar (solo reconoce UNA acción por
-	texto, la primera que matchea). Reusa _execute_targeted_discard() tal
-	cual (ya resuelve 'oponente' y le da a elegir al jugador humano si es
-	su propia mano la que descarta) seguido de un robo directo.
-	Returns: true si el patrón aplicaba (se haya podido resolver o no)."""
+	"""Detecta 'tu oponente Descarta N cartas y tú Robas [hasta] M cartas' (p.ej. Miguel) — dos
+	acciones en una sola oración que extract_action no puede encadenar (solo reconoce UNA acción
+	por texto, la primera que matchea). Reusa _execute_targeted_discard tal cual (ya resuelve
+	'oponente' y le da a elegir al jugador humano si es su propia mano la que descarta) seguido de
+	un robo directo. Returns: true si el patrón aplicaba (se haya podido resolver o no)."""
 	var lower := ability_text.to_lower()
 	if not ("tu oponente descarta" in lower and "robas" in lower):
 		return false
@@ -483,17 +409,12 @@ func try_execute_opponent_discard_and_draw_pattern(ability_text: String, card: N
 
 
 func try_execute_name_a_card_pattern(ability_text: String, card: Node, _controller_id: int) -> bool:
-	"""Detecta 'nombra una carta para que pierda(n) su habilidad en todas
-	las Zonas mientras esta carta esté en juego' (2026-08-29, Alicia en
-	Wonderland). Distinto de un silencio puntual (KeywordManager.
-	silence_card(), que apunta a UNA carta ya en juego): aquí se nombra un
-	NOMBRE, y afecta cualquier copia de ese nombre en cualquier zona, esté
-	ya en juego o aparezca después (mazo, mano) — KeywordManager.
-	lock_ability_by_name()/is_name_locked(), consultado desde is_silenced().
-	Solo cubre esta variante concreta (silenciar por nombre); el 'nombra una
-	carta' de Tesoro de los Césares es un efecto DISTINTO (sube el coste,
-	no silencia) y es una habilidad ACTIVADA, no pasa por aquí.
-	Returns: true si el patrón aplicaba (se haya podido resolver o no)."""
+	"""Alicia en Wonderland: "nombra una carta para que pierda(n) su habilidad en todas las Zonas
+	mientras esta carta esté en juego". Se bloquea un NOMBRE, no una carta: afecta cualquier copia
+	en cualquier zona, también las que aparezcan después
+	(KeywordManager.lock_ability_by_name()/is_name_locked(), consultado desde is_silenced()). El
+	"nombra una carta" de Tesoro de los Césares es otro efecto (sube el coste; habilidad activada).
+	Devuelve true si el patrón aplicaba (se haya podido resolver o no)."""
 	var lower := ability_text.to_lower()
 	if not ("nombra una carta" in lower and ("pierda" in lower or "pierdan" in lower) and "habilidad" in lower):
 		return false

@@ -1,19 +1,12 @@
 extends RefCounted
 class_name PlayerSide
-## PlayerSide — "la mano / las líneas / los Oros / el pago DEL JUGADOR X"
-## (2026-10-12, arquitectura.md §56, a pedido del usuario: "cómo podemos
-## arreglar esas cartas que solo funcionan con el Anfitrión").
-##
-## Mucho código de efectos se escribió cuando "jugador 0 = la persona,
-## jugador 1 = el bot" y usa directo main.player_hand/player_field/
-## GoldManager.pagar_coste() sin jugador. Con un Remoto real eso hace que su
-## carta mire o mueva las cartas del Anfitrión, o pague con sus Oros. Estas
-## funciones resuelven el lado correcto a partir del player_id; al arreglar
-## un patrón viejo, cambiar main.player_hand por PlayerSide.hand(main, pid).
-##
-## Del lado del Anfitrión el jugador 1 se ve como "opponent_*" (_opponent_fan
-## para la mano). Se usa con preload (no con el class_name global) para no
-## depender de que el editor ya haya registrado la clase — ver §54.
+## PlayerSide — "la mano / las líneas / los Oros / el pago DEL JUGADOR X" (arquitectura.md §56).
+## Mucho código de efectos usa main.player_hand/player_field/GoldManager.pagar_coste() sin jugador
+## (de cuando el jugador 1 era siempre el bot); con un Remoto, su carta tocaría las cartas o los
+## Oros del Anfitrión. Estas funciones resuelven el lado correcto según el player_id: al arreglar un
+## patrón viejo, cambiar main.player_hand por PlayerSide.hand(main, pid).
+## En el Anfitrión el jugador 1 es "opponent_*" (_opponent_fan para la mano). Se usa con preload (no
+## con el class_name global; ver §54).
 
 const LINE_PROPS := {
 	0: ["player_field", "player_linea_ataque", "player_linea_apoyo"],
@@ -130,6 +123,100 @@ static func play_from_hand(main: Node, pid: int, card: Node) -> void:
 		Constants.CardType.TOTEM:
 			if bot.has_method("_play_totem_remote"):
 				await bot._play_totem_remote(card)
+
+
+# =============================================================================
+# ELEGIR Y MOVER CARTAS (en vez de copiar estos bloques en cada patrón, con su rama del bot)
+# =============================================================================
+# Elige una carta EN JUEGO (líneas de los dos jugadores) que pase 'filter'.
+# - Anfitrión / Remoto: click en el tablero (await_target; el Remoto elige por red). 'optional' = se
+# puede no elegir (N).
+# - Bot local: la primera que pase 'bot_filter' (o 'filter') en los lados de 'bot_sides' en orden
+# (por defecto el rival y después el propio). Con 'bot_skip' no elige ninguna ("hasta"/"puedes" que
+# no le conviene).
+static func pick_in_play(main: Node, pid: int, prompt: String, filter: Callable, optional: bool = true,
+		bot_sides: Array = [], bot_skip: bool = false, bot_filter: Callable = Callable()) -> Node:
+	if is_bot(pid):
+		if bot_skip:
+			return null
+		var check: Callable = bot_filter if bot_filter.is_valid() else filter
+		for side in (bot_sides if not bot_sides.is_empty() else [1 - pid, pid]):
+			for container in line_containers(main, side):
+				for c in container.get_children():
+					if is_instance_valid(c) and check.call(c):
+						return c
+		return null
+	if not main.get("_card_interaction"):
+		return null
+	return await main._card_interaction.await_target(prompt, filter, optional, pid)
+
+
+## Elige una carta de la mano de 'pid' que pase 'filter' (si se da). El bot
+## toma la primera, o una al azar con 'bot_random'. null si no hay o no eligió.
+static func pick_from_hand(main: Node, pid: int, prompt: String, filter: Callable = Callable(),
+		optional: bool = true, bot_random: bool = false) -> Node:
+	var cards: Array = hand_cards(main, pid).filter(func(c):
+		return is_instance_valid(c) and (not filter.is_valid() or filter.call(c)))
+	if cards.is_empty():
+		return null
+	if is_bot(pid):
+		return cards.pick_random() if bot_random else cards[0]
+	if not main.get("_card_interaction"):
+		return null
+	return await main._card_interaction.await_target(prompt, func(c: Node) -> bool: return c in cards, optional, pid)
+
+
+## Saca una carta de la mano de 'pid' y devuelve sus datos (boca arriba). El
+## Nodo se libera: el llamador decide adónde van los datos.
+static func take_from_hand(main: Node, pid: int, card: Node) -> Dictionary:
+	if not is_instance_valid(card):
+		return {}
+	var data: Dictionary = card.card_data.duplicate()
+	data["esta_oculta"] = false
+	remove_from_hand(main, pid, card)
+	if is_instance_valid(card):
+		CardManager._disconnect_card_interaction_signals(card)
+		card.queue_free()
+	return data
+
+
+## Crea la carta (desde sus datos) en la mano de 'pid', que queda como dueño y
+## controlador. Devuelve el Nodo.
+static func put_in_hand(main: Node, pid: int, data: Dictionary) -> Node:
+	data.erase("_from_cemetery_turn")  # ya no se juega "desde el Cementerio" (GoldManager._mark_cemetery_exhumar)
+	data["esta_oculta"] = false
+	var node = main._create_card(data, false)
+	node.owner_id = pid
+	node.controller_id = pid
+	var h = hand(main, pid)
+	if h:
+		h.add_card(node)
+	main._connect_card_signals(node)
+	return node
+
+
+## Baraja una carta EN JUEGO en el Castillo de su dueño (con Prevención: pasa
+## por ActionModule.return_to_deck). true si se barajó.
+static func shuffle_into_castle(card: Node, source: Node, label: String) -> bool:
+	if not is_instance_valid(card):
+		return false
+	var owner: int = card.owner_id if card.get("owner_id") != null else 0
+	if not await ActionModule.return_to_deck(card, owner, true, source):
+		return false
+	CardManager.shuffle_deck(owner)
+	AnimationQueue.queue_shuffle(owner, "Barajar mazo (%s)" % label)
+	return true
+
+
+## Baraja una carta de la mano de 'pid' en su Castillo.
+static func shuffle_from_hand(main: Node, pid: int, card: Node, label: String) -> void:
+	var data: Dictionary = take_from_hand(main, pid, card)
+	if data.is_empty():
+		return
+	data["esta_oculta"] = true
+	CardManager.get_deck(pid).append(data)
+	CardManager.shuffle_deck(pid)
+	AnimationQueue.queue_shuffle(pid, "Barajar mazo (%s)" % label)
 
 
 # =============================================================================

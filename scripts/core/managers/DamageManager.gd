@@ -73,14 +73,9 @@ var _combat_damage_this_turn: Dictionary = {0: 0, 1: 0}
 # =============================================================================
 var _game_board: Node = null
 
-# (2026-08-28, "módulos gordos" punto 1): GameManager/ActionModule/CombatLog/
-# TriggerSystem son autoloads garantizados — se sacó el cacheo redundante vía
-# get_node_or_null() y se referencian directo. _game_board queda siempre
-# null: no existe autoload '/root/GameBoard' ni método
-# GameManager.get_game_board() (era el GameBoard.gd huérfano, eliminado).
-# _apply_damage_to_castle() (única consumidora real de _get_board()) no la
-# llama nadie hoy — el daño de combate real lo resuelve BattleManager, que ya
-# usa CardManager.
+# GameManager/ActionModule/CombatLog/TriggerSystem son autoloads: se referencian directo.
+# _game_board queda siempre null (no hay GameBoard). El daño de combate lo resuelve BattleManager
+# con CardManager; _apply_damage_to_castle() no tiene llamadores.
 
 
 func _ready() -> void:
@@ -89,7 +84,7 @@ func _ready() -> void:
 
 
 func _connect_signals() -> void:
-	# GameManager es el único conductor de turnos (ver consolidación 2026-08-19).
+	# GameManager es el único conductor de turnos.
 	if GameManager and GameManager.has_signal("turn_ended"):
 		GameManager.turn_ended.connect(_on_turn_ended)
 
@@ -228,14 +223,6 @@ func apply_damage(target, amount: int, type: int = DamageType.DIRECT, context: D
 	# Log detallado
 	_log_damage_result(target_id, result, type, context)
 
-	# ─────────────────────────────────────────────────────────────────────────
-	# TRIGGERS POST-DAÑO
-	# ─────────────────────────────────────────────────────────────────────────
-	# (2026-08-28): 'trigger_event' no existe (nunca existió) en TriggerSystem.gd
-	# — este bloque nunca se ejecutó realmente (era código muerto detrás de un
-	# guard `if _trigger_system`). apply_damage()/apply_combat_damage() tampoco
-	# tienen llamadores reales hoy (ver check_defeat_condition() más abajo, que
-	# sí es la ruta viva). Se deja documentado, no se inventa un trigger nuevo.
 
 	return result
 
@@ -284,8 +271,8 @@ func _apply_damage_to_castle(player_id: int, amount: int, result: Dictionary, co
 		board.move_card(card, Constants.Zone.CEMENTERIO, player_id)
 		result.cards_milled.append(card)
 
-		# (2026-08-28): 'queue_trigger' tampoco existe en TriggerSystem.gd —
-		# mismo código muerto que arriba, documentado y no ejecutado nunca.
+		# 'queue_trigger' tampoco existe en TriggerSystem.gd — mismo código muerto que arriba, documentado
+		# y no ejecutado nunca.
 
 	result.actual_damage = actual_damage
 
@@ -307,9 +294,7 @@ func _apply_damage_to_castle(player_id: int, amount: int, result: Dictionary, co
 		emit_signal("deck_empty", player_id)
 		emit_signal("game_over", winner_id, player_id, "deck_empty")
 
-		# Notificar al GameManager (2026-08-28: 'end_game' no existe en
-		# GameManager.gd — la API real es player_loses(); ver el mismo fix
-		# en check_defeat_condition() más abajo)
+		# Notificar al GameManager: GameManager.player_loses() (como check_defeat_condition()).
 		GameManager.player_loses(player_id, "deck_empty")
 
 		# Log
@@ -468,12 +453,9 @@ func _apply_damage_prevention(player_id: int, damage: int, type: int, context: D
 	for i in range(_damage_preventions.size()):
 		var prevention = _damage_preventions[i]
 
-		# Prevenciones CONTINUAS ligadas a una fuente en juego (2026-09-06,
-		# p.ej. Cetro Demoniaco: "No puedes recibir daño" mientras esté en
-		# juego, one_shot=false, amount=-1) — sin este chequeo, una fuente
-		# que ya salió de juego seguía previniendo daño para siempre, porque
-		# el resto de esta función solo remueve entradas one_shot o con
-		# 'amount' agotado (amount=-1 nunca se agota).
+		# Prevenciones CONTINUAS ligadas a una fuente en juego (p.ej. Cetro Demoniaco: "No puedes recibir
+		# daño", one_shot = false, amount = -1): se quitan cuando la fuente sale de juego; el resto de la
+		# función solo quita las one_shot o con 'amount' agotado.
 		var prevention_source = prevention.get("source")
 		if prevention_source != null and (not is_instance_valid(prevention_source) or not (prevention_source.get("current_zone") in Constants.ZONES_IN_PLAY)):
 			to_remove.append(i)
@@ -528,13 +510,20 @@ func _apply_damage_reduction(player_id: int, damage: int, type: int, context: Di
 			result.reduced += actual_reduce
 			result.remaining -= actual_reduce
 
-	# Linaje Maldito (2026-10-18): "no recibes daño directo hasta tu próximo
-	# turno" (el de combate lo corta BattleManager).
-	if player_id >= 0 and type != DamageType.COMBAT and NoeScript.damage_immune(player_id, "direct"):
+	# Linaje Maldito: "no recibes daño directo hasta tu próximo turno" (el de combate lo corta
+	# BattleManager).
+	# peter pan: "no puedes ser afectado por efectos oponentes" (el daño directo es por un efecto).
+	if player_id >= 0 and type != DamageType.COMBAT and (NoeScript.damage_immune(player_id, "direct") \
+			or EffectController.player_opp_immune(player_id)):
 		result.reduced += result.remaining
 		result.remaining = 0
-	# Oro de Azi del Abismo (2026-10-17): "Reduce el daño recibido por tu
-	# Castillo en 1 por cada Oro Azi que controles".
+	# puertas grandes y pequeñas / arlequín (DamageShields).
+	if player_id >= 0 and type != DamageType.COMBAT and result.remaining > 0:
+		var kept: int = load("res://scripts/core/effects/mechanics/DamageShields.gd").filter(player_id, result.remaining)
+		result.reduced += result.remaining - kept
+		result.remaining = kept
+	# Oro de Azi del Abismo: "Reduce el daño recibido por tu Castillo en 1 por cada Oro Azi que
+	# controles".
 	if player_id >= 0:
 		var azi: int = mini(AziScript.castle_damage_reduction(player_id), maxi(0, result.remaining))
 		result.reduced += azi
@@ -574,29 +563,6 @@ func add_damage_prevention(player_id: int, amount: int, damage_type: int = -1, o
 # =============================================================================
 # DAÑO DE COMBATE SIMPLIFICADO
 # =============================================================================
-func apply_combat_damage(attacker: Node, defender_id: int, context: Dictionary = {}) -> Dictionary:
-	"""Aplica daño de combate de un atacante
-
-	Calcula automáticamente el daño basado en la fuerza del atacante.
-	"""
-	var force = _get_card_force(attacker)
-
-	var ctx = context.duplicate()
-	ctx["attacker"] = attacker
-	ctx["source"] = attacker
-
-	var attacker_data: Dictionary = attacker.get("card_data") if attacker.get("card_data") else {}
-	var attacker_name = attacker_data.get("nombre", attacker_data.get("name", "???"))
-
-	print("[DamageManager] Daño de combate: %s (Fuerza %d) → Jugador %d" % [
-		attacker_name, force, defender_id + 1
-	])
-
-	var result = await apply_damage(defender_id, force, DamageType.COMBAT, ctx)
-
-	emit_signal("combat_damage_applied", attacker, defender_id, result.actual_damage)
-
-	return result
 
 
 # =============================================================================
@@ -720,11 +686,8 @@ func check_defeat_condition(player_id: int) -> bool:
 		emit_signal("deck_empty", player_id)
 		emit_signal("game_over", winner_id, player_id, "deck_empty")
 
-		# (2026-08-28): 'end_game' no existe en GameManager.gd — el
-		# has_method() de abajo siempre daba falso y esta llamada, la ÚNICA
-		# ruta real (check_defeat_condition() sí es llamada en vivo desde
-		# ActionModule.gd), nunca terminaba la partida por mazo vacío fuera
-		# de combate. La API real es GameManager.player_loses(player_id, reason).
+		# Termina la partida por mazo vacío fuera de combate con GameManager.player_loses(player_id,
+		# reason). check_defeat_condition() se llama desde ActionModule.gd.
 		GameManager.player_loses(player_id, "deck_empty")
 
 		return true

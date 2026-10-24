@@ -125,12 +125,12 @@ func _ready() -> void:
 
 
 func _connect_signals() -> void:
-	# (2026-08-28, "módulos gordos" punto 1): PriorityManager/GameManager son
-	# autoloads garantizados — se saca el cacheo redundante vía get_node_or_null().
+	# ("módulos gordos" punto 1): PriorityManager/GameManager son autoloads garantizados — se saca el
+	# cacheo redundante vía get_node_or_null.
 	PriorityManager.both_players_passed.connect(_step_resolver._on_priority_both_passed)
 	PriorityManager.action_taken.connect(_step_resolver._on_priority_action_taken)
-	# Resetear uso de habilidades al inicio de cada turno.
-	# GameManager es el único conductor de turnos (ver consolidación 2026-08-19).
+	# Resetear el uso de habilidades al inicio de cada turno. GameManager es el único conductor de
+	# turnos.
 	GameManager.turn_started.connect(_reset_ability_usage)
 
 
@@ -212,17 +212,12 @@ func _get_name_from_data(data: Dictionary) -> String:
 
 
 # =============================================================================
-# API PRINCIPAL - JUGAR CARTA
+# API PRINCIPAL
 # =============================================================================
-# play_card()/add_response_to_stack() (StackObjectType.CARD_PLAYED/
-# RESPONSE_CARD) se eliminaron aquí (2026-08-27, limpieza a pedido del
-# usuario): sin ningún llamador real en el juego — el camino que de verdad
-# juega cartas es GoldManager (_play_card_to_field/_place_card_as_gold/
-# _equip_weapon/_play_talisman), no ActionPipeline. Quedaban como un
-# segundo sistema paralelo sin terminar (_resolve_talisman_effects() tenía
-# hasta un TODO sin implementar) que podía confundir a futuro. Las
-# habilidades disparadas/activadas SÍ están vivas y no se tocaron —
-# add_triggered_ability_to_stack()/activate_ability() siguen igual.
+# Las cartas se juegan por GoldManager
+# (_play_card_to_field/_place_card_as_gold/_equip_weapon/_play_talisman), no por aquí.
+# ActionPipeline maneja habilidades disparadas/activadas:
+# add_triggered_ability_to_stack()/activate_ability().
 
 
 # =============================================================================
@@ -247,8 +242,8 @@ func _add_to_stack(stack_obj: Dictionary) -> void:
 		card_data["x_value"] = stack_obj.instance_x
 		card_data["x_total_cost"] = stack_obj.x_total_cost
 
-	# Una habilidad (activada o disparada) no es "jugar" la carta: el log no
-	# debe decir "juega X — COSTE: 0" (2026-10-14, a pedido del usuario).
+	# Una habilidad (activada o disparada) no es "jugar" la carta: el log no debe decir "juega X —
+	# COSTE: 0".
 	if stack_obj.type in [StackObjectType.ACTIVATED_ABILITY, StackObjectType.TRIGGERED_ABILITY]:
 		card_data["_log_is_ability"] = true
 	# Crear bloque de acción detallado en CombatLog
@@ -292,13 +287,8 @@ func add_triggered_ability_to_stack(ability_data: Dictionary, source_card: Dicti
 
 	emit_signal("stack_object_added", stack_obj)
 
-	# (2026-09-09, bug real encontrado al preparar la migración de la Pila de
-	# Respuesta Universal): esta función NUNCA arrancaba _process_stack() por
-	# su cuenta — solo activate_ability() lo hacía. El único llamador real de
-	# hasta ahora (SelectionModule._on_exhume_card_selected(), Exhumar) quedaba
-	# esperando un stack_object_resolved que jamás llegaba salvo que otra
-	# habilidad activada ya estuviera procesándose al mismo tiempo por
-	# coincidencia. Mismo guard que activate_ability() ya usa.
+	# Arranca _process_stack() si no está corriendo (como activate_ability()); si no, el llamador
+	# esperaba un stack_object_resolved que no llegaba.
 	if not _is_resolving:
 		_process_stack()
 
@@ -319,17 +309,9 @@ func add_triggered_ability_to_stack_and_await(ability_data: Dictionary, source_c
 	— como máximo uno de los cuatro es true."""
 	var stack_id: int = add_triggered_ability_to_stack(ability_data, source_card, context)
 
-	# 2026-09-12 (bug real reportado por el usuario: TODAS las cartas con
-	# habilidad de entrada tardaban ~8 segundos, siempre, sin excepción).
-	# Causa: las lambdas de GDScript capturan las variables locales de la
-	# función envolvente POR VALOR, no por referencia — "done = true" dentro
-	# de un closure reasigna la copia local del closure, nunca la variable
-	# "done" de la función de afuera, así que el "while not done" jamás se
-	# enteraba de que el objeto ya había resuelto y esperaba siempre el
-	# timeout completo de 8s. Los Diccionarios SÍ se comparten por
-	# referencia (por eso "outcome.resolved = true" ya funcionaba bien) —
-	# fix: "done" pasa a vivir como un campo más de ese mismo Dictionary
-	# compartido, en vez de una variable bool aparte.
+	# Las lambdas de GDScript capturan las variables locales por valor: un "done = true" dentro del
+	# closure no se ve afuera. Por eso "done" vive en el mismo Dictionary compartido (outcome), que se
+	# comparte por referencia.
 	var outcome: Dictionary = {"resolved": false, "annulled": false, "cancelled": false, "fizzled": false, "done": false}
 
 	var on_resolved := func(obj: Dictionary, _result: Dictionary) -> void:
@@ -354,22 +336,29 @@ func add_triggered_ability_to_stack_and_await(ability_data: Dictionary, source_c
 	object_cancelled.connect(on_cancelled)
 	object_fizzled.connect(on_fizzled)
 
-	# Salvaguarda con timeout (2026-09-11, bug real reportado por el usuario:
-	# el juego quedaba congelado para siempre en Fase Final, sin ningún log
-	# posterior — TriggerSystem.awaiting_response/is_resolving atascados,
-	# consistente con que este objeto puntual NUNCA llegó a recibir su Paso
-	# D/E, probablemente porque _process_stack() no se relanzó cuando hacía
-	# falta). Sin una salida de emergencia, cualquier causa que impida que
-	# ESTE objeto puntual resuelva deja el juego entero sin poder avanzar —
-	# mismo criterio de "no fricción, seguir igual" que ya usa
-	# _wait_for_response_window() (Signo Amarillo, timeout de 8s) en vez de
-	# arriesgar un cuelgue permanente. Si esto se dispara, es evidencia real
-	# de un bug más profundo por perseguir después — el push_warning deja
-	# rastro concreto (antes no había NINGÚN log en este punto de cuelgue).
+	# Salvaguarda con timeout: si este objeto nunca recibe su Paso D/E (p.ej. _process_stack() no se
+	# relanzó), el juego no queda congelado. Si se dispara, el push_warning deja rastro de un problema
+	# más profundo.
+	# Mientras este objeto siga en la Pila con alguien decidiendo (ventana de prioridad abierta o la Pila
+	# resolviendo), se espera lo que haga falta: un jugador puede tardar más de 8 s en decidir si responde y
+	# el efecto no debe seguir sin él. Solo si el objeto quedó huérfano (nadie procesa la Pila) se relanza
+	# _process_stack() una vez y, si tampoco, se sigue.
 	var waited := 0.0
-	while not outcome.done and waited < 8.0:
+	var relaunched := false
+	while not outcome.done:
 		await get_tree().process_frame
 		waited += get_process_delta_time()
+		if waited < 8.0:
+			continue
+		var still_there: bool = _stack.any(func(o): return o.get("id", -1) == stack_id)
+		if still_there and (_is_resolving or PriorityManager.priority_window_active):
+			continue
+		if still_there and not relaunched:
+			relaunched = true
+			waited = 0.0
+			_process_stack()
+			continue
+		break
 	if not outcome.done:
 		push_warning("[ActionPipeline] add_triggered_ability_to_stack_and_await() atascado >8s para stack_id=%d (_is_resolving=%s, tamaño de pila=%d) — forzando continuación sin anular/cancelar" % [
 			stack_id, str(_is_resolving), _stack.size()
@@ -397,22 +386,16 @@ func activate_ability(source_card_data: Dictionary, ability_data: Dictionary, co
 	Returns: {success: bool, reason: String}
 	"""
 	var controller_id: int = context.get("controller_id", 0)
-	# instance_id, no source_card_data.id — mismo motivo que en
-	# can_activate_ability() (2026-08-30, bug de copias compartiendo cupo).
+	# instance_id, no source_card_data.id (compartido por todas las copias): cada copia tiene su propio
+	# cupo.
 	var card_node = context.get("source_card_node")
 	var card_id: String    = str(card_node.get_instance_id()) if card_node and is_instance_valid(card_node) else str(source_card_data.get("id", ""))
 	var ability_index: int = ability_data.get("ability_index", 0)
 	var cost_type: int     = ability_data.get("cost_type", UniversalCardParser.CostType.NONE)
 	var cost_amount: int   = ability_data.get("cost_amount", 0)
 
-	# Sistema "Puedes" ELIMINADO para habilidades ACTIVADAS (2026-08-28, a
-	# pedido del usuario): clickear el botón de la habilidad YA ES la
-	# confirmación — pedir un "¿seguro?" aparte era redundante ("se entiende
-	# que si le doy al botón utilizo la habilidad"). Los triggers ("puedes"
-	# en 'Cuando entra/ataca/...', resueltos por TriggerResolution/
-	# LookAndPlayResolver/TargetedEffectExecutor, que no pasan por aquí) ya
-	# ofrecen su propio "declinar" via can_cancel en el SelectionManager que
-	# abren — nunca dependieron de este diálogo.
+	# Para habilidades ACTIVADAS no hay confirmación "Puedes": clickear el botón ya lo es. Los triggers
+	# ofrecen su propio declinar (can_cancel del SelectionManager que abren) y no pasan por aquí.
 
 	# ── Paso A: Validar activación ────────────────────────────────────────────
 	var check = can_activate_ability(source_card_data, ability_data, context)
@@ -421,27 +404,21 @@ func activate_ability(source_card_data: Dictionary, ability_data: Dictionary, co
 		return {"success": false, "reason": check.reason}
 
 	# ── Paso B: Pagar el costo ────────────────────────────────────────────────
-	# El oro real vive en GoldManager (hijo de Main), no en ActionModule/
-	# GameManager — ver docs/audit y consolidación 2026-08-19/2026-08-20.
+	# El Oro vive en GoldManager (hijo de Main).
 	var main_ref := get_node_or_null("/root/Main")
 	var source_card_node = context.get("source_card_node")
 	match cost_type:
 		UniversalCardParser.CostType.GOLD:
-			# 2026-10-06 (ver arquitectura.md §33): GoldManager.pagar_coste()
-			# ya es por jugador (Oro Virtual/restringido + elegir Oro físico
-			# interactivo) — antes el jugador 1 pagaba siempre por un camino
-			# aparte (_easy_bot._pay_oro_for_bot(), solo Oro físico simple,
-			# porque "el bot no tiene Oro Virtual/restringido" ya no es
-			# cierto). Unificado a un solo camino para los dos jugadores.
+			# GoldManager.pagar_coste() es por jugador (Oro Virtual/restringido + elegir Oro físico;
+			# arquitectura.md §33): un solo camino para los dos jugadores.
 			if not main_ref or not main_ref._gold_manager:
 				return {"success": false, "reason": "GoldManager no disponible"}
 			var paid: bool = await main_ref._gold_manager.pagar_coste(cost_amount, -1, "", -1, controller_id)
 			if not paid:
 				return {"success": false, "reason": "Oro insuficiente"}
 		UniversalCardParser.CostType.DISCARD:
-			# 2026-10-12 (§57): la mano del jugador 1 SÍ existe como Nodos
-			# (_opponent_fan) — antes este costo se rechazaba para él. El
-			# Remoto elige por red; el bot descarta la de menor coste.
+			# La mano del jugador 1 existe como Nodos (_opponent_fan) (§57). El Remoto elige por red; el bot
+			# descarta la de menor coste.
 			if not main_ref or not PlayerSideScript.hand(main_ref, controller_id):
 				return {"success": false, "reason": "No se pudo descartar"}
 			var hand_cards: Array = PlayerSideScript.hand_cards(main_ref, controller_id)
@@ -463,7 +440,7 @@ func activate_ability(source_card_data: Dictionary, ability_data: Dictionary, co
 
 	# ── Marcar como usada (para "una vez por turno") ──────────────────────────
 	if cost_type == UniversalCardParser.CostType.ONCE_PER_TURN or ability_data.get("once_per_turn", false):
-		var turn: int = GameManager.current_turn
+		var turn: int = GameManager.turn_serial
 		_ability_usage["%s_%d" % [card_id, ability_index]] = turn
 		# Registrar también en TurnRegistry del parser para coherencia
 		UniversalCardParser.turn_registry.register(card_id, ability_index, turn)
@@ -481,6 +458,9 @@ func activate_ability(source_card_data: Dictionary, ability_data: Dictionary, co
 	ctx["source_name"]           = source_card_data.get("nombre", "???")
 	ctx["is_activated_ability"]  = true
 	ctx["ability_cost_paid"]     = cost_amount
+	# Crono Diamante: "La primera habilidad de Oro que utilices cada turno no puede ser cancelada".
+	if load("res://scripts/core/effects/mechanics/ProtectionRules.gd").note_gold_ability_use(card_node, controller_id):
+		ctx["_first_gold_ability"] = true
 
 	var stack_obj = _create_stack_object(StackObjectType.ACTIVATED_ABILITY, ability_as_data, ctx)
 
@@ -506,13 +486,9 @@ func can_activate_ability(source_card_data: Dictionary, ability_data: Dictionary
 
 	Returns: {can: bool, reason: String}
 	"""
-	# instance_id de la carta VIVA cuando está disponible, no
-	# source_card_data.id (2026-08-30, corrección: ese id es el de la
-	# carta/impresión, compartido por TODAS las copias en juego — con 2
-	# copias de una misma carta, usar el 'una vez por turno' de una marcaba
-	# también el cupo de la otra, bug real reportado por el usuario). Cae a
-	# source_card_data.id solo si de verdad no hay Nodo (no debería pasar en
-	# los dos caminos reales que llaman a esta función).
+	# instance_id de la carta viva cuando existe, no source_card_data.id (compartido por todas las
+	# copias, que entonces compartían el cupo de "una vez por turno"). Cae a source_card_data.id solo
+	# si no hay Nodo.
 	var context_node = context.get("source_card_node")
 	var card_id        = str(context_node.get_instance_id()) if context_node and is_instance_valid(context_node) else str(source_card_data.get("id", ""))
 	var ability_index  = ability_data.get("ability_index", 0)
@@ -530,18 +506,19 @@ func can_activate_ability(source_card_data: Dictionary, ability_data: Dictionary
 	var phase_ok: bool = phase == Constants.Phase.VIGILIA or (phase == Constants.Phase.GUERRA_TALISMANES and not vigilia_only)
 	if not phase_ok:
 		return {"can": false, "reason": "Fuera de fase Vigilia" if vigilia_only else "Solo en Vigilia o Guerra de Talismanes"}
-	# NO se exige 'active_player_id == controller_id' (2026-09-10, corregido):
-	# el DAR permite activar habilidades instantáneas en Vigilia/Guerra de
-	# Talismanes seas o no el jugador activo — es justo lo que hace falta
-	# para responder dentro de la Pila de Respuesta Universal en el turno
-	# rival. El chequeo viejo bloqueaba esto tanto al humano como al bot.
+	# No se exige active_player_id == controller_id: el DAR permite habilidades instantáneas en
+	# Vigilia/Guerra de Talismanes seas o no el jugador activo (hace falta para responder en el turno
+	# rival).
 
 	# Una vez por turno: verificar en _ability_usage y en TurnRegistry del parser
 	if cost_type == UniversalCardParser.CostType.ONCE_PER_TURN or ability_data.get("once_per_turn", false):
-		var turn: int = GameManager.current_turn
+		var turn: int = GameManager.turn_serial
 		var key: String = "%s_%d" % [card_id, ability_index]
-		var in_local:    bool = _ability_usage.get(key, -1) == turn
-		var in_registry: bool = UniversalCardParser.turn_registry.was_used(card_id, ability_index, turn)
+		var limit: int = int(ability_data.get("uses_per_turn", 1))
+		# El registro local solo guarda "se usó"; con más de un uso por turno
+		# ("Hasta dos veces por turno") manda el contador del TurnRegistry.
+		var in_local:    bool = limit <= 1 and _ability_usage.get(key, -1) == turn
+		var in_registry: bool = UniversalCardParser.turn_registry.is_exhausted(card_id, ability_index, turn, limit)
 		if in_local or in_registry:
 			return {"can": false, "reason": "Ya usada este turno"}
 
@@ -613,8 +590,7 @@ func _process_stack() -> void:
 		if pre_check.should_remove:
 			await _handle_removed_object(top, pre_check.reason)
 			continue
-		# Anulado mientras esperaba (StackAnnul, 2026-10-14): no abre otra
-		# ventana.
+		# Anulado mientras esperaba (StackAnnul): no abre otra ventana.
 		if top.get("was_annulled", false):
 			await _handle_annulled_object(top)
 			continue
@@ -796,11 +772,8 @@ func _handle_cancelled_object(stack_obj: Dictionary) -> void:
 	# Para habilidades, simplemente se remueven
 	# Para cartas, van al cementerio sin resolver
 	if stack_obj.type in [StackObjectType.CARD_PLAYED, StackObjectType.RESPONSE_CARD]:
-		# (2026-08-28): 'move_to_zone' nunca existió en ActionModule.gd — este
-		# guard siempre daba falso y la carta NUNCA iba al cementerio al
-		# cancelarse/fizzlear, quedaba en limbo fuera de la pila. La API real
-		# para mover una carta (por Dictionary) al cementerio es
-		# CardManager.add_to_cemetery(player_id, card_data).
+		# La API para mover una carta (Dictionary) al Cementerio es CardManager.add_to_cemetery(player_id,
+		# card_data).
 		CardManager.add_to_cemetery(controller_id, stack_obj.card_data)
 
 	_remove_from_stack(stack_obj, "cancelled")
@@ -819,11 +792,8 @@ func _handle_fizzled_object(stack_obj: Dictionary) -> void:
 
 	# Cartas van al cementerio, habilidades simplemente desaparecen
 	if stack_obj.type in [StackObjectType.CARD_PLAYED, StackObjectType.RESPONSE_CARD]:
-		# (2026-08-28): 'move_to_zone' nunca existió en ActionModule.gd — este
-		# guard siempre daba falso y la carta NUNCA iba al cementerio al
-		# cancelarse/fizzlear, quedaba en limbo fuera de la pila. La API real
-		# para mover una carta (por Dictionary) al cementerio es
-		# CardManager.add_to_cemetery(player_id, card_data).
+		# La API para mover una carta (Dictionary) al Cementerio es CardManager.add_to_cemetery(player_id,
+		# card_data).
 		CardManager.add_to_cemetery(controller_id, stack_obj.card_data)
 
 	_remove_from_stack(stack_obj, "fizzled")
@@ -896,18 +866,14 @@ func _handle_annulled_object(stack_obj: Dictionary) -> void:
 
 	emit_signal("object_annulled", stack_obj, stack_obj.annuller)
 
-	# Mover al cementerio sin resolver (2026-08-28: 'move_to_zone' no existe
-	# en ActionModule.gd — ver mismo fix en _handle_cancelled_object/_handle_fizzled_object).
-	# 2026-10-14: si la ventana es de una carta real (source_card_node), quien
-	# la abrió la manda a su destino al recibir object_annulled
-	# (GoldManager._trigger_enter_play/_play_talisman) — agregarla aquí la
-	# duplicaba en el Cementerio.
+	# Al Cementerio sin resolver (CardManager.add_to_cemetery()). Si la ventana es de una carta real
+	# (source_card_node), quien la abrió la manda a su destino al recibir object_annulled
+	# (GoldManager._trigger_enter_play/_play_talisman); agregarla aquí la duplicaba.
 	if stack_obj.context.get("source_card_node") == null:
 		CardManager.add_to_cemetery(controller_id, stack_obj.card_data)
 
-	# (2026-08-28): 'trigger_event' no existe en TriggerSystem.gd — este
-	# disparo de on_card_annulled nunca ocurrió realmente. Documentado, no
-	# se inventa un trigger nuevo fuera del alcance de esta limpieza.
+	# 'trigger_event' no existe en TriggerSystem.gd — este disparo de on_card_annulled nunca ocurrió
+	# realmente. Documentado, no se inventa un trigger nuevo fuera del alcance de esta limpieza.
 
 	_remove_from_stack(stack_obj, "annulled")
 
@@ -921,9 +887,7 @@ func _log_action(action_type: String, message: String, data: Dictionary = {}) ->
 
 
 func _get_player_name(player_id: int) -> String:
-	"""Obtiene el nombre del jugador
-	(2026-08-28: GameManager no expone get_player_name() — ver mismo hallazgo
-	en PaymentManager.gd)"""
+	"""Obtiene el nombre del jugador (GameManager no expone get_player_name())."""
 	return "Jugador %d" % (player_id + 1)
 
 

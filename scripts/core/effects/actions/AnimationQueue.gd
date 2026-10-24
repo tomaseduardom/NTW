@@ -130,13 +130,6 @@ func _connect_to_action_module() -> void:
 	print("[AnimationQueue] Conectado a ActionModule")
 
 
-# _connect_to_action_executor() y sus 8 handlers (_on_ability_started,
-# _on_ability_completed, _on_executor_action, _on_cost_paid,
-# _get_cost_display_name, _on_executor_damage, _on_executor_buff,
-# _on_executor_heal, _on_executor_token) eliminados (2026-08-17): escuchaban
-# señales de ActionExecutor.execute_ability()/execute_ability_blocks(),
-# que resultaron tener cero llamadores en todo el proyecto y ya se
-# eliminaron de ActionExecutor.gd — estos handlers nunca se disparaban.
 # =============================================================================
 # HANDLERS DE ACTIONMODULE - Con animaciones automáticas
 # =============================================================================
@@ -289,15 +282,6 @@ func start() -> void:
 
 	print("[AnimationQueue] Iniciando ejecución de %d comandos" % command_queue.size())
 	await _process_queue()
-
-
-func stop() -> void:
-	"""Detiene y limpia la cola"""
-	is_running = false
-	is_paused = false
-	command_queue.clear()
-	current_command = {}
-	print("[AnimationQueue] Detenido y limpiado")
 
 
 func _process_queue() -> void:
@@ -718,9 +702,8 @@ func queue_shuffle_animation(player_id: int, source: String = "") -> String:
 
 
 func queue_shuffle(player_id: int, description: String = "Barajar mazo") -> void:
-	"""Encola la animación de barajado del Castillo — atajo del bloque de 4
-	líneas add_command(CUSTOM, {callable: animate_shuffle, description})
-	que se repetía 49 veces en los patrones (2026-10-13, §62)."""
+	"""Encola la animación de barajado del Castillo — atajo del bloque de 4 líneas add_command(CUSTOM,
+	{callable: animate_shuffle, description}) que se repetía 49 veces en los patrones (§62)."""
 	add_command(CommandType.CUSTOM, {
 		"callable": Callable(self, "animate_shuffle").bind(player_id),
 		"description": description

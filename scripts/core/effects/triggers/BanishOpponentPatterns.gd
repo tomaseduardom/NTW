@@ -1,15 +1,10 @@
 extends RefCounted
 const PlayerSideScript = preload("res://scripts/core/game/PlayerSide.gd")
-## BanishOpponentPatterns — 3 de 7 mitades de LookAndPlayResolver.gd, dividido
-## por tamaño el 2026-09-06 ("módulos gordos"). Cubre banish/destierro/mill/
-## anulación dirigidos al oponente, removal-oriented: ignis desatado, shoki,
-## colaborador titan, Ngenechén, ea poe, Asmodeus, cuervo nocturno,
-## resistencia de acero, Duelo de Dragones (banish), Culto a la Muerte,
-## Ciempiés-SP, Dragón Dorado, Carcosa, estacion gaia, templo de hatshepsut,
-## necro-titan, akuma el terrible, akari musashi. Incluye el helper compartido
-## _register_talisman_surcharge_once (solo lo usa una función de este archivo).
-## Llamada solo desde LookAndPlayResolver.gd (facade) — ver ese archivo para
-## la lista completa de las 7 mitades hermanas.
+## BanishOpponentPatterns — una de las mitades de LookAndPlayResolver.gd (fachada; ahí está la lista
+## completa). Destierro/Botar/Anular dirigidos al oponente: ignis desatado, shoki, colaborador
+## titan, Ngenechén, ea poe, Asmodeus, cuervo nocturno, resistencia de acero, Duelo de Dragones,
+## Culto a la Muerte, Ciempiés-SP, Dragón Dorado, Carcosa, estacion gaia, templo de hatshepsut,
+## necro-titan, akuma el terrible, akari musashi. Incluye _register_talisman_surcharge_once.
 
 var _main: Node
 
@@ -19,9 +14,8 @@ func setup(main: Node) -> void:
 
 
 func try_execute_banish_opponent_ally_search_ignis_titan_discount_pattern(ability_text: String, card: Node, controller_id: int) -> bool:
-	"""'Destierra un Aliado oponente de coste 3 o menos y busca en tu
-	Castillo o Cementerio una carta Ignis o Titán, juégalo reduciendo su
-	coste en un Oro hasta un mínimo de 0' (ignis desatado, 2026-09-04) —
+	"""'Destierra un Aliado oponente de coste 3 o menos y busca en tu Castillo o Cementerio una carta
+	Ignis o Titán, juégalo reduciendo su coste en un Oro hasta un mínimo de 0' (ignis desatado) —
 	dispara tanto en 'entra en juego' como en 'ataca'."""
 	var lower := ability_text.to_lower()
 	if not ("destierra un aliado oponente de coste 3 o menos y busca" in lower and "ignis o tit" in lower):
@@ -39,10 +33,8 @@ func try_execute_banish_opponent_ally_search_ignis_titan_discount_pattern(abilit
 			return false
 		if c.get("owner_id") != opponent_id:
 			return false
-		# 2026-09-12: current_zone (no get_parent()) — un Arma equipada, por
-		# ejemplo, es hija de su portador, no de la línea, así que el chequeo
-		# viejo de parent nunca la hubiera aceptado (bug real reportado por
-		# el usuario, ver arquitectura.md §10.5).
+		# current_zone (no get_parent()): un Arma equipada es hija de su portador, no de la línea
+		# (arquitectura.md §10.5).
 		if c.get("current_zone") not in [Constants.Zone.LINEA_DEFENSA, Constants.Zone.LINEA_ATAQUE, Constants.Zone.LINEA_APOYO]:
 			return false
 		return ContinuousEffectManager.cost_at_most(c, 3)
@@ -50,10 +42,9 @@ func try_execute_banish_opponent_ally_search_ignis_titan_discount_pattern(abilit
 	if target and is_instance_valid(target):
 		await ActionModule.banish([target], card, true)
 
-	# 2026-10-14, a pedido del usuario: el selector del tablero con tu
-	# Castillo y tu Cementerio a la vez, en vez del popup "¿Dónde buscar?".
-	# El Destierro de arriba ya consultó Prevención por su cuenta (banish()) —
-	# esta ventana es para la búsqueda+juego con descuento, sin cobertura propia.
+	# El selector del tablero con tu Castillo y tu Cementerio a la vez, en vez del popup "¿Dónde
+	# buscar?". El Destierro de arriba ya consultó Prevención por su cuenta (banish) — esta ventana es
+	# para la búsqueda+juego con descuento, sin cobertura propia.
 	if await TriggerSystem.open_response_window(card, str(card.card_name), controller_id):
 		return true
 	var hand_before: Array = hand_container.cards.duplicate()
@@ -80,14 +71,10 @@ func try_execute_banish_opponent_ally_search_ignis_titan_discount_pattern(abilit
 	return true
 
 
-
-
 func try_execute_banish_two_from_one_cemetery_then_draw_pattern(ability_text: String, card: Node, controller_id: int) -> bool:
-	"""'En tu Fase Final, Destierra dos cartas de un Cementerio. Luego,
-	Roba una carta' (shoki, 2026-09-04) — 'un Cementerio' (sin posesivo,
-	singular) = el jugador elige DE CUÁL de los dos, luego saca ambas de
-	ESE MISMO (a diferencia de 'los Cementerios', que mezcla el pool de
-	ambos)."""
+	"""'En tu Fase Final, Destierra dos cartas de un Cementerio. Luego, Roba una carta' (shoki) — 'un
+	Cementerio' (sin posesivo, singular) = el jugador elige DE CUÁL de los dos, luego saca ambas de
+	ESE MISMO (a diferencia de 'los Cementerios', que mezcla el pool de ambos)."""
 	var lower := ability_text.to_lower()
 	if not ("destierra dos cartas de un cementerio" in lower):
 		return false
@@ -95,27 +82,22 @@ func try_execute_banish_two_from_one_cemetery_then_draw_pattern(ability_text: St
 	var main := _main.get_node_or_null("/root/Main")
 	if not main:
 		return true
-	# Pila de Respuesta Universal (2026-09-09, piloto de migración — ver
-	# docs/plans/2026-09-09-pila-respuesta-universal-design.md): ya se
-	# declaró todo lo que hacía falta (de qué Cementerio), solo aquí se abre
-	# la ventana real para el rival antes de ejecutar el efecto.
+	# Pila de Respuesta Universal (docs/plans/2026-09-09-pila-respuesta-universal-design.md): ya se
+	# declaró todo (de qué Cementerio); aquí se abre la ventana para el rival antes de ejecutar el
+	# efecto.
 	if await TriggerSystem.open_response_window(card, str(card.card_name), controller_id):
 		return true  # anulado/cancelado durante la ventana — no se ejecuta nada
-	# Selector con los dos Cementerios, las dos de UNO solo (2026-10-14).
+	# Selector con los dos Cementerios, las dos de UNO solo.
 	await ActionModule.search_either_owner(controller_id, [Constants.Zone.CEMENTERIO], {}, 2, true, card,
 		Constants.Zone.DESTIERRO, false, true)
 	await ActionModule.draw(controller_id, 1, "etb_trigger", true)
 	return true
 
 
-
-
 func try_execute_banish_opponent_castillo_by_titan_ignis_cost_draw_pattern(ability_text: String, card: Node, controller_id: int) -> bool:
-	"""'Destierra tantas cartas del tope del Castillo oponente como coste
-	sumen los Aliados Titán o Ignis que controles y Roba dos cartas'
-	(colaborador titan, 2026-09-04) — solo esta cláusula; el descuento
-	opcional por Destruir/Descartar un Aliado Titán o Ignis propio NO
-	implementado."""
+	"""'Destierra tantas cartas del tope del Castillo oponente como coste sumen los Aliados Titán o
+	Ignis que controles y Roba dos cartas' (colaborador titan). El descuento opcional por
+	Destruir/Descartar un Aliado Titán o Ignis propio es GoldManagerTax._resolve_discard_cost_reduction()."""
 	var lower := ability_text.to_lower()
 	if not ("destierra tantas cartas del tope del castillo oponente como coste sumen los aliados titán o ignis que controles" in lower
 			or "destierra tantas cartas del tope del castillo oponente como coste sumen los aliados titan o ignis que controles" in lower):
@@ -142,20 +124,16 @@ func try_execute_banish_opponent_castillo_by_titan_ignis_cost_draw_pattern(abili
 	return true
 
 
-
-
 func try_execute_banish_opponent_cost_sum_six_pattern(ability_text: String, card: Node, controller_id: int) -> bool:
-	"""'Cuando entra en juego Destierra cartas oponentes cuyos costes sumen
-	hasta 6' (Ngenechén, 2026-09-06) — solo esta cláusula; 'Al comienzo del
-	turno oponente, genera un Oro por el turno y Roba dos cartas' (trigger
-	recurrente en CADA turno del rival, no solo una vez) y 'Una vez por
-	turno, puedes Barajar una carta de tu mano para prevenir un efecto'
-	(activada) NO implementadas."""
+	"""'Cuando entra en juego Destierra cartas oponentes cuyos costes sumen hasta 6' (Ngenechén) —
+	solo esta cláusula. Las otras: 'Al comienzo del turno oponente...' en MechanicPatterns y la
+	prevención en EffectController (registro de prevenciones)."""
 	var lower := ability_text.to_lower()
-	if not ("destierra cartas oponentes cuyos costes sumen hasta 6" in lower):
+	# "cuyos coste sumen" en una impresión (errata del texto).
+	if not ("destierra cartas oponentes cuyos costes sumen hasta 6" in lower or "destierra cartas oponentes cuyos coste sumen hasta 6" in lower):
 		return false
 	var main := _main.get_node_or_null("/root/Main")
-	if not main or not main._targeted_executor:
+	if not main:
 		return true
 	var opponent_cards: Array = []
 	var rival_fields: Array = [main.opponent_field, main.opponent_linea_ataque, main.opponent_linea_apoyo, main.opponent_gold] if controller_id == 0 \
@@ -167,9 +145,8 @@ func try_execute_banish_opponent_cost_sum_six_pattern(ability_text: String, card
 		return true
 	if not main._card_interaction:
 		return true
-	# 2026-09-13, a pedido del usuario: click directo con presupuesto en
-	# vivo (dynamic_filter, ver arquitectura.md §10.20/Tempilcahue) en vez
-	# del modal viejo que reintentaba toda la selección si te pasabas de 6.
+	# Click directo con presupuesto en vivo (dynamic_filter, ver arquitectura.md §10.20/Tempilcahue) en
+	# vez del modal viejo que reintentaba toda la selección si te pasabas de 6.
 	var budget_filter := func(chosen_so_far: Array, c: Node) -> bool:
 		var sum_cost: int = 0
 		for x in chosen_so_far:
@@ -179,32 +156,21 @@ func try_execute_banish_opponent_cost_sum_six_pattern(ability_text: String, card
 	var chosen: Array = await main._card_interaction.await_multi_target(
 		"Destierra cartas rivales cuyos costes sumen hasta 6", opponent_cards, -1, Callable(), budget_filter, true, null, controller_id)
 	if not chosen.is_empty():
-		# Sin ventana genérica aquí a propósito (2026-09-09): banish() con
-		# can_be_prevented=true (default) ya consulta Prevención adentro —
-		# agregar la ventana genérica antes duplicaría la pregunta para el
-		# mismo efecto. Ver docs/plans/2026-09-09-pila-respuesta-universal-design.md.
+		# Sin ventana genérica a propósito: banish() con can_be_prevented = true ya consulta Prevención;
+		# abrirla aquí preguntaría dos veces por el mismo efecto.
 		await ActionModule.banish(chosen, card, true)
 	return true
 
 
-
-
 func try_execute_pay_x_banish_opponent_castillo_draw_per_talisman_totem_pattern(ability_text: String, controller_id: int) -> bool:
-	"""'Cuando lo juegues, puedes pagar cualquier cantidad de Oros. Destierra
-	tantas cartas del tope del Castillo oponente como Oros hayas pagado por
-	este Talismán más dos. Por cada Talismán o Tótem Desterrado de esta
-	forma, Roba una carta' (ea poe, 2026-09-06). El '+2' del texto queda fijo
-	en el código (no se parsea el número): el texto real de esta carta
-	específica llega con codificación rota en el cache local ('m�s dos'), así
-	que el ancla de detección evita esos caracteres y solo confirma la parte
-	sin corromper.
-
-	No usa ActionModule.mill() para el Destierro: su fallback sin GameBoard
-	(EffectController._mill_cards_fallback(), ver su comentario) deja
-	'milled_cards' SIEMPRE vacío para Destierro, así que no hay forma de
-	saber qué tipo tenía cada carta desterrada — aquí se mueve carta por
-	carta a mano, igual que el resto de patrones que ya manipulan
-	CardManager.get_deck()/get_exile() directamente (p.ej. Tyet)."""
+	"""ea poe: "Cuando lo juegues, puedes pagar cualquier cantidad de Oros. Destierra tantas cartas
+	del tope del Castillo oponente como Oros hayas pagado por este Talismán más dos. Por cada
+	Talismán o Tótem Desterrado de esta forma, Roba una carta". El "+2" va fijo en el código: el
+	texto en el caché local llega con codificación rota ('m�s dos') y el ancla de detección evita
+	esos caracteres.
+	No usa ActionModule.mill(): su fallback (EffectController._mill_cards_fallback()) deja
+	'milled_cards' vacío para el Destierro y no se sabría el tipo de cada carta. Se mueve carta por
+	carta sobre CardManager.get_deck()/get_exile() (como Tyet)."""
 	var lower := ability_text.to_lower()
 	if not ("puedes pagar cualquier cantidad de oros" in lower
 			and "destierra tantas cartas del tope del castillo oponente como oros hayas pagado" in lower):
@@ -227,33 +193,21 @@ func try_execute_pay_x_banish_opponent_castillo_draw_per_talisman_totem_pattern(
 
 	var amount_to_banish: int = paid + 2
 	var opponent_id: int = 1 - controller_id
-	var deck: Array = CardManager.get_deck(opponent_id)
-	var exile: Array = CardManager.get_exile(opponent_id)
 	var banished_talisman_totem_count: int = 0
-	for i in range(amount_to_banish):
-		if deck.is_empty():
-			break
-		var card_data: Dictionary = deck.pop_front()
-		card_data["esta_oculta"] = false
-		CardManager.append_to_exile(opponent_id, card_data)
+	for card_data in CardManager.banish_from_deck(opponent_id, amount_to_banish, false, controller_id):
 		var tipo: int = card_data.get("tipo", -1)
 		if tipo == Constants.CardType.TALISMAN or tipo == Constants.CardType.TOTEM:
 			banished_talisman_totem_count += 1
-	CardManager._emit_exile_changed(opponent_id)
-	CardManager._emit_deck_changed(opponent_id)
 
 	if banished_talisman_totem_count > 0:
 		await ActionModule.draw(controller_id, banished_talisman_totem_count, "etb_trigger", true)
 	return true
 
 
-
-
 func try_execute_opponent_hand_cost_max_to_bottom_pattern(ability_text: String, controller_id: int, card: Node = null) -> bool:
-	"""'Cuando entra en juego, tu oponente pone sus cartas de coste 2 o
-	menos en el fondo del Castillo' (Asmodeus, 2026-09-06) — TODAS las
-	cartas de coste ≤2 de la mano rival, sin elección (no dice 'puedes'),
-	al fondo de su propio mazo."""
+	"""'Cuando entra en juego, tu oponente pone sus cartas de coste 2 o menos en el fondo del
+	Castillo' (Asmodeus) — TODAS las cartas de coste ≤2 de la mano rival, sin elección (no dice
+	'puedes'), al fondo de su propio mazo."""
 	var lower := ability_text.to_lower()
 	if not ("tu oponente pone sus cartas de coste 2 o menos en el fondo del castillo" in lower):
 		return false
@@ -287,17 +241,15 @@ func try_execute_opponent_hand_cost_max_to_bottom_pattern(ability_text: String, 
 	return true
 
 
-
-
 func try_execute_opponent_mill_six_exile_pattern(ability_text: String, controller_id: int, card: Node = null) -> bool:
-	"""'Tu oponente Destierra seis cartas del tope de su Castillo' (cuervo
-	nocturno, 2026-09-04) — solo la cláusula incondicional; 'Puedes poner
-	esta y otra carta de tu mano en el fondo de tu Castillo y Robar dos
-	cartas' NO implementada (conflicto real con el destino post-resolución
-	que decide GoldManager._play_talisman() después de que este patrón ya
-	terminó — mover la carta aquí duplicaría el manejo)."""
+	"""'Tu oponente Destierra seis cartas del tope de su Castillo' (cuervo nocturno) — solo la
+	cláusula incondicional. 'Puedes poner esta y otra carta de tu mano en el fondo de tu Castillo y
+	Robar dos cartas' es activada desde la mano, por el mismo camino que Tyet
+	(HandCementerioAbilityHandler._activate_tyet_mill_and_draw)."""
 	var lower := ability_text.to_lower()
-	if not ("tu oponente destierra seis cartas del tope de su castillo" in lower):
+	# Impresión nueva: "Destierra seis cartas del tope del Castillo oponente".
+	if not ("tu oponente destierra seis cartas del tope de su castillo" in lower
+			or "destierra seis cartas del tope del castillo oponente" in lower):
 		return false
 	# ActionModule.mill() no consulta Prevención adentro (a diferencia de
 	# destroy()/banish()) — le corresponde la ventana genérica.
@@ -307,13 +259,10 @@ func try_execute_opponent_mill_six_exile_pattern(ability_text: String, controlle
 	return true
 
 
-
-
 func try_execute_search_three_opponent_castillo_banish_draw_pattern(ability_text: String, card: Node, controller_id: int) -> bool:
-	"""'Busca tres cartas de distinto tipo en el Castillo oponente,
-	Destiérralas y Roba una carta' (resistencia de acero, 2026-09-04) —
-	simplificación conocida: no se fuerza 'de distinto tipo' (ActionModule.
-	search() no tiene ese filtro, solo distinct_names por NOMBRE)."""
+	"""'Busca tres cartas de distinto tipo en el Castillo oponente, Destiérralas y Roba una carta'
+	(resistencia de acero) — simplificación conocida: no se fuerza 'de distinto tipo'
+	(ActionModule. search no tiene ese filtro, solo distinct_names por NOMBRE)."""
 	var lower := ability_text.to_lower()
 	if not ("busca tres cartas de distinto tipo en el castillo oponente, destiérralas y roba una carta" in lower):
 		return false
@@ -325,15 +274,11 @@ func try_execute_search_three_opponent_castillo_banish_draw_pattern(ability_text
 	return true
 
 
-
-
 func try_execute_raise_opponent_cemetery_or_destroy_cost1_draw_pattern(ability_text: String, card: Node, controller_id: int) -> bool:
-	"""'Sube una carta oponente de coste 2 o menos a la mano o Destruye
-	hasta dos cartas de coste 1 o menos. Roba dos cartas' (cruzar el
-	bosque, 2026-09-04) — elección A/B + Robo incondicional. NO cubre la
-	variante de reingreso desde el Destierro (Barajarla en su Castillo en
-	vez de ir al Cementerio al resolver) — play_card_from_exile() no
-	tiene un override de destino post-resolución todavía."""
+	"""cruzar el bosque: "Sube una carta oponente de coste 2 o menos a la mano o Destruye hasta dos
+	cartas de coste 1 o menos. Roba dos cartas" — elección A/B + Robo. No cubre la variante de
+	reingreso desde el Destierro (Barajarla en su Castillo al resolver): play_card_from_exile() no
+	tiene override de destino."""
 	var lower := ability_text.to_lower()
 	if not ("sube una carta oponente de coste 2 o menos a la mano o destruye hasta dos cartas de coste 1 o menos" in lower):
 		return false
@@ -347,8 +292,7 @@ func try_execute_raise_opponent_cemetery_or_destroy_cost1_draw_pattern(ability_t
 
 	if choose_raise:
 		if main._zone_viewer:
-			# 2026-09-13, a pedido del usuario: click directo en el
-			# Cementerio rival en vez del modal de lista viejo.
+			# Click directo en el Cementerio rival en vez del modal de lista viejo.
 			var eligible_filter := func(c: Node) -> bool:
 				return c.owner_id == opponent_id and ContinuousEffectManager.data_cost_at_most(c.card_data, 2)
 			var picked_list: Array = await main._zone_viewer.open_cemetery_target_picker(
@@ -364,7 +308,7 @@ func try_execute_raise_opponent_cemetery_or_destroy_cost1_draw_pattern(ability_t
 					await ActionModule._put_found_card_into_play(main, opponent_id, picked_data, false)
 	else:
 		var filter := func(c: Node) -> bool:
-			# 2026-09-12: current_zone en vez de get_parent() (ver §10.5)
+			# current_zone en vez de get_parent (ver §10.5)
 			if c.get("current_zone") not in [Constants.Zone.LINEA_DEFENSA, Constants.Zone.LINEA_ATAQUE,
 					Constants.Zone.LINEA_APOYO, Constants.Zone.RESERVA_ORO]:
 				return false
@@ -388,17 +332,12 @@ func try_execute_raise_opponent_cemetery_or_destroy_cost1_draw_pattern(ability_t
 	return true
 
 
-
-
 func try_execute_annul_non_ally_banish_or_cancel_ability_pattern(ability_text: String, card: Node, controller_id: int) -> bool:
-	"""'Elige un efecto: - Anula una carta de coste 2 o menos que no sea
-	Aliado y Destierra esa carta. - Cancela la habilidad de una carta y tu
-	oponente no puede utilizar más habilidades de cartas con ese nombre
-	este turno' (Culto a la Muerte, 2026-09-04) — elección A/B. La
-	restricción 'no puede utilizar más habilidades de cartas con ese
-	nombre este turno' de la rama B NO implementada (no hay candado
-	'por el resto del turno' por nombre, solo 'mientras la fuente siga en
-	juego' — y un Talismán no se queda en juego)."""
+	"""'Elige un efecto: - Anula una carta de coste 2 o menos que no sea Aliado y Destierra esa carta.
+	- Cancela la habilidad de una carta y tu oponente no puede utilizar más habilidades de cartas
+	con ese nombre este turno' (Culto a la Muerte) — elección A/B. Hoy lo resuelve antes
+	Deck170Patterns.try_annul_on_stack() (_culto_a_la_muerte, con KeywordManager.lock_name_this_turn
+	para la rama B)."""
 	var lower := ability_text.to_lower()
 	if not ("anula una carta de coste 2 o menos que no sea aliado y destierra esa carta" in lower):
 		return false
@@ -413,7 +352,7 @@ func try_execute_annul_non_ally_banish_or_cancel_ability_pattern(ability_text: S
 		var filter := func(c: Node) -> bool:
 			if c.get("card_type") == Constants.CardType.ALIADO:
 				return false
-			# 2026-09-12: current_zone en vez de get_parent() (ver §10.5)
+			# current_zone en vez de get_parent (ver §10.5)
 			if c.get("current_zone") not in [Constants.Zone.LINEA_DEFENSA, Constants.Zone.LINEA_ATAQUE,
 					Constants.Zone.LINEA_APOYO, Constants.Zone.RESERVA_ORO]:
 				return false
@@ -423,12 +362,11 @@ func try_execute_annul_non_ally_banish_or_cancel_ability_pattern(ability_text: S
 			if TriggerSystem._targeted_executor._target_text_denies(target, ["no puede ser anulad"]):
 				main._update_debug("%s no puede ser anulada" % str(target.get("card_name")))
 			else:
-				# Sin ventana genérica aquí (2026-09-09): banish()/silence_card()
-				# ya consultan Prevención adentro por su cuenta.
+				# Sin ventana genérica aquí: banish/silence_card ya consultan Prevención adentro por su cuenta.
 				await ActionModule.banish([target], card, true)
 	else:
 		var filter2 := func(c: Node) -> bool:
-			# 2026-09-12: current_zone en vez de get_parent() (ver §10.5)
+			# current_zone en vez de get_parent (ver §10.5)
 			return c.get("current_zone") in [Constants.Zone.LINEA_DEFENSA, Constants.Zone.LINEA_ATAQUE,
 				Constants.Zone.LINEA_APOYO, Constants.Zone.RESERVA_ORO]
 		var target2: Node = await main._card_interaction.await_target("Elige una carta para cancelar su habilidad", filter2, true, controller_id)
@@ -440,15 +378,12 @@ func try_execute_annul_non_ally_banish_or_cancel_ability_pattern(ability_text: S
 	return true
 
 
-
-
 func try_execute_annul_cost_max_pattern(ability_text: String, card: Node, controller_id: int) -> bool:
-	"""'Anula una carta de coste N o menos' (2026-09-04, p.ej. Ciempiés-SP/
-	cienpies sp: 'Única. Anula una carta de coste 3 o menos.') — el genérico
-	ANNUL de UniversalCardParser solo reconoce 'anula un/el Aliado'
-	(sin filtro de coste ni otros tipos), así que este patrón cubre la
-	forma con tope de coste sobre cualquier objetivo (Aliado/Arma/Tótem).
-	Reusa _select_annul_target_cost_filter() (Paladín Bestiarium)."""
+	"""'Anula una carta de coste N o menos' (p.ej. Ciempiés-SP/cienpies sp: 'Única. Anula una carta de
+	coste 3 o menos.') — el genérico ANNUL de UniversalCardParser solo reconoce 'anula un/el
+	Aliado' (sin filtro de coste ni otros tipos), así que este patrón cubre la forma con tope de
+	coste sobre cualquier objetivo (Aliado/Arma/Tótem). Reusa _select_annul_target_cost_filter
+	(Paladín Bestiarium)."""
 	var lower := ability_text.to_lower()
 	var rx := RegEx.new()
 	rx.compile("anula una carta de coste (\\d+) o menos")
@@ -466,20 +401,17 @@ func try_execute_annul_cost_max_pattern(ability_text: String, card: Node, contro
 		if main:
 			main._update_debug("%s no puede ser anulada" % str(target.get("card_name")))
 		return true
-	# Sin ventana genérica aquí (2026-09-09): destroy() con can_be_prevented=
-	# true (4to arg) ya consulta Prevención (Estaca) adentro.
+	# Sin ventana genérica aquí: destroy con can_be_prevented= true (4to arg) ya consulta Prevención
+	# (Estaca) adentro.
 	await ActionModule.destroy([target], card, true, true)
 	return true
 
 
-
-
 func try_execute_annul_then_shuffle_hand_by_cost_pattern(ability_text: String, card: Node, controller_id: int) -> bool:
-	"""'Anula una carta. Luego, Baraja tantas cartas de tu mano como coste
-	tenga' (Dragón Dorado, 2026-09-04) — 'Anula una carta' SIN tope de
-	coste (a diferencia de try_execute_annul_cost_max_pattern), y 'Luego'
-	depende de que la anulación haya resuelto de verdad (se lee el coste
-	de la carta anulada, DAR: si no se anuló nada, 'Luego' no corre)."""
+	"""'Anula una carta. Luego, Baraja tantas cartas de tu mano como coste tenga' (Dragón Dorado) —
+	'Anula una carta' SIN tope de coste (a diferencia de try_execute_annul_cost_max_pattern), y
+	'Luego' depende de que la anulación haya resuelto de verdad (se lee el coste de la carta
+	anulada, DAR: si no se anuló nada, 'Luego' no corre)."""
 	var lower := ability_text.to_lower()
 	if not ("anula una carta. luego, baraja tantas cartas de tu mano como coste tenga" in lower):
 		return false
@@ -502,10 +434,8 @@ func try_execute_annul_then_shuffle_hand_by_cost_pattern(ability_text: String, c
 			var hand_cards: Array = hand_container.cards.duplicate()
 			var amount: int = mini(target_cost, hand_cards.size())
 			if amount > 0:
-				# 2026-09-13, a pedido del usuario: click directo en la mano en
-				# vez del modal de lista viejo. Costo TODO o NADA de 'amount'
-				# cartas exactas (mismo criterio que Belta, §10.19): si elige
-				# menos, no se mueve nada.
+				# Click directo en la mano. Costo todo o nada de 'amount' cartas exactas (como Belta, §10.19):
+				# si elige menos, no se mueve nada.
 				var picked: Array = await main._card_interaction.await_multi_target(
 					"Baraja %d carta(s) de tu mano" % amount, hand_cards, amount, Callable(), Callable(), true, null, controller_id)
 				# 'Luego' (DAR): este segundo efecto solo llega aquí si el primero
@@ -525,12 +455,9 @@ func try_execute_annul_then_shuffle_hand_by_cost_pattern(ability_text: String, c
 	return true
 
 
-
-
 func try_execute_opponent_mill_four_pattern(ability_text: String, controller_id: int, card: Node = null) -> bool:
-	"""'Al comienzo de tu turno y cuando salga del juego, tu oponente Bota
-	cuatro cartas' (Carcosa, 2026-09-04) — dispara tanto en on_turn_start
-	como en on_leave_play (mismo dispatcher compartido)."""
+	"""'Al comienzo de tu turno y cuando salga del juego, tu oponente Bota cuatro cartas' (Carcosa) —
+	dispara tanto en on_turn_start como en on_leave_play (mismo dispatcher compartido)."""
 	var lower := ability_text.to_lower()
 	if not ("tu oponente bota cuatro cartas" in lower):
 		return false
@@ -540,12 +467,9 @@ func try_execute_opponent_mill_four_pattern(ability_text: String, controller_id:
 	return true
 
 
-
-
 func try_execute_draw_discard_opponent_mill_exile_pattern(ability_text: String, controller_id: int, card: Node = null) -> bool:
-	"""'Cuando entra en juego, Roba dos cartas, Descarta una carta y tu
-	oponente Destierra dos cartas del tope de su Castillo' (estacion gaia,
-	2026-09-04)."""
+	"""'Cuando entra en juego, Roba dos cartas, Descarta una carta y tu oponente Destierra dos cartas
+	del tope de su Castillo' (estacion gaia)."""
 	var lower := ability_text.to_lower()
 	if not ("roba dos cartas, descarta una carta y tu oponente destierra dos cartas del tope de su castillo" in lower):
 		return false
@@ -574,13 +498,10 @@ func try_execute_draw_discard_opponent_mill_exile_pattern(ability_text: String, 
 	return true
 
 
-
-
 func try_execute_shuffle_or_banish_opponent_cost_max_pattern(ability_text: String, card: Node, controller_id: int) -> bool:
-	"""'Cuando entra en juego, Baraja o Destierra una carta oponente de
-	coste N o menos' (templo de hatshepsut, 2026-09-04) — objetivo único,
-	elección A/B sobre el MISMO objetivo (se elige el objetivo primero,
-	después qué hacerle — 'baraja o destierra' aplica a la misma carta)."""
+	"""'Cuando entra en juego, Baraja o Destierra una carta oponente de coste N o menos' (templo de
+	hatshepsut) — objetivo único, elección A/B sobre el MISMO objetivo (se elige el objetivo
+	primero, después qué hacerle — 'baraja o destierra' aplica a la misma carta)."""
 	var lower := ability_text.to_lower()
 	var cost_rx := RegEx.new()
 	cost_rx.compile("baraja o destierra una carta oponente de coste (\\d+) o menos")
@@ -596,7 +517,7 @@ func try_execute_shuffle_or_banish_opponent_cost_max_pattern(ability_text: Strin
 	var filter := func(c: Node) -> bool:
 		if c.get("owner_id") != opponent_id:
 			return false
-		# 2026-09-12: current_zone en vez de get_parent() (ver §10.5)
+		# current_zone en vez de get_parent (ver §10.5)
 		if c.get("current_zone") not in [Constants.Zone.LINEA_DEFENSA, Constants.Zone.LINEA_ATAQUE, Constants.Zone.LINEA_APOYO]:
 			return false
 		return ContinuousEffectManager.cost_at_most(c, max_cost)
@@ -606,8 +527,8 @@ func try_execute_shuffle_or_banish_opponent_cost_max_pattern(ability_text: Strin
 
 	var choose_banish: bool = await SelectionManager.await_two_choice(
 		main, str(card.get("card_name")), "Barajarla", "Desterrarla", controller_id)
-	# Sin ventana genérica aquí (2026-09-09): banish()/return_to_deck() ya
-	# consultan Prevención adentro por su cuenta en las dos ramas.
+	# Sin ventana genérica aquí: banish/return_to_deck ya consultan Prevención adentro por su cuenta en
+	# las dos ramas.
 	if choose_banish:
 		await ActionModule.banish([target], card, true)
 	else:
@@ -617,15 +538,11 @@ func try_execute_shuffle_or_banish_opponent_cost_max_pattern(ability_text: Strin
 	return true
 
 
-
-
 func try_execute_search_two_distinct_names_banish_or_cemetery_pattern(ability_text: String, card: Node, controller_id: int) -> bool:
-	"""'Cuando entra en juego, busca en un Castillo dos cartas de distinto
-	nombre y ponlas en el Destierro o Cementerio de su dueño' (necro-titan,
-	2026-09-04) — 'de su dueño' = el destino es del dueño de CADA carta
-	buscada (search() ya lo hace así, ver docstring de ActionModule.search:
-	'el destino también es SUYO'). 'Destierro o Cementerio' = una elección
-	para ambas cartas."""
+	"""'Cuando entra en juego, busca en un Castillo dos cartas de distinto nombre y ponlas en el
+	Destierro o Cementerio de su dueño' (necro-titan) — 'de su dueño' = el destino es del dueño de
+	CADA carta buscada (search ya lo hace así, ver docstring de ActionModule.search: 'el destino
+	también es SUYO'). 'Destierro o Cementerio' = una elección para ambas cartas."""
 	var lower := ability_text.to_lower()
 	if not ("busca en un castillo dos cartas de distinto nombre y ponlas en el destierro o cementerio" in lower):
 		return false
@@ -642,12 +559,9 @@ func try_execute_search_two_distinct_names_banish_or_cemetery_pattern(ability_te
 	return true
 
 
-
-
 func try_execute_banish_cost_or_search_two_banish_pattern(ability_text: String, card: Node, controller_id: int) -> bool:
-	"""'Cuando entra en juego, Destierra una carta de coste 2 o menos o
-	busca dos cartas en un Castillo y Destiérralas' (akuma el terrible,
-	2026-09-04) — elección A/B."""
+	"""'Cuando entra en juego, Destierra una carta de coste 2 o menos o busca dos cartas en un
+	Castillo y Destiérralas' (akuma el terrible) — elección A/B."""
 	var lower := ability_text.to_lower()
 	if not ("destierra una carta de coste 2 o menos o busca dos cartas en un castillo" in lower):
 		return false
@@ -659,7 +573,7 @@ func try_execute_banish_cost_or_search_two_banish_pattern(ability_text: String, 
 		main, "akuma el terrible", "Desterrar una carta de coste 2 o menos", "Buscar dos cartas en un Castillo y Desterrarlas", controller_id)
 	if choose_direct:
 		var target: Node = await _main._targeted_executor._select_banish_target_cost_filter("Elige una carta de coste 2 o menos para desterrar", 2, controller_id)
-		# Sin ventana genérica aquí (2026-09-09): banish() ya consulta Prevención adentro.
+		# Sin ventana genérica aquí: banish ya consulta Prevención adentro.
 		if target and is_instance_valid(target):
 			await ActionModule.banish([target], card, true)
 	else:
@@ -669,14 +583,11 @@ func try_execute_banish_cost_or_search_two_banish_pattern(ability_text: String, 
 	return true
 
 
-
-
 func try_execute_banish_opponent_non_gold_and_talisman_surcharge_pattern(ability_text: String, card: Node, controller_id: int) -> bool:
-	"""'Cuando entra en juego o ataque, Destierra una carta oponente que no
-	sea Oro. ... A tu oponente le cuesta un Oro adicional jugar Talismanes'
-	(akari musashi, 2026-09-04) — esta función solo cubre el Destierro
-	dirigido (la sobretasa de Talismanes se registra aparte, una sola vez,
-	desde el mismo llamador vía _register_talisman_surcharge_once)."""
+	"""'Cuando entra en juego o ataque, Destierra una carta oponente que no sea Oro.... A tu oponente
+	le cuesta un Oro adicional jugar Talismanes' (akari musashi) — esta función solo cubre el
+	Destierro dirigido (la sobretasa de Talismanes se registra aparte, una sola vez, desde el mismo
+	llamador vía _register_talisman_surcharge_once)."""
 	var lower := ability_text.to_lower()
 	if not ("destierra una carta oponente que no sea oro" in lower):
 		return false
@@ -690,10 +601,9 @@ func try_execute_banish_opponent_non_gold_and_talisman_surcharge_pattern(ability
 			return false
 		if c.get("owner_id") != opponent_id:
 			return false
-		# 2026-09-12: current_zone en vez de get_parent() (ver §10.5)
+		# current_zone en vez de get_parent (ver §10.5)
 		return c.get("current_zone") in [Constants.Zone.LINEA_DEFENSA, Constants.Zone.LINEA_ATAQUE, Constants.Zone.LINEA_APOYO]
-	# Sin cartas válidas no se pide objetivo (2026-10-17, bug real reportado
-	# por el usuario: pedía elegir aunque el oponente no tuviera cartas).
+	# Sin cartas válidas no se pide objetivo: pedía elegir aunque el oponente no tuviera cartas.
 	var has_target := false
 	for container in PlayerSideScript.line_containers(main, opponent_id):
 		for c in container.get_children():
@@ -704,7 +614,7 @@ func try_execute_banish_opponent_non_gold_and_talisman_surcharge_pattern(ability
 		target = await main._card_interaction.await_target("Elige una carta oponente (que no sea Oro) para desterrar", filter, true, controller_id)
 	else:
 		main._update_debug("%s: tu oponente no tiene cartas que no sean Oro para desterrar" % str(card.card_name))
-	# Sin ventana genérica aquí (2026-09-09): banish() ya consulta Prevención adentro.
+	# Sin ventana genérica aquí: banish ya consulta Prevención adentro.
 	if target and is_instance_valid(target):
 		await ActionModule.banish([target], card, true)
 
@@ -714,8 +624,6 @@ func try_execute_banish_opponent_non_gold_and_talisman_surcharge_pattern(ability
 		return true
 	_register_talisman_surcharge_once(card, controller_id)
 	return true
-
-
 
 
 func _register_talisman_surcharge_once(card: Node, controller_id: int) -> void:
@@ -733,7 +641,5 @@ func _register_talisman_surcharge_once(card: Node, controller_id: int) -> void:
 	var condition := func(c: Node) -> bool:
 		return c.get("card_type") == Constants.CardType.TALISMAN and c.get("owner_id") == opponent_id
 	PaymentManager.agregar_modificador_coste(card, 1, condition, false)
-
-
 
 

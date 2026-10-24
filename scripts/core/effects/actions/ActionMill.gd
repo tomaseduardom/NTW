@@ -32,6 +32,14 @@ func mill(player_id: int, amount: int, to_exile: bool = false, source: String = 
 		"destination": destination
 	}
 
+	# Cetro Demoniaco / nehushtan: no se puede Desterrar del Castillo rival ni Botar.
+	var rules = load("res://scripts/core/effects/mechanics/ProtectionRules.gd")
+	if rules.castle_banish_blocked(player_id) if to_exile else rules.mill_blocked():
+		result.success = false
+		result.prevented = true
+		print("[ActionModule] MILL bloqueado por una protección del Castillo")
+		return result
+
 	# DAR Sección 6: Validar estado del juego
 	if not skip_validation:
 		var validation = _main._validator._validate_mill(player_id, amount)

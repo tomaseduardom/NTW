@@ -17,6 +17,7 @@ const CDN_BASE_URL: String = "https://grimorio-cards.b-cdn.net"
 const LOCAL_CACHE_PATH: String = "user://card_cache/"
 ## Modo offline: sólo usa imágenes locales (res:// + user://). Sin descargas CDN.
 const OFFLINE_MODE: bool = true
+const KeywordParser = preload("res://scripts/core/cards/KeywordParser.gd")
 
 # =============================================================================
 # ESTADO
@@ -74,13 +75,9 @@ var _external_pending: int = 0
 var _external_collected: Array = []
 
 func load_cards_from_external_api(ediciones: Array = ["imp", "esc", "pb", "fx"]) -> void:
-	"""Carga cartas desde la nueva API externa. Ver ExternalApiClient.gd para
-	el detalle del host/auth — load_cards_from_api() apunta al host viejo
-	(localhost:3000), ya no disponible.
-
-	Ediciones confirmadas por el dueño de la API (2026-08-18): imp, pb, fx,
-	esc. Antes solo se pedían imp/esc (~2426 cartas) — pb y fx devuelven 0
-	sin autenticar, así que probablemente requieren el token Bearer (ver
+	"""Carga cartas desde la API externa (ver ExternalApiClient.gd para host/auth;
+	load_cards_from_api() apunta a un host viejo, localhost:3000). Ediciones: imp, pb, fx, esc; pb
+	y fx devuelven 0 sin autenticar (probablemente requieren el token Bearer, ver
 	ExternalApiClient.fetch_cards())."""
 	var client = ExternalApiClient
 
@@ -90,11 +87,8 @@ func load_cards_from_external_api(ediciones: Array = ["imp", "esc", "pb", "fx"])
 	# tiene 'await señal_a O señal_b' directo, así que se sondea un flag
 	# que cualquiera de las dos señales puede marcar.
 	if not client.is_authenticated():
-		# state es Dictionary a propósito (2026-08-22): los lambdas de
-		# GDScript capturan variables locales POR VALOR — 'login_attempt_done'
-		# suelto nunca se actualizaba de verdad afuera del lambda y el 'while'
-		# colgaba para siempre en silencio (confirmado con un test aislado
-		# en Godot).
+		# state es Dictionary a propósito: los lambdas de GDScript capturan las locales por valor y un
+		# 'login_attempt_done' suelto no se actualizaba afuera.
 		var state := {"done": false}
 		var on_login_succeeded := func(): state.done = true
 		var on_login_failed := func(_reason): state.done = true
@@ -254,9 +248,11 @@ func _create_card_from_api(data: Dictionary) -> Dictionary:
 ## [[texto a buscar, reemplazo], ...]. Se aplican al cargar (bundled, caché o
 ## API), así que sobreviven a reload_card.ps1.
 const TEXT_CORRECTIONS: Dictionary = {
-	# 2026-10-14, usuario: Zadquiel no dispara al atacar sino al hacer daño
-	# de combate (se distingue a propósito de "daño" a secas).
+	# Usuario: Zadquiel no dispara al atacar sino al hacer daño de combate (se distingue a propósito de
+	# "daño" a secas).
 	"zadquiel": [["Cuando ataca, mira la mano de tu oponente", "Cuando haga daño de combate, mira la mano de tu oponente"]],
+	# Erratas de la API ("del topde de tu Castillo", "cancelas").
+	"signo amarillo": [["del topde de tu Castillo", "del tope de tu Castillo"], ["para cancelas la habilidad", "para cancelar la habilidad"]],
 }
 
 
@@ -296,35 +292,9 @@ func _parse_card_type(tipo) -> Constants.CardType:
 
 
 func _parse_keywords(habilidad: String) -> Array:
-	"""Extrae las keywords del texto de habilidad"""
-	var keywords: Array = []
-	var text = habilidad.to_lower()
-
-	if "furia" in text:
-		keywords.append(Constants.Keyword.FURIA)
-	if "imbloqueable" in text:
-		keywords.append(Constants.Keyword.IMBLOQUEABLE)
-	if "indestructible" in text:
-		keywords.append(Constants.Keyword.INDESTRUCTIBLE)
-	if "indesterrable" in text:
-		keywords.append(Constants.Keyword.INDESTERRABLE)
-	# Solo "Exhumar" o jugarse a sí misma desde el Cementerio (2026-10-17, bug
-	# real reportado por el usuario: Alto Prime decía tener Exhumar — antes
-	# bastaba "desde tu Cementerio" en cualquier parte, p.ej. "Desterrarlo
-	# desde tu Cementerio" o "poner este Aliado en juego desde tu Cementerio
-	# como un Aliado sin habilidad", que son otras habilidades).
-	var self_play := false
-	for phrase in ["jugarlo desde tu cementerio", "jugarla desde tu cementerio", "jugar esta carta desde tu cementerio",
-			"jugar esta arma desde tu cementerio", "ponerlo en juego desde tu cementerio como si estuviera en tu mano",
-			"poner este oro en juego desde tu cementerio"]:
-		if phrase in text:
-			self_play = true
-	if "exhumar" in text or self_play:
-		keywords.append(Constants.Keyword.EXHUMAR)
-	if "única" in text:
-		keywords.append(Constants.Keyword.UNICA)
-
-	return keywords
+	"""Palabras clave impresas de la carta (KeywordParser: por oración, no por subcadena). Copia:
+	los efectos que dan Exhumar por el turno agregan al array del Dictionary."""
+	return KeywordParser.own_keywords(habilidad).duplicate()
 
 
 # =============================================================================
@@ -344,9 +314,8 @@ func load_cards_from_bundled() -> bool:
 	file.close()
 	if json == null or not json is Array:
 		return false
-	# 2026-10-12: el bundle viaja en el zip (tools/bundle_cards.ps1) y es la
-	# fuente común para Anfitrión y Remoto; las cartas del cache local que
-	# NO estén en el bundle (p.ej. bajadas con sync_cards.ps1 después de
+	# El bundle viaja en el zip (tools/bundle_cards.ps1) y es la fuente común para Anfitrión y Remoto;
+	# las cartas del cache local que NO estén en el bundle (p.ej. bajadas con sync_cards.ps1 después de
 	# exportar) se suman igual, en vez de quedar ignoradas para siempre.
 	var bundled_count: int = json.size()
 	var extras := _cache_cards_missing_from(json)
@@ -472,16 +441,10 @@ func get_all_cards() -> Array:
 # =============================================================================
 const LOCAL_CARDS_PATH: String = "res://cartas_descargadas/"
 
-# Mapea el número de edición embebido en el nombre de archivo CDN (p.ej. el
-# "162" en ".../162_001_transformacion_secreta.webp") a la carpeta local en
-# cartas_descargadas/. Solo estas 12 ediciones están descargadas localmente
-# — el resto cae a dorso hasta que se descarguen (ver docs/audit-2026-08-13.html,
-# "la mitad de las cartas no cargan visualización").
-#
-# IMPORTANTE — esta función asumía que `imagen` traía una carpeta
-# ("{edicion}_{CARPETA}/archivo.webp"), pero el dato real es una URL PLANA
-# sin carpeta ("https://.../{edicion}_{carta}_{slug}[_rareza].webp"). Por
-# eso NINGUNA imagen local resolvía antes de este fix, para ninguna carta.
+# Mapea el número de edición del nombre de archivo del CDN (p.ej. "162" en
+# ".../162_001_transformacion_secreta.webp") a la carpeta local en cartas_descargadas/. Solo estas
+# 12 ediciones están descargadas; el resto cae al dorso.
+# `imagen` es una URL plana sin carpeta ("https://.../{edicion}_{carta}_{slug}[_rareza].webp").
 const CDN_NUMBER_TO_FOLDER: Dictionary = {
 	"136": "AK",    # Amenaza Kaiju
 	"148": "BEST",  # Bestiarium
@@ -606,11 +569,8 @@ func get_card_image(card_id: String) -> Texture2D:
 	var local_path := LOCAL_CACHE_PATH + "images/" + card_id + ".png"
 	if FileAccess.file_exists(local_path):
 		var image := Image.load_from_file(local_path)
-		# 2026-09-11 (bug real reportado por el usuario: cartas cacheadas
-		# hace semanas se volvían a descargar de la red) — antes solo
-		# chequeaba "if image:", que es cierto para cualquier Image no-nulo
-		# aunque haya quedado vacío por una carga fallida; ahora exige que
-		# además tenga contenido real antes de darla por válida.
+		# La imagen en caché solo vale si tiene contenido: una Image no nula puede haber quedado vacía por
+		# una carga fallida.
 		if image and not image.is_empty():
 			var texture := ImageTexture.create_from_image(image)
 			image_cache[card_id] = texture
@@ -699,25 +659,18 @@ func _build_cdn_url(imagen_path: String) -> String:
 	return imagen_path if imagen_path.begins_with("http") else CDN_BASE_URL + "/" + imagen_path
 
 
-## Recortes pendientes de aplicar tras descargar (2026-08-25): {card_id: Rect2i}
-## — ver _unwrap_broken_cloudinary_fetch()/_on_image_request_completed().
+## Recortes pendientes de aplicar tras descargar: {card_id: Rect2i} — ver
+## _unwrap_broken_cloudinary_fetch/_on_image_request_completed.
 var _pending_crops: Dictionary = {}
 
 func _unwrap_broken_cloudinary_fetch(card_id: String, url: String) -> String:
-	"""Desenvuelve un proxy Cloudinary 'fetch' roto a la URL real de origen
-	(2026-08-25): la cuenta de Cloudinary usada para las cartas custom/
-	homebrew (drw7y27sm) bloquea el fetch remoto sin firmar (401 en TODAS
-	sus imágenes, confirmado en vivo) — pero la imagen de origen (Shopify
-	CDN) responde 200 directo.
-
-	Cuando el fetch trae un recorte ('c_crop,x_X,y_Y,w_W,h_H/https://...'),
-	varias cartas comparten UNA sola imagen de origen (una lámina con 2-3
-	cartas lado a lado — confirmado: 'azi_1.png' aparece con x_0/x_256/x_512,
-	tres cartas en la misma lámina) — no se puede usar la imagen de origen
-	tal cual. El recorte real se reconstruye del lado del juego con
-	Image.get_region() en _on_image_request_completed(), así que aquí se
-	guarda el Rect2i en _pending_crops[card_id] para que ese callback lo
-	recupere cuando la descarga termine."""
+	"""Desenvuelve un proxy Cloudinary 'fetch' roto a la URL de origen: la cuenta usada para cartas
+	custom (drw7y27sm) responde 401 al fetch remoto sin firmar, pero el origen (Shopify CDN)
+	responde 200.
+	Si el fetch trae un recorte ('c_crop,x_X,y_Y,w_W,h_H/https://...'), varias cartas comparten una
+	lámina de origen (p.ej. 'azi_1.png' con x_0/x_256/x_512). El recorte se reconstruye con
+	Image.get_region() en _on_image_request_completed(); aquí se guarda el Rect2i en
+	_pending_crops[card_id]."""
 	var marker := "/drw7y27sm/image/fetch/"
 	var idx := url.find(marker)
 	if idx == -1:
@@ -749,9 +702,8 @@ func _start_image_download(card_id: String, imagen_path: String) -> void:
 	ese proxy ya no está disponible, así que ese camino queda solo por
 	compatibilidad si alguna vez vuelve a levantarse."""
 	_pending_downloads[card_id] = true
-	# [DIAG-TIMING] instrumentación temporal (2026-09-11) para confirmar si la
-	# demora percibida al robar cartas es de verdad tiempo de red (CDN) y no
-	# código — sacar una vez confirmado.
+	# [DIAG-TIMING] instrumentación temporal para confirmar si la demora percibida al robar cartas es
+	# de verdad tiempo de red (CDN) y no código — sacar una vez confirmado.
 	_download_start_ms[card_id] = Time.get_ticks_msec()
 
 	imagen_path = _unwrap_broken_cloudinary_fetch(card_id, imagen_path)
@@ -801,8 +753,8 @@ func _on_image_request_completed(result: int, response_code: int, headers: Packe
 	"""Callback cuando se descarga una imagen"""
 	http.queue_free()
 	_pending_downloads.erase(card_id)
-	# [DIAG-TIMING] ver _download_card_image() — confirmado (2026-09-11): la
-	# demora es de red real, no código. Gateado, ya no hace falta por defecto.
+	# [DIAG-TIMING] ver _download_card_image — confirmado: la demora es de red real, no código.
+	# Gateado, ya no hace falta por defecto.
 	if _download_start_ms.has(card_id):
 		if Constants.VERBOSE_DIAG_LOGS:
 			print("[DIAG-TIMING] descarga %s: %d ms" % [card_id, Time.get_ticks_msec() - _download_start_ms[card_id]])
@@ -828,10 +780,8 @@ func _on_image_request_completed(result: int, response_code: int, headers: Packe
 		emit_signal("card_image_loaded", card_id, null)
 		return
 
-	# Reconstruir el recorte que hacía el proxy Cloudinary roto (2026-08-25):
-	# varias cartas custom comparten UNA imagen de origen con 2-3 cartas
-	# lado a lado — sin este recorte se vería la lámina completa en vez de
-	# solo esta carta. Ver _unwrap_broken_cloudinary_fetch().
+	# Reconstruir el recorte del proxy Cloudinary: varias cartas custom comparten una lámina con 2-3
+	# cartas. Ver _unwrap_broken_cloudinary_fetch().
 	if crop_rect != null:
 		var full_rect := Rect2i(Vector2i.ZERO, image.get_size())
 		var safe_rect: Rect2i = full_rect.intersection(crop_rect)
@@ -990,10 +940,8 @@ func run_smoke_test() -> void:
 	print("[CardDatabase] TEST 3 en curso (esperando respuesta HTTP)...")
 
 
-## Detecta el formato real por los bytes mágicos (2026-10-11): antes se
-## probaba webp → png → jpg a ciegas, y cada intento fallido imprimía
-## ERRORs del motor en la consola (ERR_FILE_CORRUPT, "Not a PNG file")
-## aunque la imagen terminara cargando bien como JPG.
+## Detecta el formato por los bytes mágicos, en vez de probar webp → png → jpg a ciegas (cada
+## intento fallido imprimía errores del motor).
 static func image_buffer_format(body: PackedByteArray) -> String:
 	if body.size() >= 12 and body.slice(0, 4).get_string_from_ascii() == "RIFF" and body.slice(8, 12).get_string_from_ascii() == "WEBP":
 		return "webp"

@@ -20,30 +20,15 @@ func setup(main: CanvasLayer) -> void:
 
 
 func await_single_pick(candidates: Array, title: String, can_cancel: bool = true, min_selections: int = 1, filter: Callable = Callable(), chooser_id: int = 0) -> Dictionary:
-	"""Abre un panel CUSTOM de 1-sola-elección y espera la respuesta —
-	extraído (2026-08-30) del mismo bloque de 15-20 líneas que se repetía
-	copiado en Don de Amma, Tesoro de los Césares, Miguel, las dos de Tyet,
-	Bernardo O'Higgins y varias más: open_selection() + Dictionary de
-	estado (los lambdas de GDScript capturan variables locales por VALOR,
-	así que 'var picked'/'var done' sueltos nunca se enteraban de la
-	elección real — ver el resto de este archivo para más detalle de ese
-	bug ya conocido) + conectar card_selected/selection_completed/
-	selection_cancelled + esperar + desconectar.
-	max_selections=1 siempre; min_selections=1 por defecto (con eso,
-	SelectionManager emite 'card_selected' apenas se elige la primera, no
-	hace falta escuchar 'selection_completed'). min_selections=0 (p.ej.
-	costo opcional tipo Bernardo O'Higgins: 'Puedes Barajar...') SÍ puede
-	terminar en 'selection_completed' con array vacío (confirmó sin elegir
-	nada) — se escuchan las dos señales siempre, la de más no molesta.
-	'chooser_id' (2026-10-07, a pedido del usuario: "arranca con await_
-	single_pick" — ver arquitectura.md §39): el puente de red para esto ya
-	estaba COMPLETO desde Fase 3 — open_selection()/_delegate_selection_to_
-	remote() ya saben mandarlo por red y emiten las mismas 3 señales que
-	esta función ya escucha más abajo. Solo faltaba exponer el parámetro
-	hasta aquí; nadie lo había necesitado porque hasta hoy todo llamador de
-	await_single_pick() se quedaba con el default 0 (bloqueado para el
-	Remoto por un guard explícito en cada carta).
-	Returns: el card_data elegido, o {} si se canceló o confirmó vacío."""
+	"""Abre un panel de una sola elección y espera la respuesta: open_selection() + Dictionary de
+	estado (los lambdas capturan las locales por valor) + conectar
+	card_selected/selection_completed/selection_cancelled + esperar + desconectar.
+	max_selections = 1 siempre; min_selections = 1 por defecto (card_selected llega con la primera
+	elección). Con min_selections = 0 (costo opcional, p.ej. Bernardo O'Higgins) puede terminar en
+	selection_completed con array vacío; se escuchan las dos señales.
+	'chooser_id' (arquitectura.md §39): open_selection()/_delegate_selection_to_remote() lo mandan
+	por red y emiten las mismas 3 señales.
+	Devuelve el card_data elegido, o {} si se canceló o se confirmó vacío."""
 	_main.open_selection(candidates, _main.SelectionMode.CUSTOM, {
 		"title": title,
 		"max_selections": 1,
@@ -93,14 +78,16 @@ func await_card_pair_choice(
 	face_down_a: bool = false,
 	chooser_id: int = 0
 ) -> bool:
-	"""Modal de Selección Visual entre 2 Cartas (p.ej. La Ouija: tope vs fondo de Castillo).
-	Presenta las dos cartas niveladas en pantalla con estética de Altar Catedralicio limpia y directa.
-	'chooser_id' (2026-10-07, ver arquitectura.md §41): mismo criterio que
-	await_castillo_pick() — esto es un modal visual con Nodos reales de ESTA
-	pantalla, no tiene sentido tal cual para el Remoto. Se delega a await_
-	choice() (ya con puente de red) con label_a/label_b como texto en vez
-	de construir un sistema nuevo — se pierde el arte de las cartas en la
-	pantalla del Remoto, pero la elección en sí es la misma."""
+	"""Modal de Selección Visual entre 2 Cartas (p.ej. La Ouija: tope vs fondo de Castillo). Presenta
+	las dos cartas niveladas en pantalla con estética de Altar Catedralicio limpia y directa.
+	'chooser_id' (ver arquitectura.md §41): mismo criterio que await_castillo_pick — esto es un
+	modal visual con Nodos reales de ESTA pantalla, no tiene sentido tal cual para el Remoto. Se
+	delega a await_choice (ya con puente de red) con label_a/label_b como texto en vez de construir
+	un sistema nuevo — se pierde el arte de las cartas en la pantalla del Remoto, pero la elección
+	en sí es la misma."""
+	if load("res://scripts/core/game/PlayerSide.gd").is_bot(chooser_id):
+		await main.get_tree().process_frame
+		return true
 	if chooser_id == 1 and NetworkClient.room_code != "" and NetworkClient.is_host:
 		var picked_idx: int = await await_choice(main, title, [label_a, label_b], chooser_id)
 		return picked_idx == 0
@@ -321,210 +308,53 @@ func await_card_pair_choice(
 
 	btn_top.grab_focus()
 
+	# Tiempo agotado (TurnClock): la primera opción.
+	var force_gen: int = NetworkClient.force_gen
+	NetworkClient.local_waits += 1
 	while not state.done:
+		if NetworkClient.ui_forced(force_gen):
+			state.picked_top = true
+			NetworkClient.ui_forced_done()
+			break
 		await main.get_tree().process_frame
+	NetworkClient.local_waits = maxi(0, NetworkClient.local_waits - 1)
 
 	canvas.queue_free()
 	return state.picked_top
 
 
 func await_choice(main: Node, title: String, options: Array, chooser_id: int = 0) -> int:
-	"""Modal de Elección estilizado Fantasy TCG con fondo de altar catedralicio,
-	shader de viñeta suave y botones dorados de alta legibilidad (sin emojis).
-	Returns: el índice (0-based) de la opción elegida.
-
-	'chooser_id' (2026-09-30, Fase 3 del plan de paridad remota — mismo
-	criterio que SelectionManager._delegate_selection_to_remote()): si quien
-	elige es el jugador 1 y hay un Remoto real conectado, se le pregunta a
-	él por red en vez de abrir este popup local (que de otro modo lo
-	mostraría en la pantalla del Anfitrión, quien terminaría eligiendo por
-	una decisión que no es suya)."""
+	"""Elegir entre opciones sobre la mesa (BoardChoice: fichas ancladas, sin ventana). Devuelve el
+	índice (0-based) de la opción elegida.
+	'chooser_id': si elige el jugador 1 con un Remoto conectado, se le pregunta por red (el Remoto usa
+	las mismas fichas sobre su tablero, ancladas a la misma carta); el bot elige solo."""
 	if chooser_id == 1 and NetworkClient.room_code != "" and NetworkClient.is_host:
-		NetworkClient.send_message({"op": "prompt", "kind": "choose_option", "title": title, "options": options})
+		var src = load("res://scripts/core/effects/EffectContext.gd").current().get("card")
+		NetworkClient.send_message({"op": "prompt", "kind": "choose_option", "title": title, "options": options,
+			"source_id": str(src.get_instance_id()) if src is Node and is_instance_valid(src) else ""})
 		var intent: Dictionary = await NetworkClient.await_intent(["choose_option_choice"])
 		return clampi(int(intent.get("index", 0)), 0, maxi(options.size() - 1, 0))
-
-	var canvas := CanvasLayer.new()
-	canvas.layer = 70
-	main.add_child(canvas)
-
-	var bg := ColorRect.new()
-	bg.color = Color(0, 0, 0, 0.75)
-	bg.size = main.get_viewport().get_visible_rect().size
-	bg.mouse_filter = Control.MOUSE_FILTER_STOP
-	canvas.add_child(bg)
-
-	var num_opts: int = options.size()
-	# Layout vertical si son 3+ opciones o si el texto es largo, u horizontal si son 2 cortas
-	var has_long_text: bool = false
-	for opt in options:
-		if str(opt).length() > 28:
-			has_long_text = true
-			break
-	var is_vertical: bool = num_opts >= 3 or has_long_text
-
-	var panel_w: float = 720.0 if not is_vertical else 640.0
-	var panel_h: float = 190.0 if not is_vertical else (110.0 + float(num_opts) * 54.0)
-
-	var panel := Panel.new()
-	panel.set_anchors_preset(Control.PRESET_CENTER)
-	panel.offset_left = -panel_w / 2.0
-	panel.offset_top = -panel_h / 2.0
-	panel.offset_right = panel_w / 2.0
-	panel.offset_bottom = panel_h / 2.0
-
-	var p_style := StyleBoxFlat.new()
-	p_style.bg_color = Color(0.03, 0.03, 0.05, 0.98)
-	p_style.set_corner_radius_all(18)
-	p_style.shadow_color = Color(0, 0, 0, 0.85)
-	p_style.shadow_size = 30
-	panel.add_theme_stylebox_override("panel", p_style)
-	canvas.add_child(panel)
-
-	# Fondo Altar Catedralicio con Viñeta Suave
-	var bg_rect := TextureRect.new()
-	bg_rect.set_anchors_preset(Control.PRESET_FULL_RECT)
-	bg_rect.texture = _main.TEX_ALTAR_BG
-	bg_rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	bg_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
-	bg_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
-
-	var smat := ShaderMaterial.new()
-	smat.shader = _main.SHADER_VIGNETTE
-	smat.set_shader_parameter("panel_size", Vector2(panel_w, panel_h))
-	smat.set_shader_parameter("corner_radius", 18.0)
-	smat.set_shader_parameter("vignette_amount", 0.70)
-	smat.set_shader_parameter("tint_color", Color(0.02, 0.02, 0.03, 0.30))
-	smat.set_shader_parameter("edge_shadow_color", Color(0.01, 0.01, 0.02, 0.95))
-	bg_rect.material = smat
-	panel.add_child(bg_rect)
-
-	var main_vbox := VBoxContainer.new()
-	main_vbox.set_anchors_preset(Control.PRESET_FULL_RECT)
-	main_vbox.offset_left = 24
-	main_vbox.offset_top = 18
-	main_vbox.offset_right = -24
-	main_vbox.offset_bottom = -18
-	main_vbox.add_theme_constant_override("separation", 12)
-	panel.add_child(main_vbox)
-
-	# Título en Cinzel-Bold
-	var title_lbl := Label.new()
-	title_lbl.text = title.to_upper()
-	title_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title_lbl.add_theme_font_override("font", _main.FONT_CINZEL_BOLD)
-	title_lbl.add_theme_font_size_override("font_size", 17)
-	title_lbl.add_theme_color_override("font_color", Color(0.95, 0.85, 0.60, 1.0))
-	title_lbl.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.9))
-	title_lbl.add_theme_constant_override("shadow_offset_x", 1)
-	title_lbl.add_theme_constant_override("shadow_offset_y", 2)
-	main_vbox.add_child(title_lbl)
-
-	# Línea separadora dorada
-	var sep := ColorRect.new()
-	sep.custom_minimum_size = Vector2(0, 1)
-	sep.color = Color(0.75, 0.60, 0.35, 0.40)
-	main_vbox.add_child(sep)
-
-	# Contenedor de Opciones
-	var opts_box: BoxContainer = VBoxContainer.new() if is_vertical else HBoxContainer.new()
-	opts_box.alignment = BoxContainer.ALIGNMENT_CENTER
-	opts_box.add_theme_constant_override("separation", 12)
-	opts_box.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	main_vbox.add_child(opts_box)
-
-	var state := {"done": false, "picked_index": 0}
-
-	for i in range(num_opts):
-		var btn := Button.new()
-		btn.text = str(options[i])
-		btn.focus_mode = Control.FOCUS_ALL
-		btn.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
-		btn.add_theme_font_override("font", _main.FONT_CINZEL_BOLD)
-		btn.add_theme_font_size_override("font_size", 14)
-		if not is_vertical:
-			btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		btn.custom_minimum_size = Vector2(180, 42)
-
-		# Estilo normal (borde dorado tenue y fondo oscuro elegante)
-		var btn_normal := StyleBoxFlat.new()
-		btn_normal.bg_color = Color(0.08, 0.09, 0.12, 0.88)
-		btn_normal.set_border_width_all(1)
-		btn_normal.border_color = Color(0.70, 0.58, 0.35, 0.75)
-		btn_normal.set_corner_radius_all(8)
-		btn_normal.content_margin_left = 18
-		btn_normal.content_margin_right = 18
-		btn_normal.content_margin_top = 8
-		btn_normal.content_margin_bottom = 8
-		btn.add_theme_stylebox_override("normal", btn_normal)
-		btn.add_theme_color_override("font_color", Color(0.92, 0.88, 0.80, 1.0))
-
-		# Estilo hover y focus (brillo dorado y fondo iluminado para teclado y mouse)
-		var btn_hover := StyleBoxFlat.new()
-		btn_hover.bg_color = Color(0.16, 0.18, 0.24, 0.95)
-		btn_hover.set_border_width_all(2)
-		btn_hover.border_color = Color(1.0, 0.88, 0.50, 1.0)
-		btn_hover.set_corner_radius_all(8)
-		btn_hover.content_margin_left = 18
-		btn_hover.content_margin_right = 18
-		btn_hover.content_margin_top = 8
-		btn_hover.content_margin_bottom = 8
-		btn.add_theme_stylebox_override("hover", btn_hover)
-		btn.add_theme_stylebox_override("focus", btn_hover)
-		btn.add_theme_color_override("font_hover_color", Color(1.0, 1.0, 0.95, 1.0))
-		btn.add_theme_color_override("font_focus_color", Color(1.0, 1.0, 0.95, 1.0))
-
-		var btn_pressed := btn_hover.duplicate()
-		btn_pressed.bg_color = Color(0.22, 0.24, 0.32, 1.0)
-		btn.add_theme_stylebox_override("pressed", btn_pressed)
-
-		var captured_idx: int = i
-		btn.pressed.connect(func():
-			state.picked_index = captured_idx
-			state.done = true
-		)
-		opts_box.add_child(btn)
-
-	# Enfocar por defecto el primer botón para accesibilidad inmediata con Enter
-	if opts_box.get_child_count() > 0:
-		var first_btn = opts_box.get_child(0) as Control
-		if first_btn:
-			first_btn.call_deferred("grab_focus")
-
-	bg.gui_input.connect(func(ev: InputEvent):
-		if ev is InputEventKey and ev.pressed and not ev.is_echo():
-			if ev.keycode == KEY_ENTER or ev.keycode == KEY_KP_ENTER:
-				if not state.done:
-					state.picked_index = 0
-					state.done = true
-	)
-
-	# Animación de entrada suave
-	panel.scale = Vector2(0.94, 0.94)
-	panel.pivot_offset = Vector2(panel_w / 2.0, panel_h / 2.0)
-	var tween := panel.create_tween()
-	tween.tween_property(panel, "scale", Vector2.ONE, 0.18).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_BACK)
-
-	while not state.done:
+	# El bot elige solo (la primera opción): nunca se le abre al Anfitrión una elección del bot.
+	if load("res://scripts/core/game/PlayerSide.gd").is_bot(chooser_id):
 		await main.get_tree().process_frame
+		return 0
 
-	canvas.queue_free()
-	return state.picked_index
+	# En la mesa, sin ventana: fichas ancladas a lo que afecta cada opción (BoardChoice).
+	var ctx_card = load("res://scripts/core/effects/EffectContext.gd").current().get("card")
+	return await load("res://scripts/ui/hud/BoardChoice.gd").choose(main, title, options, ctx_card)
 
 
 var _castillo_pick_active: bool = false
+var _castillo_pick_own_only: bool = false
 var _castillo_pick_callback: Callable = Callable()
 var _castillo_pick_cleanup: Callable = Callable()
 
 
 func start_castillo_pick(main: Node, title: String, callback: Callable, own_only: bool = false) -> void:
-	"""Versión 'start' de await_castillo_pick() (2026-09-06, a pedido del
-	usuario) — separada para poder correr EN CARRERA contra otro tipo de
-	selección (p.ej. CardInteractionModule.start_target_selection(), usada
-	por Sherlock Holmes para elegir entre 'cartas en juego' o 'un Castillo'
-	con el primer click real, sin preguntar antes). El que resuelve primero
-	debe cancelar al otro (ver cancel_castillo_pick()). callback recibe
-	true/false (propio/rival)."""
+	"""Versión 'start' de await_castillo_pick(), para correr en carrera contra otra selección (p.ej.
+	CardInteractionModule.start_target_selection() con Sherlock Holmes: "cartas en juego" o "un
+	Castillo" con el primer click). El que resuelve primero cancela al otro
+	(cancel_castillo_pick()). callback recibe true/false (propio/rival)."""
 	var player_castillo: Panel = main.get_node_or_null("GameBoard/PlayerArea/PlayerCastillo")
 	var opponent_castillo: Panel = main.get_node_or_null("GameBoard/OpponentArea/OpponentCastillo")
 	if not player_castillo or not opponent_castillo:
@@ -536,6 +366,7 @@ func start_castillo_pick(main: Node, title: String, callback: Callable, own_only
 		main._update_debug("%s — clickea tu Castillo o el del rival" % title)
 
 	_castillo_pick_active = true
+	_castillo_pick_own_only = own_only
 	_castillo_pick_callback = callback
 
 	_set_castillo_pick_glow(player_castillo, true)
@@ -545,11 +376,8 @@ func start_castillo_pick(main: Node, title: String, callback: Callable, own_only
 	player_castillo.mouse_filter = Control.MOUSE_FILTER_STOP
 	opponent_castillo.mouse_filter = Control.MOUSE_FILTER_STOP
 
-	# Cursor de mano + pulso suave de brillo (2026-08-30, a pedido del
-	# usuario: "también ponerle un efecto o hacerlo 'cliqueable' para mayor
-	# visual" — el borde estático ya avisaba que había que elegir, pero no
-	# se sentía interactivo hasta clickear). Se para al resolver, junto con
-	# todo lo demás.
+	# Cursor de mano + pulso suave de brillo, para que el Castillo se sienta clickeable. Se para al
+	# resolver.
 	var prev_player_cursor := player_castillo.mouse_default_cursor_shape
 	var prev_opponent_cursor := opponent_castillo.mouse_default_cursor_shape
 	player_castillo.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
@@ -590,8 +418,7 @@ func start_castillo_pick(main: Node, title: String, callback: Callable, own_only
 			_resolve_castillo_pick(false)
 	player_castillo.gui_input.connect(on_player_input)
 	if own_only:
-		# Solo tu Castillo (2026-10-17, p.ej. "Roba hasta N"): el rival no
-		# brilla ni se puede clickear.
+		# Solo tu Castillo (p.ej. "Roba hasta N"): el rival no brilla ni se puede clickear.
 		pulse_opponent.kill()
 		opponent_castillo.modulate = Color(1.0, 1.0, 1.0, 1.0)
 		_set_castillo_pick_glow(opponent_castillo, false)
@@ -630,25 +457,18 @@ func cancel_castillo_pick() -> void:
 
 
 func await_castillo_pick(main: Node, title: String, chooser_id: int = 0) -> bool:
-	"""Espera un click directo sobre el Panel del Castillo propio o del
-	rival en el tablero — reemplaza el popup de 2 botones de texto para
-	elegir 'tu Castillo o el del oponente' (2026-08-30, a pedido del
-	usuario: 'estaría bueno poder hacer click al castillo para hacerlo más
-	interactivo', p.ej. Infernum Vox, Aho, Espada del Juicio). Resalta
-	ambos paneles con un borde celeste mientras espera. Sin cancelar —
-	mismo criterio que await_two_choice(), es una elección obligatoria
-	entre dos zonas, no un 'puedes'. Envoltorio de start_castillo_pick()
-	(2026-09-06, mismo split que start_target_selection()/await_target()).
-	'chooser_id' (2026-10-07, ver arquitectura.md §40): esto es un click
-	sobre un Panel real de ESTA pantalla — no tiene sentido para el Remoto,
-	que no ve el tablero del Anfitrión. En vez de construir un sistema de
-	red nuevo, se delega a await_choice() (ya tiene puente de red completo,
-	"choose_option") con las mismas dos opciones en texto — misma elección
-	A/B, otro medio.
-	Returns: true si se eligió el Castillo propio, false si el rival."""
+	"""Espera un click sobre el Panel del Castillo propio o rival (p.ej. Infernum Vox, Aho, Espada del
+	Juicio), con ambos resaltados en celeste. Sin cancelar: es una elección obligatoria entre dos
+	zonas, como await_two_choice(). Envoltorio de start_castillo_pick().
+	'chooser_id' (arquitectura.md §40): el Remoto no ve el tablero del Anfitrión, así que se delega
+	a await_choice() (con puente de red, "choose_option") con las dos opciones en texto.
+	Devuelve true si se eligió el Castillo propio, false si el rival."""
 	if chooser_id == 1 and NetworkClient.room_code != "" and NetworkClient.is_host:
 		var picked_idx: int = await await_choice(main, title, ["Tu Castillo", "Castillo rival"], chooser_id)
 		return picked_idx == 0
+	if load("res://scripts/core/game/PlayerSide.gd").is_bot(chooser_id):
+		await main.get_tree().process_frame
+		return false  # el bot apunta al Castillo rival
 	var state := {"done": false, "picked_own": true}
 	start_castillo_pick(main, title, func(v: bool) -> void:
 		state.picked_own = v
@@ -673,27 +493,13 @@ func _set_castillo_pick_glow(panel: Panel, on: bool) -> void:
 
 
 func await_multi_pick(candidates: Array, title: String, max_selections: int, min_selections: int = 0, can_cancel: bool = true, filter: Callable = Callable(), chooser_id: int = 0) -> Dictionary:
-	"""Selección múltiple (0 a max_selections) y espera la respuesta —
-	extraído (2026-08-30) del mismo bloque repetido en
-	_resolve_search_cemetery_to_hand()/_select_hand_cards_for_discard()
-	(TargetedEffectExecutor.gd) y _resolve_reveal_cost_reduction()
-	(GoldManager.gd). A diferencia de await_single_pick(), aquí 'canceló
-	del todo' y 'confirmó sin elegir nada' son resultados DISTINTOS a
-	propósito (algunos llamadores necesitan diferenciarlos: declinar el
-	'puedes' entero vs. aceptarlo pero no encontrar nada que valga la
-	pena elegir) — por eso devuelve un Dictionary con las dos señales en
-	vez de colapsarlas en un Array vacío como haría await_single_pick().
-	'chooser_id' (2026-10-07, mismo arreglo que await_single_pick(), ver
-	arquitectura.md §40): el puente ya existe en open_selection(), solo
-	faltaba exponerlo. OJO — límite real para quien lo use del lado del
-	Remoto: RemoteMirrorController._show_select_cards_prompt() resuelve la
-	multi-selección con checkboxes, no con orden de click, así que cualquier
-	llamador que dependa de 'el orden en que se clickeó' (p.ej. Infernum
-	Vox, que reordena el tope del Castillo) NO preserva ese orden para el
-	Remoto — vuelve siempre en el orden original en que se mostraron. 'Mira
-	y elige cuáles' funciona igual para los dos lados; 'en QUÉ ORDEN' solo
-	para el Anfitrión.
-	Returns: {"cancelled": bool, "picked": Array[Dictionary]}."""
+	"""Selección múltiple (0 a max_selections) que espera la respuesta. A diferencia de
+	await_single_pick(), "canceló" y "confirmó sin elegir nada" son resultados distintos (declinar
+	el "puedes" vs. aceptarlo sin elegir), por eso devuelve un Dictionary.
+	'chooser_id' (arquitectura.md §40): el puente está en open_selection(). Límite del Remoto:
+	RemoteMirrorController._show_select_cards_prompt() usa checkboxes, así que no preserva el orden
+	de click (p.ej. Infernum Vox, que reordena el tope); "mirar y elegir cuáles" funciona igual.
+	Devuelve {"cancelled": bool, "picked": Array[Dictionary]}."""
 	_main.open_selection(candidates, _main.SelectionMode.CUSTOM, {
 		"title": title,
 		"max_selections": max_selections,

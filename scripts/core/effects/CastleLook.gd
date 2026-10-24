@@ -1,30 +1,21 @@
 extends RefCounted
-## CastleLook — motor único de "mira N cartas del tope/fondo de un Castillo"
-## (2026-10-13, a pedido del usuario, arquitectura.md §69).
-##
-## Regla (usuario, DAR): mirar en un Castillo siempre deja ordenar las cartas
-## que vuelven, aunque el texto no lo diga; vuelven al mismo lado del que se
-## miraron (tope → tope, fondo → fondo) salvo que el efecto diga otra cosa
-## (Infernum Vox: "tope y/o fondo"). "Muestra" NO entra aquí (es público).
-##
-## Todo en UNA ventana (CastleLookWindow): repartir a los destinos y ordenar el
-## resto. Nada se mueve hasta confirmar, y los destinos que pueden disparar
-## efectos (Oros a la Reserva/Oro Pagado, p.ej. Drácula) se aplican AL FINAL,
-## con el resto del efecto ya terminado — orden incluido.
-##
-## Quien elige: Anfitrión (ventana local), Remoto (la misma ventana por red,
-## prompt "castle_look") o bot local (reparto automático).
-##
-## boxes: [{key, label, dest, min = 0, max = -1, ordered = false,
-##          filter = Callable(card_data) -> bool}]
-## dest: "top" | "bottom" | "shuffle" (vuelven al Castillo) | "hand" |
-##       "cemetery" | "exile" | "reserva" | "pagado" | "custom" (lo aplica el
-##       llamador con lo que devuelve look()).
-## La primera zona con ordered = true (o start = true, sin flechas de orden)
-## es donde empiezan todas las cartas.
+## CastleLook — motor único de "mira N cartas del tope/fondo de un Castillo" (arquitectura.md §69).
+## Regla (DAR): mirar un Castillo siempre deja ordenar las cartas que vuelven, aunque el texto no lo
+## diga; vuelven al lado del que se miraron (tope → tope, fondo → fondo) salvo que el efecto diga
+## otra cosa (Infernum Vox: "tope y/o fondo"). "Muestra" no entra aquí (es público).
+## Todo en una ventana (CastleLookWindow): repartir a los destinos y ordenar el resto. Nada se mueve
+## hasta confirmar, y los destinos que pueden disparar efectos (Oros a la Reserva/Oro Pagado, p.ej.
+## Drácula) se aplican AL FINAL.
+## Quién elige: Anfitrión (ventana local), Remoto (la misma ventana por red, prompt "castle_look") o
+## bot local (reparto automático).
+## boxes: [{key, label, dest, min = 0, max = -1, ordered = false, filter = Callable(card_data) ->
+## bool}]
+## dest: "top" | "bottom" | "shuffle" (vuelven al Castillo) | "hand" | "cemetery" | "exile" |
+## "reserva" | "pagado" | "custom" (lo aplica el llamador).
+## La primera zona con ordered = true (o start = true, sin flechas de orden) es donde empiezan todas
+## las cartas.
 ## Devuelve {key: [card_data...]} (vacío si no había nada que mirar).
-##
-## Se usa con preload (sin class_name global), ver §54.
+## Se usa con preload (sin class_name global; ver §54).
 
 const WindowScript = preload("res://scripts/ui/zones/CastleLookWindow.gd")
 const EffectContextScript = preload("res://scripts/core/effects/EffectContext.gd")
@@ -98,6 +89,7 @@ static func look(player_id: int, deck_owner: int, count: int, from_top: bool, bo
 	# Castillo primero, después mano/Cementerio/Destierro, y los Oros al final
 	# (pueden disparar "cuando entra en juego").
 	var shuffle_needed := false
+	var exile_blocked: bool = load("res://scripts/core/effects/mechanics/ProtectionRules.gd").castle_banish_blocked(deck_owner, player_id)
 	for phase in [["top", "bottom", "shuffle"], ["hand", "cemetery", "exile"], ["reserva", "reserva_noskill", "pagado"]]:
 		for box in boxes:
 			var dest: String = box.get("dest", "custom")
@@ -116,14 +108,26 @@ static func look(player_id: int, deck_owner: int, count: int, from_top: bool, bo
 						deck.append(d)
 					shuffle_needed = shuffle_needed or not list.is_empty()
 				"hand":
-					for d in list:
-						await ActionModule._put_found_card_into_play(main, player_id, d, false)
+					# Jinete de la Peste: no puede poner cartas en su mano por efectos — vuelven al tope.
+					if load("res://scripts/core/effects/mechanics/ProtectionRules.gd").hand_by_effects_blocked(player_id):
+						for i in range(list.size() - 1, -1, -1):
+							deck.push_front(list[i])
+						CardManager._emit_deck_changed(deck_owner)
+					else:
+						for d in list:
+							await ActionModule._put_found_card_into_play(main, player_id, d, false)
 				"cemetery":
 					for d in list:
 						CardManager.add_to_cemetery(deck_owner, d)
 				"exile":
-					for d in list:
-						CardManager.add_to_exile(deck_owner, d)
+					# Cetro Demoniaco / nehushtan: no se puede Desterrar de ese Castillo — vuelven al tope.
+					if exile_blocked:
+						for i in range(list.size() - 1, -1, -1):
+							deck.push_front(list[i])
+						CardManager._emit_deck_changed(deck_owner)
+					else:
+						for d in list:
+							CardManager.add_to_exile(deck_owner, d)
 				"reserva":
 					for d in list:
 						await main._gold_manager.put_gold_directly_in_reserva(player_id, d)
@@ -190,14 +194,15 @@ static func try_execute_text(card: Node, text: String, controller_id: int, dry_r
 	# Lo de antes de "mira": solo disparadores/frecuencia, nunca un coste.
 	var prefix: String = lower.substr(0, look.get_start())
 	prefix = _rx("cuando [^,]+,|al comienzo de [^,]+,|en tu vigilia,|en tu fase final,|una vez (?:por|en tu) turno,"
-		+ "|si no has puesto oros en juego este turno,|puedes|\\by\\b").sub(prefix, "", true)
+		+ "|si no has puesto oros en juego este turno,|puedes|\\by\\b|^\\s*-").sub(prefix, "", true)
 	if not prefix.strip_edges().is_empty():
 		return false
 
 	var main: Node = (Engine.get_main_loop() as SceneTree).root.get_node_or_null("/root/Main")
-	if not main:
+	if not main and not dry_run:
 		return false
-	var count: int = _look_count(main, look, controller_id)
+	# dry_run sin Main (EffectCompiler en los tests de consola): solo importa si entiende el texto.
+	var count: int = _look_count(main, look, controller_id) if main else 0
 	if count < 0:
 		return false
 	var from_top: bool = look.get_string(3) != "fondo"
@@ -229,6 +234,18 @@ static func try_execute_text(card: Node, text: String, controller_id: int, dry_r
 		if "oros" in m.get_string(3):
 			hand_box["filter"] = func(d): return int(d.get("tipo", -1)) in [Constants.CardType.ORO, Constants.CardType.ALIADO]
 		boxes.append(hand_box)
+		rest = _cut(rest, m)
+	# "pon una en tu mano y otra en tu Cementerio o Destierro" (Relicario de San Pancracio): se elige la
+	# carta en la ventana y después el destino.
+	m = _rx("(?:otra|la\\s+otra)\\s+en\\s+tu\\s+cementerio\\s+o\\s+destierro").search(rest)
+	if m:
+		boxes.append({"key": "cem_or_exile", "label": "A tu Cementerio o Destierro", "dest": "custom", "min": 1, "max": 1})
+		rest = _cut(rest, m)
+	# "y Destierra dos cartas de ahí" (negar la luz), "y Desterrar una de ellas" (Relicario).
+	m = _rx("(?:destierra|desterrar)\\s+" + _NUM + "\\s+(?:cartas?\\s+)?de\\s+(?:ah[ií]|ellas)").search(rest)
+	if m:
+		var n_banish: int = UniversalCardParser._parse_amount(m.get_string(1))
+		boxes.append({"key": "exile_n", "label": "Al Destierro", "dest": "exile", "min": n_banish, "max": n_banish})
 		rest = _cut(rest, m)
 	for spec in [["cemetery", "A tu Cementerio", "cementerio"], ["exile", "A tu Destierro", "destierro"]]:
 		var n_zone := 1
@@ -285,7 +302,17 @@ static func try_execute_text(card: Node, text: String, controller_id: int, dry_r
 		"hand":
 			boxes = [{"key": "rest", "label": "El resto a tu mano", "dest": "hand", "start": true}] + boxes
 	var title := "%s: mira %d carta(s) del %s" % [card_name, count, "tope" if from_top else "fondo"]
-	await look(controller_id, deck_owner, count, from_top, boxes, title)
+	var result: Dictionary = await look(controller_id, deck_owner, count, from_top, boxes, title)
+	for d in result.get("cem_or_exile", []):
+		var to_exile := false
+		if not PlayerSideScript.is_bot(controller_id) \
+				and not load("res://scripts/core/effects/mechanics/ProtectionRules.gd").castle_banish_blocked(deck_owner, controller_id):
+			to_exile = await SelectionManager.await_choice(main, "%s: ¿a tu Cementerio o a tu Destierro?" % card_name,
+				["Cementerio", "Destierro"], controller_id) == 1
+		if to_exile:
+			CardManager.add_to_exile(deck_owner, d)
+		else:
+			CardManager.add_to_cemetery(deck_owner, d)
 	if draw_after > 0:
 		await ActionModule.draw(controller_id, draw_after, card_name, true)
 	return true

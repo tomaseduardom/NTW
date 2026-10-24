@@ -1,22 +1,10 @@
 extends Node
-## EffectController - Procesa efectos de cartas sobre el mazo
-## Implementa validación "En medida de lo posible" (DAR - regla general)
-##
-## ESTADO REAL (2026-08-17, ver docs/audit-2026-08-13.html hallazgo 2 y 4):
-## Casi todo aquí abajo está gateado por _validate_board(), que depende de
-## `game_board` (poblado solo por GameBoard.gd — código huérfano de un layout
-## de tablero anterior, nunca adjunto a ningún nodo de la escena actual).
-## Con fallback hacia CardManager (que SÍ está vivo y sincronizado con Main):
-##   draw_cards(), mill_cards(), destroy_card(), exile_card()
-## search_cards()/discard_cards()/return_to_deck()/return_to_hand()/
-## shuffle_deck()/convert_card_type() y todo lo que colgaba exclusivamente de
-## ellas se ELIMINARON (2026-08-17): auditadas función por función, cero
-## llamadores en todo el proyecto — implementaciones duplicadas y abandonadas
-## de lo que ActionModule.gd (el camino real: TriggerSystem →
-## UniversalCardParser → ActionModule) ya hace de verdad. Antes de añadir un
-## efecto nuevo, aplicarle a game_board el mismo tratamiento que draw_cards/
-## mill_cards/destroy_card/exile_card (fallback a CardManager) en vez de
-## asumir que va a aparecer solo — pero solo si algo realmente lo va a llamar.
+## EffectController — efectos de cartas sobre el mazo, con validación "en medida de lo posible"
+## (DAR, regla general).
+## Lo que depende de game_board (GameBoard.gd, layout viejo sin uso) cae a CardManager, que es el
+## camino vivo: draw_cards(), mill_cards(), destroy_card(), exile_card(). El resto de los efectos
+## vive en ActionModule (TriggerSystem → UniversalCardParser → ActionModule). Antes de agregar un
+## efecto aquí, darle el mismo fallback a CardManager, y solo si algo lo va a llamar.
 
 # =============================================================================
 # SIGNALS - Efectos
@@ -39,7 +27,7 @@ signal on_card_destroyed(player_id: int, card: Node)
 signal on_card_exiled(player_id: int, card: Node)
 signal on_card_returned_to_hand(player_id: int, card: Node)
 signal on_card_attacks(player_id: int, card: Node)  # DAR 5.3.1 — "cuando ataque"
-signal on_card_blocks(player_id: int, card: Node)  # DAR 5.3.2 — "cuando bloqueas" (2026-09-20)
+signal on_card_blocks(player_id: int, card: Node)  # DAR 5.3.2 — "cuando bloqueas"
 signal on_card_returned_to_deck(player_id: int, card: Node, to_top: bool)
 
 # =============================================================================
@@ -93,9 +81,8 @@ func draw_cards(player_id: int, amount: int) -> Dictionary:
 	}
 
 	if not _validate_board():
-		# El GameBoard legacy no está activo en la escena actual (ver
-		# docs/audit-2026-08-13.html, hallazgo 2) — usar el camino real del
-		# juego en su lugar en vez de fallar en silencio.
+		# El GameBoard viejo no está en la escena: usar el camino real del juego en vez de fallar en
+		# silencio.
 		return await _draw_cards_fallback(player_id, amount)
 
 	emit_signal("effect_started", "draw_cards", player_id)
@@ -174,8 +161,7 @@ func _draw_cards_fallback(player_id: int, amount: int) -> Dictionary:
 	return result
 
 
-# search_cards()/_card_matches_filter() eliminados (2026-08-17): cero
-# llamadores en todo el proyecto — ActionModule.search() es la búsqueda real.
+# La búsqueda real es ActionModule.search().
 # =============================================================================
 # 3. BOTAR CARTAS - MILL (DAR Sección 8 - Botar)
 # =============================================================================
@@ -272,7 +258,8 @@ func _mill_cards_fallback(player_id: int, amount: int, destination: int, log_it:
 		for i in range(amount):
 			if deck.is_empty():
 				break
-			var card_data: Dictionary = deck.pop_back()
+			# pop_front() = tope real (ver CardManager.add_to_deck_top()).
+			var card_data: Dictionary = deck.pop_front()
 			card_data["esta_oculta"] = false
 			CardManager.append_to_exile(player_id, card_data)
 			result.milled_cards.append(card_data)
@@ -284,9 +271,7 @@ func _mill_cards_fallback(player_id: int, amount: int, destination: int, log_it:
 		result.actual = dmg_result.get("actual", 0)
 		result.milled_cards = dmg_result.get("cards", [])
 
-	# Una línea con los nombres (2026-10-17, a pedido del usuario: el log
-	# del daño repetía 2 líneas por carta). El daño de combate lo resume
-	# BattleManager al final (log_it=false).
+	# Una línea con los nombres. El daño de combate lo resume BattleManager al final (log_it = false).
 	if log_it:
 		print("[EffectController] Jugador %d bota %d al %s: %s" % [
 			player_id + 1, result.actual, Constants.ZONE_NAMES.get(destination, "?"),
@@ -297,34 +282,19 @@ func _mill_cards_fallback(player_id: int, amount: int, destination: int, log_it:
 	return result
 
 
-# shuffle_deck()/discard_cards() eliminados (2026-08-17): cero llamadores
-# en todo el proyecto. ActionModule.discard() es el descarte real; el
-# barajado real lo hacen CardManager.shuffle_deck()/_zone_manager/GameManager
-# directamente (varios sitios ya usan esos, no EffectController).
-# =============================================================================
-# 6/7. return_to_deck()/play_card_to_zone() eliminados (2026-08-17): cero
-# llamadores en todo el proyecto. GoldManager._trigger_enter_play() ya
-# documentaba por qué evita play_card_to_zone() (depende del game_board
-# muerto) y mueve la carta directo — ver ese comentario para el camino real.
+# Descarte real: ActionModule.discard(). Barajado real:
+# CardManager.shuffle_deck()/_zone_manager/GameManager. Entrada al juego:
+# GoldManager._trigger_enter_play().
 # =============================================================================
 # 8. DESTRUIR CARTA (DAR 7.3 - Triggers de destrucción)
 # =============================================================================
 func destroy_card(player_id: int, card: Node, is_being_destroyed: bool = true, source: Node = null) -> bool:
-	"""Destruye una carta, enviándola al Cementerio (o al Destierro si fue
-	exhumada, regla que respeta CardManager.destroy_card()).
-	Emite on_card_left_play y on_card_destroyed.
-
-	is_being_destroyed (2026-09-04, bug reportado: 'el texto de la consola
-	de los Talismanes, estas no se destruyen') — GoldManager._play_talisman()
-	reusa esta función para mandar un Talismán ya resuelto a su Cementerio
-	por defecto (mismo camino real de salida de juego, mismos contadores/
-	señales), pero un Talismán resolviendo NO es una 'destrucción' en
-	términos DAR — pasar false solo cambia el texto de consola a algo
-	preciso, sin tocar prevención de salida de juego ni las señales (que
-	siguen siendo el mismo choke point real para ambos casos).
-
-	Returns: true si se destruyó
-	"""
+	"""Destruye una carta y la manda al Cementerio (o al Destierro si fue exhumada; lo respeta
+	CardManager.destroy_card()). Emite on_card_left_play y on_card_destroyed.
+	is_being_destroyed = false: GoldManager._play_talisman() reusa esta función para mandar un
+	Talismán resuelto al Cementerio (mismos contadores y señales); no es una destrucción en
+	términos DAR, así que solo cambia el texto del log.
+	Devuelve true si se destruyó."""
 	if await _try_consume_leave_play_prevention(player_id, card, source):
 		return false
 
@@ -371,23 +341,38 @@ func destroy_card(player_id: int, card: Node, is_being_destroyed: bool = true, s
 	return true
 
 
+## DAR (Portar): "Si en algún momento un Arma ... queda sin portador válido, esa Arma es enviada al
+## Cementerio." Sale del juego al Cementerio de su dueño sin ser Destruida: ni prevención, ni
+## Indestructible, ni "cuando sea Destruida" (Sariel, "No puede portar Armas").
+func send_to_cemetery_by_rule(card: Node) -> void:
+	if not is_instance_valid(card) or not (card.get("current_zone") in Constants.ZONES_IN_PLAY):
+		return
+	var from_zone = card.current_zone
+	var owner_id: int = int(card.owner_id) if card.get("owner_id") != null else 0
+	if card.has_method("on_left_play"):
+		card.on_left_play()
+	KeywordManager.clear_all_for_card(card)
+	clear_conversion_on_leave(card)
+	emit_signal("on_card_left_play", owner_id, card, from_zone)
+	await CardManager.destroy_card(owner_id, card, false)
+
+
 # =============================================================================
 # 9. DESTERRAR CARTA (DAR - Destierro)
 # =============================================================================
 func exile_card(player_id: int, card: Node, bypass_prevention: bool = false, source: Node = null) -> bool:
-	"""Destierra una carta, enviándola al Destierro
-	Emite on_card_left_play (si estaba en juego) y on_card_exiled
-
-	bypass_prevention (2026-08-28): true cuando desterrar ES el costo que el
-	propio jugador eligió pagar (p.ej. 'Puedes Desterrarlo para...', Legión
-	Paladín) — la Prevención protege contra remoción del RIVAL, no debe
-	poder bloquear que pagues tu propio costo (y si el jugador tiene otra
-	copia de la misma carta con una carga de Prevención ya activa, sin esto
-	quedaría sin poder pagar el costo de la segunda nunca).
-
-	Returns: true si se desterró
-	"""
+	"""Destierra una carta. Emite on_card_left_play (si estaba en juego) y on_card_exiled.
+	bypass_prevention: true cuando desterrar es el costo que el propio jugador eligió pagar (p.ej.
+	"Puedes Desterrarlo para...", Legión Paladín): la Prevención protege contra el rival, no contra
+	tu propio costo.
+	Devuelve true si se desterró."""
 	if not bypass_prevention and await _try_consume_leave_play_prevention(player_id, card, source):
+		return false
+	# Indesterrable, Nefandos, dulce canasta: ni un costo propio (bypass_prevention) puede Desterrar lo
+	# que no puede ser Desterrado.
+	if load("res://scripts/core/effects/mechanics/ProtectionRules.gd").cannot_be_banished(card):
+		if get_node_or_null("/root/Main"):
+			get_node("/root/Main")._update_debug("%s no puede ser Desterrada" % str(card.get("card_name")))
 		return false
 
 	var from_zone = card.current_zone if card.get("current_zone") != null else -1
@@ -422,23 +407,11 @@ func exile_card(player_id: int, card: Node, bypass_prevention: bool = false, sou
 
 
 # =============================================================================
-# 10. return_to_hand() eliminado (2026-08-17): cero llamadores en todo el
-# proyecto (Card.return_to_hand() es un método distinto y no relacionado —
-# la animación de "volver a la posición" al cancelar un drag).
+# 11. CONVERTIR TIPO DE CARTA (DAR Sección 8 - Convertir)
 # =============================================================================
-# 11. CONVERTIR TIPO DE CARTA (DAR Sección 8 - Convertir) — eliminado
-# (2026-08-17): convert_card_type(), revert_card_type() y todo lo que
-# colgaba exclusivamente de ellas (_validate_persistent_abilities,
-# _unequip_weapon, _handle_zone_movement_on_conversion, can_use_ability,
-# _update_card_faculties, _set_card_property, _register_conversion_duration,
-# _on_turn_end_revert_conversion, _on_combat_end_revert_conversion,
-# _revert_card_type, _notify_type_change, is_card_converted,
-# get_original_type) tenían CERO llamadores en todo el proyecto — la
-# palabra clave Convertir (DAR Sección 8) nunca se conectó a nada real. Se
-# conserva clear_conversion_on_leave() (y _converted_cards) porque
-# destroy_card()/exile_card() SÍ la llaman, aunque hoy sea un no-op — si
-# se reimplementa Convertir en el futuro, ahí queda el punto de enganche.
-# =============================================================================
+# clear_conversion_on_leave() (y _converted_cards) queda como punto de enganche:
+# destroy_card()/exile_card() la llaman aunque hoy no haga nada. Convertir real:
+# GoldManager.convert_ally_to_gold_in_pagado() y los patrones de Convertir.
 var _converted_cards: Dictionary = {}
 
 
@@ -449,18 +422,11 @@ func clear_conversion_on_leave(card: Node) -> void:
 
 
 # =============================================================================
-# PREVENCIÓN "SALE DEL JUEGO" (DAR - Utilizar Habilidades: Prevenir. P.ej.
-# Legión Paladín: "Puedes Desterrarlo para prevenir que un Aliado que
-# controles salga del juego", 2026-08-28)
+# PREVENCIÓN "SALE DEL JUEGO" (DAR - Utilizar Habilidades: Prevenir)
 # =============================================================================
-## Inmunidad TEMPORAL de "no pueden salir del juego" para TODOS los Aliados
-## de un jugador, con vencimiento por TURNO (no por carga) — distinto de
-## Legión Paladín (Prevención reactiva real por carta, ver
-## offer_prevention()/_prevention_registry más abajo): esto es una
-## inmunidad OTORGADA por otro efecto, no una carta de Prevención. 2026-08-29,
-## p.ej. Sherlock Holmes: "los Aliados que controlas no pueden salir del
-## juego hasta tu próximo turno" — protege a TODOS a la vez, sin límite de
-## cantidad, hasta que vuelva a empezar el turno de ese jugador.
+# Inmunidad temporal "no pueden salir del juego" para todos los Aliados de un jugador, hasta que
+# vuelva a empezar su turno (p.ej. Sherlock Holmes). Es una inmunidad otorgada por otro efecto,
+# distinta de una carta de Prevención (offer_prevention()/_prevention_registry).
 var _blanket_leave_play_immunity: Dictionary = {0: false, 1: false}
 
 
@@ -482,11 +448,17 @@ func add_blanket_leave_play_immunity(player_id: int) -> void:
 	GameManager.turn_started.connect(clear_it)
 
 
-## Inmunidad TEMPORAL de "no puede salir del juego" para UNA carta puntual
-## (2026-08-30, p.ej. Garfio Pirata: "Cuando entra en juego, el portador no
-## puede salir del juego hasta tu próximo turno") — distinta de
-## _blanket_leave_play_immunity (esa protege a TODOS los Aliados de un
-## jugador a la vez, no una carta elegida). {card_instance_id: true}
+## Igual que la anterior, pero solo durante el turno en curso (espada de magog: "tus Aliados no
+## pueden salir del juego este turno"). {controlador: turn_serial}; vence sola al cambiar el turno.
+var _leave_play_immunity_turn: Dictionary = {}
+
+
+func add_leave_play_immunity_this_turn(player_id: int) -> void:
+	_leave_play_immunity_turn[player_id] = GameManager.turn_serial
+
+
+## Inmunidad temporal "no puede salir del juego" para una carta puntual (p.ej. Garfio Pirata: "el
+## portador no puede salir del juego hasta tu próximo turno"). {card_instance_id: true}
 var _single_card_leave_play_immunity: Dictionary = {}
 
 
@@ -522,14 +494,19 @@ func _try_consume_leave_play_prevention(player_id: int, card: Node, source: Node
 	Paladín — ver offer_prevention(), tag 'leave_play')."""
 	if not is_instance_valid(card) or card.get("card_type") != Constants.CardType.ALIADO:
 		return false
-	if _blanket_leave_play_immunity.get(player_id, false):
+	var ctrl: int = int(card.controller_id) if card.get("controller_id") != null else player_id
+	if _blanket_leave_play_immunity.get(player_id, false) \
+			or int(_leave_play_immunity_turn.get(ctrl, -1)) == GameManager.turn_serial:
 		var card_name0: String = str(card.get("card_name")) if card.get("card_name") != null else "Aliado"
 		print("[EffectController] %s no sale del juego (inmunidad temporal activa para J%d)" % [card_name0, player_id + 1])
 		var main0 := get_node_or_null("/root/Main")
 		if main0:
 			main0._update_debug("%s: no puede salir del juego este turno" % card_name0)
 		return true
-	if _single_card_leave_play_immunity.get(card.get_instance_id(), false):
+	# Turiel: "no pueda salir del juego este turno" (meta con el turn_serial).
+	if _single_card_leave_play_immunity.get(card.get_instance_id(), false) \
+			or int(card.get_meta("no_leave_turn", -1)) == GameManager.turn_serial \
+			or GameManager.turn_serial <= int(card.get_meta("no_leave_until", -1)):  # Jafet, Jared
 		var card_name1: String = str(card.get("card_name")) if card.get("card_name") != null else "Aliado"
 		print("[EffectController] %s no sale del juego (inmunidad puntual activa)" % card_name1)
 		var main1 := get_node_or_null("/root/Main")
@@ -540,57 +517,121 @@ func _try_consume_leave_play_prevention(player_id: int, card: Node, source: Node
 
 
 # =============================================================================
-# PREVENCIÓN REACTIVA (DAR — Utilizar Habilidades: Prevenir), 2026-09-09
+# PREVENCIÓN REACTIVA (DAR — Utilizar Habilidades: Prevenir)
 # =============================================================================
-## Registro genérico de cartas de Prevención — reemplaza los 3 mecanismos de
-## "carga previa" que existían antes (uno por Estaca, otro por Legión
-## Paladín, otro por Drácula/Ángel Redentor) por UN solo punto de entrada
-## reactivo: se pregunta al jugador EN EL MOMENTO en que el efecto está por
-## resolverse, no antes (diseño validado en docs/plans/2026-09-02-
-## prevention-response-window-design.md, roster real re-auditado 2026-09-09
-## contra la API — Paladín Bestiarium NO es una carta de Prevención, estaba
-## en la lista original por error; Almirante Akari queda fuera a propósito,
-## su costo compartido con una segunda habilidad (Anular) no encaja limpio
-## en este registro todavía).
-##
-## Cada entry: {name, detect: Callable(text)->bool, effect_tags:
-## Array[String], opponent_only: bool, applies: Callable(target)->bool
-## (target puede ser Node o Dictionary o null — ver Drácula), is_available:
-## Callable(card)->bool, on_used: Callable(card) -> (awaitable)}.
-## No hace falta un contador de cargas separado: la disponibilidad de cada
-## carta es simplemente "¿sigue existiendo sin usar en una zona de juego?" —
-## las 4 se autoconsumen (destierro o conversión) al usarse, salvo Ángel
-## Redentor (sin costo), que usa el turn_registry ya existente para su
-## candado real de "una vez por turno".
+# Registro genérico de cartas de Prevención: un solo punto de entrada que pregunta al jugador en el
+# momento en que el efecto va a resolverse
+# (docs/plans/2026-09-02-prevention-response-window-design.md).
+# Cada entrada: {name, detect: Callable(text) -> bool, effect_tags: Array[String], opponent_only:
+# bool, applies: Callable(target) -> bool (Node, Dictionary o null — ver Drácula), is_available:
+# Callable(card) -> bool, on_used: Callable(card) (awaitable), zones (opcional: "play", "hand",
+# "play_and_hand")}.
+# Sin contador de cargas: una carta está disponible si sigue sin usar en su zona. Las que se
+# autoconsumen (destierro, conversión) desaparecen al usarse; las "una vez por turno" usan el
+# turn_registry.
 var _prevention_registry: Array[Dictionary] = []
 
 
 func _build_prevention_registry() -> void:
 	_prevention_registry = [
 		{
+			# naves de shaggai: "Cuando el portador fuera a salir del juego, puedes Destruir esta Arma para prevenirlo."
+			"name": "naves de shaggai",
+			"detect": func(text: String) -> bool:
+				return "cuando el portador fuera a salir del juego, puedes destruir esta arma para prevenirlo" in text.to_lower(),
+			"effect_tags": ["destroy", "exile", "leave_play"],
+			"opponent_only": false,
+			"applies": Callable(),
+			"is_available": func(card: Node) -> bool:
+				return is_instance_valid(_last_prevention_target) and card.get("wielder") == _last_prevention_target,
+			"on_used": func(card: Node) -> bool:
+				await ActionModule.destroy([card], card, false, true)
+				return true,
+		},
+		{
+			# mesa del te: "Hasta dos veces por turno, cuando un Aliado que controles fuera a ser afectado por un
+			# efecto oponente, en vez de eso puedes subirlo a tu mano y Robar una carta."
+			"name": "mesa del te",
+			"detect": func(text: String) -> bool:
+				return "fuera a ser afectado por un efecto oponente, en vez de eso puedes subirlo a tu mano y robar una carta" in text.to_lower(),
+			"effect_tags": ["destroy", "exile", "leave_play", "debuff", "strength_change", "silence", "control", "convert", "cancel_attack"],
+			"opponent_only": true,
+			"applies": func(target) -> bool:
+				return target is Node and is_instance_valid(target) and target.get("card_type") == Constants.CardType.ALIADO,
+			"is_available": func(card: Node) -> bool:
+				return RuleState.count("mesa_te:%d" % card.get_instance_id(), 0) < 2,
+			"on_used": func(card: Node) -> bool:
+				RuleState.add("mesa_te:%d" % card.get_instance_id(), 0)
+				var target: Node = _last_prevention_target
+				var ctrl: int = int(card.controller_id) if card.get("controller_id") != null else 0
+				var main_m := get_node_or_null("/root/Main")
+				if main_m and is_instance_valid(target):
+					await load("res://scripts/core/effects/mechanics/EnterPatterns.gd").bounce_to_owner_hand(main_m, target, card)
+				await ActionModule.draw(ctrl, 1, "mesa del te", true)
+				return true,
+		},
+		{
+			# Chestnut Hill: "...fuera a salir del juego por un efecto oponente, hasta dos veces por turno, puedes lanzar
+			# un dado de seis caras. Si sale par, prevén que esa carta salga del juego. Si sale impar, tú oponente
+			# Destierra las primeras dos cartas de su Castillo."
+			"name": "Chestnut Hill",
+			"detect": func(text: String) -> bool:
+				return "fuera a salir del juego por un efecto oponente, hasta dos veces por turno, puedes lanzar un dado" in text.to_lower(),
+			"effect_tags": ["destroy", "exile", "leave_play"],
+			"opponent_only": true,
+			"applies": Callable(),
+			"is_available": func(card: Node) -> bool:
+				return RuleState.count("chestnut:%d" % card.get_instance_id(), 0) < 2,
+			"on_used": func(card: Node) -> bool:
+				RuleState.add("chestnut:%d" % card.get_instance_id(), 0)
+				var ctrl: int = int(card.controller_id) if card.get("controller_id") != null else 0
+				var roll: int = randi() % 6 + 1
+				var main_c := get_node_or_null("/root/Main")
+				if main_c:
+					main_c._update_debug("Chestnut Hill: sale %d" % roll)
+				if roll % 2 == 0:
+					return true
+				await ActionModule.mill(1 - ctrl, 2, true, "Chestnut Hill", true)
+				return false,
+		},
+		{
+			# Romualdito (Oro): "Puedes convertirlo en un Oro sin habilidad para prevenir que un Aliado sea Destruido,
+			# cambie de controlador o sea convertido, por un efecto oponente." (convertido: ConvertPatterns.conversion_prevented)
+			"name": "Romualdito",
+			"detect": func(text: String) -> bool:
+				return "convertirlo en un oro sin habilidad para prevenir que un aliado sea destruido, cambie de controlador" in text.to_lower(),
+			"effect_tags": ["destroy", "control", "convert"],
+			"opponent_only": true,
+			"applies": func(target) -> bool:
+				return target == null or (target is Node and target.get("card_type") == Constants.CardType.ALIADO),
+			"is_available": func(card: Node) -> bool: return not card.is_converted,
+			"on_used": func(card: Node) -> bool:
+				await load("res://scripts/core/effects/mechanics/EnterPatterns.gd")._blank(card, card)
+				return true,
+		},
+		{
+			# Polvo de Hadas (Oro): "Puedes convertirlo en un Oro sin habilidad para prevenir que Botes o Destierres
+			# cartas del tope de tu Castillo por un efecto oponente." (ActionModule.mill, etiqueta "mill").
+			"name": "Polvo de Hadas",
+			"detect": func(text: String) -> bool:
+				return "convertirlo en un oro sin habilidad para prevenir que botes o destierres cartas del tope de tu castillo" in text.to_lower(),
+			"effect_tags": ["mill"],
+			"opponent_only": false,
+			"applies": Callable(),
+			"is_available": func(card: Node) -> bool: return not card.is_converted,
+			"on_used": func(card: Node) -> bool:
+				await load("res://scripts/core/effects/mechanics/EnterPatterns.gd")._blank(card, card)
+				return true,
+		},
+		{
 			"name": "Estaca",
 			"detect": func(text: String) -> bool:
 				return "desterrarla para prevenir que una carta sea afectada por un efecto oponente" in text.to_lower(),
-			# OJO: NO incluye "leave_play" — destroy_card()/exile_card() son el
-			# funnel final por el que TAMBIÉN pasa cualquier "destroy"/"exile"
-			# ya resuelto por ActionDestroy/ActionBanish más arriba en la
-			# pila; si Estaca tuviera "leave_play" aquí, preguntaría DOS veces
-			# por la misma acción (una vez como "destroy"/"exile", otra como
-			# "leave_play" al llegar a destroy_card()/exile_card()). Legión
-			# 2026-09-09, corregido a pedido del usuario: Estaca SÍ cubre
-			# "barajar de vuelta al mazo" — su alcance real es "cualquier
-			# efecto oponente que afecte a una carta", no una lista cerrada
-			# de verbos. Con "leave_play" en su lista, ambas cartas (Estaca
-			# y Legión Paladín) quedan candidatas en destroy_card()/
-			# exile_card()/return_to_deck() — pero eso NO duplica la
-			# pregunta para un Destruir/Desterrar normal: esos ya se
-			# resuelven en el paso "destroy"/"exile" de ActionDestroy/
-			# ActionBanish, que NO pasa 'source' al llamar a destroy_card()/
-			# exile_card() después — sin 'source' real, el chequeo
-			# opponent_only de Estaca no puede confirmarse y no vuelve a
-			# preguntar ahí. Solo return_to_deck() (nuevo choke point,
-			# 2026-09-09) llama con 'source' real desde varios call sites,
-			# así que ahí Estaca sí puede ofrecerse de verdad.
+			# Estaca incluye "leave_play": su alcance es "cualquier efecto oponente que afecte a una carta",
+			# también barajar de vuelta al mazo. No pregunta dos veces por un Destruir/Desterrar normal:
+			# ActionDestroy/ActionBanish ya preguntan en su paso "destroy"/"exile" y después llaman a
+			# destroy_card()/exile_card() sin 'source', así que opponent_only no se confirma ahí.
+			# return_to_deck() sí pasa 'source' real, y ahí Estaca se ofrece.
 			"effect_tags": ["destroy", "exile", "leave_play", "debuff", "strength_change", "silence"],
 			"opponent_only": true,
 			"applies": Callable(),
@@ -609,11 +650,8 @@ func _build_prevention_registry() -> void:
 				return "desterrarlo para prevenir que un aliado que controles salga del juego" in text.to_lower(),
 			"effect_tags": ["leave_play"],
 			"opponent_only": false,
-			# Su texto es específico de "un Aliado" (2026-09-09, corregido —
-			# se filtraba antes SOLO en _try_consume_leave_play_prevention(),
-			# que no cubre el choke point nuevo de return_to_deck(); ahora
-			# vive aquí, en el registro mismo, así que aplica sin importar
-			# desde dónde se llame offer_prevention()).
+			# Su texto es específico de "un Aliado": el filtro vive en el registro para que aplique desde
+			# cualquier llamada a offer_prevention().
 			"applies": func(target) -> bool:
 				if target == null:
 					return true
@@ -629,10 +667,8 @@ func _build_prevention_registry() -> void:
 			"name": "Drácula",
 			"detect": func(text: String) -> bool:
 				return "convertirlo en un oro sin habilidad para prevenir que una habilidad sea cancelada" in text.to_lower(),
-			# opponent_only=false (2026-09-09, corregido): el texto real de
-			# Drácula no dice "oponente" en ningún lado ("prevenir que una
-			# habilidad sea cancelada o un Aliado de coste 1 sea Anulado"),
-			# a diferencia de Estaca que sí lo dice explícito.
+			# opponent_only = false: el texto de Drácula no dice "oponente" ("prevenir que una habilidad sea
+			# cancelada o un Aliado de coste 1 sea Anulado"), a diferencia de Estaca.
 			"effect_tags": ["cancel", "annul"],
 			"opponent_only": false,
 			# "un Aliado de coste 1 sea Anulado" — solo cubre coste 1 exacto.
@@ -687,24 +723,17 @@ func _build_prevention_registry() -> void:
 			"opponent_only": false,
 			"applies": Callable(),
 			"is_available": func(card: Node) -> bool:
-				return not UniversalCardParser.turn_registry.was_used(str(card.get_instance_id()), 0, GameManager.current_turn),
+				return not UniversalCardParser.turn_registry.was_used(str(card.get_instance_id()), 0, GameManager.turn_serial),
 			"on_used": func(card: Node) -> bool:
-				UniversalCardParser.turn_registry.register(str(card.get_instance_id()), 0, GameManager.current_turn)
+				UniversalCardParser.turn_registry.register(str(card.get_instance_id()), 0, GameManager.turn_serial)
 				return true,
 		},
 		{
-			# 'Una vez por turno, puedes Barajar una carta de tu mano o que
-			# controles para Anular una carta de coste 2 o menos o prevenir
-			# que un Aliado sea afectado por un efecto oponente' (Almirante
-			# Akari, 2026-09-04) — reactiva de verdad (2026-09-09, corregido
-			# a pedido del usuario): SIN botón de activación, dos disparadores
-			# reactivos distintos que comparten un único candado de una vez
-			# por turno y un único costo (barajar 1 carta propia) pagado
-			# solo al confirmar cuál de los dos usa. La mitad "Prevenir"
-			# entra aquí (mismo registro que Estaca, pero solo Aliados); la
-			# mitad "Anular cuando el rival juega una carta" vive en
-			# offer_counter_annul() más abajo — comparte is_available/costo
-			# vía el mismo helper _pay_akari_shuffle_cost().
+			# Almirante Akari: "Una vez por turno, puedes Barajar una carta de tu mano o que controles para
+			# Anular una carta de coste 2 o menos o prevenir que un Aliado sea afectado por un efecto
+			# oponente". Reactiva, sin botón: dos disparadores con un solo candado por turno y un solo costo
+			# (barajar una carta propia), pagado al confirmar cuál usa. La mitad Prevenir va aquí; la de
+			# Anular, en offer_counter_annul(). Comparten _pay_akari_shuffle_cost().
 			"name": "Almirante Akari",
 			"detect": func(text: String) -> bool:
 				return "prevenir que un aliado sea afectado por un efecto oponente" in text.to_lower(),
@@ -716,20 +745,18 @@ func _build_prevention_registry() -> void:
 				var tipo = target.get("tipo") if target is Dictionary else target.get("card_type")
 				return tipo == null or int(tipo) == Constants.CardType.ALIADO,
 			"is_available": func(card: Node) -> bool:
-				return not UniversalCardParser.turn_registry.was_used(str(card.get_instance_id()), 0, GameManager.current_turn),
+				return not UniversalCardParser.turn_registry.was_used(str(card.get_instance_id()), 0, GameManager.turn_serial),
 			"on_used": func(card: Node) -> bool:
 				var paid: bool = await _pay_akari_shuffle_cost(card)
 				if not paid:
 					return false
-				UniversalCardParser.turn_registry.register(str(card.get_instance_id()), 0, GameManager.current_turn)
+				UniversalCardParser.turn_registry.register(str(card.get_instance_id()), 0, GameManager.turn_serial)
 				return true,
 		},
 		{
-			# Padre Dagón (2026-10-17): "...o prevén que uno o más Aliados
-			# sean afectados por un efecto oponente" — comparte el "Una vez
-			# por turno" con su habilidad activada (DagonPatterns.gd). "Uno o
-			# más": una sola vez cubre a todos tus Aliados afectados por ESE
-			# mismo efecto (_dagon_shield, ver offer_prevention()).
+			# Padre Dagón: "...o prevén que uno o más Aliados sean afectados por un efecto oponente" —
+			# comparte el "una vez por turno" con su habilidad activada (DagonPatterns.gd). Un uso cubre a
+			# todos tus Aliados afectados por ese mismo efecto (_dagon_shield, ver offer_prevention()).
 			"name": "Padre Dagón",
 			"detect": func(text: String) -> bool:
 				return DagonScript.PREVENTION_TEXT in text.to_lower(),
@@ -753,7 +780,149 @@ func _build_prevention_registry() -> void:
 					main_d._update_debug("Padre Dagón: tus Aliados no son afectados por ese efecto")
 				return true,
 		},
+		{
+			# Armadura Dorada: "...para prevenir que tus Aliados sean afectados" — un uso cubre a todos los
+			# afectados por ese efecto (mismo escudo que Padre Dagón).
+			"name": "Armadura Dorada",
+			"detect": func(text: String) -> bool:
+				return PreventionCosts.ARMADURA_TEXT in text.to_lower(),
+			"zones": "play_and_hand",
+			"effect_tags": ["destroy", "exile", "debuff", "strength_change", "silence", "control"],
+			"opponent_only": true,
+			"applies": func(target) -> bool:
+				if target == null:
+					return true
+				var tipo = target.get("tipo") if target is Dictionary else target.get("card_type")
+				return tipo == null or int(tipo) == Constants.CardType.ALIADO,
+			"is_available": func(card: Node) -> bool:
+				return PreventionCosts.can_pay_one(card) if PreventionCosts.in_hand(card) else not KeywordManager.is_silenced(card),
+			"on_used": func(card: Node) -> bool:
+				var owner_a: int = card.owner_id if card.get("owner_id") != null else 0
+				if not await PreventionCosts.pay_prevention_cost(card):
+					return false
+				var ctx: Dictionary = EffectContextScript.current()
+				_dagon_shield = {"owner": owner_a, "token": int(ctx.get("token", -1)),
+					"source": _last_prevention_source_id, "ms": Time.get_ticks_msec()}
+				return true,
+		},
+		{
+			# Armadura Dorada: "...o un Aliado Anulado".
+			"name": "Armadura Dorada",
+			"detect": func(text: String) -> bool:
+				return PreventionCosts.ARMADURA_TEXT in text.to_lower(),
+			"zones": "play_and_hand",
+			"effect_tags": ["annul"],
+			"opponent_only": false,
+			"applies": func(target) -> bool:
+				if target == null:
+					return false
+				var tipo = target.get("tipo") if target is Dictionary else target.get("card_type")
+				return tipo != null and int(tipo) == Constants.CardType.ALIADO,
+			"is_available": func(card: Node) -> bool:
+				return PreventionCosts.can_pay_one(card) if PreventionCosts.in_hand(card) else not KeywordManager.is_silenced(card),
+			"on_used": func(card: Node) -> bool:
+				return await PreventionCosts.pay_prevention_cost(card),
+		},
+		{
+			# ngenechen: "Una vez por turno, puedes Barajar carta de tu mano para prevenir un efecto."
+			"name": "ngenechen",
+			"detect": func(text: String) -> bool:
+				var t := text.to_lower()
+				return "barajar carta de tu mano para prevenir un efecto" in t \
+					or "barajar una carta de tu mano para prevenir un efecto" in t,
+			"effect_tags": ["destroy", "exile", "debuff", "strength_change", "silence", "control"],
+			"opponent_only": true,
+			"applies": Callable(),
+			"is_available": func(card: Node) -> bool:
+				var pid: int = card.controller_id if card.get("controller_id") != null else 0
+				return not KeywordManager.is_silenced(card) \
+					and not UniversalCardParser.turn_registry.was_used(str(card.get_instance_id()), 0, GameManager.turn_serial) \
+					and not PlayerSideScript.hand_cards(get_node("/root/Main"), pid).is_empty(),
+			"on_used": func(card: Node) -> bool:
+				if not await PreventionCosts.shuffle_one_from_hand_cost(card):
+					return false
+				UniversalCardParser.turn_registry.register(str(card.get_instance_id()), 0, GameManager.turn_serial)
+				return true,
+		},
+		{
+			# Dos de Cada Uno: "hasta dos cartas de coste 1 o menos de un mismo tipo" — la segunda del mismo
+			# tipo afectada por ese efecto también queda cubierta.
+			"name": "Dos de Cada Uno",
+			"detect": func(text: String) -> bool:
+				return PreventionCosts.DOS_DE_CADA_UNO_TEXT in text.to_lower(),
+			"zones": "hand",
+			"effect_tags": ["destroy", "exile", "leave_play", "debuff", "strength_change", "silence", "control", "convert", "cancel_attack"],
+			"opponent_only": true,
+			"applies": func(target) -> bool:
+				return target is Node and ContinuousEffectManager.cost_at_most(target, 1),
+			"is_available": func(card: Node) -> bool:
+				return PreventionCosts.can_pay_one(card),
+			"on_used": func(card: Node) -> bool:
+				var owner_d: int = card.owner_id if card.get("owner_id") != null else 0
+				var first: Node = _last_prevention_target
+				if not await PreventionCosts.pay_prevention_cost(card):
+					return false
+				var ctx: Dictionary = EffectContextScript.current()
+				_extra_shield = {"owner": owner_d, "token": int(ctx.get("token", -1)),
+					"source": _last_prevention_source_id, "ms": Time.get_ticks_msec(), "left": 1,
+					"first": first, "filter": PreventionCosts.same_type_low_cost_filter(first)}
+				return true,
+		},
+		# Al final, para que las entradas de arriba tengan prioridad (CompiledPrevention.spec() las
+		# excluye): "Puedes <coste> para prevenir que un Tótem sea Anulado o su habilidad cancelada"
+		# (Ángel Gadreel, Serafín, wendy, orden del águila negra).
+		_compiled_prevention_entry("annul", ["annul", "cancel"], false),
+		# "...para prevenir que una carta / uno o más Oros sean afectados por un efecto oponente"
+		# (lucifer, ciudad subterranea).
+		_compiled_prevention_entry("affect", ["destroy", "exile", "leave_play", "debuff", "strength_change", "silence", "control"], true),
 	]
+
+
+## Objetivo del ofrecimiento en curso (offer_prevention_for_player()): las entradas de
+## CompiledPrevention lo necesitan junto con la carta, que 'applies' no recibe.
+var _last_applies_arg = null
+
+
+func _compiled_prevention_entry(kind: String, tags: Array, opponent_only: bool) -> Dictionary:
+	var spec_of := func(card: Node) -> Dictionary:
+		var sp: Dictionary = CompiledPrevention.spec(str(card.get("card_ability")), _prevention_registry)
+		return sp if sp.get("kind", "") == kind else {}
+	return {
+		"name": "Prevención compilada (%s)" % kind,
+		"detect": func(text: String) -> bool:
+			return CompiledPrevention.spec(text, _prevention_registry).get("kind", "") == kind,
+		"zones": "play_and_hand",
+		"effect_tags": tags,
+		"opponent_only": opponent_only,
+		"applies": Callable(),
+		"is_available": func(card: Node) -> bool:
+			var sp: Dictionary = spec_of.call(card)
+			return not sp.is_empty() and CompiledPrevention.applies(sp, _last_applies_arg, card) \
+				and CompiledPrevention.is_available(sp, card),
+		"on_used": func(card: Node) -> bool:
+			return await CompiledPrevention.pay(spec_of.call(card), card),
+	}
+
+
+## Dos de Cada Uno: {owner, token, source, ms, left, first, filter}.
+var _extra_shield: Dictionary = {}
+var _last_prevention_target: Node = null
+
+
+func _extra_shield_covers(affected_card: Node, effect_source: Node) -> bool:
+	if _extra_shield.is_empty() or int(_extra_shield.left) <= 0 or affected_card == _extra_shield.first:
+		return false
+	var owner_id: int = affected_card.controller_id if affected_card.get("controller_id") != null else 0
+	if owner_id != int(_extra_shield.owner) or not _extra_shield.filter.call(affected_card):
+		return false
+	var source_id: int = effect_source.get_instance_id() if is_instance_valid(effect_source) else 0
+	if source_id != int(_extra_shield.source):
+		return false
+	var token: int = int(EffectContextScript.current().get("token", -1))
+	var same: bool = token == int(_extra_shield.token) if token >= 0 else Time.get_ticks_msec() - int(_extra_shield.ms) <= 3000
+	if same:
+		_extra_shield.left = int(_extra_shield.left) - 1
+	return same
 
 
 ## Padre Dagón: el efecto oponente del que ya protegió a tus Aliados.
@@ -802,8 +971,7 @@ func _pay_akari_shuffle_cost(source_card: Node) -> bool:
 
 	if not main._card_interaction:
 		return false
-	# 2026-09-13, a pedido del usuario: click directo sobre la mano/campo en
-	# vez del modal de lista viejo.
+	# Click directo sobre la mano/campo, sin modal de lista.
 	var cost_filter := func(c: Node) -> bool: return c in cost_candidates
 	var cost_node: Node = await main._card_interaction.await_target(
 		"Almirante Akari: elige una carta de tu mano o que controles para Barajar (costo)", cost_filter)
@@ -829,7 +997,7 @@ func _pay_akari_shuffle_cost(source_card: Node) -> bool:
 ## RIVAL de quien jugó controla un Akari disponible y la carta jugada cuesta
 ## 2 o menos; si el jugador confirma, paga el mismo costo compartido
 ## (_pay_akari_shuffle_cost) y Anula (destruye) la carta recién jugada.
-func offer_counter_annul(played_card) -> void:  # sin tipo: puede llegar ya liberada (2026-10-14)
+func offer_counter_annul(played_card) -> void:  # sin tipo: puede llegar ya liberada
 	if not is_instance_valid(played_card):
 		return
 	var played_owner: int = played_card.controller_id if played_card.get("controller_id") != null else 0
@@ -854,7 +1022,7 @@ func offer_counter_annul(played_card) -> void:  # sin tipo: puede llegar ya libe
 				continue
 			var ability_text: String = str(card.card_ability) if card.get("card_ability") != null else ""
 			if "anular una carta de coste 2 o menos" in ability_text.to_lower() \
-					and not UniversalCardParser.turn_registry.was_used(str(card.get_instance_id()), 0, GameManager.current_turn):
+					and not UniversalCardParser.turn_registry.was_used(str(card.get_instance_id()), 0, GameManager.turn_serial):
 				akari = card
 				break
 		if akari:
@@ -869,25 +1037,18 @@ func offer_counter_annul(played_card) -> void:  # sin tipo: puede llegar ya libe
 	var paid: bool = await _pay_akari_shuffle_cost(akari)
 	if not paid:
 		return
-	UniversalCardParser.turn_registry.register(str(akari.get_instance_id()), 0, GameManager.current_turn)
+	UniversalCardParser.turn_registry.register(str(akari.get_instance_id()), 0, GameManager.turn_serial)
 	if not is_instance_valid(played_card):
 		return
 	await ActionModule.destroy([played_card], akari, true, true)
 
 
-## "Una vez por turno, puedes subir una carta que controles a la mano de su
-## dueño para Anular un Talismán o Tótem de coste 2 o menos" (flechar xoon,
-## 2026-09-20, arquitectura.md "539 cartas sin cobertura") — mismo mecanismo
-## real que offer_counter_annul()/Almirante Akari arriba: este motor no
-## modela un stack de resolución interceptable, así que "Anular X de coste
-## N" en la práctica se implementa como "cuando esa carta termina de entrar/
-## resolver, puedes Destruirla" (offer_counter_annul() es el precedente
-## verificado para esto, ver arquitectura.md §2 sobre LinkedEffectRegistry/
-## TargetSelector — ese clúster con un verdadero targeting-en-la-pila está
-## marcado como código muerto, no es lo que usan las cartas reales). Llamar
-## desde el mismo choke point que offer_counter_annul() (después de que
-## played_card termina de entrar en juego), del lado de quien la jugó.
-func offer_flechar_xoon_annul(played_card) -> void:  # sin tipo: puede llegar ya liberada (2026-10-14)
+## flechar xoon: "Una vez por turno, puedes subir una carta que controles a la mano de su dueño para
+## Anular un Talismán o Tótem de coste 2 o menos". Mismo mecanismo que offer_counter_annul()
+## (Almirante Akari): "Anular X de coste N" se implementa como "cuando esa carta termina de
+## entrar/resolver, puedes Destruirla". Llamar desde el mismo punto que offer_counter_annul(), del
+## lado de quien la jugó.
+func offer_flechar_xoon_annul(played_card) -> void:  # sin tipo: puede llegar ya liberada
 	if not is_instance_valid(played_card):
 		return
 	var played_type = played_card.get("card_type")
@@ -914,7 +1075,7 @@ func offer_flechar_xoon_annul(played_card) -> void:  # sin tipo: puede llegar ya
 				continue
 			var ability_text: String = str(card.card_ability) if card.get("card_ability") != null else ""
 			if "para anular un talism" in ability_text.to_lower() \
-					and not UniversalCardParser.turn_registry.was_used(str(card.get_instance_id()), 0, GameManager.current_turn):
+					and not UniversalCardParser.turn_registry.was_used(str(card.get_instance_id()), 0, GameManager.turn_serial):
 				xoon = card
 				break
 		if xoon:
@@ -945,7 +1106,7 @@ func offer_flechar_xoon_annul(played_card) -> void:  # sin tipo: puede llegar ya
 	if not cost_node or not is_instance_valid(cost_node):
 		return
 
-	UniversalCardParser.turn_registry.register(str(xoon.get_instance_id()), 0, GameManager.current_turn)
+	UniversalCardParser.turn_registry.register(str(xoon.get_instance_id()), 0, GameManager.turn_serial)
 	var owner_id: int = cost_node.get("owner_id") if cost_node.get("owner_id") != null else 0
 	var target_hand = main.player_hand if owner_id == 0 else null
 	if target_hand and cost_node.get("card_data") != null:
@@ -994,37 +1155,59 @@ func offer_prevention_for_player(target_owner_id: int, effect_source: Node, effe
 		else [main.opponent_field, main.opponent_linea_ataque, main.opponent_linea_apoyo,
 			main.opponent_gold, main.opponent_oro_pagado]
 
-	var candidates: Array = []  # [{entry, card}]
+	# Cartas en juego (y Armas equipadas) y, para las entradas cuyo "zones" incluye la mano, las de la
+	# mano.
+	var pool: Array = []  # [carta, desde_la_mano]
 	for field in fields:
 		if not field:
 			continue
 		for card in field.get_children():
 			if not is_instance_valid(card):
 				continue
+			pool.append([card, false])
+			var weapons = card.get("equipped_weapons")
+			if weapons is Array:
+				for w in weapons:
+					if is_instance_valid(w) and w.get_parent() != field:
+						pool.append([w, false])
+	for card in PlayerSideScript.hand_cards(main, target_owner_id):
+		if is_instance_valid(card):
+			pool.append([card, true])
+
+	var candidates: Array = []  # [{entry, card}]
+	_last_applies_arg = applies_arg
+	for item in pool:
+		var card: Node = item[0]
+		var from_hand: bool = item[1]
+		if not from_hand:
 			var card_controller: int = card.controller_id if card.get("controller_id") != null else -1
 			if card_controller != target_owner_id:
 				continue
-			var ability_text: String = str(card.card_ability) if card.get("card_ability") != null else ""
-			if ability_text.is_empty():
+		var ability_text: String = str(card.card_ability) if card.get("card_ability") != null else ""
+		if ability_text.is_empty():
+			continue
+		for entry in _prevention_registry:
+			var zones: String = str(entry.get("zones", "play"))
+			if from_hand and zones == "play":
 				continue
-			for entry in _prevention_registry:
-				if not (effect_tag in entry.effect_tags):
-					continue
-				if entry.opponent_only and source_owner != 1 - target_owner_id:
-					continue
-				if not entry.detect.call(ability_text):
-					continue
-				if entry.applies.is_valid() and not entry.applies.call(applies_arg):
-					continue
-				if not entry.is_available.call(card):
-					continue
-				candidates.append({"entry": entry, "card": card})
+			if not from_hand and zones == "hand":
+				continue
+			if not (effect_tag in entry.effect_tags):
+				continue
+			if entry.opponent_only and source_owner != 1 - target_owner_id:
+				continue
+			if not entry.detect.call(ability_text):
+				continue
+			if entry.applies.is_valid() and not entry.applies.call(applies_arg):
+				continue
+			if not entry.is_available.call(card):
+				continue
+			candidates.append({"entry": entry, "card": card})
 
 	if candidates.is_empty():
 		return false
-	# Una sola respuesta por efecto (2026-10-17, a pedido del usuario — DAR):
-	# aunque tengas 3 Estacas, contra un mismo efecto solo previenes con una;
-	# las demás cartas quedan afectadas.
+	# Una sola respuesta por efecto (DAR): aunque tengas 3 Estacas, contra un mismo efecto previenes
+	# con una; las demás cartas quedan afectadas.
 	var effect_ctx: Dictionary = EffectContextScript.current()
 	if not effect_ctx.is_empty() and target_owner_id in effect_ctx.get("prevented_by", []):
 		return false
@@ -1037,25 +1220,28 @@ func offer_prevention_for_player(target_owner_id: int, effect_source: Node, effe
 
 
 func _offer_prevention_choice(target_owner_id: int, candidates: Array) -> bool:
+	# Remoto: elige él, por red.
+	if PlayerSideScript.is_remote(target_owner_id):
+		var main_r := get_node_or_null("/root/Main")
+		var options: Array = ["Pasar"]
+		for c in candidates:
+			options.append("Usar %s" % str(c.card.get("card_name")))
+		var idx: int = await SelectionManager.await_choice(main_r, "¿Deseas prevenir este efecto?", options, target_owner_id)
+		if idx <= 0 or idx > candidates.size():
+			return false
+		var remote_chosen: Dictionary = candidates[idx - 1]
+		return await remote_chosen.entry.on_used.call(remote_chosen.card)
 	if target_owner_id != 0:
-		# Capa 2 de la Pila de Respuesta Universal (2026-09-09): el bot ya
-		# puede usar Prevención de verdad — sin diálogo, decide solo, al azar
-		# entre usar una de las candidatas disponibles o no usar ninguna
-		# (mismo criterio simple que el resto de las decisiones de
-		# EasyBotController — no hay heurística de "conviene o no", solo la
-		# posibilidad real de reaccionar en vez de nunca hacerlo).
+		# Bot: decide solo, al azar entre usar una candidata o ninguna (mismo criterio simple que
+		# EasyBotController).
 		if randf() < 0.5:
 			return false
 		var bot_chosen: Dictionary = candidates[randi() % candidates.size()]
 		return await bot_chosen.entry.on_used.call(bot_chosen.card)
 
-	# Fusión con la Pila de Respuesta Universal (2026-09-09): un solo panel
-	# visual para "responder a algo" en todo el juego — mismo título/timer/
-	# 'Pasar' que ResponseWindowHandler usa para la ventana genérica, en vez
-	# del diálogo aparte (await_two_choice/await_single_pick) que Prevención
-	# tenía antes. No pasa por ActionPipeline (esto es una pregunta puntual
-	# con N candidatas + Pasar, no un objeto de pila que pueda ser anulado a
-	# su vez), pero se ve y se siente igual para el jugador.
+	# Mismo panel que la ventana genérica de respuesta (título, timer, "Pasar" de
+	# ResponseWindowHandler), para que responder se vea igual en todo el juego. No pasa por
+	# ActionPipeline: es una pregunta puntual con N candidatas, no un objeto de pila anulable.
 	var chosen: Dictionary = await _ask_prevention_panel(candidates)
 	if chosen.is_empty():
 		return false
@@ -1150,25 +1336,74 @@ func offer_prevention(affected_card: Node, effect_source: Node, effect_tag: Stri
 		return true
 	if _dagon_shield_covers(affected_card, effect_source):
 		return true
+	if _extra_shield_covers(affected_card, effect_source):
+		return true
 	_last_prevention_source_id = effect_source.get_instance_id() if is_instance_valid(effect_source) else 0
+	_last_prevention_target = affected_card
+	if effect_tag != "annul" and affected_card.get("card_type") == Constants.CardType.ALIADO \
+			and affected_card.get("current_zone") in Constants.ZONES_IN_PLAY:
+		var affected_ctrl: int = int(affected_card.controller_id) if affected_card.get("controller_id") != null else 0
+		if _current_effect_controller(effect_source) == 1 - affected_ctrl:
+			load("res://scripts/core/effects/triggers/LimitedEventTriggers.gd").fire("ally_affected", {"pid": affected_ctrl})
 	if affected_card.get("current_zone") == null or not (affected_card.current_zone in Constants.ZONES_IN_PLAY):
 		return false
 	var owner_id: int = affected_card.controller_id if affected_card.get("controller_id") != null else 0
 	if effect_tag != "annul" and await _fision_toll_prevents(affected_card, owner_id, effect_source):
 		return true
+	if effect_tag != "annul" and opp_immune_card(affected_card, effect_source):
+		return true
+	# corazón de muerte: "a tu oponente le cueste un Oro adicional afectarla hasta tu próximo turno".
+	if effect_tag != "annul" and GameManager.turn_serial <= int(affected_card.get_meta("affect_toll_until", -1)):
+		var payer: int = _current_effect_controller(effect_source)
+		if payer == 1 - owner_id and not opp_cost_waived(payer, owner_id) \
+				and not await load("res://scripts/core/effects/triggers/TriggerTollPatterns.gd").pay_toll(affected_card, payer, 1):
+			return true
 	return await offer_prevention_for_player(owner_id, effect_source, effect_tag, affected_card)
 
 
-## Puente temporal (2026-09-09) — para cartas con el modelo VIEJO de carga
-## previa que quedaron fuera de este rediseño (Fisión Nuclear/Transformación,
-## MiscUniquePatterns.gd: aproximan una protección "burbuja"/repartida con
-## una carga por carta, sin pregunta reactiva — no encajan en el registro de
-## _prevention_registry, que asume UNA carta de Prevención real detectada
-## por texto). Almirante Akari YA NO usa este puente (ver
-## _prevention_registry/offer_counter_annul() — se pasó a reactivo de
-## verdad). Aislado del registro reactivo a propósito, se consulta primero
-## en offer_prevention().
-## {card_instance_id: count}
+## "No puede ser afectado por efectos oponentes" de una carta por un tiempo (Revólver Webley, Fuego
+## Purificador, Rugido de Titán): meta "opp_immune_until" = último turn_serial en que vale. Anular no
+## es afectar la carta.
+func opp_immune_card(affected_card: Node, effect_source) -> bool:
+	if not is_instance_valid(affected_card):
+		return false
+	# Fuego Purificador / Rugido de Titán: "Prevén que una carta sea afectada por un efecto oponente" — ese
+	# efecto puntual (la carta de la que sale), no todos.
+	var prevented: Dictionary = affected_card.get_meta("prevent_effect_of", {})
+	if not prevented.is_empty() and int(prevented.get("turn", -1)) == GameManager.turn_serial:
+		var ctx: Dictionary = EffectContextScript.current()
+		var source_id: int = effect_source.get_instance_id() if effect_source != null and is_instance_valid(effect_source) else 0
+		var ctx_id: int = ctx.card.get_instance_id() if not ctx.is_empty() and is_instance_valid(ctx.get("card")) else 0
+		if int(prevented.source_id) in [source_id, ctx_id]:
+			var main_p := get_node_or_null("/root/Main")
+			if main_p:
+				main_p._update_debug("%s no es afectada por ese efecto (se previno)" % str(affected_card.get("card_name")))
+			return true
+	var in_battle: bool = GameManager.current_phase in [Constants.Phase.ATAQUE, Constants.Phase.BLOQUEO,
+		Constants.Phase.GUERRA_TALISMANES, Constants.Phase.ASIGNACION_DANIO]
+	var battle_immune: bool = in_battle and int(affected_card.get_meta("opp_immune_battle_turn", -1)) == GameManager.turn_serial  # Dhampir Feroce
+	if not battle_immune and GameManager.turn_serial > int(affected_card.get_meta("opp_immune_until", -1)):
+		return false
+	var owner_id: int = affected_card.controller_id if affected_card.get("controller_id") != null else 0
+	if _current_effect_controller(effect_source) != 1 - owner_id:
+		return false
+	var main := get_node_or_null("/root/Main")
+	if main:
+		main._update_debug("%s no puede ser afectado por efectos oponentes" % str(affected_card.get("card_name")))
+	return true
+
+
+## "No puedes ser afectado por efectos oponentes" del jugador (peter pan, Jugando con el Demonio):
+## RuleState "opp_effect_immune". Cubre lo mismo que el escudo de Fisión Nuclear para el jugador
+## (Descartar/Botar, buscar o mirar su mano y su Castillo, daño por efecto), sin el peaje sobre sus
+## cartas en juego.
+func player_opp_immune(player_id: int) -> bool:
+	return RuleState.active("opp_effect_immune", player_id)
+
+
+## Modelo de carga previa (sin pregunta reactiva) para las cartas que no encajan en
+## _prevention_registry (Fisión Nuclear/Transformación, MiscUniquePatterns.gd: protección repartida
+## con una carga por carta). Se consulta primero en offer_prevention(). {card_instance_id: count}
 var _legacy_targeted_preventions: Dictionary = {}
 
 
@@ -1194,31 +1429,25 @@ func try_consume_legacy_targeted_prevention(card: Node) -> bool:
 	return true
 
 
-## Fisión Nuclear (2026-10-14, a pedido del usuario: "carta importante que
-## tiene varios efectos complicados"). "Hasta tu próximo turno, no puedes ser
-## afectado por efectos oponentes y para afectar tus cartas en juego tu
-## oponente debe Desterrar una carta de su mano":
-##  - el JUGADOR protegido: los efectos del rival que lo afectan a él
-##    (Descartar de su mano, Botar de su Castillo) no ocurren — ver
-##    fision_blocks_player_effect(), consultado en ActionModule.discard/mill;
-##  - su Castillo y su mano (el Cementerio NO, usuario 2026-10-14): el rival
-##    no puede buscar ni mirar cartas en su Castillo (fision_hides_zones_of(),
-##    en ActionSearch y CastleLook) ni en su mano, ni hacerle daño por
-##    efecto (DamageManager);
-##    en combate, el daño "al Destierro" de habilidades rivales va como daño
-##    normal (BattleManager);
-##  - sus cartas EN JUEGO (también las que entren después): cada vez que un
-##    efecto del rival fuera a afectar una, el rival elige si Destierra una
-##    carta de su mano para que la afecte; si no puede o no quiere, no la
-##    afecta — en offer_prevention() (destruir, desterrar, barajar/devolver,
-##    debilitar, silenciar, ganar el control). Anular NO es afectar la carta
-##    (usuario, 2026-10-14).
-## Quién controla el efecto: EffectContext (el efecto en curso) o, si no hay,
-## el controlador de la carta fuente. Dura hasta que empieza el siguiente
-## turno del jugador protegido.
+## Fisión Nuclear: "Hasta tu próximo turno, no puedes ser afectado por efectos oponentes y para
+## afectar tus cartas en juego tu oponente debe Desterrar una carta de su mano":
+## - el jugador protegido: no le afectan Descartar ni Botar del rival
+## (fision_blocks_player_effect(), en ActionModule.discard/mill);
+## - su Castillo y su mano (no el Cementerio): el rival no puede buscar ni mirar
+## (fision_hides_zones_of(), en ActionSearch y CastleLook) ni hacerle daño por efecto
+## (DamageManager); en combate, el daño "al Destierro" de habilidades rivales va como daño normal
+## (BattleManager);
+## - sus cartas en juego (también las que entren después): el rival elige si Destierra una carta de
+## su mano para afectarla; si no, no la afecta (offer_prevention(): destruir, desterrar,
+## barajar/devolver, debilitar, silenciar, ganar el control). Anular no es afectar la carta.
+## Quién controla el efecto: EffectContext o, si no hay, el controlador de la fuente. Dura hasta el
+## siguiente turno del protegido.
 const PlayerSideScript = preload("res://scripts/core/game/PlayerSide.gd")
 const EffectContextScript = preload("res://scripts/core/effects/EffectContext.gd")
 const DagonScript = preload("res://scripts/core/effects/triggers/DagonPatterns.gd")
+const PreventionCosts = preload("res://scripts/core/effects/mechanics/PreventionCosts.gd")
+const TurnLimits = preload("res://scripts/core/effects/mechanics/TurnLimits.gd")
+const CompiledPrevention = preload("res://scripts/core/effects/mechanics/CompiledPrevention.gd")
 var _fision_shields: Dictionary = {}  # player_id -> true
 
 
@@ -1232,6 +1461,32 @@ func activate_fision_shield(player_id: int) -> void:
 		if GameManager.turn_started.is_connected(clear_it):
 			GameManager.turn_started.disconnect(clear_it)
 	GameManager.turn_started.connect(clear_it)
+
+
+## DAR abril 2026 (Coste Adicional): "Los costes adicionales no hacen objetivo pero afectan a los jugadores,
+## por lo que los efectos que hagan que los jugadores no puedan ser afectados pueden evitar pagar costes
+## adicionales." true = 'payer' no paga el recargo que puso 'source_pid' (-1: se asume del rival, como casi
+## todos los "a tu oponente le cuesta...").
+func opp_cost_waived(payer: int, source_pid: int) -> bool:
+	if source_pid == payer or not (is_fision_shielded(payer) or player_opp_immune(payer)):
+		return false
+	return true
+
+
+## DAR abril 2026 (Afectar): "Los efectos que cancelen ataque afectan a los Aliados" (las restricciones de
+## ataque afectan al jugador). Deja solo los atacantes cuyo ataque sí se cancela: "no puede ser afectado
+## por efectos oponentes" y las prevenciones del Aliado (etiqueta "cancel_attack") lo evitan.
+func filter_attack_cancel(attackers_in: Array, source: Node) -> Array:
+	var out: Array = []
+	for a in attackers_in:
+		if is_instance_valid(a) and not await offer_prevention(a, source, "cancel_attack"):
+			out.append(a)
+	return out
+
+
+## Lo mismo para una clave de RuleState puesta sobre 'payer' (PaymentManager, TriggerTollPatterns).
+func rule_cost_waived(key: String, payer: int) -> bool:
+	return opp_cost_waived(payer, RuleState.source_of(key, payer))
 
 
 func is_fision_shielded(player_id: int) -> bool:
@@ -1250,7 +1505,7 @@ func _current_effect_controller(effect_source) -> int:
 func fision_blocks_player_effect(player_id: int) -> bool:
 	"""true si 'player_id' está protegido por Fisión Nuclear y el efecto en
 	curso es de su rival (Descartar/Botar no ocurren)."""
-	if not is_fision_shielded(player_id) or _current_effect_controller(null) != 1 - player_id:
+	if not (is_fision_shielded(player_id) or player_opp_immune(player_id)) or _current_effect_controller(null) != 1 - player_id:
 		return false
 	var main := get_node_or_null("/root/Main")
 	if main:
@@ -1263,11 +1518,32 @@ func fision_hides_zones_of(zone_owner: int, chooser_id: int, zone: int = Constan
 	(o la mano) de 'zone_owner' por Fisión Nuclear. El Cementerio no cuenta."""
 	if zone not in [Constants.Zone.CASTILLO, Constants.Zone.MANO]:
 		return false
-	if chooser_id < 0 or chooser_id == zone_owner or not is_fision_shielded(zone_owner):
+	# Escudo Estelar: "Los jugadores no pueden buscar, mirar, ni mostrar cartas de la mano ni los Castillos
+	# por efectos hasta tu próxima Fase Final" (también las propias).
+	if RuleState.active("zones_hidden", zone_owner):
+		var main_e := get_node_or_null("/root/Main")
+		if main_e:
+			main_e._update_debug("Escudo Estelar: no se puede buscar ni mirar en la mano ni en los Castillos")
+		return true
+	if chooser_id < 0 or chooser_id == zone_owner:
+		return false
+	# Terminal P-12: "Si está en tu Reserva, ... él no puede mirar tu mano ni tu Castillo."
+	if TurnLimits.terminal_in_reserva(zone_owner):
+		var main_t := get_node_or_null("/root/Main")
+		if main_t:
+			main_t._update_debug("Terminal P-12: no puedes mirar la mano ni el Castillo del jugador %d" % (zone_owner + 1))
+		return true
+	# Ofrenda a los Abuelos: "prevén que tu oponente busque cartas en tu Castillo" (este turno).
+	if zone == Constants.Zone.CASTILLO and not RuleState.turn_data("castle_search_block:%d" % zone_owner).is_empty():
+		var main_o := get_node_or_null("/root/Main")
+		if main_o:
+			main_o._update_debug("Ofrenda a los Abuelos: no puedes buscar cartas en el Castillo del jugador %d" % (zone_owner + 1))
+		return true
+	if not is_fision_shielded(zone_owner) and not player_opp_immune(zone_owner):
 		return false
 	var main := get_node_or_null("/root/Main")
 	if main:
-		main._update_debug("Fisión Nuclear: no puedes buscar ni elegir en las zonas del jugador %d" % (zone_owner + 1))
+		main._update_debug("No puedes buscar ni elegir en las zonas del jugador %d (no puede ser afectado por efectos oponentes)" % (zone_owner + 1))
 	return true
 
 
@@ -1308,19 +1584,14 @@ func _fision_toll_prevents(affected_card, owner_id: int, effect_source) -> bool:
 	return false
 
 
-## Colapso Global (2026-10-14, mazo 170): "En respuesta a que tu oponente
-## fuera a mirar tu mano o buscar cartas en un Castillo, puedes Desterrar una
-## carta de tu mano para jugarlo sin pagar su coste. Prevén que tu oponente
-## mire tu mano o busque cartas y tú Robas una carta."
-## Se ofrece en las búsquedas (ActionSearch) y en los efectos que miran la
-## mano rival. true = la búsqueda/mirada no ocurre. Se juega pagando su coste
-## o Desterrando una carta de la mano; va al Cementerio y Robas una.
-## Sidhes del Bosque (2026-10-18): "Puedes jugarlo en respuesta a que tu
-## oponente fuera a buscar cartas en un Castillo. Nombra dos cartas. Este
-## turno tu oponente debe mostrar las cartas que busca y no puede buscar las
-## cartas nombradas. Roba una carta o sube un Aliado de tu Cementerio a tu
-## mano." ActionSearch lo ofrece antes de buscar en un Castillo y aplica el
-## candado (sidhes_blocked_names) y el mostrar (sidhes_reveal_to).
+## Colapso Global: "En respuesta a que tu oponente fuera a mirar tu mano o buscar cartas en un
+## Castillo, puedes Desterrar una carta de tu mano para jugarlo sin pagar su coste. Prevén que tu
+## oponente mire tu mano o busque cartas y tú Robas una carta." Se ofrece en las búsquedas
+## (ActionSearch) y al mirar la mano rival; true = no ocurre. Se paga su coste o se Destierra una
+## carta de la mano; va al Cementerio.
+## Sidhes del Bosque: "Puedes jugarlo en respuesta a que tu oponente fuera a buscar cartas en un
+## Castillo. Nombra dos cartas...". ActionSearch lo ofrece antes de buscar y aplica el candado
+## (sidhes_blocked_names) y el mostrar (sidhes_reveal_to).
 func offer_sidhes(searcher_id: int) -> void:
 	if searcher_id < 0:
 		return
@@ -1351,6 +1622,19 @@ func offer_sidhes(searcher_id: int) -> void:
 	if is_instance_valid(sidhes):
 		CardManager._disconnect_card_interaction_signals(sidhes)
 		sidhes.queue_free()
+	await resolve_sidhes_effect(victim, card_name)
+	sdata["esta_oculta"] = false
+	CardManager.add_to_cemetery(victim, sdata)
+
+
+## Efecto de Sidhes del Bosque, jugado en respuesta (offer_sidhes) o como Talismán normal en tu
+## Vigilia / Guerra de Talismanes ("puedes jugarlo en respuesta" no impide jugarlo normal). victim =
+## quien juega Sidhes; el candado es para su oponente.
+func resolve_sidhes_effect(victim: int, card_name: String) -> void:
+	var main := get_node_or_null("/root/Main")
+	if not main:
+		return
+	var searcher_id: int = 1 - victim
 	# Nombrar dos cartas.
 	var names: Array = []
 	if PlayerSideScript.is_bot(victim):
@@ -1369,8 +1653,7 @@ func offer_sidhes(searcher_id: int) -> void:
 			var n: String = str(picked.get("nombre", "")).to_lower()
 			if not n.is_empty() and not (n in names):
 				names.append(n)
-	main.set_meta("sidhes_lock", {"searcher": searcher_id, "turn": GameManager.current_turn, "names": names,
-		"reveal_to": victim})
+	RuleState.set_turn_data("sidhes_lock", {"searcher": searcher_id, "names": names, "reveal_to": victim})
 	main._update_debug("%s: este turno tu oponente muestra lo que busca y no puede buscar %s" % [card_name,
 		" ni ".join(names) if not names.is_empty() else "nada nombrado"])
 	# Roba una carta o sube un Aliado de tu Cementerio a tu mano.
@@ -1383,16 +1666,11 @@ func offer_sidhes(searcher_id: int) -> void:
 	else:
 		await ActionModule.search(victim, Constants.Zone.CEMENTERIO, {"type": Constants.CardType.ALIADO}, 1, true, false, false,
 			null, Constants.Zone.MANO, false, victim)
-	sdata["esta_oculta"] = false
-	CardManager.add_to_cemetery(victim, sdata)
 
 
 func _sidhes_lock_for(searcher_id: int) -> Dictionary:
-	var main := get_node_or_null("/root/Main")
-	if not main:
-		return {}
-	var lock: Dictionary = main.get_meta("sidhes_lock", {})
-	if lock.is_empty() or int(lock.get("searcher", -1)) != searcher_id or int(lock.get("turn", -1)) != GameManager.current_turn:
+	var lock: Dictionary = RuleState.turn_data("sidhes_lock")
+	if lock.is_empty() or int(lock.get("searcher", -1)) != searcher_id:
 		return {}
 	return lock
 
@@ -1463,14 +1741,12 @@ func offer_colapso_global(searcher_id: int) -> bool:
 	return true
 
 
-## Prevenir daño al Castillo con un Oro (2026-10-14, mazo 170):
-##  - Alicanto: "En respuesta a que fueras a recibir daño, puedes Desterrar
-##    este Oro para prevenirlo. Luego, puedes convertir una carta de tu mano
-##    en un Oro sin habilidad y ponerla en tu Oro Pagado."
-##  - Escritura Sagrada: "Puedes subirlo a tu mano o convertirlo en un Oro sin
-##    habilidad para prevenir recibir daño."
-## Se ofrece en BattleManager antes de aplicar el daño de combate. Previene
-## todo ese daño.
+## Prevenir daño al Castillo con un Oro:
+## - Alicanto: "En respuesta a que fueras a recibir daño, puedes Desterrar este Oro para prevenirlo.
+## Luego, puedes convertir una carta de tu mano en un Oro sin habilidad y ponerla en tu Oro Pagado."
+## - Escritura Sagrada: "Puedes subirlo a tu mano o convertirlo en un Oro sin habilidad para
+## prevenir recibir daño."
+## Se ofrece en BattleManager antes del daño de combate y previene todo ese daño.
 func offer_castle_damage_prevention(defender_id: int, damage: int) -> bool:
 	var main := get_node_or_null("/root/Main")
 	if not main or damage <= 0:
@@ -1543,15 +1819,10 @@ func _alicanto_convert_hand_card(main: Node, pid: int) -> void:
 		gold_node.is_converted = true
 
 
-## Efectos suspendidos que resuelven en la PRÓXIMA Fase Final de un jugador
-## puntual, de una sola vez (2026-09-06, a pedido del usuario — p.ej. Fisión
-## Nuclear: 'En la próxima Fase Final oponente, Baraja una carta de coste 2
-## o menos o Roba dos cartas') — a diferencia de un trigger real en juego
-## (on_opponent_turn_end, que dispara TODOS los turnos mientras la fuente
-## siga en juego), esto es un Talismán que ya se resolvió y fue Desterrado:
-## no hay ninguna carta en juego a la que consultarle has_trigger() después.
-## 'No se puede responder con nada' (aclarado por el usuario) = se resuelve
-## directo, sin pasar por ningún sistema de prevención.
+## Efectos suspendidos que resuelven una vez en la próxima Fase Final de un jugador (p.ej. Fisión
+## Nuclear: "En la próxima Fase Final oponente, Baraja una carta de coste 2 o menos o Roba dos
+## cartas"). No es un trigger en juego: el Talismán ya se resolvió y no hay carta a la que
+## consultar. No se puede responder: se resuelve directo, sin prevención.
 var _scheduled_next_final_phase_effects: Dictionary = {}
 
 

@@ -1,16 +1,13 @@
 extends RefCounted
 ## TalismanSearchPatterns — "busca un Talismán en un Castillo y juégalo"
-## (2026-10-14, revisión del mazo 170, docs/revision-mazo-170.md).
-##
-## Reina Nyssara: "busca un Talismán en un Castillo y juégalo reduciendo su
-## coste en un Oro, hasta un mínimo de 0 y Roba dos cartas".
-## Nyssara Cautiva: "puedes buscar un Talismán en un Castillo, juégalo pagando
-## su coste y Roba una carta".
-##
-## Se elige en el selector del tablero (los dos Castillos, o solo el tuyo si
-## dice "tu Castillo"); solo son elegibles los Talismanes que puedes pagar. El
-## Talismán se juega bajo tu control pero sigue siendo de su dueño (vuelve a
-## SU Cementerio). Se usa con preload, sin class_name global (ver §54).
+## (docs/revision-mazo-170.md).
+## Reina Nyssara: "busca un Talismán en un Castillo y juégalo reduciendo su coste en un Oro, hasta
+## un mínimo de 0 y Roba dos cartas".
+## Nyssara Cautiva: "puedes buscar un Talismán en un Castillo, juégalo pagando su coste y Roba una
+## carta".
+## Se elige en el selector del tablero (los dos Castillos, o solo el tuyo si dice "tu Castillo");
+## solo son elegibles los Talismanes que puedes pagar. Se juega bajo tu control pero sigue siendo de
+## su dueño (vuelve a SU Cementerio). Se usa con preload (ver §54).
 
 const PlayerSideScript = preload("res://scripts/core/game/PlayerSide.gd")
 

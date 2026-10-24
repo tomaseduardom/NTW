@@ -1,32 +1,18 @@
 extends RefCounted
 class_name LookAndPlayResolver
-## LookAndPlayResolver — Familia de patrones "mira/muestra N cartas del tope
-## de tu Castillo y [elige qué hacer con ellas]": Signo Amarillo (1 a mano, 1
-## a Cementerio), Tangata Manu (juega una gratis), Presente (juega una gratis
-## o llévate todas a la mano), Perder la Razón (juega una gratis o un Oro
-## directo a Oro Pagado). Opera sobre TriggerSystem via _main.
-## Extraído de TargetedEffectExecutor.gd (2026-08-28, "módulos gordos" —
-## a pedido del usuario, mismo tipo de corte que separó TriggerResolution/
-## TriggerRestrictions/TemporaryBuffSystem de TriggerSystem.gd).
-##
-## Dividido en 7 archivos por tamaño (2026-09-06, "módulos gordos" —
-## el archivo llegó a ~3200 líneas, el más grande del proyecto). Este
-## archivo queda como FACADE — cada función de abajo es un reenvío de una
-## sola línea a la mitad que corresponda, con el mismo nombre y firma de
-## siempre, así que TriggerResolution.gd (único llamador, vía
-## `_main._look_and_play.try_execute_X(...)`) no necesitó cambiar una sola
-## línea por este split. Mismo idioma que SearchAbilityHandler.gd/
-## SearchAbilityHandler_AI.gd/SearchAbilityHandler_JV.gd.
-##
-## Las 7 mitades, por mecánica dominante:
-## - LookRevealPatterns.gd: familia "mira/muestra N... elige destino(s)".
-## - SearchOwnZonePatterns.gd: busca/relocaliza/convierte en zonas propias.
+## LookAndPlayResolver — FACHADA: cada función reenvía en una línea a la mitad que corresponde, con
+## el mismo nombre y firma (TriggerResolution.gd la llama vía
+## `_main._look_and_play.try_execute_X(...)`). Opera sobre TriggerSystem vía _main.
+## Mitades, por mecánica:
+## - LookRevealPatterns.gd: "mira/muestra N... elige destino(s)" (Signo Amarillo, Tangata Manu,
+## Presente, Perder la Razón...).
+## - SearchOwnZonePatterns.gd: busca/mueve/convierte en zonas propias.
 ## - BanishOpponentPatterns.gd: destierra/destruye/anula/bota al oponente.
-## - ShuffleDrawPatterns.gd: combos de Barajar/Robar sobre recursos propios.
-## - GoldConversionPatterns.gd: genera Oro Virtual / convierte carta-a-carta.
-## - PlayFromCemeteryPatterns.gd: juega un Aliado del Cementerio con descuento.
-## - MiscUniquePatterns.gd: 4 patrones únicos (burbuja+Fase Final, respuesta+
-##   exilio+elección, robo de control+renombrado, candado de nombre).
+## - ShuffleDrawPatterns.gd: Barajar/Robar sobre recursos propios.
+## - GoldConversionPatterns.gd: Oro Virtual / conversión carta a carta.
+## - PlayFromCemeteryPatterns.gd: jugar un Aliado del Cementerio con descuento.
+## - MiscUniquePatterns.gd: patrones únicos (Fisión Nuclear, Transformación, shedo titan, Malleus
+## Maleficarum).
 
 const LookRevealPatternsScript = preload("res://scripts/core/effects/triggers/LookRevealPatterns.gd")
 const SearchOwnZonePatternsScript = preload("res://scripts/core/effects/triggers/SearchOwnZonePatterns.gd")

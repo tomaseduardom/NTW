@@ -1,12 +1,8 @@
 extends RefCounted
-## ShuffleDrawPatterns — 4 de 7 mitades de LookAndPlayResolver.gd, dividido por
-## tamaño el 2026-09-06 ("módulos gordos"). Cubre combos de Barajar/Robar sobre
-## recursos propios (sin apuntar al oponente): Caín (x2), vision heroica, el
-## caleuche, manuel rodriguez (ataca solo), amazona desafiante, Abrazo de
-## Maipú, Príncipe Orión, blanca nieves, kaitai, rafael, Escarapela Nacional,
-## Tótem del Dragón Ancestral. Llamada solo desde LookAndPlayResolver.gd
-## (facade) — ver ese archivo para la lista completa de las 7 mitades
-## hermanas.
+## ShuffleDrawPatterns — una de las mitades de LookAndPlayResolver.gd (fachada; ahí está la lista
+## completa). Combos de Barajar/Robar sobre recursos propios: Caín (x2), vision heroica, el
+## caleuche, manuel rodriguez (ataca solo), amazona desafiante, Abrazo de Maipú, Príncipe Orión,
+## blanca nieves, kaitai, rafael, Escarapela Nacional, Tótem del Dragón Ancestral.
 
 const StackAnnulScript = preload("res://scripts/core/effects/StackAnnul.gd")
 
@@ -47,7 +43,7 @@ func try_execute_shuffle_or_draw_choice_pattern(ability_text: String, controller
 	var filter := func(c: Node) -> bool:
 		if c.get("card_cost") == null or ContinuousEffectManager.get_modified_cost(c) > 2:
 			return false
-		# 2026-09-12: current_zone en vez de get_parent() (ver §10.5)
+		# current_zone en vez de get_parent (ver §10.5)
 		return c.get("current_zone") in [Constants.Zone.LINEA_DEFENSA, Constants.Zone.LINEA_ATAQUE, Constants.Zone.LINEA_APOYO]
 	var target: Node = await main._card_interaction.await_target(
 		"Baraja hasta una carta en juego (coste 2 o menos) — N para no barajar ninguna", filter, true, controller_id)
@@ -58,8 +54,6 @@ func try_execute_shuffle_or_draw_choice_pattern(ability_text: String, controller
 		CardManager.shuffle_deck(owner)
 		AnimationQueue.queue_shuffle(owner, "Barajar mazo (Caín)")
 	return true
-
-
 
 
 func try_execute_cain_damage_shuffle_search_pattern(isolated_text: String, card: Node, controller_id: int) -> bool:
@@ -93,8 +87,7 @@ func try_execute_cain_damage_shuffle_search_pattern(isolated_text: String, card:
 		return true
 
 	var pick_amount: int = mini(2, matching.size())
-	# 2026-09-14, a pedido del usuario: click directo (open_reveal_picker)
-	# en vez del modal de lista viejo.
+	# Click directo (open_reveal_picker) en vez del modal de lista viejo.
 	var found: Array = []
 	if main._zone_viewer:
 		found = await main._zone_viewer.open_reveal_picker(
@@ -113,8 +106,7 @@ func try_execute_cain_damage_shuffle_search_pattern(isolated_text: String, card:
 
 	var to_play_data: Dictionary = {}
 	if found.size() == 2:
-		# 2026-09-14, a pedido del usuario: click directo (open_reveal_picker)
-		# en vez del modal de lista viejo.
+		# Click directo (open_reveal_picker) en vez del modal de lista viejo.
 		if main._zone_viewer:
 			var picked_list: Array = await main._zone_viewer.open_reveal_picker(
 				"Elige cuál de las dos jugar sin pagar su coste (la otra va a tu mano)", found, controller_id, Callable(), 1, false)
@@ -142,13 +134,10 @@ func try_execute_cain_damage_shuffle_search_pattern(isolated_text: String, card:
 	return true
 
 
-
-
 func try_execute_shuffle_cost_max_three_pattern(ability_text: String, controller_id: int) -> bool:
-	"""'Baraja una carta de coste 3 o menos o Anula un Talismán oponente'
-	(vision heroica, 2026-09-06) — SOLO la primera rama ('Anula un
-	Talismán oponente' es contramagia real de pila, no implementada); no
-	se ofrece elección, siempre Baraja."""
+	"""'Baraja una carta de coste 3 o menos o Anula un Talismán oponente' (vision heroica). Hoy la
+	resuelve antes EffectInterpreter (elección "A o B" con Anular sobre la Pila, que solo se ofrece si
+	hay un Talismán rival que Anular); esto queda de respaldo: solo Baraja."""
 	var lower := ability_text.to_lower()
 	if not ("baraja una carta de coste 3 o menos o anula un talismán oponente" in lower):
 		return false
@@ -156,8 +145,7 @@ func try_execute_shuffle_cost_max_three_pattern(ability_text: String, controller
 	var main := _main.get_node_or_null("/root/Main")
 	if not main or not main._card_interaction:
 		return true
-	# 2026-10-14 (StackAnnul): si hay un Talismán oponente en la pila, se
-	# puede elegir Anularlo.
+	# Si hay un Talismán oponente en la pila, se puede elegir Anularlo.
 	var talisman_obj: Dictionary = StackAnnulScript.find_target(controller_id, true, false, func(obj: Dictionary) -> bool:
 		return StackAnnulScript.type_of(obj) == Constants.CardType.TALISMAN)
 	if not talisman_obj.is_empty():
@@ -168,7 +156,7 @@ func try_execute_shuffle_cost_max_three_pattern(ability_text: String, controller
 			StackAnnulScript.apply(talisman_obj, null)
 			return true
 	var filter := func(c: Node) -> bool:
-		# 2026-09-12: current_zone en vez de get_parent() (ver §10.5)
+		# current_zone en vez de get_parent (ver §10.5)
 		if c.get("current_zone") not in [Constants.Zone.LINEA_DEFENSA, Constants.Zone.LINEA_ATAQUE, Constants.Zone.LINEA_APOYO]:
 			return false
 		return ContinuousEffectManager.cost_at_most(c, 3)
@@ -181,14 +169,11 @@ func try_execute_shuffle_cost_max_three_pattern(ability_text: String, controller
 	return true
 
 
-
-
 func try_execute_shuffle_cost_max_two_draw_two_pattern(ability_text: String, controller_id: int, card: Node = null) -> bool:
-	"""'Elige un efecto: - En respuesta a que se juegue una carta sin pagar
-	su coste... - Baraja una carta de coste 2 o menos y Roba dos cartas'
-	(el caleuche, 2026-09-06) — SOLO se implementa la segunda rama (la
-	primera depende de la ventana de respuesta reactiva, que no existe);
-	no se ofrece elección, se resuelve siempre como la rama B."""
+	"""'Elige un efecto: - En respuesta a que se juegue una carta sin pagar su coste... - Baraja una
+	carta de coste 2 o menos y Roba dos cartas' (el caleuche) — SOLO se implementa la segunda rama
+	(la primera depende de la ventana de respuesta reactiva, que no existe); no se ofrece elección,
+	se resuelve siempre como la rama B."""
 	var lower := ability_text.to_lower()
 	if not ("baraja una carta de coste 2 o menos y roba dos cartas" in lower and "en respuesta a que se juegue una carta sin pagar su coste" in lower):
 		return false
@@ -196,9 +181,8 @@ func try_execute_shuffle_cost_max_two_draw_two_pattern(ability_text: String, con
 	var main := _main.get_node_or_null("/root/Main")
 	if not main or not main._card_interaction:
 		return true
-	# Rama A (2026-10-14, StackAnnul): en la pila, una carta oponente jugada
-	# sin pagar su coste o que no puede ser Anulada: entra sin habilidad por
-	# el turno; si es Talismán, se resuelve sin efecto.
+	# Rama A (StackAnnul): en la pila, una carta oponente jugada sin pagar su coste o que no puede ser
+	# Anulada: entra sin habilidad por el turno; si es Talismán, se resuelve sin efecto.
 	var free_obj: Dictionary = StackAnnulScript.find_target(controller_id, true, false, func(obj: Dictionary) -> bool:
 		var node = StackAnnulScript.card_of(obj)
 		var free: bool = node != null and is_instance_valid(node) and node.get_meta("played_free", false)
@@ -218,7 +202,7 @@ func try_execute_shuffle_cost_max_two_draw_two_pattern(ability_text: String, con
 			main._update_debug("El Caleuche: %s queda sin habilidad" % obj_name)
 			return true
 	var filter := func(c: Node) -> bool:
-		# 2026-09-12: current_zone en vez de get_parent() (ver §10.5)
+		# current_zone en vez de get_parent (ver §10.5)
 		if c.get("current_zone") not in [Constants.Zone.LINEA_DEFENSA, Constants.Zone.LINEA_ATAQUE, Constants.Zone.LINEA_APOYO]:
 			return false
 		return ContinuousEffectManager.cost_at_most(c, 2)
@@ -234,14 +218,11 @@ func try_execute_shuffle_cost_max_two_draw_two_pattern(ability_text: String, con
 	return true
 
 
-
-
 func try_execute_attacks_alone_draw_pattern(ability_text: String, controller_id: int, card: Node = null) -> bool:
-	"""'Cuando ataque solo, Roba una carta...' (manuel rodriguez, 2026-09-04)
-	— condición 'ataca solo' (único atacante declarado este combate), sin
-	precedente en el motor. Solo cubre el Robo; la sobretasa 'a tu
-	oponente le cuesta un Oro adicional afectar a tus Aliados' queda fuera
-	(demasiado ambigua qué cuenta como 'afectar' para modelarla ahora)."""
+	"""manuel rodriguez: "Cuando ataque solo, Roba una carta..." (único atacante declarado en el
+	combate). "...y hasta tu próximo turno a tu oponente le cuesta un Oro adicional afectar a tus
+	Aliados": ProtectionRules.grant_ally_affect_tax (se cobra al ceder el rival la prioridad) hasta el
+	turno del rival inclusive."""
 	var lower := ability_text.to_lower()
 	if not ("cuando ataque solo" in lower and "roba una carta" in lower):
 		return false
@@ -250,18 +231,15 @@ func try_execute_attacks_alone_draw_pattern(ability_text: String, controller_id:
 	if await TriggerSystem.open_response_window(card, "manuel rodriguez", controller_id):
 		return true
 	await ActionModule.draw(controller_id, 1, "on_attack_trigger", true)
+	if "le cuesta un oro adicional afectar a tus aliados" in lower:
+		load("res://scripts/core/effects/mechanics/ProtectionRules.gd").grant_ally_affect_tax(controller_id, GameManager.turn_serial + 1)
 	return true
 
 
-
-
 func try_execute_shuffle_one_in_play_and_four_cemetery_pattern(ability_text: String, controller_id: int, card: Node = null) -> bool:
-	"""'Cuando entra en juego o en tu Fase Final, Baraja hasta una carta de
-	coste 2 o menos y hasta cuatro cartas de los Cementerios' (amazona
-	desafiante, 2026-09-06) — solo la parte de ETB; el repetir esto TODAS
-	las Fases Finales (no solo la primera vez) no está implementado (no
-	hay un trigger recurrente de Aliado para Fase Final todavía, solo el
-	de un uso de EffectController.schedule_next_final_phase_effect())."""
+	"""amazona desafiante: "Cuando entra en juego o en tu Fase Final, Baraja hasta una carta de coste
+	2 o menos y hasta cuatro cartas de los Cementerios". Entrada y cada Fase Final ("en tu fase
+	final" es on_turn_end, TriggerSystem.resolve_turn_end_triggers())."""
 	var lower := ability_text.to_lower()
 	if not ("baraja hasta una carta de coste 2 o menos y hasta cuatro cartas de los cementerios" in lower):
 		return false
@@ -281,8 +259,7 @@ func try_execute_shuffle_one_in_play_and_four_cemetery_pattern(ability_text: Str
 		for c in field.get_children():
 			if is_instance_valid(c) and ContinuousEffectManager.cost_at_most(c, 2):
 				in_play_candidates.append(c)
-	# 2026-09-13, a pedido del usuario: click directo en vez de los modales
-	# de lista viejos.
+	# Click directo en vez de los modales de lista viejos.
 	if not in_play_candidates.is_empty() and main._card_interaction:
 		var in_play_filter := func(c: Node) -> bool: return c in in_play_candidates
 		var picked1_node: Node = await main._card_interaction.await_target(
@@ -318,25 +295,20 @@ func try_execute_shuffle_one_in_play_and_four_cemetery_pattern(ability_text: Str
 	return true
 
 
-
-
 func try_execute_shuffle_any_cemetery_or_exile_into_castillo_then_draw_pattern(ability_text: String, controller_id: int, card: Node = null) -> bool:
-	"""'Baraja cualquier cantidad de cartas de tu Cementerio y Destierro en
-	tu Castillo y Roba tres cartas' (Abrazo de Maipú, 2026-09-04) — 'tu'
-	restringe el pool al propio Cementerio+Destierro (a diferencia de 'los
-	Cementerios'), cada carta vuelve a SU Castillo (siempre el mismo,
-	propio, aquí)."""
+	"""'Baraja cualquier cantidad de cartas de tu Cementerio y Destierro en tu Castillo y Roba tres
+	cartas' (Abrazo de Maipú) — 'tu' restringe el pool al propio Cementerio+Destierro (a diferencia
+	de 'los Cementerios'), cada carta vuelve a SU Castillo (siempre el mismo, propio, aquí)."""
 	var lower := ability_text.to_lower()
 	if not ("baraja cualquier cantidad de cartas de tu cementerio y destierro en tu castillo" in lower):
 		return false
 	if await TriggerSystem.open_response_window(card, "Abrazo de Maipú", controller_id):
 		return true
 
-	# 2026-09-13, a pedido del usuario: click directo combinando Cementerio Y
-	# Destierro propios en un solo popup (zone_type="cemetery_and_exile",
-	# nuevo en ZoneViewerModule.open_cemetery_target_picker()), con botón
-	# "Seleccionar todo" — el texto real es 'cualquier cantidad', sin tope,
-	# y clickear una por una sería tedioso con muchas cartas acumuladas.
+	# Click directo combinando Cementerio Y Destierro propios en un solo popup
+	# (zone_type="cemetery_and_exile", nuevo en ZoneViewerModule.open_cemetery_target_picker), con
+	# botón "Seleccionar todo" — el texto real es 'cualquier cantidad', sin tope, y clickear una por
+	# una sería tedioso con muchas cartas acumuladas.
 	var main := _main.get_node_or_null("/root/Main")
 	if main and main._zone_viewer:
 		var own_only := func(c: Node) -> bool: return c.owner_id == controller_id
@@ -359,31 +331,29 @@ func try_execute_shuffle_any_cemetery_or_exile_into_castillo_then_draw_pattern(a
 	return true
 
 
-
-
 func try_execute_shuffle_banish_four_cemeteries_pattern(ability_text: String, controller_id: int) -> bool:
-	"""'Baraja y/o Destierra hasta cuatro cartas de los Cementerios. Si
-	Barajaste y/o Desterraste cuatro cartas de distinto tipo, genera un
-	Oro por el turno' (Ofrendas al Dragón, 2026-09-04) — solo la primera
-	oración; el bono condicionado a 4 tipos distintos NO implementado
-	(_resolve_armeria_barajar_desterrar() no informa qué tipos se
-	eligieron)."""
+	"""'Baraja y/o Destierra hasta cuatro cartas de los Cementerios. Si Barajaste y/o Desterraste
+	cuatro cartas de distinto tipo, genera un Oro por el turno' (Ofrendas al Dragón)."""
 	var lower := ability_text.to_lower()
 	if not ("baraja y/o destierra hasta cuatro cartas de los cementerios" in lower):
 		return false
 	var main := _main.get_node_or_null("/root/Main")
 	if not main or not main._gold_manager:
 		return true
-	await main._gold_manager._resolve_armeria_barajar_desterrar(4, "Ofrendas al Dragón", controller_id)
+	var moved: Array = await main._gold_manager._resolve_armeria_barajar_desterrar(4, "Ofrendas al Dragón", controller_id)
+	if "cuatro cartas de distinto tipo, genera un oro por el turno" in lower:
+		var types := {}
+		for d in moved:
+			types[int(d.get("tipo", -1))] = true
+		if moved.size() >= 4 and types.size() >= 4:
+			main._gold_manager.generar_oros_virtuales(1, controller_id)
+			main._update_debug("Ofrendas al Dragón: cuatro tipos distintos, genera un Oro por el turno")
 	return true
 
 
-
-
 func try_execute_shuffle_banish_cemeteries_then_destroy_or_draw_pattern(ability_text: String, card: Node, controller_id: int) -> bool:
-	"""'Cuando entra en juego, Baraja y/o Destierra hasta tres cartas de
-	los Cementerios y elige entre Destruir una carta de coste 2 o menos o
-	Robar dos cartas' (Tótem del Dragón Ancestral, 2026-09-04)."""
+	"""'Cuando entra en juego, Baraja y/o Destierra hasta tres cartas de los Cementerios y elige entre
+	Destruir una carta de coste 2 o menos o Robar dos cartas' (Tótem del Dragón Ancestral)."""
 	var lower := ability_text.to_lower()
 	if not ("baraja y/o destierra hasta tres cartas de los cementerios y elige entre destruir una carta de coste 2 o menos o robar dos cartas" in lower):
 		return false
@@ -407,11 +377,9 @@ func try_execute_shuffle_banish_cemeteries_then_destroy_or_draw_pattern(ability_
 	return true
 
 
-
-
 func try_execute_draw_or_raise_cemetery_ally_pattern(ability_text: String, controller_id: int, card: Node = null) -> bool:
-	"""'Cuando entra en juego, Roba una carta o sube un Aliado de tu
-	Cementerio a tu mano' (Príncipe Orión, 2026-09-04) — elección A/B."""
+	"""'Cuando entra en juego, Roba una carta o sube un Aliado de tu Cementerio a tu mano' (Príncipe
+	Orión) — elección A/B."""
 	var lower := ability_text.to_lower()
 	if not ("roba una carta o sube un aliado de tu cementerio a tu mano" in lower):
 		return false
@@ -426,8 +394,7 @@ func try_execute_draw_or_raise_cemetery_ally_pattern(ability_text: String, contr
 	if choose_draw:
 		await ActionModule.draw(controller_id, 1, "etb_trigger", true)
 	elif main._zone_viewer:
-		# 2026-09-13, a pedido del usuario: click directo en el propio
-		# Cementerio en vez del modal de lista viejo.
+		# Click directo en el propio Cementerio en vez del modal de lista viejo.
 		var eligible_filter := func(c: Node) -> bool:
 			return c.owner_id == controller_id and c.get("card_type") == Constants.CardType.ALIADO
 		var picked: Array = await main._zone_viewer.open_cemetery_target_picker(
@@ -444,11 +411,9 @@ func try_execute_draw_or_raise_cemetery_ally_pattern(ability_text: String, contr
 	return true
 
 
-
-
 func try_execute_shuffle_up_to_one_ally_pattern(ability_text: String, card: Node, controller_id: int) -> bool:
-	"""'Cuando entra en juego, Baraja hasta un Aliado' (blanca nieves,
-	2026-09-04) — objetivo opcional (0 o 1), cualquier Aliado en juego."""
+	"""'Cuando entra en juego, Baraja hasta un Aliado' (blanca nieves) — objetivo opcional (0 o 1),
+	cualquier Aliado en juego."""
 	var lower := ability_text.to_lower()
 	if not ("cuando entra en juego, baraja hasta un aliado" in lower):
 		return false
@@ -460,10 +425,9 @@ func try_execute_shuffle_up_to_one_ally_pattern(ability_text: String, card: Node
 		"Elige un Aliado para barajar (opcional)", func(c: Node) -> bool:
 			if c.get("card_type") != Constants.CardType.ALIADO:
 				return false
-			# 2026-09-12: current_zone en vez de get_parent() (ver §10.5)
+			# current_zone en vez de get_parent (ver §10.5)
 			return c.get("current_zone") in [Constants.Zone.LINEA_DEFENSA, Constants.Zone.LINEA_ATAQUE, Constants.Zone.LINEA_APOYO], true, controller_id)
-	# Sin ventana genérica aquí (2026-09-09): return_to_deck() ya consulta
-	# Prevención adentro por su cuenta.
+	# Sin ventana genérica aquí: return_to_deck ya consulta Prevención adentro por su cuenta.
 	if target and is_instance_valid(target):
 		var target_owner: int = target.controller_id if target.get("controller_id") != null else controller_id
 		if await ActionModule.return_to_deck(target, target_owner, true, card):
@@ -472,12 +436,9 @@ func try_execute_shuffle_up_to_one_ally_pattern(ability_text: String, card: Node
 	return true
 
 
-
-
 func try_execute_draw_then_discard_pattern(ability_text: String, controller_id: int, card: Node = null) -> bool:
-	"""'Roba N carta(s) y Descarta M carta(s)' (2026-09-04, p.ej. kaitai:
-	'Cuando entra en juego, Roba tres cartas y Descarta dos cartas') — el
-	genérico extract_action() solo reconoce la PRIMERA acción de una
+	"""'Roba N carta(s) y Descarta M carta(s)' (p.ej. kaitai: 'Cuando entra en juego, Roba tres cartas
+	y Descarta dos cartas') — el genérico extract_action solo reconoce la PRIMERA acción de una
 	oración compuesta, así que sin esto el Descarte se perdía siempre."""
 	var lower := ability_text.to_lower()
 	var rx := RegEx.new()
@@ -505,12 +466,9 @@ func try_execute_draw_then_discard_pattern(ability_text: String, controller_id: 
 	return true
 
 
-
-
 func try_execute_shuffle_non_gold_or_draw_two_pattern(ability_text: String, card: Node, controller_id: int) -> bool:
-	"""'Cuando entra en juego, Baraja hasta una carta que no sea Oro o Roba
-	dos cartas' (rafael, 2026-09-04) — elección A/B; 'hasta una' = el
-	Barajar es opcional (cancelar el picker = 0 elegidas)."""
+	"""'Cuando entra en juego, Baraja hasta una carta que no sea Oro o Roba dos cartas' (rafael) —
+	elección A/B; 'hasta una' = el Barajar es opcional (cancelar el picker = 0 elegidas)."""
 	var lower := ability_text.to_lower()
 	if not ("baraja hasta una carta que no sea oro o roba dos cartas" in lower):
 		return false
@@ -525,11 +483,10 @@ func try_execute_shuffle_non_gold_or_draw_two_pattern(ability_text: String, card
 		var filter := func(c: Node) -> bool:
 			if c.get("card_type") == Constants.CardType.ORO:
 				return false
-			# 2026-09-12: current_zone en vez de get_parent() (ver §10.5)
+			# current_zone en vez de get_parent (ver §10.5)
 			return c.get("current_zone") in [Constants.Zone.LINEA_DEFENSA, Constants.Zone.LINEA_ATAQUE, Constants.Zone.LINEA_APOYO]
 		var target: Node = await main._card_interaction.await_target("Elige una carta que no sea Oro para barajar (opcional)", filter, true, controller_id)
-		# Sin ventana genérica aquí (2026-09-09): return_to_deck() ya consulta
-		# Prevención adentro por su cuenta.
+		# Sin ventana genérica aquí: return_to_deck ya consulta Prevención adentro por su cuenta.
 		if target and is_instance_valid(target):
 			var target_owner: int = target.controller_id if target.get("controller_id") != null else controller_id
 			if await ActionModule.return_to_deck(target, target_owner, true, card):
@@ -540,11 +497,9 @@ func try_execute_shuffle_non_gold_or_draw_two_pattern(ability_text: String, card
 	return true
 
 
-
-
 func try_execute_draw_or_search_ally_or_gold_pattern(ability_text: String, card: Node, controller_id: int) -> bool:
-	"""'Roba dos cartas o busca un Aliado u Oro en tu Castillo y ponlo en
-	tu mano' (2026-09-04, p.ej. Escarapela Nacional) — elección A/B."""
+	"""'Roba dos cartas o busca un Aliado u Oro en tu Castillo y ponlo en tu mano' (p.ej. Escarapela
+	Nacional) — elección A/B."""
 	var lower := ability_text.to_lower()
 	if not ("roba dos cartas o busca un aliado u oro en tu castillo" in lower):
 		return false
@@ -562,7 +517,5 @@ func try_execute_draw_or_search_ally_or_gold_pattern(ability_text: String, card:
 		await ActionModule.search(controller_id, Constants.Zone.CASTILLO,
 			{"type": [Constants.CardType.ALIADO, Constants.CardType.ORO]}, 1, true, false, false, card, Constants.Zone.MANO)
 	return true
-
-
 
 

@@ -1,12 +1,8 @@
 extends RefCounted
-## Azi del Abismo (2026-10-17, bug real reportado por el usuario: "ese azi no
-## se transformó en oro" — solo se resolvía el "Descarta una carta"):
-##   "Una vez por turno, Descarta una carta de tu mano para convertir este
-##   Aliado hasta tu próximo turno en un Oro con la habilidad "Reduce el daño
-##   recibido por tu Castillo en 1 por cada Oro Azi que controles.""
-## La conversión y la vuelta a Aliado están en GoldManager
-## (convert_ally_to_gold_until_next_turn / revert_converted_golds).
-## Se usa con preload.
+## Azi del Abismo: "Una vez por turno, Descarta una carta de tu mano para convertir este Aliado
+## hasta tu próximo turno en un Oro con la habilidad 'Reduce el daño recibido por tu Castillo en 1
+## por cada Oro Azi que controles.'" La conversión y la vuelta a Aliado están en GoldManager
+## (convert_ally_to_gold_until_next_turn / revert_converted_golds). Se usa con preload.
 
 const PlayerSideScript = preload("res://scripts/core/game/PlayerSide.gd")
 

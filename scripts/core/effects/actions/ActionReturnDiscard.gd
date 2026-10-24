@@ -12,21 +12,16 @@ func setup(main: Node) -> void:
 
 
 func return_to_deck(card: Node, player_id: int, to_top: bool = true, source: Node = null) -> bool:
-	"""Devuelve una carta que está EN JUEGO a su Castillo (tope o fondo del
-	mazo — 'devuelve al mazo'/'pon en el fondo del mazo'). El patrón real de
-	ABILITY_PATTERNS['RETURN_DECK'] ya existía pero apuntaba a esta función,
-	que nunca se había escrito. Si tenía Armas equipadas, también vuelven al
-	mazo con ella (el Arma sigue al portador, igual que al destruir/desterrar
-	— ver CardManager.destroy_card()/exile_card()).
-
-	source (2026-09-09, "sistema de respuestas" — a pedido del usuario,
-	cerrando un hueco real: esto no chequeaba NADA de Prevención antes):
-	tag "leave_play" — Legión Paladín puede prevenir esto (Estaca NO,
-	'barajar de vuelta al mazo' no es destruir/desterrar/debuff/silenciar,
-	su alcance confirmado no lo cubre). Se revisa ANTES de tocar las Armas
-	equipadas — si se previene, la carta y sus Armas se quedan exactamente
-	como estaban."""
+	"""Devuelve una carta EN JUEGO a su Castillo (tope o fondo: "devuelve al mazo" / "pon en el fondo
+	del mazo"; ABILITY_PATTERNS['RETURN_DECK']). Sus Armas equipadas vuelven al mazo con ella (el
+	Arma sigue al portador, como en CardManager.destroy_card()/exile_card()).
+	source: Prevención con tag "leave_play" (Legión Paladín, Estaca contra efectos oponentes). Se
+	revisa ANTES de tocar las Armas: si se previene, la carta y sus Armas quedan como estaban."""
 	if not is_instance_valid(card):
+		return false
+	# "No puede ser Barajado": los efectos de Barajar llaman con to_top = true y después barajan.
+	if to_top and load("res://scripts/core/effects/mechanics/ProtectionRules.gd").cannot_be_shuffled(card):
+		print("[ActionModule] %s no puede ser Barajado" % str(card.get("card_name")))
 		return false
 	if await EffectController.offer_prevention(card, source, "leave_play"):
 		return false
@@ -43,24 +38,18 @@ func return_to_deck(card: Node, player_id: int, to_top: bool = true, source: Nod
 	else:
 		CardManager.add_to_deck_bottom(player_id, card_data)
 
-	# on_card_returned_to_deck estaba declarada en EffectController.gd pero
-	# nunca se emitía desde ningún lado (2026-09-11, encontrado al construir
-	# GameStateBroadcaster para el multiplayer remoto — sin esto, una carta
-	# "barajada de vuelta al mazo" dejaba un fantasma visual permanente del
-	# lado del Remoto, sin ninguna instrucción de red que la sacara del
-	# tablero). Se emite ANTES de desconectar/liberar, mismo orden que
-	# destroy_card()/exile_card() en EffectController.gd.
+	# Se emite on_card_returned_to_deck (GameStateBroadcaster la usa para sacar la carta del tablero
+	# del Remoto), antes de desconectar/liberar, como destroy_card()/exile_card() en
+	# EffectController.gd.
 	EffectController.emit_signal("on_card_returned_to_deck", player_id, card, to_top)
 
 	var main_node: Node = _main.get_node_or_null("/root/Main") if _main else (Engine.get_main_loop().root.get_node_or_null("Main") if Engine.get_main_loop() else null)
 	if main_node and main_node.get("_zone_manager") != null and is_instance_valid(card) and card.is_inside_tree() and card.visible:
 		await main_node._zone_manager.animate_card_return_to_deck(card, player_id)
 
-	# Desconectar señales de interacción ANTES de liberar (2026-08-29, mismo
-	# bug que CardManager.destroy_card()/exile_card()) — sin esto, un hover
-	# que sigue apuntando al nodo después de queue_free() tira "Invalid
-	# access... on a base object of type previously freed" al tocar
-	# .modulate en el próximo evento de mouse.
+	# Desconectar las señales de interacción ANTES de liberar (como
+	# CardManager.destroy_card()/exile_card()): un hover posterior falla con "previously freed" al
+	# tocar .modulate.
 	CardManager._unequip_from_wielder(card)
 	CardManager._disconnect_card_interaction_signals(card)
 	card.queue_free()

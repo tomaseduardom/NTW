@@ -1,10 +1,7 @@
 extends RefCounted
-## PlayFromCemeteryPatterns — 6 de 7 mitades de LookAndPlayResolver.gd,
-## dividido por tamaño el 2026-09-06 ("módulos gordos"). Cubre patrones de
-## jugar un Aliado directo del Cementerio, gratis o con descuento: Titán
-## Abismal, aku aku, sumi el terrible. Llamada solo desde
-## LookAndPlayResolver.gd (facade) — ver ese archivo para la lista completa de
-## las 7 mitades hermanas.
+## PlayFromCemeteryPatterns — una de las mitades de LookAndPlayResolver.gd (fachada; ahí está la
+## lista completa). Jugar un Aliado directo del Cementerio, gratis o con descuento: Titán Abismal,
+## aku aku, sumi el terrible.
 
 const PlayerSideScript = preload("res://scripts/core/game/PlayerSide.gd")
 var _main: Node
@@ -15,11 +12,10 @@ func setup(main: Node) -> void:
 
 
 func try_execute_titan_abismal_conditional_play_or_draw_pattern(ability_text: String, controller_id: int, card: Node = null) -> bool:
-	"""'Cuando entra en juego, si sólo controlas Aliados Titán o Ignis,
-	juega una carta Titán de coste 1 o menos de tu Cementerio sin pagar su
-	coste o Roba una carta' (Titán Abismal, 2026-09-06) — solo esta
-	cláusula condicional A/B; 'Cuando entra en juego o ataca, una carta en
-	juego aumenta o reduce su coste en un Oro' NO implementada."""
+	"""'Cuando entra en juego, si sólo controlas Aliados Titán o Ignis, juega una carta Titán de coste
+	1 o menos de tu Cementerio sin pagar su coste o Roba una carta' (Titán Abismal) — solo esta
+	cláusula condicional A/B; 'Cuando entra en juego o ataca, una carta en juego aumenta o reduce
+	su coste en un Oro' la resuelve EffectInterpreter (verbo "cost_shift")."""
 	var lower := ability_text.to_lower()
 	if not ("si sólo controlas aliados titán o ignis" in lower or "si solo controlas aliados titan o ignis" in lower):
 		return false
@@ -52,8 +48,7 @@ func try_execute_titan_abismal_conditional_play_or_draw_pattern(ability_text: St
 				return true
 			await ActionModule.draw(controller_id, 1, "etb_trigger", true)
 			return true
-		# 2026-09-13, a pedido del usuario: click directo en el propio
-		# Cementerio en vez del modal de lista viejo.
+		# Click directo en el propio Cementerio en vez del modal de lista viejo.
 		var eligible_filter := func(c: Node) -> bool:
 			return c.owner_id == controller_id and c.get("card_type") == Constants.CardType.ALIADO \
 				and int(c.card_data.get("coste", 99)) <= 1 and "tit" in str(c.card_data.get("raza", "")).to_lower()
@@ -74,22 +69,17 @@ func try_execute_titan_abismal_conditional_play_or_draw_pattern(ability_text: St
 	return true
 
 
-
-
 func try_execute_play_cemetery_ally_discounted_min1_pattern(ability_text: String, card: Node, controller_id: int) -> bool:
-	"""'Cuando entra en juego, puedes jugar un Aliado de tu Cementerio
-	reduciendo su coste en un Oro, hasta un mínimo de 1' (aku aku,
-	2026-09-04) — mismo mecanismo de búsqueda-a-mano + descuento que
-	_activate_kuchiku_cazador_search_and_play_discount() (SearchAbility
-	Handler.gd), pero DISPARADO (ETB) y desde el propio Cementerio sin
-	elección de zona."""
+	"""'Cuando entra en juego, puedes jugar un Aliado de tu Cementerio reduciendo su coste en un Oro,
+	hasta un mínimo de 1' (aku aku) — mismo mecanismo de búsqueda-a-mano + descuento que
+	_activate_kuchiku_cazador_search_and_play_discount (SearchAbility Handler.gd), pero DISPARADO
+	(ETB) y desde el propio Cementerio sin elección de zona."""
 	var lower := ability_text.to_lower()
 	if not ("puedes jugar un aliado de tu cementerio reduciendo su coste en un oro, hasta un mínimo de 1" in lower):
 		return false
 
-	# 2026-10-12 (§57): antes cortaba para el jugador 1 — gold_manager.
-	# play_card() es solo del Anfitrión ("No es tu turno"). Ahora juega con
-	# PlayerSide.play_from_hand(), que usa el camino propio del jugador 1.
+	# Juega con PlayerSide.play_from_hand(), que usa el camino de cada jugador
+	# (gold_manager.play_card() directo era solo del Anfitrión; §57).
 	var main := _main.get_node_or_null("/root/Main")
 	if not main or not main._gold_manager:
 		return true
@@ -129,12 +119,9 @@ func try_execute_play_cemetery_ally_discounted_min1_pattern(ability_text: String
 	return true
 
 
-
-
 func try_execute_play_cemetery_ally_free_or_draw_three_pattern(ability_text: String, controller_id: int, card: Node = null) -> bool:
-	"""'Cuando entra en juego, puedes jugar un Aliado de coste 2 o menos de
-	tu Cementerio sin pagar su coste o Roba tres cartas' (sumi el
-	terrible, 2026-09-04) — elección A/B."""
+	"""'Cuando entra en juego, puedes jugar un Aliado de coste 2 o menos de tu Cementerio sin pagar su
+	coste o Roba tres cartas' (sumi el terrible) — elección A/B."""
 	var lower := ability_text.to_lower()
 	if not ("puedes jugar un aliado de coste 2 o menos de tu cementerio sin pagar su coste o roba tres cartas" in lower):
 		return false
@@ -153,8 +140,7 @@ func try_execute_play_cemetery_ally_free_or_draw_three_pattern(ability_text: Str
 				return true
 			await ActionModule.draw(controller_id, 3, "etb_trigger", true)
 			return true
-		# 2026-09-13, a pedido del usuario: click directo en vez del modal
-		# de lista viejo.
+		# Click directo en vez del modal de lista viejo.
 		var eligible_filter := func(c: Node) -> bool:
 			return c.owner_id == controller_id and c.get("card_type") == Constants.CardType.ALIADO and int(c.card_data.get("coste", 99)) <= 2
 		var picked: Array = await main._zone_viewer.open_cemetery_target_picker(
@@ -172,7 +158,5 @@ func try_execute_play_cemetery_ally_free_or_draw_three_pattern(ability_text: Str
 			return true
 		await ActionModule.draw(controller_id, 3, "etb_trigger", true)
 	return true
-
-
 
 

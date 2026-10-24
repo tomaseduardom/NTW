@@ -1,19 +1,11 @@
 extends RefCounted
-## GoldManagerVisuals — Tokens visuales de Oro (Reserva/Oro Pagado): conteo
-## disponible, separación dinámica entre cartas de Oro, recorte de click para
-## la superposición en cascada, e imagen/creación/despawn de tokens de Oro
-## Virtual (genérico y restringido). Ninguna de estas funciones toca estado
-## propio de GoldManager (oros_virtuales, restricted_gold_pools,
-## virtual_gold_tokens siguen viviendo ahí — aquí solo se opera sobre los
-## Arrays de tokens que GoldManager pasa como parámetro, y sobre nodos de
-## Main vía _main). Extraído de GoldManager.gd (2026-09-06, "módulos gordos",
-## Fase 2) — confirmado por grep de todo scripts/ que ninguna de estas
-## funciones tiene un llamador externo a GoldManager.gd salvo
-## _update_gold_display() (GameBootstrap.gd, MulliganController.gd), que
-## GoldManager.gd sigue exponiendo bajo el mismo nombre como forwarder.
-## _despawn_gold_token() usa _main.create_tween()/_main.get_tree(), no un
-## create_tween() propio — RefCounted no lo tiene, mismo patrón ya usado en
-## AnimationEffects.gd (Fase 4).
+## GoldManagerVisuals — lo visual del Oro (Reserva/Oro Pagado): conteo disponible, separación
+## dinámica entre cartas, recorte de click para la superposición en cascada, y creación/despawn de
+## las fichas de Oro Virtual (genérico y restringido). No toca el estado de GoldManager
+## (oros_virtuales, restricted_gold_pools, virtual_gold_tokens): opera sobre los Arrays que se le
+## pasan y sobre nodos de Main vía _main. GoldManager reexpone _update_gold_display() (lo usan
+## GameBootstrap y MulliganController). _despawn_gold_token() usa
+## _main.create_tween()/_main.get_tree() porque RefCounted no los tiene.
 
 var _main: Node = null
 
@@ -40,19 +32,9 @@ func _update_gold_display() -> void:
 
 
 func update_gold_containers_spacing() -> void:
-	"""Calcula y ajusta la separación dinámica de las cartas de oro en Reserva
-	y Oro Pagado para ambos jugadores, evitando que se superpongan en exceso.
-
-	Reconstruida (2026-09-02, parse error reportado por el usuario): el
-	cuerpo de esta función y el de puede_pagar() (más abajo) aparecieron
-	truncados a la mitad — un 'if' sin bloque indentado y un 'return' de
-	puede_pagar() pegado como si fuera parte de este 'if', con
-	_update_container_gold_spacing(_main.player_gold) directamente
-	desaparecido. No hay forma de recuperar los valores originales del
-	cálculo de separación (la función que llaman, _update_container_gold_
-	spacing(), tampoco existía en ningún lado del archivo), así que su
-	implementación de más abajo es una reconstrucción conservadora nueva —
-	revisala si la separación visual no queda como esperabas."""
+	"""Calcula y ajusta la separación dinámica de las cartas de Oro en la Reserva y el Oro Pagado de
+	ambos jugadores, para que no se superpongan de más. Implementación conservadora
+	(_update_container_gold_spacing()); revisarla si la separación visual no queda bien."""
 	if not _main:
 		return
 	if _main.player_gold:
@@ -186,11 +168,8 @@ func _get_token_image_for_label(label: String) -> String:
 
 
 func _spawn_gold_token(nombre: String, label: String, target_list: Array, player_id: int = 0) -> void:
-	"""Token visual en Reserva de Oro con ilustración temática de ficha rúnica/éter.
-
-	'player_id' (2026-10-06, ver arquitectura.md §33): a qué Reserva real
-	(player_gold u opponent_gold) va el token — antes siempre player_gold,
-	sin importar de quién era el Oro Virtual que representaba."""
+	"""Ficha visual de Oro Virtual en la Reserva, con ilustración de ficha rúnica. 'player_id': a qué
+	Reserva va (player_gold u opponent_gold; arquitectura.md §33)."""
 	var image_path := _get_token_image_for_label(label)
 	var token_data := {
 		"id": "%s_token_%d" % [nombre.to_lower().replace(" ", "_"), Time.get_ticks_usec()],

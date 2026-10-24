@@ -1,26 +1,11 @@
 extends RefCounted
-## LookRevealPatterns — 1 de 7 mitades de LookAndPlayResolver.gd, dividido por
-## tamaño el 2026-09-06 ("módulos gordos"). Esta cubre la familia "mira/muestra
-## N cartas del tope de tu Castillo... elige destino(s)": Signo Amarillo,
-## Tangata Manu, Presente, Perder la Razón, Tesoro de los Césares, Alicia en
-## Wonderland, y toda la familia "reveal_until_X_and_Y" agregada 2026-09-04 en
-## adelante (Cabeza de Mimir, atenea en wonderland, metalmorfo, akari, Duelo de
-## Dragones, gran kraken, kitsune - sp, etc.). Llamada solo desde
-## LookAndPlayResolver.gd (facade) — ver ese archivo para la lista completa de
-## las 7 mitades hermanas (SearchOwnZonePatterns, BanishOpponentPatterns,
-## ShuffleDrawPatterns, GoldConversionPatterns, PlayFromCemeteryPatterns,
-## MiscUniquePatterns).
-##
-## Dividida a su vez en dos mitades por tamaño (2026-09-06, "módulos gordos",
-## split anidado — facade de facade): LookRevealPatternsA.gd (alfabético
-## dynamic_gold_count..play_or_hand, 6 patrones — concentra los 3
-## try_execute_look_play_* con su filtro compartido, los más largos del
-## grupo) y LookRevealPatternsB.gd (look_two_hand_convert_gold..
-## weapon_or_totem_and_ally, 10 patrones). Este archivo queda como FACADE —
-## cada función de abajo es un reenvío de una sola línea a la mitad que
-## corresponda, con el mismo nombre y firma de siempre, así que
-## LookAndPlayResolver.gd (único llamador, vía `_look_reveal.try_execute_X_pattern(...)`)
-## no necesitó cambiar una sola línea por este split.
+## LookRevealPatterns — una de las mitades de LookAndPlayResolver.gd: "mira/muestra N cartas del
+## tope de tu Castillo... elige destino(s)" (Signo Amarillo, Tangata Manu, Presente, Perder la
+## Razón, Tesoro de los Césares, Alicia en Wonderland y la familia "reveal_until_X_and_Y": Cabeza de
+## Mimir, atenea en wonderland, metalmorfo, akari, Duelo de Dragones, gran kraken, kitsune - sp...).
+## Es a su vez una FACHADA: cada función reenvía en una línea a LookRevealPatternsA.gd
+## (dynamic_gold_count..play_or_hand) o LookRevealPatternsB.gd
+## (look_two_hand_convert_gold..weapon_or_totem_and_ally), con el mismo nombre y firma.
 
 const LookRevealPatternsAScript = preload("res://scripts/core/effects/triggers/LookRevealPatternsA.gd")
 const LookRevealPatternsBScript = preload("res://scripts/core/effects/triggers/LookRevealPatternsB.gd")

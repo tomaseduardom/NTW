@@ -1,15 +1,9 @@
 ﻿extends RefCounted
-## GoldConversionPatterns — 5 de 7 mitades de LookAndPlayResolver.gd, dividido
-## por tamaño el 2026-09-06 ("módulos gordos"). Cubre generación de Oro
-## Virtual restringido y conversión carta-a-carta: Acabar la Esperanza,
-## Garfio Pirata, manuel rodriguez (Oro/Barajar), leon indiferente,
-## peripillan, almirante akari, Espíritu de la Máquina. Incluye una copia
-## privada de _remove_data_from_array (idéntica a la de LookRevealPatterns.gd
-## — duplicada a propósito porque try_execute_convert_then_reveal_until_
-## same_type_pattern es la única función de este archivo que la necesita, y
-## las 7 mitades no se referencian entre sí). Llamada solo desde
-## LookAndPlayResolver.gd (facade) — ver ese archivo para la lista completa de
-## las 7 mitades hermanas.
+## GoldConversionPatterns — una de las mitades de LookAndPlayResolver.gd (fachada; ahí está la lista
+## completa). Oro Virtual restringido y conversión carta a carta: Acabar la Esperanza, Garfio
+## Pirata, manuel rodriguez (Oro/Barajar), leon indiferente, peripillan, almirante akari, Espíritu
+## de la Máquina, Sariel. Tiene su propia copia de _remove_data_from_array (las mitades no se
+## referencian entre sí).
 
 var _main: Node
 
@@ -19,29 +13,12 @@ func setup(main: Node) -> void:
 
 
 func try_execute_convert_then_reveal_until_same_type_pattern(ability_text: String, card: Node, controller_id: int) -> bool:
-	"""'Convierte un Oro o carta de coste N o menos en una carta del mismo
-	tipo, sin habilidad. Muestra cartas del tope de tu Castillo hasta
-	mostrar hasta dos cartas de ese tipo, ponlas en tu mano y Baraja el
-	resto.' (Acabar la Esperanza, myl_id 20613, edición kvsm_titanes /
-	reprint promo custom_mid_33, 'Ángeles y Demonios: Vigilantes - Mazo
-	Dragón'). Las dos oraciones están LIGADAS: 'ese tipo' en la segunda es
-	el tipo de la carta elegida como objetivo de Convertir en la primera
-	(Oro, Aliado, Arma, Talismán o Tótem) — no se puede resolver aparte con
-	el patrón genérico 'muestra/mira N...', necesita el objetivo ya
-	elegido. 'Hasta mostrar hasta DOS' = revela de a una del tope hasta
-	encontrar 2 de ese tipo o vaciar el Castillo (mismo molde que Alicia en
-	Wonderland, try_execute_reveal_until_distinct_cost_allies_pattern más
-	arriba), el resto se baraja de vuelta.
-
-	'Si es Anulado, genera un Oro y Roba una carta' (primera cláusula real
-	de esta carta, antes de 'Exhumar') queda SIN implementar a propósito:
-	los Talismanes en este motor resuelven directo (TriggerSystem.
-	resolve_talisman(), sin pasar por la Pila/una ventana de respuesta
-	real), así que hoy no existe ningún punto en el que un Talismán pueda
-	ser Anulado A MITAD de su propia resolución — esa cláusula no tiene
-	todavía un evento real al que engancharse (mismo hueco que el sistema
-	de Prevención real, diseño pendiente en docs/plans/2026-09-02-
-	prevention-response-window-design.md)."""
+	"""Acabar la Esperanza (myl_id 20613): "Convierte un Oro o carta de coste N o menos en una carta
+	del mismo tipo, sin habilidad. Muestra cartas del tope de tu Castillo hasta mostrar hasta dos
+	cartas de ese tipo, ponlas en tu mano y Baraja el resto." Las dos oraciones están ligadas: "ese
+	tipo" es el de la carta convertida, así que no sirve el patrón genérico "muestra/mira N...". Se
+	revela de a una hasta encontrar 2 de ese tipo o vaciar el Castillo (como Alicia en Wonderland);
+	el resto se baraja. "Si es Anulado, genera un Oro y Roba una carta": AllyEventTriggers.on_stopped()."""
 	var lower := ability_text.to_lower()
 	if not ("convierte un oro o carta de coste" in lower and "muestra cartas del tope de tu castillo" in lower
 			and "hasta mostrar hasta dos cartas de ese tipo" in lower):
@@ -63,9 +40,8 @@ func try_execute_convert_then_reveal_until_same_type_pattern(ability_text: Strin
 		return true
 
 	var target_type: int = chosen_target.card_type
-	# Sin ventana genérica aquí (2026-09-09): Acabar la Esperanza es un
-	# Talismán — TriggerSystem.resolve_talisman() ya abrió UNA ventana para
-	# toda la carta antes de siquiera llegar a este patrón.
+	# Sin ventana genérica aquí: Acabar la Esperanza es un Talismán y resolve_talisman() ya abrió una
+	# para toda la carta.
 	chosen_target.is_converted = true
 	await KeywordManager.silence_card(chosen_target, card, "permanent")
 
@@ -81,6 +57,7 @@ func try_execute_convert_then_reveal_until_same_type_pattern(ability_text: Strin
 		if top.get("tipo", -1) == target_type:
 			matches.append(top)
 
+	load("res://scripts/core/effects/mechanics/RevealedCards.gd").record(controller_id, revealed, (str(card.card_name) if card else "Acabar la Esperanza"))
 	if main.has_method("_create_card"):
 		for picked_data in matches:
 			var card_node = main._create_card(picked_data, false)
@@ -100,13 +77,9 @@ func try_execute_convert_then_reveal_until_same_type_pattern(ability_text: Strin
 	return true
 
 
-
-
 func try_execute_wielder_attack_gold_or_draw_pattern(ability_text: String, card: Node, controller_id: int) -> bool:
-	"""'Cuando el portador ataque, si es de coste 1 o más, genera un Oro o
-	Roba una carta' (Garfio Pirata, 2026-09-06, bug reportado por el
-	usuario) — 'es' se refiere al PORTADOR (el Aliado que porta esta
-	Arma), no a esta Arma misma. Elección A/B."""
+	"""Garfio Pirata: "Cuando el portador ataque, si es de coste 1 o más, genera un Oro o Roba una
+	carta" — "es" se refiere al PORTADOR. Elección A/B."""
 	var lower := ability_text.to_lower()
 	if not ("si es de coste 1 o más, genera un oro o roba una carta" in lower):
 		return false
@@ -123,23 +96,18 @@ func try_execute_wielder_attack_gold_or_draw_pattern(ability_text: String, card:
 	if await TriggerSystem.open_response_window(card, str(card.card_name), controller_id):
 		return true
 	if choose_gold:
-		# 2026-10-06: generar_oros_virtuales() ya es por jugador (ver
-		# arquitectura.md §33).
+		# generar_oros_virtuales ya es por jugador (ver arquitectura.md §33).
 		main._gold_manager.generar_oros_virtuales(1, controller_id)
 	else:
 		await ActionModule.draw(controller_id, 1, "on_attack_trigger", true)
 	return true
 
 
-
-
 func try_execute_gold_for_allies_or_shuffle_cost_max_pattern(ability_text: String, card: Node, controller_id: int) -> bool:
-	"""'Al comienzo del turno, genera un Oro para Aliados o Baraja una
-	carta de coste 3 o menos' (manuel rodriguez, 2026-09-04) — elección
-	A/B. Dispara en CUALQUIER 'al comienzo del turno' (propio o rival, sin
-	calificador 'tu' en el texto — TriggerSystem.resolve_agrupacion_
-	triggers() solo llama esto para el jugador activo, así que en la
-	práctica equivale a 'en tu turno')."""
+	"""'Al comienzo del turno, genera un Oro para Aliados o Baraja una carta de coste 3 o menos'
+	(manuel rodriguez) — elección A/B. Dispara en CUALQUIER 'al comienzo del turno' (propio o
+	rival, sin calificador 'tu' en el texto — TriggerSystem.resolve_agrupacion_triggers solo llama
+	esto para el jugador activo, así que en la práctica equivale a 'en tu turno')."""
 	var lower := ability_text.to_lower()
 	var cost_rx := RegEx.new()
 	cost_rx.compile("genera un oro para aliados o baraja una carta de coste (\\d+) o menos")
@@ -159,20 +127,18 @@ func try_execute_gold_for_allies_or_shuffle_cost_max_pattern(ability_text: Strin
 			return true
 		var predicate := func(card_type: int, _card_race: String, _card_cost: int) -> bool:
 			return card_type == Constants.CardType.ALIADO
-		# 2026-10-06: generar_oro_virtual_restringido() ya es por jugador
-		# (ver arquitectura.md §33).
+		# generar_oro_virtual_restringido ya es por jugador (ver arquitectura.md §33).
 		main._gold_manager.generar_oro_virtual_restringido(1, predicate, "Aliados", controller_id)
 	else:
 		var filter := func(c: Node) -> bool:
 			if c.get("card_type") not in [Constants.CardType.ALIADO, Constants.CardType.ARMA, Constants.CardType.TOTEM]:
 				return false
-			# 2026-09-12: current_zone en vez de get_parent() (ver §10.5)
+			# current_zone en vez de get_parent (ver §10.5)
 			if c.get("current_zone") not in [Constants.Zone.LINEA_DEFENSA, Constants.Zone.LINEA_ATAQUE, Constants.Zone.LINEA_APOYO]:
 				return false
 			return ContinuousEffectManager.cost_at_most(c, max_cost)
 		var target: Node = await main._card_interaction.await_target("Elige una carta de coste %d o menos para barajar" % max_cost, filter, true, controller_id)
-		# Sin ventana genérica aquí (2026-09-09): return_to_deck() ya consulta
-		# Prevención adentro por su cuenta.
+		# Sin ventana genérica aquí: return_to_deck ya consulta Prevención adentro por su cuenta.
 		if target and is_instance_valid(target):
 			var target_owner: int = target.controller_id if target.get("controller_id") != null else 0
 			if await ActionModule.return_to_deck(target, target_owner, true, card):
@@ -181,17 +147,13 @@ func try_execute_gold_for_allies_or_shuffle_cost_max_pattern(ability_text: Strin
 	return true
 
 
-
-
 func try_execute_convert_two_top_castillo_to_allies_pattern(ability_text: String, card: Node, controller_id: int) -> bool:
-	"""'Convierte dos cartas del tope de un Castillo en Aliados de Fuerza 2
-	sin habilidad, ponlos bajo tu control y no pueden salir del juego ni
-	cambiar de controlador hasta tu próximo turno' (leon indiferente,
-	2026-09-04) — mismo mecanismo de conversión real que Sherlock Holmes/
-	Biblioteca de Caballería (is_converted + silence_card + Fuerza fijada
-	por modificador). 'No pueden cambiar de controlador' queda satisfecho
-	por construcción: no hay ningún efecto de robo de control que pueda
-	tocarlos en el medio de resolver este mismo Talismán."""
+	"""'Convierte dos cartas del tope de un Castillo en Aliados de Fuerza 2 sin habilidad, ponlos bajo
+	tu control y no pueden salir del juego ni cambiar de controlador hasta tu próximo turno' (leon
+	indiferente) — mismo mecanismo de conversión real que Sherlock Holmes/Biblioteca de Caballería
+	(is_converted + silence_card + Fuerza fijada por modificador). 'No pueden cambiar de
+	controlador' queda satisfecho por construcción: no hay ningún efecto de robo de control que
+	pueda tocarlos en el medio de resolver este mismo Talismán."""
 	var lower := ability_text.to_lower()
 	if not ("convierte dos cartas del tope de un castillo en aliados de fuerza 2 sin habilidad" in lower):
 		return false
@@ -200,8 +162,8 @@ func try_execute_convert_two_top_castillo_to_allies_pattern(ability_text: String
 	if not main:
 		return true
 	var zone_owner: int = await _main._targeted_executor._choose_search_zone_owner(controller_id, Constants.Zone.CASTILLO)
-	# Sin ventana genérica aquí (2026-09-09): silence_card() (dentro del loop
-	# de abajo) ya consulta Prevención adentro por su cuenta.
+	# Sin ventana genérica aquí: silence_card (dentro del loop de abajo) ya consulta Prevención adentro
+	# por su cuenta.
 	var deck: Array = CardManager.get_deck(zone_owner)
 	var converted := 0
 	while converted < 2 and not deck.is_empty():
@@ -243,13 +205,10 @@ func try_execute_convert_two_top_castillo_to_allies_pattern(ability_text: String
 	return true
 
 
-
-
 func try_execute_convert_gold_or_opponent_cost_max_draw_pattern(ability_text: String, card: Node, controller_id: int) -> bool:
-	"""'Cuando entra en juego, convierte un Oro o una carta oponente de
-	coste 2 o menos en una carta del mismo tipo sin habilidad y Roba una
-	carta' (peripillan, 2026-09-04) — 'un Oro' sin calificador (cualquier
-	jugador), 'una carta' SÍ calificada 'oponente'."""
+	"""'Cuando entra en juego, convierte un Oro o una carta oponente de coste 2 o menos en una carta
+	del mismo tipo sin habilidad y Roba una carta' (peripillan) — 'un Oro' sin calificador
+	(cualquier jugador), 'una carta' SÍ calificada 'oponente'."""
 	var lower := ability_text.to_lower()
 	var cost_rx := RegEx.new()
 	cost_rx.compile("convierte un oro o una carta oponente de coste (\\d+) o menos en una carta del mismo tipo sin habilidad")
@@ -289,13 +248,10 @@ func try_execute_convert_gold_or_opponent_cost_max_draw_pattern(ability_text: St
 	return true
 
 
-
-
 func try_execute_gold_for_allies_until_next_turn_pattern(ability_text: String, controller_id: int, card: Node = null) -> bool:
-	"""'Una vez por turno, genera un Oro para jugar Aliados. Puedes usar ese
-	Oro hasta el comienzo de tu próximo turno' (Sariel, 2026-10-14). Antes
-	caía en el GOLD genérico: Oro sin restricción, siempre del Anfitrión y
-	que vencía al empezar el turno rival."""
+	"""Sariel: "Una vez por turno, genera un Oro para jugar Aliados. Puedes usar ese Oro hasta el
+	comienzo de tu próximo turno". Oro restringido a Aliados, del jugador que activa, que sobrevive
+	al turno rival (until_own_next_turn)."""
 	var lower := ability_text.to_lower()
 	if not ("genera un oro para jugar aliados" in lower and "hasta el comienzo de tu próximo turno" in lower):
 		return false
@@ -311,8 +267,8 @@ func try_execute_gold_for_allies_until_next_turn_pattern(ability_text: String, c
 
 
 func try_execute_gold_for_allies_or_weapons_pattern(ability_text: String, controller_id: int, card: Node = null) -> bool:
-	"""'Al comienzo del Ataque, genera un Oro por el turno para jugar
-	Aliados o Armas' (almirante akari, 2026-09-04)."""
+	"""'Al comienzo del Ataque, genera un Oro por el turno para jugar Aliados o Armas' (almirante
+	akari)."""
 	var lower := ability_text.to_lower()
 	if not ("genera un oro por el turno para jugar aliados o armas" in lower):
 		return false
@@ -324,24 +280,19 @@ func try_execute_gold_for_allies_or_weapons_pattern(ability_text: String, contro
 		return true
 	var predicate := func(card_type: int, _card_race: String, _card_cost: int) -> bool:
 		return card_type == Constants.CardType.ALIADO or card_type == Constants.CardType.ARMA
-	# 2026-10-06: generar_oro_virtual_restringido() ya es por jugador (ver
-	# arquitectura.md §33).
+	# generar_oro_virtual_restringido ya es por jugador (ver arquitectura.md §33).
 	main._gold_manager.generar_oro_virtual_restringido(1, predicate, "Aliados o Armas", controller_id)
 	return true
 
 
-
-
 func try_execute_espiritu_maquina_conditional_gold_pattern(ability_text: String, controller_id: int, card: Node = null) -> bool:
-	"""'Cuando entra en juego, si no es tu primer turno, genera un Oro
-	para jugar Armas o Tótem de coste 2 o más' (Espíritu de la Máquina,
-	2026-09-04). 'Tu primer turno' = GameManager.current_turn == 1 (el
-	contador solo avanza cuando el turno vuelve al jugador 0, así que
-	turno 1 cubre el primer turno de AMBOS jugadores por igual)."""
+	"""'Cuando entra en juego, si no es tu primer turno, genera un Oro para jugar Armas o Tótem de
+	coste 2 o más' (Espíritu de la Máquina). 'Tu primer turno' = turno de jugador 1 o 2
+	(turn_serial: el primero de cada jugador, empiece quien empiece)."""
 	var lower := ability_text.to_lower()
 	if not ("si no es tu primer turno" in lower and "genera un oro para jugar armas o tótem" in lower):
 		return false
-	if GameManager.current_turn <= 1:
+	if GameManager.turn_serial <= 2:
 		return true
 	if await TriggerSystem.open_response_window(card, str(card.get("card_name")) if card else "Espíritu de la Máquina", controller_id):
 		return true
@@ -353,12 +304,9 @@ func try_execute_espiritu_maquina_conditional_gold_pattern(ability_text: String,
 		if card_type == Constants.CardType.ARMA or card_type == Constants.CardType.TOTEM:
 			return card_cost >= 2
 		return false
-	# 2026-10-06: generar_oro_virtual_restringido() ya es por jugador (ver
-	# arquitectura.md §33) — esta habilidad se desbloquea.
+	# generar_oro_virtual_restringido ya es por jugador (ver arquitectura.md §33).
 	main._gold_manager.generar_oro_virtual_restringido(1, predicate, "Armas o Tótem de coste 2 o más", controller_id)
 	return true
-
-
 
 
 func _remove_data_from_array(array: Array, data: Dictionary) -> void:
@@ -372,6 +320,5 @@ func _remove_data_from_array(array: Array, data: Dictionary) -> void:
 		if (search_id and item.get("id") == search_id) or (search_uuid and item.get("uuid") == search_uuid):
 			array.remove_at(i)
 			return
-
 
 

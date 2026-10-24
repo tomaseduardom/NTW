@@ -1,28 +1,18 @@
 extends RefCounted
-## OroAbilityPatterns — Patrones "try_execute_*_pattern" para cartas Oro
-## detectadas sin cobertura en la auditoría de 539 cartas (2026-09-20, ver
-## arquitectura.md "Auditoría completa de habilidades faltantes"). Mismo
-## criterio que TotemAbilityPatterns.gd/WeaponAbilityPatterns.gd: detección
-## por substring del texto de habilidad, no por nombre de carta, en su
-## propio archivo porque estas cartas Oro no calzaban en ningún parser
-## genérico existente. Instanciado directo en TriggerSystem._ready() como
-## _oro_patterns (mismo patrón que _totem_patterns/_weapon_patterns),
-## llamado desde TriggerResolution.gd en los branches on_agrupacion/
-## on_turn_end (llamadas explícitas con la cláusula YA AISLADA — ver nota
-## de arquitectura.md 2026-09-20 sobre el riesgo de registrar una función
-## de una sola cláusula en el despachador compartido _resolve_look_and_
-## play_patterns(), que recorre con el texto COMPLETO sin aislar).
+## OroAbilityPatterns — patrones "try_execute_*_pattern" para Oros (auditoría de cartas sin
+## cobertura, arquitectura.md). Mismo criterio que TotemAbilityPatterns.gd/WeaponAbilityPatterns.gd
+## (detección por substring). Instanciado en TriggerSystem._ready() como _oro_patterns. Las
+## cláusulas de una sola fase (on_agrupacion/on_turn_end) se llaman explícitamente desde
+## TriggerResolution.gd con la cláusula ya aislada: en el despachador compartido
+## _resolve_look_and_play_patterns() (texto completo) se dispararían donde no corresponde.
 
 const CastleLookScript = preload("res://scripts/core/effects/CastleLook.gd")
 
 var _main: Node
 
-## torii (2026-09-20): "Si lo haces, no Robas al finalizar tu turno" —
-## bandera de una sola vez por jugador, consumida por PhaseFlowController.
-## _resolve_fase_final() ANTES del bucle de robo normal. Se guarda el
-## número de turno junto a la bandera (mismo criterio que _kotoku_in_
-## talisman_fizzle en TotemAbilityPatterns.gd) para que nunca sobreviva
-## al turno siguiente si por algún motivo nunca se consume.
+## torii: "Si lo haces, no Robas al finalizar tu turno" — bandera de un uso por jugador que consume
+## PhaseFlowController._resolve_fase_final() antes del robo. Se guarda con el número de turno (como
+## kotoku-in) para que no sobreviva al turno siguiente.
 var _torii_skip_final_draw: Dictionary = {}
 
 
@@ -31,7 +21,7 @@ func setup(main: Node) -> void:
 
 
 func register_torii_skip_final_draw(player_id: int) -> void:
-	_torii_skip_final_draw[player_id] = GameManager.current_turn
+	_torii_skip_final_draw[player_id] = GameManager.turn_serial
 
 
 func should_skip_final_draw(player_id: int) -> bool:
@@ -39,7 +29,7 @@ func should_skip_final_draw(player_id: int) -> bool:
 		return false
 	var set_turn: int = _torii_skip_final_draw[player_id]
 	_torii_skip_final_draw.erase(player_id)
-	return set_turn == GameManager.current_turn
+	return set_turn == GameManager.turn_serial
 
 
 # =============================================================================
@@ -81,17 +71,11 @@ func try_execute_hidromiel_pattern(ability_text: String, card: Node, controller_
 # udjat ("Ángeles y Demonios: Vigilantes")
 # =============================================================================
 func try_execute_udjat_vigilia_pattern(ability_text: String, card: Node, controller_id: int) -> bool:
-	"""'Una vez por turno, dos Aliados ganan y/o pierden 1 de Fuerza por el
-	turno o Baraja una carta de tu mano para Robar una carta' (udjat).
-	Habilidad ACTIVADA — mismo camino compartido que kotoku-in/sable
-	corto. Guardia 'en tu fase final' (su otra cláusula, distinta): sin
-	esto, el despachador compartido también prueba este texto durante el
-	branch on_turn_end de la Fase Final (ver arquitectura.md 2026-09-20,
-	§12.9), disparando esta elección ahí en vez de solo en una activación
-	real. Simplificación: 'dos Aliados ganan y/o pierden 1 de Fuerza' se
-	implementa como un solo Aliado elegido gana o pierde 1 de Fuerza (no
-	dos independientes con signos distintos) — cubre el caso de uso
-	principal sin la complejidad de una selección de signo por Aliado."""
+	"""udjat: "Una vez por turno, dos Aliados ganan y/o pierden 1 de Fuerza por el turno o Baraja una
+	carta de tu mano para Robar una carta". Habilidad ACTIVADA (camino compartido, como
+	kotoku-in/sable corto). Guardia "en tu fase final" (su otra cláusula): sin ella, el despachador
+	la probaría también en on_turn_end (arquitectura.md §12.9). Simplificación: un solo Aliado
+	elegido gana o pierde 1 de Fuerza."""
 	var lower := ability_text.to_lower()
 	if not ("dos aliados ganan y/o pierden 1 de fuerza por el turno" in lower):
 		return false
@@ -182,20 +166,12 @@ func try_execute_udjat_final_pattern(ability_text: String, card: Node, controlle
 # libro de thoth ("Bestiarium")
 # =============================================================================
 func try_execute_libro_de_thoth_pay_pattern(ability_text: String, card: Node, controller_id: int) -> bool:
-	"""'Una vez por turno, puedes pagar un Oro para Robar una carta y elegir
-	entre que un Aliado gane Furia, duplique su Fuerza, o su daño sea
-	enviado al Destierro este turno' (libro de thoth). Habilidad ACTIVADA.
-	No tiene guardia contra su otra cláusula ('Cuando bloquees, genera un
-	Oro por el turno') porque esa otra cláusula NO se implementó — ver
-	docstring de más abajo, el trigger on_block no existe en el motor
-	todavía, así que nunca se prueba este texto desde ese camino.
-
-	2026-10-05: a diferencia de GoldManager.puede_pagar()/pagar_coste()
-	(de un solo jugador, ver arquitectura.md §22), GameState.puede_pagar()/
-	pagar_oro() SÍ reciben player_id real y leen/escriben oro_reserva[player_id]/
-	oro_pagado[player_id] — Dictionaries indexados por jugador, no una
-	variable única. Esta carta paga por ese camino (no por el Oro Virtual de
-	GoldManager), así que no hace falta excluirla del puente de red."""
+	"""libro de thoth: "Una vez por turno, puedes pagar un Oro para Robar una carta y elegir entre que
+	un Aliado gane Furia, duplique su Fuerza, o su daño sea enviado al Destierro este turno".
+	Habilidad ACTIVADA. Su otra cláusula ("Cuando bloquees, genera un Oro por el turno") la
+	resuelve GoldManager.check_libro_de_thoth_block() desde el Bloqueo, no por aquí.
+	Paga con GameState.puede_pagar()/pagar_oro(), que reciben player_id (oro_reserva/oro_pagado
+	indexados por jugador)."""
 	var lower := ability_text.to_lower()
 	if not ("puedes pagar un oro para robar una carta y elegir entre que un aliado gane furia" in lower):
 		return false
@@ -242,13 +218,8 @@ func try_execute_libro_de_thoth_pay_pattern(ability_text: String, card: Node, co
 			# turno sobre Card.damage_goes_to_exile: una conexión de una sola
 			# vez a GameManager.turn_started que se desconecta sola.
 			target.damage_goes_to_exile = true
-			# 2026-09-20, bug real encontrado en revisión de código: el mismo
-			# mecanismo de Segundo Sello (SearchOwnZonePatterns.gd) tenía un
-			# filtro `started_player_id != owner_id` que esperaba a que
-			# volviera a ser TU turno para limpiar el flag, dejándolo vivo un
-			# turno de más (todo el turno del oponente). Se limpia en el
-			# PRÓXIMO turn_started sin importar de quién sea — corregido en
-			# ambos lugares a la vez, ver esa misma nota en SearchOwnZonePatterns.gd.
+			# "Este turno": el flag se limpia en el PRÓXIMO turn_started, sea de quien sea (como Segundo
+			# Sello en SearchOwnZonePatterns.gd).
 			var clear_it: Callable
 			clear_it = func(_started_player_id: int, _turn: int) -> void:
 				if is_instance_valid(target):
@@ -318,12 +289,10 @@ func try_execute_torii_agrupacion_pattern(ability_text: String, card: Node, cont
 
 
 func try_execute_carro_szgany_final_pattern(ability_text: String, card: Node, controller_id: int) -> bool:
-	"""'En tu Fase Final, Destierra hasta dos cartas de un Cementerio, mira
-	tantas cartas del tope de tu Castillo como Aliados controles y
-	ordénalas' (Carro Szgany, 2026-10-14). EffectCompiler no entiende la
-	frase entera y la cadena vieja hacía solo una parte. Destierro: selector
-	del tablero con los dos Cementerios, todas de UNO (one_zone). Mirar:
-	CastleLook con la segunda mitad del texto."""
+	"""Carro Szgany: "En tu Fase Final, Destierra hasta dos cartas de un Cementerio, mira tantas
+	cartas del tope de tu Castillo como Aliados controles y ordénalas". EffectCompiler no entiende
+	la frase completa. Destierro: selector del tablero con los dos Cementerios, todas de UNO
+	(one_zone). Mirar: CastleLook con la segunda mitad del texto."""
 	var lower := ability_text.to_lower()
 	var look_at: int = lower.find("mira tantas cartas del tope de tu castillo como aliados controles")
 	if not ("destierra hasta dos cartas de un cementerio" in lower) or look_at < 0:

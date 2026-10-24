@@ -9,31 +9,23 @@ const CARD_SCENE_PATH = "res://scenes/cards/Card.tscn"
 
 ## Palabras clave que indican triggers
 const TRIGGER_PATTERNS: Dictionary = {
-	# (2026-08-28, corrección de terminología real de Mitos y Leyendas, a
-	# pedido del usuario): "cuando deje/dejar/abandona el juego" no existe
-	# como frase real — es "al salir del juego"/"cuando salga del
-	# juego"/"cuando sale del juego". Algunas cartas mezclan ambos conceptos
-	# en una sola oración ("cuando entra o salga del juego") — se agrega esa
-	# frase completa a los dos, pero OJO: esto solo la CLASIFICA en el
-	# primer tipo que la detecte, no dispara ambos triggers a la vez (eso
-	# necesitaría lógica aparte, no implementada todavía).
+	# Terminología de Mitos y Leyendas: "al salir del juego" / "cuando salga del juego" / "cuando sale
+	# del juego" (no "cuando deje/abandona el juego"). "cuando entra o salga del juego" está en los dos
+	# tipos, pero aquí solo se clasifica en el primero que la detecte; no dispara ambos.
 	"on_enter_play": ["cuando entre al juego", "al entrar al juego", "cuando entra al juego", "al ser jugado", "cuando entra o salga del juego", "cuando entra o sale del juego",
 		"cuando ataca, entra"],
 	"on_leave_play": ["al salir del juego", "cuando salga del juego", "cuando sale del juego", "cuando entra o salga del juego",
 		"cuando entra o sale del juego", "entra o sale del juego"],
-	# "cuando muera"/"al morir" no existen como concepto real en el juego —
-	# se eliminaron (2026-08-28, a pedido del usuario).
+	# "cuando muera"/"al morir" no existen como concepto real en el juego — se eliminaron.
 	"on_destroyed": ["cuando sea destruido", "al ser destruido"],
 	"on_discard": ["cuando descartes", "al descartar", "cuando sea descartado"],
 	"on_draw": ["cuando robes", "al robar", "cada vez que robes"],
 	"on_attack": ["cuando ataque", "cuando ataca", "al atacar", "cada vez que ataque"],
 	"on_block": ["cuando bloquee", "al bloquear"],
-	# "infligir"/"inflija"/"inflige" no es terminología real (2026-08-28) —
-	# se reemplazó por "cuando haga daño de combate", la forma más común en
-	# el texto real de las cartas junto a "cuando haga daño" a secas.
+	# "infligir"/"inflija"/"inflige" no es terminología real — se reemplazó por "cuando haga daño de
+	# combate", la forma más común en el texto real de las cartas junto a "cuando haga daño" a secas.
 	"on_damage_dealt": ["cuando haga daño de combate", "cuando haga daño", "si hizo daño", "cuando hace daño"],
-	# "cuando reciba daño"/"al recibir daño" no son la frase real — es
-	# "cuando fueras a recibir daño" (2026-08-28, a pedido del usuario).
+	# "cuando reciba daño"/"al recibir daño" no son la frase real — es "cuando fueras a recibir daño".
 	"on_damage_received": ["cuando fueras a recibir daño"],
 	"on_turn_start": ["al comienzo del turno", "al inicio del turno", "al comenzar tu turno"],
 	"on_turn_end": ["al final del turno", "al terminar el turno", "al finalizar tu turno"],
@@ -99,49 +91,8 @@ func _ready() -> void:
 # CREACIÓN DE CARTAS
 # =============================================================================
 func _scan_and_apply_keywords(card: Node) -> void:
-	"""Escanea el texto de habilidad y activa flags de keywords
-
-	Usa KeywordManager si está disponible, sino aplica directamente
-	"""
-	# KeywordManager es autoload — siempre existe (2026-08-28, "módulos
-	# gordos" punto 1: el fallback manual de abajo, _apply_keyword_flag_
-	# fallback(), era inalcanzable siempre; se sacó).
+	"""Registra en el log las keywords impresas (KeywordManager → KeywordParser)."""
 	KeywordManager.scan_and_apply_keywords(card)
-
-
-func _parse_keywords(json_data: Dictionary) -> Array:
-	"""Extrae keywords del JSON o del texto de habilidad"""
-	var keywords: Array = []
-
-	# Primero intentar obtener del campo directo
-	if json_data.has("keywords"):
-		var kw = json_data.get("keywords")
-		if kw is Array:
-			keywords = kw
-		elif kw is String:
-			keywords = kw.split(",")
-
-	# Detectar keywords del texto de habilidad
-	var ability = json_data.get("habilidad", json_data.get("ability", "")).to_lower()
-
-	if ability.contains("indestructible") or ability.contains("no puede ser destruid"):
-		keywords.append(Constants.Keyword.INDESTRUCTIBLE)
-	if ability.contains("furia") or ability.contains("puede atacar"):
-		keywords.append(Constants.Keyword.FURIA)
-	if ability.contains("imbloqueable") or ability.contains("no puede ser bloqueado"):
-		keywords.append(Constants.Keyword.IMBLOQUEABLE)
-	if ability.contains("indesterrable") or ability.contains("no puede ser desterrad"):
-		keywords.append(Constants.Keyword.INDESTERRABLE)
-	if ability.contains("exhumar") or ability.contains("jugar desde el cementerio"):
-		keywords.append(Constants.Keyword.EXHUMAR)
-	if ability.contains("única") or ability.contains("solo 1 copia"):
-		keywords.append(Constants.Keyword.UNICA)
-	if ability.contains("errante"):
-		keywords.append(Constants.Keyword.ERRANTE)
-	if ability.contains("retador"):
-		keywords.append(Constants.Keyword.RETADOR)
-
-	return keywords
 
 
 # =============================================================================
@@ -159,16 +110,8 @@ func on_card_enters_play(card: Node) -> void:
 	# Marcar que entró este turno (para verificación de Furia, DAR 3.1)
 	card.entered_this_turn = true
 
-	# Escanear keywords si no se hizo antes
+	# Log de las keywords impresas
 	_scan_and_apply_keywords(card)
-
-	# Emitir señal para que otros sistemas reaccionen
-	var keywords = KeywordManager.get_cached_keywords(card)
-	if not keywords.is_empty():
-		print("[CardFactory] %s entró en juego con keywords: %s" % [
-			card.card_name if card.get("card_name") else "Carta",
-			keywords.map(func(k): return KeywordManager.Keyword.keys()[k])
-		])
 
 
 func on_turn_start_clear_summon_sickness(player_id: int) -> void:

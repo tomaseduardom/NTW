@@ -91,12 +91,8 @@ func _validate_search(player_id: int, zone: int, filter: Dictionary, amount: int
 	"""Valida si hay cartas que cumplan el filtro en la zona"""
 	var result = {"valid": true, "can_resolve": 1.0, "reason": "", "warnings": []}
 
-	# _get_searchable_zone_data() vive en ActionSearch.gd (submódulo de
-	# ActionModule), no en ActionModule.gd mismo — mismo patrón de bug que
-	# arquitectura.md §2 ("_main.<propiedad> inexistente"), aquí con un
-	# submódulo hermano en vez de un padre equivocado (2026-09-11, bug real
-	# reportado por el usuario: "Invalid call. Nonexistent function
-	# '_get_searchable_zone_data' in base 'Node (ActionModule.gd)'").
+	# _get_searchable_zone_data() vive en ActionSearch.gd (submódulo de ActionModule), no en
+	# ActionModule.gd.
 	var zone_cards = _main._action_search._get_searchable_zone_data(player_id, zone)
 	if zone_cards == null:
 		result.valid = false

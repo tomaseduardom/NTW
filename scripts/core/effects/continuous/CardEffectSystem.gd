@@ -46,10 +46,8 @@ func _ready() -> void:
 
 func _connect_to_effect_controller() -> void:
 	"""Conecta al EffectController para escuchar entradas y salidas de zonas"""
-	# (2026-08-28, "módulos gordos" punto 1): EffectController es autoload y
-	# carga ANTES que CardEffectSystem (ver orden en project.godot), así que
-	# el retry con call_deferred nunca se disparaba — se saca el lookup y el
-	# fallback muerto.
+	# EffectController es autoload y carga antes que CardEffectSystem (orden de project.godot): se
+	# conecta directo.
 	var enter_callable = Callable(self, "_on_card_entered_play")
 	if not EffectController.on_card_entered_play.is_connected(enter_callable):
 		EffectController.on_card_entered_play.connect(enter_callable)
@@ -70,11 +68,9 @@ func _on_card_entered_play(player_id: int, card: Node, zone: int) -> void:
 	"""
 	# Verificar si es una zona monitoreada
 	if zone not in MONITORED_ZONES:
-		# 2026-09-25, a pedido del usuario ("redundante"): para las 4 zonas
-		# monitoreadas de abajo, el handler específico (_handle_*_entry) ya
-		# imprime su propia línea más clara — este mensaje genérico solo
-		# quedaba duplicando esa info. Para zonas fuera de esa lista sigue
-		# siendo la única traza de que la carta entró a algún lado.
+		# ("redundante"): para las 4 zonas monitoreadas de abajo, el handler específico (_handle_*_entry)
+		# ya imprime su propia línea más clara — este mensaje genérico solo quedaba duplicando esa info.
+		# Para zonas fuera de esa lista sigue siendo la única traza de que la carta entró a algún lado.
 		if Constants.VERBOSE_DIAG_LOGS:
 			print("[CardEffectSystem] Carta entró a %s: %s" % [
 				Constants.ZONE_NAMES.get(zone, "?"),
@@ -96,13 +92,9 @@ func _on_card_entered_play(player_id: int, card: Node, zone: int) -> void:
 		Constants.Zone.LINEA_ATAQUE:
 			_handle_attack_line_entry(player_id, card)
 
-	# NO llamar aquí a _process_etb_trigger(): TriggerSystem también escucha
-	# esta misma señal (on_card_entered_play) y ejecuta el texto de habilidad
-	# vía UniversalCardParser → ActionModule, que es el camino más completo
-	# (respeta conectores Y/Luego/O, orden APNAP entre jugadores). Si ambos
-	# se ejecutaran, un "roba 2" robaría el doble. _process_etb_trigger()
-	# queda como código muerto a propósito — ver docs/audit, hallazgo de
-	# efectos de carta (sesión 2026-08-16).
+	# Aquí no se ejecuta el "Cuando entra en juego": lo resuelve TriggerSystem (llamado por
+	# GoldManager._trigger_enter_play()). Si ambos lo hicieran, un "roba 2" robaría el doble. Esta
+	# señal solo recalcula efectos continuos.
 
 
 func _handle_gold_reserve_entry(player_id: int, card: Node) -> void:
@@ -166,33 +158,19 @@ func _handle_attack_line_entry(player_id: int, card: Node) -> void:
 
 
 # =============================================================================
-# SISTEMA ETB / PIPELINE DE EJECUCIÓN DE ACCIONES — ELIMINADO (2026-08-17)
-# =============================================================================
-# Todo lo que vivía aquí (cola de habilidades ETB/activadas/disparadas,
-# execute_draw/execute_search/execute_look/execute_mill/execute_discard/
-# execute_return_to_deck, execute_action_pipeline y su parser de texto
-# propio) tenía CERO llamadores en todo el proyecto — código muerto desde
-# antes de esta sesión. _on_card_entered_play() ya documentaba (más abajo)
-# que _process_etb_trigger() no se llama a propósito: TriggerSystem
-# escucha la misma señal on_card_entered_play y resuelve el texto de
-# habilidad vía UniversalCardParser → ActionModule, que es el camino real.
-# Auditado función por función (68 funciones revisadas) antes de recortar
-# — lo único que SÍ estaba vivo de este archivo (el sistema de habilidades
-# continuas de Oro y los handlers on_card_entered_play/on_card_left_play)
-# sigue más abajo, intacto.
-# =============================================================================
 # LISTENER DE SALIDA DE ZONAS
 # =============================================================================
+# La ejecución de acciones es TriggerSystem → UniversalCardParser → ActionModule; este archivo
+# mantiene las habilidades continuas de Oro y los handlers on_card_entered_play/on_card_left_play.
 func _on_card_left_play(player_id: int, card: Node, from_zone: int) -> void:
 	"""Handler para cuando una carta sale del juego
 	Desactiva todas las habilidades continuas de esa carta
 	"""
 	var card_id = card.get_instance_id()
 
-	# 2026-09-23, a pedido del usuario: este mensaje solo duplicaba lo que ya
-	# informa EffectController ("X fue destruida"/"X resuelve su efecto y va
-	# al Cementerio") — 3 líneas distintas para el mismo evento de salida de
-	# juego. Se mantiene gateado para depuración profunda.
+	# Este mensaje solo duplicaba lo que ya informa EffectController ("X fue destruida"/"X resuelve su
+	# efecto y va al Cementerio") — 3 líneas distintas para el mismo evento de salida de juego. Se
+	# mantiene gateado para depuración profunda.
 	if Constants.VERBOSE_DIAG_LOGS:
 		print("[CardEffectSystem] Carta salió de %s: %s" % [
 			Constants.ZONE_NAMES.get(from_zone, "?"),
@@ -418,7 +396,7 @@ func _get_continuous_ability_targets(source_card: Node, ability: Dictionary) -> 
 	if not main:
 		return targets
 
-	# Un Aliado puede estar en Defensa o en Ataque (consolidación 2026-08-20)
+	# Un Aliado puede estar en Defensa o en Ataque.
 	var own_fields = [main.player_field, main.player_linea_ataque] if controller_id == 0 else [main.opponent_field, main.opponent_linea_ataque]
 	var enemy_fields = [main.opponent_field, main.opponent_linea_ataque] if controller_id == 0 else [main.player_field, main.player_linea_ataque]
 
@@ -612,12 +590,3 @@ func recalculate_all_continuous_effects() -> void:
 			await _apply_continuous_effects(source, ability)
 
 
-# =============================================================================
-# ACTION PIPELINE (DAR 7.1) — ELIMINADO (2026-08-17): execute_action_pipeline()
-# y todo lo que colgaba de ahí (_execute_pipeline_action, _execute_destroy_
-# targets, _execute_exile_targets, _execute_damage, _execute_buff,
-# _execute_shuffle, parse_ability_to_actions, _split_by_connectors,
-# _parse_single_action, is_pipeline_running, get_pipeline_progress) no
-# tenía NINGÚN llamador en todo el proyecto — el camino real de ejecución
-# de acciones es TriggerSystem → UniversalCardParser → ActionModule.
-# =============================================================================

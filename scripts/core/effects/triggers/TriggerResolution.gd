@@ -16,6 +16,14 @@ const CemeteryReviveScript = preload("res://scripts/core/effects/triggers/Cemete
 const VampireScript = preload("res://scripts/core/effects/triggers/VampirePatterns.gd")
 const NoeScript = preload("res://scripts/core/effects/triggers/NoePatterns.gd")
 const TriggerTollScript = preload("res://scripts/core/effects/triggers/TriggerTollPatterns.gd")
+const BlockScript = preload("res://scripts/core/effects/triggers/BlockPatterns.gd")
+const TurnStartScript = preload("res://scripts/core/effects/mechanics/TurnStartPatterns.gd")
+const CemeteryTriggersScript = preload("res://scripts/core/effects/triggers/CemeteryTriggers.gd")
+const LeavePlayScript = preload("res://scripts/core/effects/triggers/LeavePlayPatterns.gd")
+const AttackScript = preload("res://scripts/core/effects/mechanics/AttackPatterns.gd")
+const EnterScript = preload("res://scripts/core/effects/mechanics/EnterPatterns.gd")
+const TalismanScript = preload("res://scripts/core/effects/mechanics/TalismanPatterns.gd")
+const ActivatedScript = preload("res://scripts/core/effects/mechanics/ActivatedPatterns.gd")
 const CastleLookScript = preload("res://scripts/core/effects/CastleLook.gd")  # "mira N cartas" (§69)
 
 var _main: Node
@@ -63,66 +71,32 @@ func resolve_next_trigger() -> Dictionary:
 	_main.awaiting_response = true
 
 	print("[TriggerSystem] Resolviendo trigger: %s" % card.card_name)
-	# waiting_for_responses YA NO se emite aquí (2026-09-19, §10.53) — su único
-	# oyente real, ResponseWindowHandler._on_trigger_waiting_for_responses()
-	# (el diálogo viejo de Signo Amarillo), cancelaba vía TriggerSystem.
-	# cancel_current_trigger()/pending_cancel_callback, que solo
-	# _wait_for_response_window() leía — con open_response_window() reemplazándola
-	# más abajo, ese flag ya no lo consume nadie, así que ese diálogo viejo
-	# quedaría clickeable pero roto (el 'Sí, cancelar' no cancelaría nada de
-	# verdad). Signo Amarillo sigue ofreciéndose igual, por el camino nuevo:
-	# ResponseWindowHandler._on_step_d_waiting()/_offer_signo_amarillo_for_step_d(),
-	# que ya escucha ActionPipeline.step_d_waiting — la señal que SÍ emite
-	# open_response_window() de abajo para CUALQUIER objeto de la Pila,
-	# trigger o no. Ver docstrings actualizados de _wait_for_response_window()
-	# y _on_trigger_waiting_for_responses() (huérfanos, no borrados).
+	# waiting_for_responses ya no se emite: Signo Amarillo se ofrece por
+	# ResponseWindowHandler._offer_signo_amarillo_for_step_d(), que escucha
+	# ActionPipeline.step_d_waiting (emitida por open_response_window() para cualquier objeto de la
+	# Pila). ResponseWindowHandler._on_trigger_waiting_for_responses() queda sin emisor (§10.53).
 
-	# 2026-09-19 (arquitectura.md §10.53, a pedido explícito y repetido del
-	# usuario: "que el sistema se abra por carta jugada o habilidad activada
-	# o disparada"). Antes esto llamaba _wait_for_response_window(), que —
-	# a propósito, desde 2026-08-17, cuando el bot no tenía NINGUNA lógica de
-	# respuesta real — resolvía el trigger casi al instante sin abrir ninguna
-	# ventana de prioridad real, salvo el caso puntual de Signo Amarillo (ver
-	# _wait_for_response_window() más abajo, que queda sin llamador después
-	# de este cambio — no se borró, ver su propio docstring actualizado).
-	# Ahora reusa el mismo mecanismo genérico que ya usan los ~40 patrones
-	# "mira/muestra" y CUALQUIER carta jugada (GoldManager._trigger_enter_play(),
-	# EasyBotController, §10.53) — TriggerSystem.open_response_window(), Pila
-	# de Respuesta Universal: abre un objeto no-op real en ActionPipeline, así
-	# que el rival (humano o bot) recibe el mismo Paso D real, con el mismo
-	# brillo celeste/botón de Anular (§10.51) y el mismo auto-pase (§10.52)
-	# que cualquier otro objeto de la Pila — para CUALQUIER trigger, no solo
-	# los ~40 patrones que ya lo llamaban a mano.
-	#
-	# 2026-10-12 (§59, opción B elegida por el usuario: el rival responde
-	# DESPUÉS de que se declaran los objetivos): la ventana ya NO se abre
-	# aquí adelante. El efecto arranca con la ventana "pendiente" en
-	# EffectContext; la abre el propio patrón tras declarar (su llamada a
-	# open_response_window() pasa a ser LA ventana) o, si no la pide,
-	# EffectContext.ensure_window() justo antes de su primera acción real.
-	# Antes el rival pasaba hasta 3 veces por la misma carta.
+	# Pila de Respuesta Universal (§10.53): todo trigger da al rival (humano o bot) una ventana real,
+	# con el mismo Paso D, brillo/botón de Anular (§10.51) y auto-pase (§10.52) que cualquier carta
+	# jugada.
+	# El rival responde después de que se declaran los objetivos (§59): el efecto arranca con la
+	# ventana "pendiente" en EffectContext; la abre el patrón tras declarar (open_response_window()) o,
+	# si no la pide, EffectContext.ensure_window() antes de su primera acción real. Así el rival no
+	# pasa varias veces por la misma carta.
 
 	# === RESOLVER "EN MEDIDA DE LO POSIBLE" (DAR Sección 8) ===
 	print("[TriggerSystem] Resolviendo: %s de %s" % [trigger_type, card.card_name])
 
-	# awaiting_response sigue en true durante TODA la ejecución del efecto
-	# (2026-09-10, bug real reportado por el usuario: bucle en Fase Final con
-	# Biblioteca de Caballería, mismo patrón con Drácula en Vigilia) — la
-	# Pila de Respuesta Universal (open_response_window(), agregada hoy a
-	# ~40 patrones de trigger) abre una ventana de prioridad REAL desde
-	# DENTRO de _execute_trigger_effect(). Antes, awaiting_response se
-	# apagaba AQUÍ ARRIBA, antes de ejecutar el efecto — así que esa ventana
-	# anidada quedaba fuera de la guardia que PhaseFlowController.
-	# _on_priority_both_passed_main() ya tenía para "no reacciones a una
-	# ventana anidada de un trigger, es suya" (comentario propio de ese
-	# archivo). El 'ambos pasaron' de la ventana nueva SÍ llegaba a la
-	# lógica de fin de fase, causando resoluciones dobles.
-	# Matriz V (2026-10-14): habilidades de cartas de coste 0 o 1 del rival
-	# solo se disparan si Destierra una carta de su mano.
+	# awaiting_response sigue en true durante todo el efecto: la ventana que el patrón abre por dentro
+	# queda bajo la guardia de PhaseFlowController._on_priority_both_passed_main() ("ventana anidada de
+	# un trigger"). Si se apagaba antes, el "ambos pasaron" de esa ventana llegaba al fin de fase y
+	# resolvía dos veces.
+	# Matriz V: las habilidades de cartas de coste 0 o 1 del rival solo se disparan si Destierra una
+	# carta de su mano.
 	if await Deck170Script.matriz_v_blocks_trigger(card, controller_id):
 		_main.awaiting_response = false
 		return await resolve_next_trigger()
-	# Mecha-Daikaiju (2026-10-17): pagar un Oro para usar habilidades disparadas.
+	# Mecha-Daikaiju: pagar un Oro para usar habilidades disparadas.
 	if await TriggerTollScript.blocks_trigger(card, controller_id):
 		_main.awaiting_response = false
 		return await resolve_next_trigger()
@@ -154,91 +128,6 @@ func resolve_next_trigger() -> Dictionary:
 	return trigger
 
 
-func _wait_for_response_window() -> bool:
-	"""Resuelve el trigger de inmediato, sin abrir una ventana de prioridad.
-	Returns: true si fue cancelado, false si pasó
-
-	2026-09-19, §10.53: SIN LLAMADOR HOY A PROPÓSITO — resolve_next_trigger()
-	pasó a llamar TriggerSystem.open_response_window() directo (una ventana de
-	prioridad REAL para CUALQUIER trigger, a pedido del usuario), reemplazando
-	esta espera corta. _signo_amarillo_response_available()/_find_signo_
-	amarillo() (más abajo) quedan huérfanas con ella — Signo Amarillo se sigue
-	ofreciendo igual, pero por ResponseWindowHandler._offer_signo_amarillo_
-	for_step_d() (escucha ActionPipeline.step_d_waiting, que open_response_
-	window() sí emite). No se borró: documenta el diseño de 2026-08-17 (abajo)
-	por si algún día hace falta volver a un modo "sin fricción" opcional.
-
-	Antes abría una ventana real vía PriorityManager y esperaba a que el
-	oponente (bot) le pasara la prioridad — mecánicamente funcionaba, pero
-	el bot nunca responde nada de verdad todavía (no hay IA real), así que
-	esa espera era pura fricción: obligaba al jugador a presionar ¿Paso?
-	para cada carta con 'cuando entra en juego'/'cuando ataque' antes de
-	poder seguir jugando, sin ningún beneficio (nadie iba a cancelar nada).
-	A pedido del usuario (2026-08-17), los triggers ahora se resuelven de
-	inmediato.
-
-	EXCEPCIÓN (2026-08-26, Signo Amarillo): si el trigger viene de un Oro o
-	de una carta fuera del juego (mano/destierro/cementerio/castillo) Y el
-	rival controla un Oro sin convertir con el texto de Signo Amarillo, ahí
-	sí hay algo real que puede pasar — se espera de verdad a que responda.
-	resolve_next_trigger() ya emitió waiting_for_responses ANTES de llamar
-	aquí (línea de arriba, sin condición) — CardInspectionLayer la escucha y
-	solo muestra el botón de Signo Amarillo si encuentra uno disponible, así
-	que no hace falta emitir de nuevo, solo esperar. En cualquier otro caso
-	se sigue resolviendo al instante, sin fricción."""
-	if _main.pending_cancel_callback.is_valid():
-		_main.pending_cancel_callback = Callable()
-		return true
-
-	if _signo_amarillo_response_available():
-		var elapsed := 0.0
-		while elapsed < 8.0 and _main.awaiting_response:
-			if _main.pending_cancel_callback.is_valid():
-				_main.pending_cancel_callback = Callable()
-				return true
-			await _main.get_tree().create_timer(0.1).timeout
-			elapsed += 0.1
-
-	return false
-
-
-func _signo_amarillo_response_available() -> bool:
-	"""¿Este trigger es cancelable por Signo Amarillo (habilidad de Oro o de
-	fuera del juego) y el rival tiene uno sin convertir para hacerlo?"""
-	var trigger: Dictionary = _main.current_trigger_for_response
-	if trigger.is_empty():
-		return false
-	var card: Node = trigger.get("card")
-	if not card or not is_instance_valid(card):
-		return false
-
-	var qualifies: bool = card.get("card_type") == Constants.CardType.ORO
-	if not qualifies:
-		var off_board_zones = [Constants.Zone.MANO, Constants.Zone.DESTIERRO, Constants.Zone.CEMENTERIO, Constants.Zone.CASTILLO]
-		qualifies = card.get("current_zone") in off_board_zones
-	if not qualifies:
-		return false
-
-	var controller_id: int = trigger.get("controller_id", 0)
-	return _find_signo_amarillo(1 - controller_id) != null
-
-
-func _find_signo_amarillo(player_id: int) -> Node:
-	var main := _main.get_node_or_null("/root/Main")
-	if not main:
-		return null
-	var container = main.player_gold if player_id == 0 else main.opponent_gold
-	if not container:
-		return null
-	for c in container.get_children():
-		if not is_instance_valid(c) or c.get("is_converted") == true:
-			continue
-		var ability_text: String = str(c.get("card_ability") if c.get("card_ability") != null else "")
-		if "convertir este oro en un oro sin habilidad" in ability_text.to_lower():
-			return c
-	return null
-
-
 func cancel_current_trigger(cancelling_card: Node = null) -> bool:
 	"""Cancela el trigger actual en la ventana de respuesta
 	Llamado cuando el oponente usa una habilidad de cancelación
@@ -267,73 +156,104 @@ func pass_response() -> void:
 	_main.awaiting_response = false
 
 
+## Condiciones de "Cuando ataque/ataques" que el compilador no ve (las quita como parte del disparador):
+## - "con un sólo Aliado" / "cuando ataque solo": un único atacante (kaihime, arturo prat, uriko-hime);
+## - "por primera vez en el juego": una vez por carta (toyotomi hideyoshi); fasolt, además, "si porta
+## Armas".
+func _attack_condition_met(card: Node, clause: String) -> bool:
+	var t := CemeteryTriggersScript.normalize(clause)
+	if ("con un solo aliado" in t or "ataque solo" in t or "ataca solo" in t) and GameManager.attackers.size() != 1:
+		return false
+	if "si porta armas" in t:
+		var weapons = card.get("equipped_weapons")
+		if not (weapons is Array) or not weapons.any(func(w): return is_instance_valid(w)):
+			return false
+	if "por primera vez en el juego" in t:
+		if card.has_meta("first_attack_done"):
+			return false
+		card.set_meta("first_attack_done", true)
+	return true
+
+
+## El bloque de "entra en juego o ataca" (todas sus oraciones hasta el próximo disparador), o la
+## oración sola si no es uno de esos.
+func _attack_block(full_text: String, clause: String) -> String:
+	var blocks: Array[String] = _isolate_all_trigger_clauses(full_text, ["en juego o ataque", "en juego o ataca"])
+	return blocks[0] if not blocks.is_empty() and clause in blocks[0] else clause
+
+
 func _resolve_look_and_play_patterns(card: Node, full_ability_text: String, isolated_ability_text: String, controller_id: int, event_data: Dictionary) -> bool:
-	"""Prueba en orden los patrones compuestos "muestra/mira N..." (cada uno
-	con su propio regex específico, así que reciben el texto COMPLETO, no
-	aislado a una oración — ver historial de por qué) y si ninguno matchea
-	cae al genérico extract_action() + execute_parsed_action() sobre el
-	texto aislado. Compartido entre la resolución de habilidades disparadas
-	(on_enter_play/on_ally_enters de Aliados/Armas/Oro) y la resolución
-	directa de Talismanes (TriggerSystem.resolve_talisman(), que NO pasa
-	por la cola de triggers — 2026-08-27, a pedido del usuario: 'los
-	Talismanes no disparan, resuelven').
-	Returns: true si algo se ejecutó."""
-	# Efecto compilado por piezas (2026-10-12, arquitectura.md §54): si
-	# EffectCompiler entiende TODO el texto aislado y EffectInterpreter sabe
-	# ejecutar todos sus pasos, se resuelve por ahí; si no, sigue la cadena
-	# de patrones de siempre. Va primero a propósito: la cadena vieja busca
-	# sobre el texto COMPLETO y gana la primera coincidencia, que puede
-	# quedarse con una parte del efecto y saltarse el resto.
-	# Anular/Cancelar sobre la pila real (2026-10-14, StackAnnul): antes que
-	# todo, con el texto completo — si no, "Anula X" caía en patrones que
-	# destruían una carta en juego o en otra parte del texto (Sacrificio
-	# Solar barajaba el mazo).
+	"""Prueba en orden los patrones compuestos "muestra/mira N..." (cada uno con su regex, sobre el
+	texto completo) y, si ninguno calza, el genérico extract_action() + execute_parsed_action()
+	sobre el texto aislado. Compartido por las habilidades disparadas y por los Talismanes
+	(TriggerSystem.resolve_talisman(): los Talismanes no disparan, resuelven). Devuelve true si
+	algo se ejecutó."""
+	# Efecto compilado por piezas (arquitectura.md §54): si EffectCompiler entiende todo el texto
+	# aislado y EffectInterpreter sabe ejecutar todos sus pasos, se resuelve por ahí. Va primero porque
+	# la cadena vieja busca sobre el texto completo y la primera coincidencia puede quedarse con solo
+	# una parte del efecto.
+	# Anular/Cancelar sobre la pila real (StackAnnul) va antes que todo: si no, "Anula X" caía en
+	# patrones que destruían una carta en juego (Sacrificio Solar barajaba el mazo).
 	if card and card.get("card_type") == Constants.CardType.TALISMAN \
 			and await Deck170Script.try_annul_on_stack(card, full_ability_text, controller_id):
 		return true
-	# Azi del Abismo (2026-10-17): Descartar para convertirse en Oro hasta tu
-	# próximo turno — antes del intérprete, que solo veía "Descarta una".
+	# Talismanes sueltos armados con piezas existentes (caminar el tablón, el juicio, momificar...).
+	if card and card.get("card_type") == Constants.CardType.TALISMAN \
+			and await TalismanScript.try_execute(card, full_ability_text, controller_id):
+		return true
+	# Habilidades activadas sueltas armadas con piezas existentes (el emperador, kultrung, animita...).
+	if card and card.get("card_type") != Constants.CardType.TALISMAN 			and await ActivatedScript.try_execute(card, isolated_ability_text, controller_id):
+		return true
+	# Azi del Abismo: Descartar para convertirse en Oro hasta tu próximo turno. Antes del intérprete,
+	# que solo veía "Descarta una".
 	if await AziScript.try_execute(card, isolated_ability_text, controller_id):
 		return true
-	# Padre Dagón (2026-10-17): la mitad activada, global.
+	# Padre Dagón: la mitad activada, global.
 	if await DagonScript.try_execute(card, isolated_ability_text, controller_id):
 		return true
-	# Plaga de Ratas (2026-10-17).
+	# Plaga de Ratas.
 	if await RatPlagueScript.try_execute(card, isolated_ability_text, controller_id):
 		return true
-	# Kaitai (2026-10-17): su habilidad de Fase Final.
+	# Kaitai: su habilidad de Fase Final.
 	if await CemeteryReviveScript.try_execute(card, isolated_ability_text, controller_id):
 		return true
-	# Vlad el Empalador, Dhampir (2026-10-17).
+	# Vlad el Empalador, Dhampir.
 	if await VampireScript.try_execute(card, isolated_ability_text, controller_id):
 		return true
-	# Noé (2026-10-17).
+	# Noé.
 	if await NoeScript.try_execute(card, isolated_ability_text, controller_id):
+		return true
+	# Mazos guardados: Aegishjalmur...
+	if await load("res://scripts/core/effects/mechanics/MechanicPatterns.gd").try_execute(card, isolated_ability_text, controller_id):
+		return true
+	# Golpe Solar: antes del intérprete (que lo resolvía en el orden impreso). Primero elige el
+	# objetivo a Barajar, luego el descarte y el Aliado.
+	if await _main._draw_shuffle_resolver.try_execute_golpe_solar_pattern(full_ability_text, card, controller_id):
+		return true
+	# Sombrerero Loco: elección en el tablero, sin popup. Antes del intérprete, que la compila como
+	# "A o B" con popup.
+	if await _main._draw_shuffle_resolver.try_execute_shuffle_ally_or_search_castle_pattern(isolated_ability_text, card, controller_id):
 		return true
 	if await _main._effect_interpreter.try_execute(card, isolated_ability_text, controller_id):
 		return true
-	# "Mira N cartas del tope/fondo de un Castillo" (2026-10-13, §69): una sola
-	# ventana para repartir y ordenar (CastleLook.gd). Solo si entiende todo el
-	# bloque; si no, sigue la cadena de siempre.
+	# "Mira N cartas del tope/fondo de un Castillo" (§69): una sola ventana para repartir y ordenar
+	# (CastleLook.gd). Solo si entiende todo el bloque.
 	if await CastleLookScript.try_execute_text(card, isolated_ability_text, controller_id):
 		return true
-	# "Busca un Talismán en un Castillo y juégalo" (2026-10-14, Reina
-	# Nyssara, Nyssara Cautiva).
+	# "Busca un Talismán en un Castillo y juégalo" (Reina Nyssara, Nyssara Cautiva).
 	if await TalismanSearchScript.try_execute(card, isolated_ability_text, controller_id):
 		return true
-	# Mazo 170 (2026-10-14): Rey de los Loñolicos, Ursitoare, Nyssara Cautiva...
+	# Mazo 170: Rey de los Loñolicos, Ursitoare, Nyssara Cautiva...
 	if await Deck170Script.try_execute(card, isolated_ability_text, controller_id):
 		return true
-	# Sombrerero Loco (2026-10-14): elección en el tablero, sin popup.
-	if await _main._draw_shuffle_resolver.try_execute_shuffle_ally_or_search_castle_pattern(isolated_ability_text, card, controller_id):
-		return true
-	# Habilidades ACTIVADAS de Tótems (2026-09-20, arquitectura.md "539
-	# cartas sin cobertura") — llegan aquí también vía TriggerSystem.
-	# resolve_ability_effect() (mismo camino compartido que los triggers,
-	# ver ese comentario), así que se chequean primero, junto al resto.
+	# Habilidades activadas de Tótems: llegan aquí también vía TriggerSystem.resolve_ability_effect()
+	# (camino compartido con los triggers), así que se chequean primero.
 	if await _main._totem_patterns.try_execute_kotoku_in_vigilia_pattern(full_ability_text, card, controller_id):
 		return true
 	if await _main._totem_patterns.try_execute_metropolitan_vigilia_convert_pattern(full_ability_text, card, controller_id):
+		return true
+	# Solo con el texto aislado de la activada: el texto completo también lo trae el "cuando entra".
+	if await _main._totem_patterns.try_execute_iga_ryu_convert_totems_pattern(isolated_ability_text, card, controller_id):
 		return true
 	if await _main._totem_patterns.try_execute_rueda_fortuna_reveal_pattern(full_ability_text, card, controller_id):
 		return true
@@ -341,18 +261,14 @@ func _resolve_look_and_play_patterns(card: Node, full_ability_text: String, isol
 		return true
 	if await _main._totem_patterns.try_execute_estacion_fantasma_name_pattern(full_ability_text, card, controller_id):
 		return true
-	# Habilidades ACTIVADAS de Armas (2026-09-20, arquitectura.md "539
-	# cartas sin cobertura") — mismo camino compartido que las de Tótems
-	# arriba, cada una con su propia guardia 'el portador gana' contra el
-	# falso positivo de on_enter_play (ver comentarios en WeaponAbilityPatterns.gd).
+	# Habilidades activadas de Armas: mismo camino que las de Tótems; cada una con su guardia "el
+	# portador gana" contra el falso positivo de on_enter_play (WeaponAbilityPatterns.gd).
 	if await _main._weapon_patterns.try_execute_canon_naval_shared_pattern(full_ability_text, card, controller_id):
 		return true
 	if await _main._weapon_patterns.try_execute_sable_corto_vigilia_pattern(full_ability_text, card, controller_id):
 		return true
-	# Habilidades ACTIVADAS de Oros (2026-09-20, arquitectura.md "539 cartas
-	# sin cobertura") — mismo camino compartido que Tótems/Armas arriba,
-	# cada una con su propia guardia de texto contra el falso positivo de
-	# on_enter_play/on_turn_end (ver OroAbilityPatterns.gd).
+	# Habilidades activadas de Oros: mismo camino; cada una con su guardia de texto contra el falso
+	# positivo de on_enter_play/on_turn_end (OroAbilityPatterns.gd).
 	if await _main._oro_patterns.try_execute_udjat_vigilia_pattern(full_ability_text, card, controller_id):
 		return true
 	if await _main._oro_patterns.try_execute_libro_de_thoth_pay_pattern(full_ability_text, card, controller_id):
@@ -514,13 +430,9 @@ func _resolve_look_and_play_patterns(card: Node, full_ability_text: String, isol
 		return true
 	if await _main._draw_shuffle_resolver.try_execute_free_play_weapon_or_totem_cost1_hand_cemetery_pattern(full_ability_text, controller_id, card):
 		return true
-	# Estos dos, a diferencia de todos los de arriba, chequean sobre el texto
-	# YA AISLADO al bloque de este trigger en particular (no el texto
-	# completo de la carta) — 2026-08-29: una carta puede tener el MISMO
-	# trigger repetido dos veces (Alicia en Wonderland), y este resolutor se
-	# llama una vez POR BLOQUE; si estos dos chequearan full_ability_text
-	# (que no cambia entre llamadas) se dispararían dos veces, una por cada
-	# bloque de la carta.
+	# Estos dos chequean sobre el texto ya aislado al bloque de este trigger: una carta puede repetir
+	# el mismo trigger (Alicia en Wonderland) y este resolutor se llama una vez por bloque; con el
+	# texto completo se dispararían dos veces.
 	if await _main._look_and_play.try_execute_reveal_until_distinct_cost_allies_pattern(isolated_ability_text, controller_id, card):
 		return true
 	if await _main._look_and_play.try_execute_search_ally_castillo_or_cementerio_then_buff_pattern(isolated_ability_text, card, controller_id):
@@ -569,10 +481,6 @@ func _resolve_look_and_play_patterns(card: Node, full_ability_text: String, isol
 		return true
 	if await _main._draw_shuffle_resolver.try_execute_banish_cemeteries_equal_to_own_strength_pattern(isolated_ability_text, card, controller_id):
 		return true
-	# try_execute_banish_up_to_n_cemeteries_then_draw_pattern() ELIMINADA
-	# (2026-09-13) — código muerto, siempre interceptada antes por
-	# try_execute_banish_from_cemeteries_and_draw_pattern() (línea ~379,
-	# chequeo más suelto). Ver arquitectura.md §10.21.
 	if await _main._draw_shuffle_resolver.try_execute_draw_and_shuffle_hand_pattern(isolated_ability_text, controller_id, card):
 		return true
 	if await _main._draw_shuffle_resolver.try_execute_draw_and_shuffle_opponent_card_pattern(isolated_ability_text, controller_id, card):
@@ -596,19 +504,9 @@ func _execute_trigger_effect(card: Node, trigger_type: String, event_data: Dicti
 		"blocked_by": null
 	}
 
-	# Verificar si la carta tiene un handler ESPECÍFICO para este trigger
-	# (Card.effect_handlers) — 'handled' solo queda true si de verdad hizo
-	# algo. Antes, cualquier Card (TODAS tienen _on_trigger_event definido
-	# en la clase base) cortaba aquí sin importar el resultado, así que el
-	# fallback bueno de más abajo (aísla la oración correcta, reconoce
-	# SEARCH/DESTROY/BUFF/etc.) nunca se ejecutaba — Card._on_trigger_event()
-	# caía en su propio _resolve_default_effect(), un escaneo de palabras
-	# clave sobre el texto COMPLETO sin aislar por oración (2026-08-22: por
-	# esto Tyet, cuyo texto tiene 'busca un Arma...' Y 'Robar dos cartas' de
-	# una habilidad de Oro totalmente distinta más adelante, terminaba
-	# robando una carta en vez de buscar). _resolve_default_effect() se
-	# eliminó y _on_trigger_event() ahora marca no_handler=true cuando no
-	# hay handler específico, dejando pasar la ejecución hasta aquí.
+	# Handler específico de la carta (Card.effect_handlers): 'handled' solo queda true si de verdad
+	# hizo algo. Si no hay handler, _on_trigger_event() marca no_handler y la ejecución sigue al
+	# fallback de abajo, que aísla la oración correcta (si no, p.ej. Tyet robaba en vez de buscar).
 	var handled := false
 	if card.has_method("_on_trigger_event"):
 		var effect_callable: Callable = card._on_trigger_event
@@ -628,33 +526,17 @@ func _execute_trigger_effect(card: Node, trigger_type: String, event_data: Dicti
 			var full_ability_text: String = ""
 			if card.get("card_data") != null:
 				full_ability_text = card.card_data.get("habilidad", "")
-			# Aislar la(s) oración(es) de ENTRA (2026-08-22, mismo bug que
-			# on_attack/on_damage_dealt de más abajo, nunca se había
-			# corregido aquí): una carta puede tener "Cuando entra en juego,
-			# X.\nEn tu Fase Final, Y." en el mismo bloque — sin aislar,
-			# extract_action() podía encontrar Y (p.ej. un 'Destierra...' de
-			# Fase Final) como la PRIMERA acción reconocible del texto
-			# completo y ejecutarla al entrar en juego, disparando el efecto
-			# equivocado.
-			# 2026-08-29: una carta puede tener DOS "Cuando entra en juego"
-			# independientes (p.ej. Alicia en Wonderland) — se procesa cada
-			# bloque aislado por separado, no solo el primero.
+			# Aislar las oraciones de "entra en juego": sin aislar, extract_action() podía tomar la primera
+			# acción de otra habilidad (p.ej. un "Destierra..." de Fase Final). Una carta puede tener dos
+			# "Cuando entra en juego" independientes (Alicia en Wonderland): se procesa cada bloque.
 			var clauses: Array[String] = _isolate_all_trigger_clauses(full_ability_text, ["cuando entra", "al entrar", "cuando ataca, entra"])
 			if clauses.is_empty() and not full_ability_text.is_empty():
 				clauses = [full_ability_text]
 			var controller_id: int = card.get("owner_id") if card.get("owner_id") != null else 0
-			# Tótems auditados 2026-09-20 (arquitectura.md, "539 cartas sin
-			# cobertura") — no calzan en _resolve_look_and_play_patterns()
-			# porque no son un solo bloque "mira/muestra N... elige qué
-			# hacer" genérico (arco del triunfo además necesita is_entering
-			# explícito, ver TotemAbilityPatterns.gd), se chequean aparte,
-			# ANTES del bucle de cláusulas genérico de abajo.
-			# 2026-10-12 (arquitectura.md §54): estas cartas tienen UNA sola
-			# cláusula de entrada y su patrón explícito la resuelve completa. Antes
-			# el bucle genérico de abajo corría IGUAL después, y la cadena vieja
-			# (o el extract_action() del final) volvía a ejecutar el mismo efecto
-			# (p.ej. azusa yumi robaba y hacía Botar dos veces). explicit_done
-			# corta ese doble disparo.
+			# Tótems con patrón propio (no son un bloque "mira/muestra" genérico; arco del triunfo necesita
+			# is_entering, ver TotemAbilityPatterns.gd): se chequean antes del bucle genérico. Tienen una
+			# sola cláusula de entrada y su patrón la resuelve completa; explicit_done evita que el bucle
+			# genérico la ejecute otra vez (arquitectura.md §54).
 			var explicit_done := false
 			if await _main._totem_patterns.try_execute_arco_del_triunfo_pattern(full_ability_text, card, controller_id, true):
 				result["no_handler"] = false
@@ -671,23 +553,33 @@ func _execute_trigger_effect(card: Node, trigger_type: String, event_data: Dicti
 			if await _main._totem_patterns.try_execute_metropolitan_enter_pattern(full_ability_text, card, controller_id):
 				result["no_handler"] = false
 				explicit_done = true
-			# Armas auditadas 2026-09-20 (arquitectura.md "539 cartas sin
-			# cobertura") — mismo criterio que los Tótems de arriba: no calzan
-			# en el despachador compartido porque necesitan saber si es
-			# ENTER u otras condiciones puntuales, se chequean aparte.
+			# Armas con patrón propio: mismo criterio que los Tótems (necesitan saber si es entrada u otras
+			# condiciones).
 			if await _main._weapon_patterns.try_execute_nodachi_enter_pattern(full_ability_text, card, controller_id):
 				result["no_handler"] = false
 				explicit_done = true
 			if await _main._weapon_patterns.try_execute_azusa_yumi_enter_leave_pattern(full_ability_text, card, controller_id):
 				result["no_handler"] = false
 				explicit_done = true
-			# hidromiel (2026-09-20, arquitectura.md "539 cartas sin
-			# cobertura") — única cláusula de la carta, sin riesgo de falso
-			# positivo con otra cláusula propia; se registra igual que los
-			# Tótems/Armas de arriba por consistencia de estilo.
+			# hidromiel: única cláusula de la carta; se registra igual que los Tótems/Armas por consistencia.
 			if await _main._oro_patterns.try_execute_hidromiel_pattern(full_ability_text, card, controller_id):
 				result["no_handler"] = false
 				explicit_done = true
+			# Marchosias, Isla de Poveglia, transilvania, antu: "cuando entra o sale del juego" (LeavePlayPatterns).
+			if trigger_type == "on_enter_play" and not explicit_done and LeavePlayScript.handles(full_ability_text, true):
+				if await LeavePlayScript.try_execute(card, full_ability_text, controller_id, true, event_data):
+					result["no_handler"] = false
+					explicit_done = true
+			# Cartas sueltas armadas con piezas existentes (EnterPatterns: garfio pirata, la muerte, Lamec...).
+			if trigger_type == "on_enter_play" and not explicit_done and EnterScript.handles(full_ability_text):
+				if await EnterScript.try_execute(card, full_ability_text, controller_id):
+					result["no_handler"] = false
+					explicit_done = true
+			# fuma kotaro: "Cuando entra en juego o ataques con un sólo Aliado" (AttackPatterns).
+			if trigger_type == "on_enter_play" and not explicit_done and AttackScript.handles_enter(full_ability_text):
+				if await AttackScript.try_execute(card, full_ability_text, controller_id):
+					result["no_handler"] = false
+					explicit_done = true
 			for ability_text: String in clauses:
 				if explicit_done:
 					break
@@ -695,12 +587,8 @@ func _execute_trigger_effect(card: Node, trigger_type: String, event_data: Dicti
 				if resolved:
 					result["no_handler"] = false
 		elif trigger_type == "on_leave_play":
-			# 'Al salir del juego'/'cuando salga del juego'/'cuando entra o
-			# salga del juego' (2026-08-29, p.ej. Legión Paladín) — hasta aquí
-			# solo on_enter_play/on_ally_enters tenían fallback genérico por
-			# texto; on_leave_play nunca resolvía nada por este camino, sin
-			# importar qué tan bien detectado estuviera el patrón en
-			# TargetedEffectExecutor/LookAndPlayResolver.
+			# "Al salir del juego" / "cuando salga del juego" / "cuando entra o salga del juego" (p.ej.
+			# Legión Paladín): fallback genérico por texto.
 			var full_ability_text: String = ""
 			if card.get("card_data") != null:
 				full_ability_text = card.card_data.get("habilidad", "")
@@ -711,17 +599,14 @@ func _execute_trigger_effect(card: Node, trigger_type: String, event_data: Dicti
 			if ability_text.is_empty():
 				ability_text = full_ability_text
 			var controller_id: int = card.get("owner_id") if card.get("owner_id") != null else 0
-			# arco del triunfo (2026-09-20) — misma función que en on_enter_
-			# play, is_entering=false: desregistra el efecto continuo de
-			# daño al Destierro (el aura de Fuerza se limpia sola vía
-			# ModifierRegistry al salir la carta fuente de juego).
-			# Mismo corte de doble disparo que en on_enter_play (2026-10-12).
+			# arco del triunfo con is_entering = false: desregistra el daño al Destierro (el aura de Fuerza
+			# la limpia ModifierRegistry al salir la fuente). Mismo corte de doble disparo que en
+			# on_enter_play.
 			var explicit_done := false
 			if await _main._totem_patterns.try_execute_arco_del_triunfo_pattern(full_ability_text, card, controller_id, false):
 				result["no_handler"] = false
 				explicit_done = true
-			# Armas auditadas 2026-09-20 (arquitectura.md "539 cartas sin
-			# cobertura") — mismo criterio que arco del triunfo arriba.
+			# Armas con patrón propio: mismo criterio que arco del triunfo.
 			if await _main._weapon_patterns.try_execute_azusa_yumi_enter_leave_pattern(full_ability_text, card, controller_id):
 				result["no_handler"] = false
 				explicit_done = true
@@ -737,7 +622,37 @@ func _execute_trigger_effect(card: Node, trigger_type: String, event_data: Dicti
 			if await _main._weapon_patterns.try_execute_canon_naval_leave_pattern(full_ability_text, card, controller_id):
 				result["no_handler"] = false
 				explicit_done = true
+			# mahishi, onryo, los umbras, ryujin: los resuelve CemeteryTriggers.on_card_destroyed().
+			# el fantasma / agentes de killbird: "...no disparan sus habilidades al salir del juego" es una regla
+			# (TriggerRestrictions._blocked_by_rule_in_play), no un disparador propio.
+			var lower_leave: String = CemeteryTriggersScript.normalize(full_ability_text)
+			if TriggerRestrictions.FANTASMA_TEXT in lower_leave or TriggerRestrictions.KILLBIRD_TEXT in lower_leave:
+				result["no_handler"] = false
+				explicit_done = true
+			if CemeteryTriggersScript.handles_leave_clause(ability_text):
+				result["no_handler"] = false
+				explicit_done = true
+			# Cambios de control, convertir, condiciones de turno o de causa (LeavePlayPatterns).
+			if not explicit_done and LeavePlayScript.handles(full_ability_text, false):
+				if await LeavePlayScript.try_execute(card, full_ability_text, controller_id, false, event_data):
+					result["no_handler"] = false
+					explicit_done = true
+			# libra, zmeoaica: lo mismo que al entrar (EnterPatterns).
+			if not explicit_done and EnterScript.handles_leave(full_ability_text):
+				if await EnterScript.try_execute(card, full_ability_text, controller_id):
+					result["no_handler"] = false
+					explicit_done = true
 			if not ability_text.is_empty() and not explicit_done:
+				# El bloque completo (como en on_enter_play) si el compilador lo entiende entero (mochizuki
+				# chiyome: "...hasta mostrar un Aliado de coste 2. Ponlo en tu mano y Baraja el resto");
+				# si no, la oración sola, como siempre.
+				var leave_blocks: Array[String] = _isolate_all_trigger_clauses(full_ability_text, [
+					"al salir del juego", "cuando salga del juego", "cuando sale del juego", "cuando entra o salga del juego",
+					"cuando entra o sale del juego", "entra o sale del juego", "o salga del juego"])
+				if not leave_blocks.is_empty() and leave_blocks[0] != ability_text:
+					var block_plan: Dictionary = EffectCompiler.compile_clause(leave_blocks[0])
+					if block_plan.ok and EffectCompiler.is_executable(block_plan.steps):
+						ability_text = leave_blocks[0]
 				var resolved := await _resolve_look_and_play_patterns(card, full_ability_text, ability_text, controller_id, event_data)
 				if resolved:
 					result["no_handler"] = false
@@ -751,17 +666,24 @@ func _execute_trigger_effect(card: Node, trigger_type: String, event_data: Dicti
 			var ability_text: String = ""
 			if card.get("card_data") != null:
 				ability_text = card.card_data.get("habilidad", "")
-			# "cuando entra en juego o ataque" (2026-08-29, p.ej. Sherlock
-			# Holmes) es la misma cláusula que el disparador de entrada — no
-			# tiene 'cuando ataque' como substring literal.
+			# "cuando entra en juego o ataque/ataca/ataques" (p.ej. Sherlock Holmes, Viejo del Saco, fuma
+			# kotaro) es la misma cláusula que la de entrada: no contiene "cuando ataque" literal.
 			var clause := _isolate_trigger_clause(ability_text, [
-				"cuando ataque", "cuando atac", "al atacar", "en juego o ataque", "cuando el portador ataque"
+				"cuando ataque", "cuando atac", "al atacar", "en juego o ataque", "en juego o ataca", "cuando el portador ataque"
 			])
-			if not clause.is_empty():
+			if not clause.is_empty() and not _attack_condition_met(card, clause):
+				result["no_handler"] = false  # condición no cumplida: no hace nada
+			elif not clause.is_empty():
 				var controller_id: int = card.get("owner_id") if card.get("owner_id") != null else 0
-				# Vlad el Empalador, Dhampir, Antonio Pincheira (2026-10-17):
-				# "Cuando entra en juego o ataca" / "Cuando ataca, entra o sale".
-				if await VampireScript.try_execute(card, clause, controller_id):
+				# príncipe orión, Los Szgany, elemental de magma...: bloqueos elegidos por el atacante.
+				if await AttackScript.try_execute(card, clause, controller_id):
+					result["no_handler"] = false
+				# Vlad el Empalador, Dhampir, Antonio Pincheira: "Cuando entra en juego o ataca" / "Cuando
+				# ataca, entra o sale".
+				elif await VampireScript.try_execute(card, clause, controller_id):
+					result["no_handler"] = false
+				# Viejo del Saco: "Cuando entra en juego o ataca".
+				elif await load("res://scripts/core/effects/mechanics/MechanicPatterns.gd").try_execute(card, clause, controller_id):
 					result["no_handler"] = false
 				elif await CemeteryReviveScript.try_execute(card, clause, controller_id):
 					result["no_handler"] = false
@@ -783,27 +705,18 @@ func _execute_trigger_effect(card: Node, trigger_type: String, event_data: Dicti
 					result["no_handler"] = false
 				elif await _main._effect_interpreter.try_execute(card, clause, controller_id):
 					result["no_handler"] = false
-				else:
-					var action := UniversalCardParser.extract_action(clause)
-					if action.get("matched", false):
-						await _main._targeted_executor.execute_parsed_action(action, card, event_data)
-						result["no_handler"]    = false
-					result["parsed_action"] = action
+				# "Cuando entra en juego o ataca, ...": la misma cadena que al entrar (seiryu, yaj, Papa
+				# Legba...), que termina en extract_action() sobre la cláusula.
+				# Con el bloque entero, como al entrar (Papa Legba: "...pon una en tu mano y la otra en tu
+				# Cementerio. Si mostraste ambos, ...").
+				elif await _resolve_look_and_play_patterns(card, ability_text, _attack_block(ability_text, clause), controller_id, event_data):
+					result["no_handler"] = false
 		elif trigger_type == "on_block":
-			# 'Cuando bloquee'/'al bloquear' IMPRESO EN EL PROPIO ALIADO que
-			# bloquea (2026-09-20, arquitectura.md "539 cartas sin cobertura")
-			# — primer uso real de este trigger, hasta ahora clasificado en
-			# Card.TRIGGER_KEYWORDS pero sin ninguna rama de resolución
-			# (recolectado desde GameManager.confirm_blockers_and_collect_
-			# triggers(), 'card' = el Aliado bloqueador mismo, camino DIRECTO
-			# igual que on_attack). NO es el camino de libro de thoth: esa
-			# carta es un Oro que reacciona a que TÚ bloquees con cualquier
-			# Aliado, no una habilidad impresa en el bloqueador — se resuelve
-			# aparte, con un chequeo directo del Oro en juego, mismo criterio
-			# que Llave del Abismo (ver GoldManager._trigger_enter_play()) —
-			# el camino 'directo' de _collect_triggers_for_event() solo llega
-			# a la carta que disparó el evento, nunca a otra carta pasiva en
-			# una zona distinta (el Oro no está en el campo de Aliados).
+			# "Cuando bloquee" / "al bloquear" impreso en el Aliado que bloquea (recolectado en
+			# GameManager.confirm_blockers_and_collect_triggers(), card = el bloqueador; camino directo como
+			# on_attack). libro de thoth es otra cosa: un Oro que reacciona a que bloquees con cualquier
+			# Aliado; se resuelve aparte con un chequeo directo (como Llave del Abismo), porque el camino
+			# directo solo llega a la carta que disparó el evento.
 			var ability_text: String = ""
 			if card.get("card_data") != null:
 				ability_text = card.card_data.get("habilidad", "")
@@ -812,40 +725,33 @@ func _execute_trigger_effect(card: Node, trigger_type: String, event_data: Dicti
 			])
 			if not clause.is_empty():
 				var controller_id: int = card.get("owner_id") if card.get("owner_id") != null else 0
-				var resolved := await _resolve_look_and_play_patterns(card, ability_text, clause, controller_id, event_data)
-				if resolved:
+				# arthur gordon pym, Elías: dependen de a quién bloquea (event_data.blocked).
+				if await BlockScript.try_execute(card, clause, controller_id, event_data):
 					result["no_handler"] = false
+				else:
+					var resolved := await _resolve_look_and_play_patterns(card, ability_text, clause, controller_id, event_data)
+					if resolved:
+						result["no_handler"] = false
 		elif trigger_type == "on_turn_end":
-			# 'En tu Fase Final'/'Al final del turno' (2026-08-30, p.ej.
-			# Espada de O'Higgins) — primer trigger de este tipo que
-			# realmente resuelve algo; hasta ahora TriggerSystem.
-			# resolve_turn_end_triggers() nunca se llamaba desde ningún lado
-			# y esta rama no existía, así que ninguna carta con este texto
-			# había hecho nada jamás. Mismo aislamiento de oración que
-			# on_attack/on_damage_dealt, por la misma razón (una carta puede
-			# tener varios disparadores distintos en el mismo bloque).
+			# "En tu Fase Final" / "Al final del turno" (p.ej. Espada de O'Higgins), disparado por
+			# TriggerSystem.resolve_turn_end_triggers(). Se aísla la oración como en
+			# on_attack/on_damage_dealt: una carta puede tener varios disparadores en el mismo bloque.
 			var ability_text: String = ""
 			if card.get("card_data") != null:
 				ability_text = card.card_data.get("habilidad", "")
 			var clause := _isolate_trigger_clause(ability_text, [
 				"en tu fase final", "al final del turno", "al terminar el turno",
-				# torii (2026-09-20, arquitectura.md "539 cartas sin cobertura")
-				# — frase NARROW a propósito, ver docstring de try_execute_
-				# torii_final_pattern() en OroAbilityPatterns.gd (por qué "en
-				# la fase final" a secas no se puede usar aquí).
+				# torii: frase acotada a propósito; ver try_execute_torii_final_pattern() en
+				# OroAbilityPatterns.gd ("en la fase final" a secas no sirve).
 				"en la fase final, si tienes"
 			])
 			if not clause.is_empty():
 				var controller_id: int = card.get("owner_id") if card.get("owner_id") != null else 0
-				# Cañón Naval (2026-09-20, arquitectura.md "539 cartas sin
-				# cobertura") — llamada EXPLÍCITA con la cláusula YA AISLADA
-				# (no el texto completo), a propósito NO registrada en el
-				# despachador compartido — ver el docstring de la función en
-				# WeaponAbilityPatterns.gd para el motivo completo.
+				# Cañón Naval: llamada explícita con la cláusula ya aislada, no registrada en el despachador
+				# compartido (motivo en su docstring, WeaponAbilityPatterns.gd).
 				if await _main._weapon_patterns.try_execute_canon_naval_final_pattern(clause, card, controller_id):
 					result["no_handler"] = false
-				# udjat / torii (2026-09-20, arquitectura.md "539 cartas sin
-				# cobertura") — mismo criterio que Cañón Naval arriba.
+				# udjat / torii: mismo criterio que Cañón Naval.
 				if await _main._oro_patterns.try_execute_udjat_final_pattern(clause, card, controller_id):
 					result["no_handler"] = false
 				if await _main._oro_patterns.try_execute_torii_final_pattern(clause, card, controller_id):
@@ -857,64 +763,59 @@ func _execute_trigger_effect(card: Node, trigger_type: String, event_data: Dicti
 					if resolved:
 						result["no_handler"] = false
 		elif trigger_type == "on_opponent_turn_end":
-			# 'En la Fase Final oponente' (2026-09-04, p.ej. Biblioteca de
-			# Caballería) — mismo aislamiento que on_turn_end, pero disparado
-			# por TriggerSystem.resolve_turn_end_triggers() sobre el campo del
-			# jugador CONTRARIO al que termina turno (ver ese método).
+			# "En la Fase Final oponente" (p.ej. Biblioteca de Caballería): como on_turn_end, pero
+			# TriggerSystem.resolve_turn_end_triggers() lo dispara sobre el campo del jugador que no termina
+			# el turno.
 			var ability_text: String = ""
 			if card.get("card_data") != null:
 				ability_text = card.card_data.get("habilidad", "")
 			var clause := _isolate_trigger_clause(ability_text, [
 				"en la fase final oponente", "en la fase final de tu oponente"
 			])
-			if not clause.is_empty():
+			if "puedes jugarla" in clause.to_lower() or "puedes jugarlo" in clause.to_lower():
+				# "Puedes jugarla en Guerra de Talismanes o en la Fase Final oponente" (Kukri, Diabolista de Ébano):
+				# momento para jugarla (PhaseStartWindow), no un disparador.
+				result["no_handler"] = false
+			elif not clause.is_empty():
 				var controller_id: int = card.get("owner_id") if card.get("owner_id") != null else 0
 				var resolved := await _resolve_look_and_play_patterns(card, ability_text, clause, controller_id, event_data)
 				if resolved:
 					result["no_handler"] = false
 		elif trigger_type == "on_agrupacion":
-			# 'En tu Agrupación' (2026-08-30, p.ej. Espada del Juicio: 'Cuando
-			# entra en juego y en tu Agrupación, Destierra...') — misma
-			# oración puede contener DOS disparadores distintos ('cuando
-			# entra' Y 'en tu agrupación'); se aísla igual que on_turn_end,
-			# y se procesa una vez por cada trigger_type que matchee esa
-			# misma oración (no es un doble-disparo, son dos eventos reales
-			# distintos que comparten el mismo efecto impreso).
+			# "En tu Agrupación" (p.ej. Espada del Juicio: "Cuando entra en juego y en tu Agrupación,
+			# Destierra..."): una oración puede tener dos disparadores; se procesa una vez por cada
+			# trigger_type que calce (son dos eventos distintos, no un doble disparo).
 			var ability_text: String = ""
 			if card.get("card_data") != null:
 				ability_text = card.card_data.get("habilidad", "")
 			var clause := _isolate_trigger_clause(ability_text, [
 				"en tu agrupación", "en tu agrupacion",
-				# torii (2026-09-20, arquitectura.md "539 cartas sin
-				# cobertura") — su frase real es "al comienzo de tu
-				# Agrupación", distinta de "en tu agrupación" (ver también
-				# Card.TRIGGER_KEYWORDS['on_agrupacion'], se agregó ahí
-				# también para que el trigger se clasifique).
+				# torii: su frase es "al comienzo de tu Agrupación" (también en
+				# Card.TRIGGER_KEYWORDS['on_agrupacion'] para clasificarlo).
 				"al comienzo de tu agrupación", "al comienzo de tu agrupacion"
 			])
 			if not clause.is_empty():
 				var controller_id: int = card.get("owner_id") if card.get("owner_id") != null else 0
-				# torii (2026-09-20) — llamada EXPLÍCITA con la cláusula YA
-				# AISLADA, mismo criterio que Cañón Naval/udjat en on_turn_end.
+				# torii: llamada explícita con la cláusula aislada, como Cañón Naval/udjat.
 				if await _main._oro_patterns.try_execute_torii_agrupacion_pattern(clause, card, controller_id):
 					result["no_handler"] = false
 				var resolved := await _resolve_look_and_play_patterns(card, ability_text, clause, controller_id, event_data)
 				if resolved:
 					result["no_handler"] = false
 		elif trigger_type == "on_turn_start":
-			# 'Al comienzo del turno' (2026-09-04, a pedido del usuario —
-			# p.ej. manuel rodriguez: 'Al comienzo del turno, genera un Oro
-			# para Aliados o Baraja una carta de coste 3 o menos') — mismo
-			# aislamiento que on_agrupacion (disparado desde el mismo lugar
-			# real, ver TriggerSystem.resolve_agrupacion_triggers()).
+			# "Al comienzo del turno" (p.ej. manuel rodriguez): mismo aislamiento que on_agrupacion,
+			# disparado desde TriggerSystem.resolve_agrupacion_triggers().
 			var ability_text: String = ""
 			if card.get("card_data") != null:
 				ability_text = card.card_data.get("habilidad", "")
-			var clause := _isolate_trigger_clause(ability_text, [
-				"al comienzo del turno", "al inicio del turno", "al comienzo de tu turno"
-			])
+			# La oración que vale en este turno (Carcosa: "al comienzo del turno oponente" y "al comienzo de
+			# tu turno" en oraciones distintas).
+			var controller_id: int = card.get("owner_id") if card.get("owner_id") != null else 0
+			if card.get("controller_id") != null:
+				controller_id = int(card.controller_id)
+			var clause: String = load("res://scripts/core/effects/mechanics/CardQuery.gd").turn_start_clause(
+				ability_text, GameManager.active_player_id == controller_id)
 			if not clause.is_empty():
-				var controller_id: int = card.get("owner_id") if card.get("owner_id") != null else 0
 				if await _main._look_and_play.try_execute_gold_for_allies_or_shuffle_cost_max_pattern(clause, card, controller_id):
 					result["no_handler"] = false
 				else:
@@ -922,65 +823,92 @@ func _execute_trigger_effect(card: Node, trigger_type: String, event_data: Dicti
 					if resolved:
 						result["no_handler"] = false
 		elif trigger_type == "on_ataque_start":
-			# 'Al comienzo del Ataque' (2026-09-04, a pedido del usuario —
-			# p.ej. almirante akari: 'Al comienzo del Ataque, genera un Oro
-			# por el turno para jugar Aliados o Armas').
+			# "Al comienzo del Ataque" (p.ej. almirante akari: "genera un Oro por el turno para jugar Aliados
+			# o Armas").
 			var ability_text: String = ""
 			if card.get("card_data") != null:
 				ability_text = card.card_data.get("habilidad", "")
 			var clause := _isolate_trigger_clause(ability_text, [
 				"al comienzo del ataque"
 			])
+			# ambrosio ohiggins: su "Al comienzo del Ataque" se usa desde la mano o el Cementerio, antes de
+			# declarar (TurnStartPatterns.ambrosio_on_ataque_start()); en juego no hace nada.
+			if TurnStartScript.AMBROSIO_TEXT in CemeteryTriggersScript.normalize(clause):
+				result["no_handler"] = false
+				clause = ""
 			if not clause.is_empty():
 				var controller_id: int = card.get("owner_id") if card.get("owner_id") != null else 0
 				var resolved := await _resolve_look_and_play_patterns(card, ability_text, clause, controller_id, event_data)
 				if resolved:
 					result["no_handler"] = false
 		elif trigger_type == "on_vigilia":
-			# 'Al comienzo de tu/la Vigilia' (2026-09-03, corregido — NO
-			# 'en tu vigilia' sola: esa es la ventana NORMAL de las
-			# habilidades activadas ('una vez por turno, puedes X'), así
-			# que por sí sola no implica disparador real. Ver la nota
-			# larga en Card.gd TRIGGER_KEYWORDS['on_vigilia']. 'en tu
-			# vigilia o fase final' queda aparte por Mariano Osorio,
-			# acotado a esa combinación exacta.
+			# "Al comienzo de tu/la Vigilia". No "en tu vigilia" sola: esa es la ventana normal de las
+			# habilidades activadas ("una vez por turno, puedes X"), ver Card.gd
+			# TRIGGER_KEYWORDS['on_vigilia']. "en tu vigilia o fase final" queda aparte, acotado a Mariano
+			# Osorio.
 			var ability_text: String = ""
 			if card.get("card_data") != null:
 				ability_text = card.card_data.get("habilidad", "")
 			var clause := _isolate_trigger_clause(ability_text, [
 				"al comienzo de tu vigilia", "al comienzo de la vigilia", "en tu vigilia o fase final"
 			])
-			if not clause.is_empty():
+			var nclause: String = CemeteryTriggersScript.normalize(clause)
+			if "vigilia oponente" in nclause or "esta en tu cementerio" in nclause or "jugar este aliado de tu cementerio" in nclause \
+					or "este u otro oro de tu cementerio" in nclause or "puedes jugarlo al comienzo" in nclause:
+				# París, pulsera de energia, compendium maleficarum, gumyocho, veinte mil leguas: los resuelve
+				# ActivatedPatterns.vigilia_start_extras(). "Puedes jugarlo al comienzo de la Vigilia" (Guerrillero
+				# Rodriguez) es un momento para jugarlo (PhaseStartWindow), no un disparador.
+				result["no_handler"] = false
+			elif not clause.is_empty():
 				var controller_id: int = card.get("owner_id") if card.get("owner_id") != null else 0
 				var resolved := await _resolve_look_and_play_patterns(card, ability_text, clause, controller_id, event_data)
 				if resolved:
 					result["no_handler"] = false
-		elif trigger_type == "on_damage_dealt":
-			# 'Cuando haga daño de combate'/'cuando haga daño'/'si hizo daño'
-			# (DAR) — mismo aislamiento de oración que on_attack, por la
-			# misma razón: una carta puede tener varios disparadores
-			# distintos en el mismo bloque de texto. "Infligir"/"inflija"/
-			# "inflige" no es terminología real del juego (2026-08-28, a
-			# pedido del usuario) — se sacó de la lista.
+		elif trigger_type == "on_destroyed":
+			# "Cuando sea Destruido": la carta ya está en el Cementerio y su Nodo se liberó; llega aquí
+			# con un proxy desde CemeteryTriggers.on_card_destroyed(), no por la cola de triggers.
 			var ability_text: String = ""
 			if card.get("card_data") != null:
 				ability_text = card.card_data.get("habilidad", "")
-			# "cuando hace daño" (2026-10-12, p.ej. Sir Galahad: 'Cuando hace
-			# daño al Castillo oponente, ...') — on_damage_dealt ya solo se
-			# dispara por daño al Castillo (PhaseFlowController._fire_damage_
-			# dealt_triggers()).
+			var clause := _isolate_trigger_clause(ability_text, ["cuando sea destruido", "al ser destruido"])
+			if not clause.is_empty():
+				var controller_id: int = card.get("owner_id") if card.get("owner_id") != null else 0
+				if card.get("controller_id") != null:
+					controller_id = int(card.controller_id)
+				# dis pater: "si hay seis o más cartas en tu Destierro, puedes ...". Los patrones de abajo
+				# no ven la condición; sin cumplirla, la habilidad se resuelve sin hacer nada.
+				var cond := RegEx.create_from_string("(?i)si hay (\\w+) o m[aá]s cartas en tu destierro, ").search(clause)
+				if cond:
+					var needed: int = EffectCompiler.parse_amount(cond.get_string(1).to_lower())
+					if CardManager.get_exile_count(controller_id) < needed:
+						result["no_handler"] = false
+						return result
+				var resolved := await _resolve_look_and_play_patterns(card, ability_text, clause, controller_id, event_data)
+				if resolved:
+					result["no_handler"] = false
+		elif trigger_type == "on_damage_dealt":
+			# "Cuando haga daño de combate" / "cuando haga daño" / "si hizo daño" (DAR): mismo aislamiento de
+			# oración que on_attack. "Infligir" no es terminología del juego.
+			var ability_text: String = ""
+			if card.get("card_data") != null:
+				ability_text = card.card_data.get("habilidad", "")
+			# "cuando hace daño" (p.ej. Sir Galahad: "Cuando hace daño al Castillo oponente"):
+			# on_damage_dealt solo se dispara por daño al Castillo
+			# (PhaseFlowController._fire_damage_dealt_triggers()).
 			var clause := _isolate_trigger_clause(ability_text, [
 				"cuando haga daño de combate", "cuando haga daño", "si hizo daño", "cuando hace daño"
 			])
 			if not clause.is_empty():
 				var controller_id: int = card.get("owner_id") if card.get("owner_id") != null else 0
-				# Zadquiel (2026-10-14): texto completo, la cláusula aislada
-				# corta antes de "Esa carta no puede ser jugada...".
+				# Zadquiel: texto completo; la cláusula aislada corta antes de "Esa carta no puede ser
+				# jugada...".
 				if await _main._look_and_play.try_execute_look_hand_name_play_lock_pattern(ability_text, card, controller_id):
 					result["no_handler"] = false
 				elif await _main._convert_misc_resolver.try_execute_convert_ally_to_gold_pattern(clause, card, controller_id):
 					result["no_handler"] = false
 				elif await _main._draw_shuffle_resolver.try_execute_banish_cemeteries_equal_to_own_strength_pattern(clause, card, controller_id):
+					result["no_handler"] = false
+				elif await ActivatedScript.try_execute(card, clause, controller_id):  # escorpio, malafar, nagaraja, vinci y yang...
 					result["no_handler"] = false
 				elif await _main._effect_interpreter.try_execute(card, clause, controller_id):
 					result["no_handler"] = false
@@ -1012,32 +940,14 @@ func _isolate_trigger_clause(ability_text: String, trigger_phrases: Array) -> St
 
 
 func _isolate_all_trigger_clauses(ability_text: String, trigger_phrases: Array) -> Array[String]:
-	"""Como _isolate_trigger_clause() pero devuelve TODOS los bloques que
-	empiezan con alguna frase de trigger_phrases, no solo el primero — una
-	carta puede repetir el MISMO tipo de trigger dos veces con efectos
-	independientes (2026-08-29, p.ej. Alicia en Wonderland: dos 'Cuando
-	entra en juego' separados, cada uno con su propio efecto). Cada bloque
-	junta las oraciones siguientes hasta que aparece:
-	  - otra oración que vuelva a matchear trigger_phrases (empieza el
-	    siguiente bloque), o
-	  - una oración de habilidad ACTIVADA ('una vez por turno'/'una vez al
-	    turno'/'una vez en tu turno'/'una vez en su turno') — esas se
-	    resuelven por un camino totalmente distinto (parse_abilities() +
-	    ActionPipeline) y no deben mezclarse aquí aunque no matcheen
-	    trigger_phrases (2026-08-29, p.ej. Tesoro de los Césares: el ETB
-	    de esta carta son DOS oraciones separadas por punto, seguidas de
-	    una habilidad activada en el mismo bloque de texto — sin este corte
-	    el bloque del ETB se comía también la activada).
-	Ya NO tiene la limitación que este comentario documentaba antes
-	(2026-08-30, bug real encontrado: Garfio Pirata — 'Cuando entra en
-	juego, el portador no puede salir del juego hasta tu próximo turno.
-	Cuando el portador ataque, ... Roba una carta.' — sin el corte de abajo,
-	la oración de 'Cuando el portador ataque' quedaba pegada al bloque de
-	'Cuando entra en juego', y extract_action() encontraba 'Roba una carta'
-	y la ejecutaba AL EQUIPARSE en vez de al atacar). Ahora también corta el
-	bloque en curso apenas aparece una oración de un trigger de OTRO TIPO
-	(cualquier frase de Card.TRIGGER_KEYWORDS que no sea de este mismo
-	trigger_phrases)."""
+	"""Como _isolate_trigger_clause(), pero devuelve todos los bloques que empiezan con alguna frase
+	de trigger_phrases (una carta puede repetir el mismo trigger, p.ej. Alicia en Wonderland). Cada
+	bloque junta las oraciones siguientes hasta:
+	- otra oración que calce trigger_phrases (siguiente bloque);
+	- una habilidad activada ("una vez por turno" y variantes), que se resuelve por
+	parse_abilities() + ActionPipeline (p.ej. Tesoro de los Césares);
+	- una oración de un trigger de otro tipo de Card.TRIGGER_KEYWORDS (p.ej. Garfio Pirata: si no,
+	su "Roba una carta" de "Cuando el portador ataque" se ejecutaba al equiparse)."""
 	var blocks: Array[String] = []
 	if ability_text.is_empty():
 		return blocks
@@ -1045,20 +955,21 @@ func _isolate_all_trigger_clauses(ability_text: String, trigger_phrases: Array) 
 	var current: Array[String] = []
 	var once_markers := ["una vez por turno", "una vez al turno", "una vez en tu turno", "una vez en su turno"]
 
-	# Frases de cualquier OTRO tipo de trigger (no las de trigger_phrases,
-	# las que estamos aislando) — ver corrección de 2026-08-30 arriba.
+	# Frases de los otros tipos de trigger (no las de trigger_phrases).
 	var other_trigger_phrases: Array = []
 	for kw_type in Card.TRIGGER_KEYWORDS:
 		for phrase in Card.TRIGGER_KEYWORDS[kw_type]:
 			if phrase not in trigger_phrases:
 				other_trigger_phrases.append(phrase)
+	# "Al comienzo de cada turno" (la esmeralda): no está en TRIGGER_KEYWORDS, pero es otra habilidad y
+	# corta el bloque.
+	if "al comienzo de cada turno" not in trigger_phrases:
+		other_trigger_phrases.append("al comienzo de cada turno")
 
-	# Cada renglón del texto es una habilidad aparte (2026-10-14, bug real
-	# reportado por el usuario: Signo Amarillo "resolvió pero no hizo nada" —
-	# su "Cuando entra en juego, mira..." se llevaba pegado el renglón
-	# siguiente, "Puedes convertir este Oro...", y CastleLook/EffectCompiler
-	# ya no lo entendían). Un bloque no sigue en el renglón de abajo, salvo
-	# que éste empiece en minúscula (texto cortado a mitad de oración).
+	# Cada renglón del texto es una habilidad aparte (Signo Amarillo: su "Cuando entra en juego,
+	# mira..." se llevaba el renglón "Puedes convertir este Oro..." y CastleLook/EffectCompiler ya no
+	# lo entendían). Un bloque sigue en el renglón de abajo solo si éste empieza en minúscula (oración
+	# cortada).
 	var sentences: Array = []  # [oración, empieza_renglón]
 	for line in ability_text.split("\n"):
 		var first_in_line := true

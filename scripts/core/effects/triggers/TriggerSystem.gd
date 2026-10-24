@@ -48,53 +48,39 @@ var _resolution: TriggerResolution
 var _targeted_executor: TargetedEffectExecutor
 var _restrictions: TriggerRestrictions
 var _buffs: TemporaryBuffSystem
-## Patrones "mira/muestra y juega" (Signo Amarillo, Tangata Manu, Presente,
-## Perder la Razón) — sacado de TargetedEffectExecutor.gd (2026-08-28,
-## "módulos gordos").
+## Patrones "mira/muestra y juega" (Signo Amarillo, Tangata Manu, Presente, Perder la Razón).
 var _look_and_play: LookAndPlayResolver
-## Buscador de cartas por nombre para efectos "nombra una carta" (2026-08-29,
-## p.ej. Alicia en Wonderland, Tesoro de los Césares). Cargado con preload()
-## en vez del nombre de clase global (a diferencia de los módulos de arriba)
-## porque es un script nuevo — el editor todavía no lo había escaneado para
-## registrar su class_name, y referenciarlo por nombre tiraba "Could not
-## find type" hasta el próximo reimport manual del proyecto.
+## Buscador de cartas por nombre para efectos "nombra una carta" (p.ej. Alicia en Wonderland, Tesoro
+## de los Césares). Con preload(): un editor abierto desde antes de crear la clase no tiene
+## registrado su class_name y falla con "Could not find type".
 const CardNameSearchDialogScript = preload("res://scripts/ui/selection/CardNameSearchDialog.gd")
 var _card_name_search: RefCounted
-## Familias de patrones "try_execute_*_pattern" extraídas de
-## TargetedEffectExecutor.gd (2026-08-30, "módulos gordos") — mismo corte
-## que ya separó LookAndPlayResolver.gd de este mismo archivo. preload()
-## en vez del nombre de clase global: son scripts NUEVOS de esta sesión, ver
-## el comentario de arriba sobre CardNameSearchDialogScript.
-# preload y no el class_name global (2026-10-12): un editor de Godot abierto
-# desde antes de crear la clase no la tiene registrada y Main/TriggerSystem
-# fallaban con "Could not find type" hasta reabrir el proyecto.
+## Familias de patrones "try_execute_*_pattern" separadas de TargetedEffectExecutor.gd. preload() en
+## vez del class_name global, por el mismo motivo que arriba.
 const EffectContextScript = preload("res://scripts/core/effects/EffectContext.gd")  # detector de paridad (§56)
 const EffectInterpreterScript = preload("res://scripts/core/effects/compiler/EffectInterpreter.gd")
+const AllyEventTriggersScript = preload("res://scripts/core/effects/triggers/AllyEventTriggers.gd")
 const DrawShuffleResolverScript = preload("res://scripts/core/effects/triggers/DrawShuffleResolver.gd")
 const ConvertAndMiscResolverScript = preload("res://scripts/core/effects/triggers/ConvertAndMiscResolver.gd")
-## Patrones de Tótems detectados sin cobertura en la auditoría de 539 cartas
-## (2026-09-20, ver arquitectura.md) — script nuevo de esta sesión, preload()
-## por el mismo motivo que CardNameSearchDialogScript arriba.
+## Patrones de Tótems (auditoría de cartas sin cobertura, arquitectura.md). preload() por el mismo
+## motivo.
 const TotemAbilityPatternsScript = preload("res://scripts/core/effects/triggers/TotemAbilityPatterns.gd")
-## Patrones de Armas detectados sin cobertura en la misma auditoría de 539
-## cartas (2026-09-20) — mismo criterio y mismo motivo de preload() que
-## TotemAbilityPatternsScript arriba.
+## Patrones de Armas (misma auditoría). preload() por el mismo motivo.
 const WeaponAbilityPatternsScript = preload("res://scripts/core/effects/triggers/WeaponAbilityPatterns.gd")
-## Patrones de Oros detectados sin cobertura en la misma auditoría de 539
-## cartas (2026-09-20) — mismo criterio y mismo motivo de preload() que
-## TotemAbilityPatternsScript/WeaponAbilityPatternsScript arriba.
+## Patrones de Oros (misma auditoría). preload() por el mismo motivo.
 const OroAbilityPatternsScript = preload("res://scripts/core/effects/triggers/OroAbilityPatterns.gd")
 var _draw_shuffle_resolver: RefCounted
 var _convert_misc_resolver: RefCounted
 var _totem_patterns: RefCounted
 var _weapon_patterns: RefCounted
 var _oro_patterns: RefCounted
-## Efectos compilados por piezas (EffectCompiler + EffectInterpreter,
-## 2026-10-12, arquitectura.md §54) — se prueba ANTES de la cadena de
-## patrones en TriggerResolution._resolve_look_and_play_patterns().
+## Efectos compilados por piezas (EffectCompiler + EffectInterpreter, arquitectura.md §54): se
+## prueban antes de la cadena de patrones en TriggerResolution._resolve_look_and_play_patterns().
 var _effect_interpreter: RefCounted
-## "Cuando sea puesta en tu Cementerio" (2026-10-14, Lanza Argenta).
+## "Cuando sea puesta en tu Cementerio" (Lanza Argenta).
 const CemeteryTriggersScript = preload("res://scripts/core/effects/triggers/CemeteryTriggers.gd")
+const PlayerSideScript = preload("res://scripts/core/game/PlayerSide.gd")
+const CardQuery = preload("res://scripts/core/effects/mechanics/CardQuery.gd")
 var _cemetery_triggers: RefCounted
 
 
@@ -126,6 +112,7 @@ func _ready() -> void:
 	_cemetery_triggers = CemeteryTriggersScript.new()
 	CardManager.card_put_in_cemetery.connect(_cemetery_triggers.on_card_put_in_cemetery)
 	CardManager.card_put_in_exile.connect(_cemetery_triggers.on_card_put_in_exile)
+	CardManager.card_destroyed.connect(_cemetery_triggers.on_card_destroyed)
 
 	# Conectar a señales de EffectController para recolectar triggers.
 	# on_card_entered_play y on_card_attacks NO se conectan aquí — esos dos
@@ -167,16 +154,9 @@ func end_collecting_and_queue() -> void:
 	# Notificar que hay triggers pendientes
 	emit_signal("triggers_pending", pending_active_triggers, pending_opponent_triggers)
 
-	# Si hay múltiples triggers del jugador activo, ELIGE el orden (DAR 7.4:
-	# el dueño de varios triggers simultáneos decide en qué orden resuelven
-	# — 2026-08-30, a pedido del usuario: p.ej. Espada de O'Higgins y
-	# Capitán O'Brien disparando juntos en Fase Final, donde puede importar
-	# barajar el Cementerio con uno ANTES de robar con el otro. Antes esto
-	# era un TODO sin implementar — emitía trigger_ordering_requested pero
-	# nadie lo escuchaba nunca, así que siempre caía a 'orden de llegada'
-	# silenciosamente). Solo el jugador humano elige por ahora, mismo
-	# criterio ya establecido para el resto de decisiones interactivas de
-	# esta sesión — el oponente sigue en orden de llegada.
+	# Con varios triggers simultáneos del jugador activo, él elige el orden (DAR 7.4; p.ej. Espada de
+	# O'Higgins y Capitán O'Brien en Fase Final: barajar el Cementerio antes de robar). Solo elige el
+	# humano; el oponente resuelve en orden de llegada.
 	if pending_active_triggers.size() > 1 and active_player == 0:
 		pending_active_triggers = await _prompt_trigger_order(pending_active_triggers)
 
@@ -193,20 +173,10 @@ func end_collecting_and_queue() -> void:
 
 
 func _prompt_trigger_order(triggers: Array[Dictionary]) -> Array[Dictionary]:
-	"""Deja elegir al jugador el orden de resolución entre varios triggers
-	simultáneos propios clickeando DIRECTO sobre las cartas reales que van
-	a disparar (2026-09-13, a pedido del usuario: 'hacer click en la carta
-	que vaya a disparar... luego en la siguiente y así', en vez del modal
-	de lista viejo) — cada carta con un trigger pendiente ya es un Nodo
-	real y visible en juego, no hace falta ningún dato intermedio.
-	Returns: los mismos triggers, en el orden elegido (o el orden original
-	si algo falla, para no perder ningún trigger en el camino).
-
-	2026-09-02: firma corregida de Array genérico a Array[Dictionary] — el
-	llamador (end_collecting_and_queue()) asigna el resultado directo a
-	pending_active_triggers, que SÍ está tipado Array[Dictionary]; GDScript
-	rechaza en tiempo de ejecución asignar un Array sin tipar a una variable
-	tipada, aunque el contenido real fueran todo Dictionary."""
+	"""Elegir el orden de resolución de varios triggers propios clickeando las cartas que van a
+	disparar, una tras otra. Devuelve los mismos triggers en el orden elegido (o el original si
+	algo falla, para no perder ninguno). Tipado Array[Dictionary] porque el llamador lo asigna a
+	pending_active_triggers."""
 	var main := get_node_or_null("/root/Main")
 	if not main or not main._card_interaction:
 		return triggers
@@ -219,13 +189,9 @@ func _prompt_trigger_order(triggers: Array[Dictionary]) -> Array[Dictionary]:
 		candidates.append(card)
 		by_card[card] = t
 
-	# cancellable=false (mismo criterio que descartes mandatorios, ver
-	# arquitectura.md §10.29): el orden hay que elegirlo entero, ESC a
-	# mitad de camino perdería triggers reales sin resolver.
-	# glow_color_override = dorado (2026-09-15, a pedido del usuario): esto
-	# no es "elegir un objetivo propio/rival" (celeste/rojo, el default) —
-	# son triggers PROPIOS ya disparados esperando orden, mismo significado
-	# que el brillo dorado de "habilidad activable disponible".
+	# cancellable = false (arquitectura.md §10.29): hay que elegir el orden completo; ESC a mitad
+	# dejaría triggers sin resolver. Brillo dorado: son triggers propios esperando orden, no objetivos
+	# (celeste/rojo).
 	var chosen: Array = await main._card_interaction.await_multi_target(
 		"Elige el orden en que se resuelven (clickea primero la que quieras que actúe antes)",
 		candidates, candidates.size(), Callable(), Callable(), false, CardBadges.GLOW_COLOR_GOLD)
@@ -288,9 +254,8 @@ func clear_triggers() -> void:
 
 
 func resolve_talisman(card: Node) -> bool:
-	"""Envoltorio (2026-10-12, §56): marca el contexto de efecto (quién
-	controla este Talismán) para el detector de paridad mientras resuelve.
-	La lógica real está en _resolve_talisman_impl()."""
+	"""Envoltorio (§56): marca el contexto de efecto (quién controla el Talismán) para el detector de
+	paridad mientras resuelve. La lógica está en _resolve_talisman_impl()."""
 	var controller: int = int(card.get("owner_id")) if is_instance_valid(card) and card.get("owner_id") != null else 0
 	var ctx_token: int = EffectContextScript.push(card, controller, "Talismán", "pending")
 	var annulled: bool = await _resolve_talisman_impl(card)
@@ -299,24 +264,14 @@ func resolve_talisman(card: Node) -> bool:
 
 
 func _resolve_talisman_impl(card: Node) -> bool:
-	"""Resuelve el efecto impreso de un Talismán al jugarlo (DAR Sección 8).
-	A diferencia de una habilidad disparada (Sección 7.4), un Talismán no
-	'dispara' nada — su texto ES el efecto de jugarlo, se resuelve directo
-	aquí, sin pasar por has_trigger(), register_trigger() ni la cola
-	compartida de triggers (2026-08-27, a pedido del usuario). Llamado
-	desde GoldManager._trigger_enter_play() para cartas tipo TALISMAN.
-
-	Pila de Respuesta Universal (2026-09-09): para un Talismán, "jugarlo" y
-	"que su efecto resuelva" son EL MISMO momento del DAR (no hay un estado
-	intermedio de "en juego" como con un Aliado) — así que este es el ÚNICO
-	choke point que hace falta para darle a CUALQUIER Talismán una ventana
-	de respuesta real, en vez de que cada patrón (try_execute_*_pattern en
-	LookAndPlayResolver y sus mitades) tuviera que abrir la suya por su
-	cuenta. Los pocos patrones que ya tenían su propia ventana interna
-	(Golpe Solar, Tempilcahue, Acabar la Esperanza — de cuando todavía no
-	existía este choke point) se la sacaron para no preguntar dos veces.
-	Returns: true si fue anulado/cancelado durante la ventana (no se
-	resuelve el efecto — el llamador lo manda al Cementerio sin más)."""
+	"""Resuelve el efecto impreso de un Talismán al jugarlo (DAR Sección 8). Un Talismán no dispara:
+	su texto es el efecto y se resuelve directo, sin has_trigger()/register_trigger() ni la cola de
+	triggers. Lo llama GoldManager._trigger_enter_play().
+	Para un Talismán, jugarlo y resolverlo son el mismo momento, así que este es el único punto que
+	hace falta para darle a cualquier Talismán su ventana de respuesta (Pila de Respuesta
+	Universal); los patrones no abren una propia.
+	Devuelve true si fue anulado/cancelado en la ventana (no se resuelve; el llamador lo manda al
+	Cementerio)."""
 	if not is_instance_valid(card):
 		return false
 	var ability_text: String = card.get("card_ability") if card.get("card_ability") != null else ""
@@ -325,11 +280,9 @@ func _resolve_talisman_impl(card: Node) -> bool:
 	var controller_id: int = card.get("owner_id") if card.get("owner_id") != null else 0
 	if await open_response_window(card, str(card.card_name) if card.get("card_name") else "", controller_id):
 		return true
-	# kotoku-in (2026-09-20): "el próximo Talismán que juegue tu oponente
-	# este turno se resuelva sin efecto" — se consume ANTES de resolver,
-	# mismo canal de retorno que Anular/Cancelar (true = va al Cementerio
-	# sin resolver su efecto).
-	if _totem_patterns.consume_kotoku_in_talisman_fizzle(controller_id):
+	# kotoku-in: "el próximo Talismán que juegue tu oponente este turno se resuelva sin efecto" — se
+	# consume antes de resolver; true = al Cementerio sin efecto, como Anular/Cancelar.
+	if _totem_patterns.consume_kotoku_in_talisman_fizzle(controller_id, int(card.get("card_cost")) if card.get("card_cost") != null else 0):
 		return true
 	await _resolution._resolve_look_and_play_patterns(card, ability_text, ability_text, controller_id, {"card": card})
 	return false
@@ -347,12 +300,12 @@ func _on_global_event(player_id: int, card: Node, event_type: String) -> void:
 
 
 func _on_global_event_with_zone(player_id: int, card: Node, zone: int, event_type: String) -> void:
-	"""Handler para eventos con zona"""
-	_collect_triggers_for_event(event_type, {
-		"player_id": player_id,
-		"card": card,
-		"zone": zone
-	})
+	"""Handler para eventos con zona. Al salir del juego se anota por qué (efecto/daño de quién), que
+	se pierde en cuanto la cola resuelve (kato tsune: "por un efecto oponente")."""
+	var data := {"player_id": player_id, "card": card, "zone": zone}
+	if event_type == "on_leave_play":
+		data["cause"] = CemeteryTriggersScript._cause(player_id)
+	_collect_triggers_for_event(event_type, data)
 
 
 func _on_global_event_with_dest(player_id: int, card: Node, destination: int, event_type: String) -> void:
@@ -366,47 +319,24 @@ func _on_global_event_with_dest(player_id: int, card: Node, destination: int, ev
 
 func _collect_triggers_for_event(event_type: String, event_data: Dictionary) -> void:
 	"""Recolecta todos los triggers que responden a un evento.
-
-	GUARDIA DE REENTRADA (2026-08-16): esta función se llama con 'await' desde
-	varios sitios (GoldManager al jugar una carta, GameManager al declarar un
-	atacante). trigger_queue/pending_* son variables de módulo COMPARTIDAS —
-	si un jugador dispara un segundo evento (p.ej. declara un ataque) mientras
-	la ventana de respuesta del trigger anterior (p.ej. 'roba 2' de un oro
-	recién jugado) sigue abierta, la segunda llamada empezaba a recolectar y
-	encolar SOBRE la misma cola que el primer resolve_all_triggers() todavía
-	estaba vaciando en su propio bucle — dos bucles compitiendo por el mismo
-	trigger_queue. Resultado real reportado: el efecto del oro se resolvía
-	solo al intentar atacar, y la ventana de prioridad quedaba en un estado
-	que ya no dejaba pasar. Se espera a que la recolección/resolución anterior
-	termine antes de empezar una nueva — así siempre queda serializado."""
-	# Reentrada segura (2026-08-23): si esta llamada ocurre DENTRO de la
-	# resolución de otro trigger (p.ej. Lobo Sagrado equipa un Arma cuyo
-	# propio 'cuando entra en juego' dispara este mismo camino vía
-	# _trigger_enter_play), esperar a que is_resolving baje a false es un
-	# DEADLOCK: is_resolving no baja hasta que ESTA MISMA llamada anidada
-	# retorne, porque es parte de la cadena de await de la resolución
-	# externa. Confirmado con log real: Lobo Sagrado nunca robaba las 2
-	# cartas (el código quedaba después de este punto sin ejecutarse jamás),
-	# y cualquier otro trigger posterior tampoco podía avanzar. Distinguir
-	# la reentrada es seguro: is_collecting solo es true durante un tramo
-	# 100% síncrono (sin ningún await) de esta función, así que una llamada
-	# anidada real solo puede darse con is_collecting ya en false — se sigue
-	# esperando si hay una recolección concurrente genuina en curso, pero
-	# nunca por estar anidada dentro de su propia resolución.
+	Guardia de reentrada: se llama con await desde varios sitios y trigger_queue/pending_* son
+	compartidos. Si llegaba un segundo evento (p.ej. declarar un ataque) mientras la ventana del
+	trigger anterior seguía abierta, dos bucles competían por la misma cola. Se espera a que
+	termine la recolección/resolución anterior: todo queda serializado."""
+	# Reentrada anidada: si esta llamada ocurre dentro de la resolución de otro trigger (p.ej. Lobo
+	# Sagrado equipa un Arma con "cuando entra en juego"), esperar a is_resolving = false es un
+	# deadlock (no baja hasta que esta llamada retorne). is_collecting solo es true en un tramo
+	# síncrono, así que se espera solo si hay una recolección concurrente real, nunca por estar
+	# anidada.
+	# iga ryu: el primer Aliado que entra bajo el control de su oponente cada turno pierde su
+	# habilidad, antes de recolectar sus "cuando entra en juego".
+	if event_type == "on_enter_play":
+		load("res://scripts/core/effects/mechanics/InPlayAbilities.gd").iga_ryu_on_ally_enters(event_data.get("card", null))
 	var is_nested_reentry := is_resolving and not is_collecting
 	if not is_nested_reentry:
-		# Salvaguarda (2026-08-26): esta espera estaba pensada para durar como
-		# mucho unos pocos frames (una recolección/resolución concurrente
-		# real). Causa raíz real encontrada y corregida (ver "camino
-		# completo" más abajo: _get_related_triggers() recibía una
-		# event_card ya liberada sin chequeo de validez, tiraba un error de
-		# tipo y cortaba la función antes de llegar a
-		# end_collecting_and_queue() — is_collecting quedaba en true para
-		# siempre y esta espera colgaba TODOS los triggers del resto de la
-		# partida en silencio). Se deja igual esta salvaguarda de 3s como
-		# defensa extra ante cualquier otro error no previsto en ese mismo
-		# tramo síncrono: fuerza el reset y avisa por consola en vez de
-		# trabar el juego entero.
+		# Salvaguarda: esta espera debería durar pocos frames. Si un error deja is_collecting trabado en
+		# true, a los 3 s fuerza el reset y avisa por consola en vez de colgar todos los triggers de la
+		# partida.
 		var waited := 0.0
 		while (is_collecting or is_resolving) and waited < 3.0:
 			await get_tree().process_frame
@@ -420,42 +350,27 @@ func _collect_triggers_for_event(event_type: String, event_data: Dictionary) -> 
 	var event_card = event_data.get("card", null)
 
 	# ── Camino directo: el propio disparador de la carta del evento ────────
-	# (p.ej. "Cuando entra en juego" de la carta que se acaba de jugar). No
-	# depende de GameManager.game_board — ese es el GameBoard legacy huérfano
-	# (docs/audit-2026-08-13.html, hallazgo 2/4), nunca registrado en la
-	# escena real; exigirlo aquí hacía que NINGUNA carta disparara NUNCA
-	# ningún trigger por este camino.
-	if event_card and is_instance_valid(event_card) and event_card.has_method("has_trigger"):
+	# (p.ej. "Cuando entra en juego" de la carta recién jugada). No depende de GameManager.game_board
+	# (GameBoard viejo, siempre null).
+	# "Cuando sea Destruido" de la propia carta: no por aquí (su Nodo se libera antes de que la cola lo
+	# resuelva), sino por CemeteryTriggers.on_card_destroyed().
+	if event_card and is_instance_valid(event_card) and event_card.has_method("has_trigger") \
+			and event_type != "on_destroyed" \
+			and not (event_type == "on_enter_play" and event_card.get_meta("skip_enter_triggers", false)):  # Manicomio
 		if event_card.has_trigger(event_type):
 			if _check_trigger_conditions(event_card, event_type, event_data):
 				register_trigger(event_card, event_type, event_data)
 
-	# ── Camino completo: triggers de OTRAS cartas que reaccionan a este
-	# evento (p.ej. "Cuando otro Aliado entre al juego..."). Antes dependía
-	# de GameManager.game_board (el GameBoard legacy huérfano, siempre null)
-	# y nunca se ejecutaba — usa el campo real de Main (un solo contenedor
-	# por jugador, no hay zonas separadas de Defensa/Ataque/Apoyo).
-	#
-	# CORRECCIÓN (2026-08-17): este bucle también revisaba si OTRAS cartas
-	# tenían el mismo event_type ("on_enter_play", "on_attack", etc.) que
-	# la carta que disparó el evento — pero esos triggers son propios de
-	# CADA carta ("cuando ESTA carta entra en juego"), no algo que otra
-	# carta deba compartir solo por tener una frase parecida en su propio
-	# texto. Resultado real: cada vez que se jugaba una carta nueva, TODAS
-	# las demás cartas del campo con su propio 'cuando entra en juego' (ya
-	# resuelto hace turnos) volvían a dispararse. Solo debe revisarse
-	# related_triggers (p.ej. on_ally_enters), que sí está pensado para
-	# difundirse a otras cartas bajo un trigger_type distinto.
+	# ── Camino completo: triggers de OTRAS cartas que reaccionan a este evento ──
+	# (p.ej. "Cuando otro Aliado entre al juego..."), sobre el campo real de Main. Solo se revisan los
+	# related_triggers (p.ej. on_ally_enters): los triggers de mismo event_type ("cuando ESTA carta
+	# entra en juego") son propios de cada carta; si se compartieran, todas las cartas del campo
+	# volverían a dispararse con cada carta nueva.
 	var main = get_node_or_null("/root/Main")
 	if main:
-		# event_card puede llegar ya liberada (p.ej. una carta que salió de
-		# juego) — _get_related_triggers() declara 'event_card: Node'
-		# tipado, y pasarle una instancia liberada tira un error de tipo en
-		# Godot ("previously freed") que corta la función AQUÍ MISMO, antes
-		# de llegar a end_collecting_and_queue() (2026-08-26 — causa real de
-		# que is_collecting quedara trabado en true para siempre y ningún
-		# trigger volviera a dispararse en lo que quedaba de partida). El
-		# "camino directo" de arriba ya tenía este chequeo, este bloque no.
+		# event_card puede llegar ya liberada (una carta que salió de juego). Pasarla a
+		# _get_related_triggers() (tipado Node) tira "previously freed" y corta la función antes de
+		# end_collecting_and_queue(), dejando is_collecting trabado.
 		var safe_event_card: Node = event_card if is_instance_valid(event_card) else null
 		var related_triggers = _get_related_triggers(event_type, safe_event_card)
 
@@ -494,27 +409,63 @@ func _collect_triggers_for_event(event_type: String, event_data: Dictionary) -> 
 		await resolve_all_triggers()
 
 
-func resolve_turn_end_triggers(player_id: int) -> void:
-	"""Dispara 'En tu Fase Final'/'Al final del turno' (on_turn_end) para
-	CADA carta que el jugador controla y tenga este trigger (2026-08-30,
-	p.ej. Espada de O'Higgins) — llamar al ENTRAR a Fase Final, antes del
-	robo/límite de mano normales (PhaseFlowController._resolve_fase_final()).
-	A diferencia de on_enter_play/on_attack/etc. (una carta puntual
-	dispara por algo que le pasó a ELLA), Fase Final es un evento de FASE
-	que puede afectar a varias cartas en juego a la vez — no tiene sentido
-	forzarlo por _collect_triggers_for_event() (pensada para un event_card
-	puntual + 'triggers relacionados' de otras cartas, un concepto
-	distinto). Reusa los mismos primitivos de siempre (begin_collecting/
-	register_trigger/end_collecting_and_queue/resolve_all_triggers) en vez
-	de inventar un camino de resolución aparte."""
+## "Cuando ataques" es del jugador, no de la carta: también dispara en las cartas que no atacan
+## (Oros como bullnax o amuleto de oso, Armas como espada colmillo, Aliados que se quedan). Una vez por
+## ataque, después del "cuando ataque" de cada atacante (que ya cubre a los atacantes con este texto).
+## Sable de Napoleón y Estación Fantasma tienen su propio camino (GameManager / InPlayAbilities).
+const PLAYER_ATTACK_SKIP := ["cuando ataques con tres o mas aliados", "cuando ataques, elige hasta dos aliados con furia"]
+
+
+func resolve_player_attack_triggers(player_id: int, attackers: Array) -> void:
 	var main = get_node_or_null("/root/Main")
 	if not main:
 		return
-	# player_gold/player_oro_pagado agregados (2026-09-04, p.ej. Tamales:
-	# 'En tu Fase Final, puedes Barajar hasta tres cartas de los
-	# Cementerios') — un Oro en Reserva/Oro Pagado también puede tener
-	# 'En tu Fase Final', y antes esta lista solo escaneaba las tres líneas
-	# de campo, dejando cualquier trigger de Fase Final de un Oro inerte.
+	var waited := 0.0
+	while (is_collecting or is_resolving) and waited < 3.0:
+		await get_tree().process_frame
+		waited += get_process_delta_time()
+	var candidates: Array = []
+	var containers: Array = PlayerSideScript.line_containers(main, player_id)
+	containers.append(PlayerSideScript.gold_reserva(main, player_id))
+	containers.append(PlayerSideScript.oro_pagado(main, player_id))
+	for container in containers:
+		if not container:
+			continue
+		for c in container.get_children():
+			if not is_instance_valid(c):
+				continue
+			candidates.append(c)
+			var weapons = c.get("equipped_weapons")
+			if weapons is Array:
+				for w in weapons:
+					if is_instance_valid(w):
+						candidates.append(w)
+	var event_data := {"player_id": player_id}
+	begin_collecting()
+	for c in candidates:
+		if c in attackers or not c.has_method("has_trigger") or not c.has_trigger("on_attack"):
+			continue
+		var t := CemeteryTriggersScript.normalize(str(c.get("card_ability")))
+		if not ("cuando ataques" in t) or PLAYER_ATTACK_SKIP.any(func(p): return p in t):
+			continue
+		if _check_trigger_conditions(c, "on_attack", event_data):
+			register_trigger(c, "on_attack", event_data)
+	await end_collecting_and_queue()
+	if has_pending_triggers():
+		await resolve_all_triggers()
+
+
+func resolve_turn_end_triggers(player_id: int) -> void:
+	"""Dispara "En tu Fase Final" / "Al final del turno" (on_turn_end) en cada carta del jugador que
+	lo tenga (p.ej. Espada de O'Higgins). Llamar al entrar a Fase Final, antes del robo/límite de
+	mano (PhaseFlowController._resolve_fase_final()). Es un evento de fase (varias cartas a la
+	vez), no un event_card puntual, así que no pasa por _collect_triggers_for_event(); reusa
+	begin_collecting/register_trigger/end_collecting_and_queue/resolve_all_triggers."""
+	var main = get_node_or_null("/root/Main")
+	if not main:
+		return
+	# Incluye la Reserva y el Oro Pagado: un Oro también puede tener "En tu Fase Final" (p.ej.
+	# Tamales).
 	var fields = [main.player_field, main.player_linea_ataque, main.player_linea_apoyo,
 			main.player_gold, main.player_oro_pagado] if player_id == 0 \
 		else [main.opponent_field, main.opponent_linea_ataque, main.opponent_linea_apoyo,
@@ -546,11 +497,8 @@ func resolve_turn_end_triggers(player_id: int) -> void:
 							and _check_trigger_conditions(w, "on_turn_end", event_data):
 						register_trigger(w, "on_turn_end", event_data)
 
-	# "En la Fase Final oponente" (2026-09-04, p.ej. Biblioteca de
-	# Caballería) — a diferencia de on_turn_end de arriba (cartas del propio
-	# player_id, cuya Fase Final es la que ocurre), este dispara sobre las
-	# cartas del OTRO jugador, que ve la Fase Final de player_id como "la
-	# Fase Final de su oponente".
+	# "En la Fase Final oponente" (p.ej. Biblioteca de Caballería): dispara sobre las cartas del otro
+	# jugador, para quien esta es la Fase Final de su oponente.
 	var opponent_id: int = 1 - player_id
 	var opponent_fields = [main.player_field, main.player_linea_ataque, main.player_linea_apoyo,
 			main.player_gold, main.player_oro_pagado] if opponent_id == 0 \
@@ -570,16 +518,14 @@ func resolve_turn_end_triggers(player_id: int) -> void:
 
 	if has_pending_triggers():
 		await resolve_all_triggers()
+	# miroku (Destierro) y Los Señalados ("En la Fase Final").
+	await load("res://scripts/core/effects/mechanics/ActivatedPatterns.gd").turn_end_extras(main, player_id)
 
 
 func resolve_agrupacion_triggers(player_id: int) -> void:
-	"""Dispara 'En tu Agrupación' (on_agrupacion) para CADA carta que el
-	jugador controla y tenga este trigger (2026-08-30, p.ej. Espada del
-	Juicio: 'Cuando entra en juego y en tu Agrupación, Destierra...') —
-	llamar al ENTRAR a la fase Agrupación (PhaseFlowController). Mismo
-	patrón que resolve_turn_end_triggers(), copiado tal cual en vez de
-	parametrizado: es un evento de FASE distinto (no un event_card puntual
-	de _collect_triggers_for_event())."""
+	"""Dispara "En tu Agrupación" (on_agrupacion) en cada carta del jugador que lo tenga (p.ej. Espada
+	del Juicio). Llamar al entrar a Agrupación (PhaseFlowController). Mismo patrón que
+	resolve_turn_end_triggers(): evento de fase."""
 	var main = get_node_or_null("/root/Main")
 	if not main:
 		return
@@ -605,15 +551,13 @@ func resolve_agrupacion_triggers(player_id: int) -> void:
 				continue
 			if card.has_trigger("on_agrupacion") and _check_trigger_conditions(card, "on_agrupacion", event_data):
 				register_trigger(card, "on_agrupacion", event_data)
-			# "Al comienzo del turno" (on_turn_start, 2026-09-04, p.ej.
-			# manuel rodriguez) — mismo momento real que Agrupación (la
-			# primera fase del turno), así que se dispara desde el mismo
-			# lugar en vez de duplicar todo resolve_*_triggers() para un
-			# evento que ocurre exactamente igual. Excepción conocida:
-			# Turno 1 salta Agrupación (PhaseFlowController), así que un
-			# "on_turn_start" del jugador que empieza no dispara ese
-			# primer turno — caso borde poco relevante (efecto de una vez).
-			if card.has_trigger("on_turn_start") and _check_trigger_conditions(card, "on_turn_start", event_data):
+			# "Al comienzo del turno" (on_turn_start, p.ej. manuel rodriguez): mismo momento que Agrupación,
+			# así que se dispara desde aquí. El turno 1 salta Agrupación, así que el on_turn_start del primer
+			# jugador no dispara ese turno. Solo si alguna oración vale en este turno ("al comienzo del turno
+			# oponente" de ngenechen no dispara en el tuyo).
+			if card.has_trigger("on_turn_start") \
+					and not CardQuery.turn_start_clause(str(card.get("card_ability")), true).is_empty() \
+					and _check_trigger_conditions(card, "on_turn_start", event_data):
 				register_trigger(card, "on_turn_start", event_data)
 			var weapons = card.get("equipped_weapons")
 			if weapons is Array:
@@ -621,8 +565,8 @@ func resolve_agrupacion_triggers(player_id: int) -> void:
 					if is_instance_valid(w) and w.has_method("has_trigger") and w.has_trigger("on_agrupacion") \
 							and _check_trigger_conditions(w, "on_agrupacion", event_data):
 						register_trigger(w, "on_agrupacion", event_data)
-	# "Al comienzo del turno" SIN "tu" (2026-10-18, a pedido del usuario —
-	# manuel rodriguez): también dispara al comienzo del turno del oponente.
+	# "Al comienzo del turno" sin "tu" (manuel rodriguez): también dispara al comienzo del turno del
+	# oponente.
 	var other_fields = [main.opponent_field, main.opponent_linea_ataque, main.opponent_linea_apoyo] if player_id == 0 \
 		else [main.player_field, main.player_linea_ataque, main.player_linea_apoyo]
 	for field in other_fields:
@@ -631,23 +575,42 @@ func resolve_agrupacion_triggers(player_id: int) -> void:
 		for card in field.get_children():
 			if not is_instance_valid(card) or not card.has_method("has_trigger") or not card.has_trigger("on_turn_start"):
 				continue
-			var t: String = str(card.get("card_ability")).to_lower()
-			if "al comienzo de tu turno" in t or not ("al comienzo del turno" in t or "al inicio del turno" in t):
+			# "al comienzo del turno" a secas o "del turno oponente" (Carcosa tiene las dos en oraciones
+			# distintas).
+			if CardQuery.turn_start_clause(str(card.get("card_ability")), false).is_empty():
 				continue
 			if _check_trigger_conditions(card, "on_turn_start", event_data):
 				register_trigger(card, "on_turn_start", event_data)
+	# Oros (Reserva y Oro Pagado): los recorridos de arriba solo miran las líneas. "Al comienzo del turno"
+	# de los dos jugadores (Medalla de Santa Muerte, kamidana, kagura suzu) y "En tu Agrupación" del
+	# jugador del turno (torii).
+	for gold_owner in [player_id, 1 - player_id]:
+		for gold_field in [PlayerSide.gold_reserva(main, gold_owner), PlayerSide.oro_pagado(main, gold_owner)]:
+			if not gold_field:
+				continue
+			for card in gold_field.get_children():
+				if not is_instance_valid(card) or not card.has_method("has_trigger"):
+					continue
+				if gold_owner == player_id and card.has_trigger("on_agrupacion") \
+						and _check_trigger_conditions(card, "on_agrupacion", event_data):
+					register_trigger(card, "on_agrupacion", event_data)
+				if card.has_trigger("on_turn_start") \
+						and not CardQuery.turn_start_clause(str(card.get("card_ability")), gold_owner == player_id).is_empty() \
+						and _check_trigger_conditions(card, "on_turn_start", event_data):
+					register_trigger(card, "on_turn_start", event_data)
 	await end_collecting_and_queue()
 
 	if has_pending_triggers():
 		await resolve_all_triggers()
+	# origenes: "En tu Agrupación, puedes Descartar una carta para subirlo de tu Cementerio a tu mano".
+	await load("res://scripts/core/effects/mechanics/ActivatedPatterns.gd").agrupacion_cemetery_extras(main, player_id)
+	# la esmeralda: "Al comienzo de cada turno" — Arma equipada, en los dos turnos.
+	await load("res://scripts/core/effects/mechanics/TurnStartPatterns.gd").on_turn_start()
 
 
 func resolve_ataque_triggers(player_id: int) -> void:
-	"""Dispara 'Al comienzo del Ataque' (on_ataque_start, 2026-09-04, a
-	pedido del usuario — p.ej. almirante akari: 'Al comienzo del Ataque,
-	genera un Oro por el turno para jugar Aliados o Armas') — mismo
-	patrón que resolve_agrupacion_triggers(), llamar al ENTRAR a la fase
-	Ataque (PhaseFlowController)."""
+	"""Dispara "Al comienzo del Ataque" (on_ataque_start, p.ej. almirante akari). Llamar al entrar a
+	la fase de Ataque (PhaseFlowController). Mismo patrón que resolve_agrupacion_triggers()."""
 	var main = get_node_or_null("/root/Main")
 	if not main:
 		return
@@ -680,18 +643,16 @@ func resolve_ataque_triggers(player_id: int) -> void:
 
 
 func resolve_vigilia_triggers(player_id: int) -> void:
-	"""Dispara 'En tu Vigilia' (on_vigilia) para CADA carta que el jugador
-	controla y tenga este trigger (2026-09-03, p.ej. Mariano Osorio: 'En
-	tu Vigilia o Fase Final, Destierra hasta tres cartas del Cementerio
-	oponente') — llamar al ENTRAR a la fase Vigilia (PhaseFlowController).
-	Mismo patrón que resolve_agrupacion_triggers()/resolve_turn_end_
-	triggers(), copiado tal cual en vez de parametrizado: es un evento de
-	FASE distinto."""
+	"""Dispara "En tu Vigilia" (on_vigilia) en cada carta del jugador que lo tenga (p.ej. Mariano
+	Osorio: "En tu Vigilia o Fase Final, Destierra hasta tres cartas del Cementerio oponente").
+	Llamar al entrar a Vigilia (PhaseFlowController). Mismo patrón que
+	resolve_agrupacion_triggers()."""
 	var main = get_node_or_null("/root/Main")
 	if not main:
 		return
-	var fields = [main.player_field, main.player_linea_ataque, main.player_linea_apoyo] if player_id == 0 \
-		else [main.opponent_field, main.opponent_linea_ataque, main.opponent_linea_apoyo]
+	# Con los Oros: "Al comienzo de tu Vigilia" de un Oro (salmon del saber, shakuhachi, armadura imperial...).
+	var fields = [main.player_field, main.player_linea_ataque, main.player_linea_apoyo, main.player_gold, main.player_oro_pagado] if player_id == 0 \
+		else [main.opponent_field, main.opponent_linea_ataque, main.opponent_linea_apoyo, main.opponent_gold, main.opponent_oro_pagado]
 
 	var waited := 0.0
 	while (is_collecting or is_resolving) and waited < 3.0:
@@ -722,6 +683,10 @@ func resolve_vigilia_triggers(player_id: int) -> void:
 
 	if has_pending_triggers():
 		await resolve_all_triggers()
+	# pulsera de energia (Cementerio) y París (Vigilia oponente): fuera del campo del jugador activo.
+	await load("res://scripts/core/effects/mechanics/ActivatedPatterns.gd").vigilia_start_extras(main, player_id)
+	# compendium maleficarum, gumyocho (Cementerio), veinte mil leguas (cualquier Vigilia).
+	await load("res://scripts/core/effects/mechanics/ActivatedPatterns.gd").vigilia_cemetery_extras(main, player_id)
 
 
 func _get_related_triggers(event_type: String, event_card: Node) -> Array:
@@ -747,10 +712,8 @@ func _check_trigger_conditions(card: Node, trigger_type: String, event_data: Dic
 		return false
 	if _named_trigger_already_used_this_turn(card):
 		return false
-	# Tamales: 'tu oponente... ni disparar' (2026-09-04) — mismo chequeo
-	# que _validate_ability() usa para habilidades ACTIVADAS, aquí para
-	# DISPARADAS. No bloquea auras/efectos continuos (esos no pasan por
-	# este choke point).
+	# Tamales ("tu oponente... ni disparar"): el mismo chequeo que _validate_ability() hace para
+	# habilidades activadas, aquí para disparadas. No bloquea auras ni efectos continuos.
 	if not ContinuousEffectManager.tamales_ability_restriction_reason(card).is_empty():
 		return false
 	if card.has_method("_trigger_conditions_met"):
@@ -759,18 +722,10 @@ func _check_trigger_conditions(card: Node, trigger_type: String, event_data: Dic
 
 
 func _named_trigger_already_used_this_turn(card: Node) -> bool:
-	"""'Solo puedes utilizar la habilidad de X una vez por turno' aplicado a
-	un TRIGGER, no a una habilidad ACTIVADA (2026-08-30, p.ej. Tangata
-	Manu: su 'Cuando entra en juego' puede jugar gratis OTRA copia de sí
-	mismo desde el Castillo, cuyo propio 'Cuando entra en juego' volvería a
-	dispararse sin este chequeo — la restricción del texto es por NOMBRE,
-	compartida entre TODAS las copias que entren ese turno, no por
-	instancia. turn_registry ya evita el reuso de una habilidad ACTIVADA
-	por card_id/ability_index (CardInspectionLayer._validate_ability()),
-	pero nunca se consultaba desde aquí para TRIGGERs — este es el único
-	choke point real por el que pasa cualquier trigger antes de encolarse
-	(ver register_trigger() más abajo), así que alcanza con chequear Y
-	registrar aquí mismo, una sola vez por intento de disparo real."""
+	""""Solo puedes utilizar la habilidad de X una vez por turno" aplicado a un trigger (p.ej. Tangata
+	Manu: su "Cuando entra en juego" puede jugar otra copia de sí mismo, que volvería a
+	dispararse). El límite es por nombre, compartido entre todas las copias. Todo trigger pasa por
+	aquí antes de encolarse (register_trigger()), así que basta con chequear y registrar aquí."""
 	if card.get("card_data") == null:
 		return false
 	var habilidad_text: String = card.card_data.get("habilidad", "")
@@ -789,12 +744,10 @@ func _named_trigger_already_used_this_turn(card: Node) -> bool:
 	var card_name: String = str(card.card_data.get("nombre", "")).to_lower()
 	if card_name.is_empty():
 		return false
-	# Prefijo 'trigger_once:' (2026-08-30) para no compartir namespace con
-	# el registro de habilidades ACTIVADAS, que usa card_id/ability_index
-	# numéricos — un nombre de carta nunca podría colisionar con esa clave,
-	# pero el prefijo lo deja explícito.
+	# Prefijo 'trigger_once:' para no mezclarse con las claves de habilidades activadas
+	# (card_id/ability_index).
 	var name_key: String = "trigger_once:%s" % card_name
-	var turn: int = GameManager.current_turn
+	var turn: int = GameManager.turn_serial
 	if UniversalCardParser.turn_registry.was_used(name_key, 0, turn):
 		return true
 	UniversalCardParser.turn_registry.register(name_key, 0, turn)
@@ -878,37 +831,22 @@ func has_buff_type(target: Node, buff_type: String) -> bool:
 # =============================================================================
 # FORWARDERS - TargetedEffectExecutor
 # =============================================================================
-func _execute_parsed_action(action: Dictionary, card: Node, event_data: Dictionary) -> void:
-	await _targeted_executor.execute_parsed_action(action, card, event_data)
 
 
 func open_response_window(source_card: Node, description: String, controller_id: int) -> bool:
-	"""Punto de entrada de la Pila de Respuesta Universal (2026-09-09, ver
-	docs/plans/2026-09-09-pila-respuesta-universal-design.md) para los
-	patrones de trigger de LookAndPlayResolver/DSR_*/TargetedEffectExecutor/
-	etc.: se llama justo en el límite "ya se declaró todo (objetivos/modo
-	elegidos), falta ejecutar el efecto" que ya existe en casi todas esas
-	funciones — mismo lugar donde hoy se insertó EffectController.
-	offer_prevention() en los choke points de destroy/exile/etc.
-
-	Empuja un objeto a ActionPipeline SIN texto de habilidad resoluble
-	(deliberado: si llevara 'habilidad', el Paso E llamaría a
-	resolve_ability_effect() → _resolve_look_and_play_patterns(), que
-	volvería a matchear el MISMO patrón que llamó a esta función — recursión
-	infinita. El efecto real se queda donde siempre estuvo, en las líneas del
-	patrón que siguen después de este await) — así el Paso E es un no-op
-	inofensivo y lo único que de verdad importa es el Paso D (ventana de
-	prioridad real para el rival).
-
-	Returns: true si el llamador debe ABORTAR su propio efecto (fue anulado o
-	cancelado durante la ventana); false si debe seguir normalmente."""
+	"""Punto de entrada de la Pila de Respuesta Universal
+	(docs/plans/2026-09-09-pila-respuesta-universal-design.md) para los patrones de trigger: se
+	llama cuando ya se declaró todo (objetivos/modo) y falta ejecutar el efecto.
+	Empuja a ActionPipeline un objeto sin texto de habilidad resoluble a propósito: si lo tuviera,
+	el Paso E llamaría a resolve_ability_effect() y volvería a calzar el mismo patrón (recursión
+	infinita). El Paso E es un no-op; lo que importa es el Paso D (ventana de prioridad para el
+	rival).
+	Devuelve true si el llamador debe abortar su efecto (anulado/cancelado); false si sigue."""
 	if not is_instance_valid(source_card):
 		return false
-	# Una sola ventana por efecto (2026-10-12, §59): si la pide la carta del
-	# efecto que se está resolviendo y el rival ya tuvo su ventana para él,
-	# no se abre otra (antes: hasta 3 seguidas por la misma carta). Si
-	# estaba pendiente, esta ES la ventana — después de que el patrón ya
-	# declaró sus objetivos (opción B).
+	# Una sola ventana por efecto (§59): si la pide la carta del efecto en curso y el rival ya tuvo su
+	# ventana, no se abre otra. Si estaba pendiente, esta es la ventana (después de declarar
+	# objetivos).
 	var ctx: Dictionary = EffectContextScript.current()
 	var tracked: bool = not ctx.is_empty() and ctx.get("card") == source_card
 	if tracked:
@@ -922,29 +860,28 @@ func open_response_window(source_card: Node, description: String, controller_id:
 	var context: Dictionary = {
 		"controller_id": controller_id,
 		"source_card_node": source_card,
-		# Qué es esta ventana (2026-10-14, StackAnnul): "carta" = una carta
-		# jugada (Aliado/Arma/Tótem/Oro, se Anula), "Talismán" (se Anula),
-		# "disparada"/"activada" (habilidades, se Cancelan).
+		# Qué es esta ventana (StackAnnul): "carta" = carta jugada (Aliado/Arma/Tótem/Oro, se Anula),
+		# "Talismán" (se Anula), "disparada"/"activada" (habilidades, se Cancelan).
 		"window_kind": str(ctx.kind) if tracked else "carta",
 	}
+	# Crono Diamante cuenta también las disparadas de Oros (las activadas: ActionPipeline.activate_ability()).
+	if tracked and str(ctx.kind) == "disparada" \
+			and load("res://scripts/core/effects/mechanics/ProtectionRules.gd").note_gold_ability_use(source_card, controller_id):
+		context["_first_gold_ability"] = true
 	var outcome: Dictionary = await ActionPipeline.add_triggered_ability_to_stack_and_await(ability_data, source_data, context)
 	var stopped: bool = outcome.get("annulled", false) or outcome.get("cancelled", false)
 	if tracked:
 		ctx.window = "cancelled" if stopped else "done"
+	if stopped:
+		await AllyEventTriggersScript.on_stopped(source_card, controller_id, str(context.window_kind))  # "Si es Anulado, ..."
 	return stopped
 
 
 func resolve_ability_effect(card: Node, effect_text: String, controller_id: int) -> bool:
-	"""Resuelve el texto de efecto de una habilidad — disparada o activada
-	(2026-08-27, a pedido del usuario: 'las habilidades también se
-	resuelven, sean disparadas o activadas', mismo concepto que ya se
-	aplicó a Talismanes). Antes StackStepResolver._resolve_ability() (el
-	camino real de las habilidades ACTIVADAS, vía ActionPipeline) solo
-	probaba extract_action() simple, sin los patrones compuestos ("mira/
-	muestra N...") que sí usan las disparadas — una habilidad activada con
-	ese tipo de efecto nunca resolvía bien. Ahora las dos comparten
-	_resolve_look_and_play_patterns().
-	Returns: true si se ejecutó algo."""
+	"""Resuelve el texto de efecto de una habilidad, disparada o activada.
+	StackStepResolver._resolve_ability() (habilidades activadas vía ActionPipeline) lo usa para que
+	las activadas tengan los mismos patrones compuestos ("mira/muestra N...") que las disparadas:
+	las dos comparten _resolve_look_and_play_patterns(). Devuelve true si se ejecutó algo."""
 	return await _resolution._resolve_look_and_play_patterns(card, effect_text, effect_text, controller_id, {})
 
 

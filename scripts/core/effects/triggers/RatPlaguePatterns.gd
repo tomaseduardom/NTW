@@ -1,10 +1,7 @@
 extends RefCounted
-## Plaga de Ratas (2026-10-17, a pedido del usuario):
-##   "Cuando entra en juego, puedes buscar un Plaga de Ratas en tu Castillo o
-##   Cementerio y juégalo sin pagar su coste.
-##   Puedes Destruirlo para Barajar hasta dos cartas de los Cementerios o que
-##   un Aliado gane 1 de Fuerza permanentemente."
-## Se usa con preload.
+## Plaga de Ratas: "Cuando entra en juego, puedes buscar un Plaga de Ratas en tu Castillo o
+## Cementerio y juégalo sin pagar su coste. Puedes Destruirlo para Barajar hasta dos cartas de los
+## Cementerios o que un Aliado gane 1 de Fuerza permanentemente." Se usa con preload.
 
 const PlayerSideScript = preload("res://scripts/core/game/PlayerSide.gd")
 const ETB_RX := "(?i)busca(?:r)? (?:un|una) ([^.]+?) en tu castillo o cementerio y juégalo sin pagar su coste"

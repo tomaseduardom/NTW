@@ -1,7 +1,6 @@
 extends RefCounted
-## Deck170Patterns — efectos que faltaban del mazo 170 (Talisman - Control),
-## 2026-10-14, ver docs/revision-mazo-170.md. Cada patrón reconoce su propio
-## texto; try_execute() los prueba en orden. Se usa con preload (ver §54).
+## Deck170Patterns — efectos del mazo 170 (Talisman - Control; docs/revision-mazo-170.md). Cada
+## patrón reconoce su texto; try_execute() los prueba en orden. Se usa con preload (ver §54).
 
 const PlayerSideScript = preload("res://scripts/core/game/PlayerSide.gd")
 const StackAnnulScript = preload("res://scripts/core/effects/StackAnnul.gd")
@@ -34,8 +33,9 @@ static func try_execute(card: Node, text: String, controller_id: int) -> bool:
 # -----------------------------------------------------------------------------
 # Diadema Celestial: "Tus Aliados bloqueadores ganan 1 de Fuerza y los Aliados
 # oponentes pierden Imbloqueable. Si Botas esta carta por daño, dejas de Botar
-# cartas y Destierras este Oro." / Visión de Enoc: "Cuando Botes esta carta
-# por daño, puedes Barajar hasta cinco cartas de los Cementerios."
+# cartas y Destierras este Oro." ("pierden Imbloqueable" lo resuelve
+# KeywordAuras.gd) / Visión de Enoc: "Cuando Botes esta carta por daño, puedes
+# Barajar hasta cinco cartas de los Cementerios."
 # -----------------------------------------------------------------------------
 static func count_in_gold_zones(pid: int, phrase: String) -> int:
 	var main := _main_node()
@@ -55,11 +55,6 @@ static func count_in_gold_zones(pid: int, phrase: String) -> int:
 static func blocker_strength_bonus(blocker: Node) -> int:
 	var pid: int = blocker.controller_id if blocker.get("controller_id") != null else 0
 	return count_in_gold_zones(pid, "tus aliados bloqueadores ganan 1 de fuerza")
-
-
-static func opponent_removes_unblockable(attacker: Node) -> bool:
-	var pid: int = attacker.controller_id if attacker.get("controller_id") != null else 0
-	return count_in_gold_zones(1 - pid, "los aliados oponentes pierden imbloqueable") > 0
 
 
 static func on_milled_by_damage(pid: int, data: Dictionary, destination: int) -> bool:
@@ -131,18 +126,14 @@ static func on_vigilia_started(active_pid: int) -> void:
 			continue
 		var use_it: bool = PlayerSideScript.is_bot(pid)
 		if not use_it:
-			# Texto claro (2026-10-17, a pedido del usuario: se confundía con
-			# lo que estaba jugando el oponente en ese momento).
+			# Texto claro: se confundía con lo que estaba jugando el oponente en ese momento
 			use_it = await SelectionManager.await_two_choice(main,
 				"%s (en tu mano): comienza la Vigilia oponente" % str(c.card_name),
 				"Ponerla en juego ahora (en tu próximo turno no podrás poner Oros)", "No ponerla", pid)
 		if not use_it or not is_instance_valid(c):
 			return
-		# 2026-10-17, bug real reportado por el usuario: antes se bloqueaba el
-		# próximo turno y se sacaba la carta de la mano ANTES de ponerla en
-		# juego — si eso fallaba, la Escarapela desaparecía y el bloqueo
-		# quedaba igual. Ahora solo si de verdad entró en juego; si no, la
-		# carta sigue en la mano.
+		# El bloqueo del próximo turno y sacar la carta de la mano ocurren solo si la Escarapela entró en
+		# juego de verdad; si falla, la carta sigue en la mano.
 		var data: Dictionary = c.card_data.duplicate()
 		data["esta_oculta"] = false
 		var node = await main._gold_manager.put_gold_directly_in_reserva(pid, data)
@@ -187,14 +178,13 @@ static func on_card_left_play(_pid: int, card) -> void:  # sin tipo: puede llega
 				in str(c.get("card_ability")).to_lower()):
 			continue
 		var key := "nyssara_gain:%d" % c.get_instance_id()
-		if UniversalCardParser.turn_registry.was_used(key, 0, GameManager.current_turn):
+		if UniversalCardParser.turn_registry.was_used(key, 0, GameManager.turn_serial):
 			continue
-		UniversalCardParser.turn_registry.register(key, 0, GameManager.current_turn)
+		UniversalCardParser.turn_registry.register(key, 0, GameManager.turn_serial)
 		c.card_ability = str(c.card_ability) + "\n" + gained_text
 		if c.get("card_data") is Dictionary:
-			# 2026-10-17, a pedido del usuario: al inspeccionarla, la carta
-			# muestra su texto original y las habilidades ganadas se apilan a
-			# la derecha (CardInspectionLayer._build_gained_abilities_panel()).
+			# Al inspeccionarla, la carta muestra su texto original y las habilidades ganadas se apilan a la
+			# derecha (CardInspectionLayer._build_gained_abilities_panel).
 			if not c.card_data.has("_base_habilidad"):
 				c.card_data["_base_habilidad"] = str(c.card_data.get("habilidad", ""))
 			var gained: Array = c.card_data.get("_gained_abilities", [])
@@ -429,6 +419,28 @@ static func banish_from_hand_toll(main: Node, payer: int, prompt: String) -> boo
 # Anular / Cancelar en la pila (StackAnnul). Se llama al principio de la
 # cadena de resolución, con el texto COMPLETO de la carta.
 # -----------------------------------------------------------------------------
+## DAR abril 2026 (Respuesta): un Talismán de Anular/Cancelar solo se puede jugar si en la pila hay algo
+## del rival que pueda Anular o Cancelar (tipo, coste y que no esté protegido). true si se puede jugar o
+## si el texto no es de ese tipo (opciones con "o", "Elige un efecto"... se deciden al resolver).
+static func annul_response_has_target(card: Node, text: String, controller_id: int) -> bool:
+	var lower := text.to_lower().replace("\n", " ")
+	if "elige un efecto" in lower or "o una carta en juego pierde su habilidad" in lower \
+			or "o prevén que un aliado sea afectado" in lower:
+		return true
+	var sentence := ""
+	for raw in lower.split("."):
+		var s: String = raw.strip_edges()
+		if s.begins_with("anula") or s.begins_with("cancela"):
+			sentence = s
+			break
+	if sentence.is_empty() or " o prevén" in sentence:
+		return true
+	var plan: Dictionary = load("res://scripts/core/effects/compiler/EffectCompiler.gd").compile_clause(sentence)
+	if plan.ok and not plan.steps.is_empty() and plan.steps[0].op == "choice":
+		return true
+	return not StackAnnulScript.try_from_text(card, sentence, controller_id, true).is_empty()
+
+
 static func try_annul_on_stack(card: Node, text: String, controller_id: int) -> bool:
 	var lower := text.to_lower().replace("\n", " ")
 	var main := _main_node()
@@ -458,6 +470,11 @@ static func try_annul_on_stack(card: Node, text: String, controller_id: int) -> 
 			break
 	if sentence.is_empty() or " o prevén" in sentence:
 		return false
+	# "Anula una carta de coste 1 o menos o mira la mano de tu oponente y..." (Mala Flecha): elección
+	# que el compilador entiende entera; la resuelve EffectInterpreter (sin Anular si la Pila está vacía).
+	var plan: Dictionary = load("res://scripts/core/effects/compiler/EffectCompiler.gd").compile_clause(sentence)
+	if plan.ok and not plan.steps.is_empty() and plan.steps[0].op == "choice":
+		return false
 	var res: Dictionary = StackAnnulScript.try_from_text(card, sentence, controller_id)
 	if res.is_empty():
 		main._update_debug("%s: no hay nada en la pila que pueda Anular o Cancelar" % _name(card, "Anular"))
@@ -484,10 +501,9 @@ static func try_annul_on_stack(card: Node, text: String, controller_id: int) -> 
 
 
 static func _play_annulled_under_control(main: Node, obj: Dictionary, controller_id: int) -> void:
-	"""Envidia (2026-10-14): espera a que la carta Anulada llegue al
-	Cementerio de su dueño y la juega bajo tu control sin pagar su coste
-	(sigue siendo de su dueño). Si es un Talismán, elige objetivos de nuevo
-	al resolverse."""
+	"""Envidia: espera a que la carta Anulada llegue al Cementerio de su dueño y la juega bajo tu
+	control sin pagar su coste (sigue siendo de su dueño). Si es un Talismán, elige objetivos de
+	nuevo al resolverse."""
 	var owner_id: int = int(obj.get("context", {}).get("controller_id", 1 - controller_id))
 	var data: Dictionary = StackAnnulScript.data_of(obj)
 	var card_name: String = str(data.get("nombre", ""))

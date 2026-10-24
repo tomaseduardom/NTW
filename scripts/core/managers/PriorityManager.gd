@@ -24,11 +24,10 @@ var player_passed: Array[bool] = [false, false]
 ## Indica si hay una ventana de prioridad activa
 var priority_window_active: bool = false
 
-## 2026-09-11: true mientras hay un diálogo reactivo real esperando decisión
-## del humano (p.ej. Signo Amarillo, ResponseWindowHandler) — el auto-pase
-## "no hay nada que decidir aquí" (PhaseFlowController/ResponseWindowHandler)
-## lo respeta para no cerrar la ventana por abajo mientras el diálogo sigue
-## abierto esperando un click.
+## True mientras hay un diálogo reactivo real esperando decisión del humano (p.ej. Signo Amarillo,
+## ResponseWindowHandler) — el auto-pase "no hay nada que decidir aquí"
+## (PhaseFlowController/ResponseWindowHandler) lo respeta para no cerrar la ventana por abajo
+## mientras el diálogo sigue abierto esperando un click.
 var suppress_human_autopass: bool = false
 
 ## Contexto actual de la prioridad (para UI)
@@ -45,56 +44,40 @@ enum PriorityContext {
 	GUERRA_TALISMANES,    # 5.C3 - Jugar talismanes y habilidades
 	RESPONSE_WINDOW,      # Respuesta a habilidad/efecto
 	DISCARD_PHASE,        # Descarte en fase final
-	BLOCK_DECLARATION     # Declaración de bloqueadores
+	BLOCK_DECLARATION,    # Declaración de bloqueadores
+	PHASE_START           # Comienzo de fase: "Puedes jugarlo al comienzo de cualquier Fase" (PhaseStartWindow)
 }
 
 var current_priority_context: int = PriorityContext.NONE
 
-## Guerra de Talismanes por turnos (2026-10-13, §64, opción B elegida por el
-## usuario). Cada Talismán/habilidad abre su propia Ventana de Respuesta
-## (Paso D) sobre esta misma instancia, que pisa la ventana de la Guerra.
-## Antes nadie la volvía a abrir: quedaba sin ventana hasta que alguien
-## apretaba "Daño" (que la recuperaba siempre con el defensor) y, peor, el
-## "ambos pasaron" de la ventana de respuesta podía terminar la Guerra. Ahora,
-## cuando la acción termina de resolverse, la Guerra sigue con el OTRO
-## jugador (el que no actuó) y los pases vuelven a cero.
+## Guerra de Talismanes por turnos (§64). Cada Talismán/habilidad abre su propia Ventana de
+## Respuesta (Paso D) sobre esta instancia, pisando la de la Guerra. Cuando la acción termina de
+## resolverse, la Guerra sigue con el OTRO jugador (el que no actuó) y los pases vuelven a cero; así
+## el "ambos pasaron" de la respuesta no termina la Guerra.
 var _guerra_last_actor: int = -1
 var _guerra_actions_running: int = 0
 var _guerra_resume_scheduled: bool = false
 var _guerra_resume_after_action: bool = false
 
-## Contador que sube en CADA start_priority_window() (2026-09-15, bug real
-## reportado por el usuario: "se traba en Guerra de Talismanes" — con log
-## en vivo confirmando visible=true dos veces seguidas y luego, sin ningún
-## click del jugador, priority_window_active=false). Causa real:
-## PhaseFlowController._human_pass_after()/_bot_pass_after() son timers de
-## 0.2s "fire and forget" — si la ventana para la que se programaron (p.ej.
-## la Ventana de Respuesta corta de un trigger 'cuando entra en juego') ya
-## se cerró SOLA antes de que el timer termine, el timer sigue vivo y
-## dispara tarde sobre lo que sea que esté activo en ESE momento — si para
-## entonces ya abrió una ventana NUEVA (p.ej. Guerra de Talismanes) con el
-## mismo jugador con prioridad, el timer viejo le pasa la prioridad SIN que
-## el jugador haya hecho nada. Los llamadores capturan esta generación al
-## programarse y la comparan al disparar — si cambió, la ventana para la
-## que se programaron ya no es la actual, no hacen nada.
+## Contador que sube en cada start_priority_window(). Los timers de auto-pase
+## (PhaseFlowController._human_pass_after()/_bot_pass_after()) capturan esta generación al
+## programarse y no hacen nada si cambió: si su ventana ya se cerró y se abrió otra (p.ej. Guerra de
+## Talismanes), le pasarían la prioridad al jugador sin que hiciera nada.
 var _window_generation: int = 0
 
-## Jugador que controla el objeto de la pila al que responde esta ventana
-## (Paso D de StackStepResolver), o -1 si la ventana no responde a ninguna
-## carta/habilidad puntual (fase, pila recién vaciada, etc.). Ver
-## needs_real_decision() — 2026-10-11, botón de paso simétrico online.
+## Jugador que controla el objeto de la pila al que responde esta ventana (Paso D de
+## StackStepResolver), o -1 si no responde a una carta/habilidad puntual (fase, pila recién vaciada,
+## etc.). Ver needs_real_decision().
 var current_stack_controller: int = -1
 
-## Tiempo límite para responder en una Ventana de Respuesta online (2026-10-11,
-## a pedido del usuario: "5 segundos nada más por ahora"). Solo aplica a
-## RESPONSE_WINDOW — Bloqueo y Guerra de Talismanes esperan sin límite.
+## Tiempo límite para responder en una Ventana de Respuesta online: "5 segundos nada más por
+## ahora"). Solo aplica a RESPONSE_WINDOW — Bloqueo y Guerra de Talismanes esperan sin límite.
 const ONLINE_RESPONSE_TIMEOUT: float = 5.0
 
 
 func _ready() -> void:
-	# GameManager es el único conductor de fases (ver consolidación
-	# 2026-08-19, docs/audit-2026-08-13.html) — la ventana de Bloqueo/Guerra
-	# de Talismanes se abre automáticamente al escuchar su phase_changed.
+	# GameManager es el único conductor de fases: la ventana de Bloqueo/Guerra de Talismanes se abre al
+	# escuchar su phase_changed.
 	if GameManager and GameManager.has_signal("phase_changed"):
 		GameManager.phase_changed.connect(_on_phase_changed)
 
@@ -140,10 +123,8 @@ func _get_starting_priority_player(context: int) -> int:
 
 	match context:
 		PriorityContext.GUERRA_TALISMANES:
-			# "Tu tienes la prioridad en Guerra de Talismanes" (2026-08-30,
-			# p.ej. Garfio Pirata) — anula la regla DAR 5.C3 por defecto
-			# (defensor primero) si algún jugador controla una carta que se
-			# la otorgue.
+			# "Tu tienes la prioridad en Guerra de Talismanes" (p.ej. Garfio Pirata) — anula la regla DAR
+			# 5.C3 por defecto (defensor primero) si algún jugador controla una carta que se la otorgue.
 			var override_player := _player_with_guerra_talismanes_priority()
 			if override_player >= 0:
 				return override_player
@@ -163,10 +144,9 @@ func _get_starting_priority_player(context: int) -> int:
 
 
 func _player_with_guerra_talismanes_priority() -> int:
-	"""Busca, entre ambos jugadores, si alguno controla una carta (o Arma
-	equipada) cuyo texto le otorga la prioridad en Guerra de Talismanes
-	(2026-08-30, p.ej. Garfio Pirata: 'tu tienes la prioridad en Guerra de
-	Talismanes'). Devuelve el player_id o -1 si nadie la tiene."""
+	"""Busca, entre ambos jugadores, si alguno controla una carta (o Arma equipada) cuyo texto le
+	otorga la prioridad en Guerra de Talismanes (p.ej. Garfio Pirata: 'tu tienes la prioridad en
+	Guerra de Talismanes'). Devuelve el player_id o -1 si nadie la tiene."""
 	var main := get_node_or_null("/root/Main")
 	if not main:
 		return -1
@@ -220,6 +200,8 @@ func _get_context_name(context: int) -> String:
 			return "Declarar Bloqueadores"
 		PriorityContext.DISCARD_PHASE:
 			return "Fase de Descarte"
+		PriorityContext.PHASE_START:
+			return "Comienzo de Fase"
 		_:
 			return "Prioridad"
 
@@ -311,13 +293,11 @@ func _on_phase_changed(new_phase: int) -> void:
 # CONSULTAS
 # =============================================================================
 func needs_real_decision(player_id: int) -> bool:
-	"""¿Tiene este jugador una decisión real que tomar en la ventana actual,
-	o puede pasar automáticamente? (2026-10-11, a pedido del usuario: "el
-	jugador activo solo pasa para ir a la guerra o pasar turno; el otro
-	debe pasar cada vez que el oponente juegue una carta o use una
-	habilidad", y al cambiar de turno se invierten los roles).
-	- Ventana de Respuesta: decide solo el rival de quien controla el objeto
-	de la pila. Sin objeto puntual (pila recién vaciada) nadie decide.
+	"""¿Tiene este jugador una decisión real en la ventana actual, o puede pasar solo? El jugador
+	activo pasa para ir a la Guerra o terminar el turno; el otro, cada vez que el oponente juega
+	una carta o usa una habilidad:
+	- Ventana de Respuesta: decide solo el rival de quien controla el objeto de la pila. Sin objeto
+	puntual (pila recién vaciada), nadie.
 	- Bloqueo: decide solo el defensor.
 	- Guerra de Talismanes (y el resto): deciden ambos."""
 	match current_priority_context:
@@ -326,6 +306,8 @@ func needs_real_decision(player_id: int) -> bool:
 		PriorityContext.BLOCK_DECLARATION:
 			var active_player: int = GameManager.active_player_id if GameManager else 0
 			return player_id != active_player
+		PriorityContext.PHASE_START:
+			return not load("res://scripts/core/game/PhaseStartWindow.gd").playable_cards(player_id).is_empty()
 		_:
 			return true
 

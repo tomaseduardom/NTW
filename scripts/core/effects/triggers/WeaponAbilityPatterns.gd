@@ -1,15 +1,11 @@
 extends RefCounted
-## WeaponAbilityPatterns — Patrones "try_execute_*_pattern" para Armas
-## detectadas sin cobertura en la auditoría de 539 cartas (2026-09-20, ver
-## arquitectura.md). Mismo criterio que TotemAbilityPatterns.gd (detección
-## por substring, no por nombre de carta) pero para el tipo Arma, que tiene
-## su propio ciclo de vida (equipar/desequipar, "el portador gana X") ya
-## cubierto en su mayor parte por GoldManager._register_weapon_strength_
-## bonus() — este archivo cubre las cláusulas ADICIONALES de cada Arma que
-## ese parser genérico no toca (triggers de entrada/salida, habilidades
-## activadas de Vigilia/Fase Final).
-## Instanciado directo en TriggerSystem._ready() como _weapon_patterns (mismo
-## patrón que _totem_patterns), llamado desde TriggerResolution.gd.
+## WeaponAbilityPatterns — patrones "try_execute_*_pattern" para Armas (auditoría de cartas sin
+## cobertura, arquitectura.md). Mismo criterio que TotemAbilityPatterns.gd (detección por
+## substring). El "el portador gana X" lo cubre GoldManager._register_weapon_strength_bonus(); aquí
+## van las cláusulas adicionales (triggers de entrada/salida, habilidades de Vigilia/Fase Final).
+## Instanciado en TriggerSystem._ready() como _weapon_patterns, llamado desde TriggerResolution.gd.
+
+const PlayerSideScript = preload("res://scripts/core/game/PlayerSide.gd")
 
 var _main: Node
 
@@ -22,31 +18,21 @@ func setup(main: Node) -> void:
 # Cañón Naval ("Libertadores")
 # =============================================================================
 func try_execute_canon_naval_shared_pattern(ability_text: String, card: Node, controller_id: int) -> bool:
-	"""'Una vez por turno o cuando salga del juego, tu oponente Bota cinco
-	cartas y Destierra hasta tres cartas de un Cementerio' (Cañón Naval,
-	2026-09-20). Un solo efecto compartido entre dos disparadores distintos
-	(activada 'una vez por turno' Y trigger automático al salir de juego) —
-	el cupo de 'una vez por turno' vía UniversalCardParser.turn_registry solo
-	aplica al camino ACTIVADO (llamado desde _resolve_look_and_play_patterns);
-	el camino on_leave_play llama directo a _execute_canon_naval_effect() sin
-	pasar por el chequeo de cupo, porque salir de juego es un disparador
-	aparte, no una segunda activación manual el mismo turno.
-
-	Registrada en el despachador compartido (a diferencia de try_execute_
-	canon_naval_final_pattern() más abajo) porque ESTA cláusula sí es una
-	habilidad ACTIVADA real (vía StackStepResolver._resolve_ability(), que
-	aísla el texto antes de llegar aquí) — la guardia 'el portador gana' es
-	la misma usada en try_execute_sable_corto_vigilia_pattern(), necesaria
-	para no disparar también durante on_enter_play (que pasa el texto
-	COMPLETO de la carta, el cual sí contiene esa otra cláusula)."""
+	"""Cañón Naval: "Una vez por turno o cuando salga del juego, tu oponente Bota cinco cartas y
+	Destierra hasta tres cartas de un Cementerio". Un efecto con dos disparadores: el cupo de "una
+	vez por turno" (turn_registry) solo aplica al camino ACTIVADO; on_leave_play llama directo a
+	_execute_canon_naval_effect().
+	Está en el despachador compartido porque es una habilidad ACTIVADA
+	(StackStepResolver._resolve_ability() aísla el texto); la guardia "el portador gana" (como
+	sable corto) evita que se dispare en on_enter_play, que pasa el texto completo."""
 	var lower := ability_text.to_lower()
 	if not ("bota cinco cartas y destierra hasta tres cartas de un cementerio" in lower):
 		return false
 	if "el portador gana" in lower:
 		return false
-	if UniversalCardParser.turn_registry.was_used(str(card.get_instance_id()), 0, GameManager.current_turn):
+	if UniversalCardParser.turn_registry.was_used(str(card.get_instance_id()), 0, GameManager.turn_serial):
 		return true
-	UniversalCardParser.turn_registry.register(str(card.get_instance_id()), 0, GameManager.current_turn)
+	UniversalCardParser.turn_registry.register(str(card.get_instance_id()), 0, GameManager.turn_serial)
 	await _execute_canon_naval_effect(card, controller_id)
 	return true
 
@@ -86,29 +72,12 @@ func _execute_canon_naval_effect(card: Node, controller_id: int) -> void:
 
 
 func try_execute_canon_naval_final_pattern(ability_text: String, card: Node, controller_id: int) -> bool:
-	"""'En tu Fase Final, puedes Botar las primeras dos cartas de tu Castillo
-	para agrupar un Oro' (Cañón Naval) — 'agrupar' aquí se interpreta como
-	'generar' (mismo verbo con el que el resto del catálogo describe un Oro
-	virtual puntual, p.ej. kotoku-in/metropolitan 'genera un Oro'), SIN
-	restricción de para qué sirve (el texto no dice 'para jugar cartas de
-	tipo X' como los demás Oro virtuales de esta sesión), así que el
-	predicado es siempre-verdadero.
-
-	IMPORTANTE (2026-09-20): a diferencia del resto de las funciones de este
-	archivo, esta NO está registrada en el despachador compartido
-	_resolve_look_and_play_patterns() — se llama EXPLÍCITAMENTE desde el
-	branch on_turn_end de TriggerResolution._execute_trigger_effect(), con
-	la cláusula ya aislada ('en tu fase final'). Motivo: ese branch, como
-	todos los de _execute_trigger_effect(), pasa el texto COMPLETO de la
-	carta (sin aislar) como primer argumento a _resolve_look_and_play_
-	patterns() — si esta función estuviera en la lista compartida, se
-	intentaría también durante on_enter_play (con el texto completo, que
-	SÍ contiene esta cláusula como substring), disparando la elección de
-	Fase Final apenas se equipa el Arma en vez de en la Fase Final real.
-	Ver la guardia real usada en try_execute_sable_corto_vigilia_pattern()
-	para el caso INVERSO (habilidad activada real, que sí necesita estar en
-	la lista compartida porque StackStepResolver._resolve_ability() aísla el
-	texto antes de llegar aquí)."""
+	"""Cañón Naval: "En tu Fase Final, puedes Botar las primeras dos cartas de tu Castillo para
+	agrupar un Oro". "Agrupar" se interpreta como "generar" un Oro, sin restricción de uso
+	(predicado siempre verdadero).
+	No está en el despachador compartido: se llama explícitamente desde la rama on_turn_end de
+	TriggerResolution._execute_trigger_effect() con la cláusula aislada. En la lista compartida se
+	probaría también en on_enter_play (texto completo) y dispararía al equipar."""
 	var lower := ability_text.to_lower()
 	if not ("botar las primeras dos cartas de tu castillo para agrupar un oro" in lower):
 		return false
@@ -134,14 +103,12 @@ func try_execute_canon_naval_final_pattern(ability_text: String, card: Node, con
 # flechar xoon ("Libertadores")
 # =============================================================================
 func try_execute_flechar_xoon_leave_pattern(ability_text: String, card: Node, controller_id: int) -> bool:
-	"""'Cuando salga del juego, puedes Desterrar una carta de coste 2 o
-	menos' (flechar xoon, 2026-09-20). La otra cláusula adicional ('Una vez
-	por turno, puedes subir una carta que controles a la mano de su dueño
-	para Anular un Talismán o Tótem de coste 2 o menos') se implementó aparte
-	en EffectController.offer_flechar_xoon_annul() — no es un trigger propio
-	de esta carta sino una reacción a que el RIVAL juegue algo, mismo
-	mecanismo real de Almirante Akari (offer_counter_annul), así que vive en
-	el mismo choke point que esa carta, no aquí."""
+	"""'Cuando salga del juego, puedes Desterrar una carta de coste 2 o menos' (flechar xoon). La otra
+	cláusula adicional ('Una vez por turno, puedes subir una carta que controles a la mano de su
+	dueño para Anular un Talismán o Tótem de coste 2 o menos') se implementó aparte en
+	EffectController.offer_flechar_xoon_annul — no es un trigger propio de esta carta sino una
+	reacción a que el RIVAL juegue algo, mismo mecanismo real de Almirante Akari
+	(offer_counter_annul), así que vive en el mismo choke point que esa carta, no aquí."""
 	var lower := ability_text.to_lower()
 	if not ("cuando salga del juego, puedes desterrar una carta de coste 2 o menos" in lower):
 		return false
@@ -167,22 +134,13 @@ func try_execute_flechar_xoon_leave_pattern(ability_text: String, card: Node, co
 # sable corto ("Libertadores")
 # =============================================================================
 func try_execute_sable_corto_vigilia_pattern(ability_text: String, card: Node, controller_id: int) -> bool:
-	"""'En tu Vigilia, una vez por turno, tu oponente muestra tantas cartas
-	del tope de su Castillo como Fuerza tenga un Aliado que controles y
-	ponlas en su Cementerio' (sable corto, 2026-09-20). Habilidad ACTIVADA
-	(mismo camino compartido que kotoku-in/la rueda de la fortuna en
-	TotemAbilityPatterns.gd) — elige UN Aliado propio, el oponente mill tantas
-	cartas como la Fuerza actual (ya modificada) de ese Aliado.
-
-	Guardia 'el portador gana' (2026-09-20): esta función SÍ está en la lista
-	compartida de _resolve_look_and_play_patterns() porque una habilidad
-	activada real necesita estarlo (StackStepResolver._resolve_ability() la
-	invoca con el texto YA AISLADO a esta sola cláusula) — pero esa misma
-	lista compartida también se recorre durante on_enter_play con el texto
-	COMPLETO de la carta (sin aislar), donde SÍ aparece 'el portador gana 1
-	de fuerza e indesterrable' (otra cláusula de sable corto). Sin esta
-	guardia, equipar sable corto dispararía esta elección de inmediato en
-	vez de esperar a una activación real en Vigilia."""
+	"""sable corto: "En tu Vigilia, una vez por turno, tu oponente muestra tantas cartas del tope de
+	su Castillo como Fuerza tenga un Aliado que controles y ponlas en su Cementerio". Habilidad
+	ACTIVADA (camino compartido, como kotoku-in): elige un Aliado propio y el oponente Bota tantas
+	como su Fuerza actual.
+	Guardia "el portador gana": la lista compartida también se recorre en on_enter_play con el
+	texto completo (que incluye "el portador gana 1 de fuerza e indesterrable"); sin la guardia,
+	equipar sable corto dispararía esta elección."""
 	var lower := ability_text.to_lower()
 	if not ("tu oponente muestra tantas cartas del tope de su castillo como fuerza tenga un aliado que controles" in lower):
 		return false
@@ -214,21 +172,12 @@ func try_execute_sable_corto_vigilia_pattern(ability_text: String, card: Node, c
 # nehushtan ("Bestiarium")
 # =============================================================================
 func try_execute_nehushtan_leave_pattern(ability_text: String, card: Node, controller_id: int) -> bool:
-	"""'Cuando salga del juego, Roba dos cartas' (nehushtan, 2026-09-20). Solo
-	esta cláusula — 'Si el portador está en Línea de Defensa los jugadores no
-	pueden Desterrar cartas del Castillo de su oponente ni Botar cartas'
-	queda SIN implementar a propósito: mismo hallazgo de arquitectura ya
-	documentado para hojo-shi en arquitectura.md §12.8 (el bloqueo global vía
-	ActionValidator.gd es poco confiable porque la mayoría de las llamadas
-	reales a Botar/Desterrar del proyecto pasan skip_validation=true) — no es
-	un problema de esta carta puntual, es deuda de arquitectura preexistente.
-	'Puedes jugarla en Guerra de Talismanes' tampoco se implementó: es una
-	excepción de fase AUTO-REFERENCIADA (solo sobre sí misma, no un habilitador
-	general como Lobo Sagrado — GoldManagerRestrictions._can_play_weapons_in_
-	guerra_talismanes() solo detecta el segundo caso), y modificar el punto
-	único de verdad de excepciones de fase (has_phase_exception(), compartido
-	por TODA carta del juego) no se alcanzó a hacer con la seguridad debida
-	en esta tarea."""
+	"""nehushtan: "Cuando salga del juego, Roba dos cartas". "Si el portador está en Línea de
+	Defensa los jugadores no pueden Desterrar cartas del Castillo de su oponente ni Botar cartas" es
+	ProtectionRules.castle_banish_blocked() / mill_blocked(). Sin implementar:
+	- "Puedes jugarla en Guerra de Talismanes": excepción de fase sobre sí misma;
+	GoldManagerRestrictions._can_play_weapons_in_guerra_talismanes() solo cubre habilitadores
+	generales como Lobo Sagrado."""
 	var lower := ability_text.to_lower()
 	if not ("cuando salga del juego, roba dos cartas" in lower):
 		return false
@@ -240,15 +189,11 @@ func try_execute_nehushtan_leave_pattern(ability_text: String, card: Node, contr
 # azusa yumi ("Espíritu Samurái")
 # =============================================================================
 func try_execute_azusa_yumi_enter_leave_pattern(ability_text: String, card: Node, controller_id: int) -> bool:
-	"""'Cuando entra o salga del juego, tú Robas una carta y tu oponente Bota
-	dos cartas' (azusa yumi, 2026-09-20) — mismo texto cubre AMBOS disparadores
-	(on_enter_play y on_leave_play), igual que arco del triunfo. El bono de
-	Fuerza dinámico y 'hace daño al Destierro' se resuelven en GoldManager.
-	_register_weapon_strength_bonus() al equipar (ver bloque 'azusa_rx' ahí),
-	no aquí. 'Puedes jugarla al comienzo de cualquier Fase y puedes tener más
-	de tres copias en tu Castillo' queda sin implementar (excepción de fase +
-	de construcción de mazo, mismo motivo que la cláusula de fase de
-	nehushtan arriba)."""
+	"""azusa yumi: "Cuando entra o salga del juego, tú Robas una carta y tu oponente Bota dos cartas"
+	— el mismo texto para on_enter_play y on_leave_play (como arco del triunfo). El bono de Fuerza
+	dinámico y el daño al Destierro están en GoldManager._register_weapon_strength_bonus()
+	('azusa_rx'). "Puedes jugarla al comienzo de cualquier Fase" lo habilita PhaseStartWindow;
+	"puedes tener más de tres copias" es de construcción de mazo."""
 	var lower := ability_text.to_lower()
 	if not ("cuando entra o salga del juego, t" in lower and "robas una carta" in lower and "bota dos cartas" in lower):
 		return false
@@ -261,16 +206,11 @@ func try_execute_azusa_yumi_enter_leave_pattern(ability_text: String, card: Node
 # nodachi ("Espíritu Samurái")
 # =============================================================================
 func try_execute_nodachi_enter_pattern(ability_text: String, card: Node, controller_id: int) -> bool:
-	"""'Cuando entra en juego, mira la mano de tu oponente. Descarta de ahí
-	hasta dos Talismanes cuyos costes sumen 2 o menos' (nodachi, 2026-09-20).
-	'Los Talismanes cuestan un Oro adicional' se implementó aparte en
-	GoldManager._register_weapon_talisman_tax() (efecto ESTÁTICO mientras
-	nodachi está equipada, no un trigger de entrada). 'Si el portador es de
-	Raza Caballero, Guerrero y/o Héroe, gana 2 de Fuerza y no puede ser
-	Barajado' queda SIN implementar a propósito: 'no puede ser Barajado' es
-	un tipo de protección que no existe todavía en ningún lado del proyecto
-	(grep confirmado, cero resultados) — construir una protección nueva sin
-	precedente no alcanzó el tiempo para hacerse con solidez en esta tarea."""
+	"""nodachi: "Cuando entra en juego, mira la mano de tu oponente. Descarta de ahí hasta dos
+	Talismanes cuyos costes sumen 2 o menos". "Los Talismanes cuestan un Oro adicional" está en
+	GoldManager._register_weapon_talisman_tax() (estático mientras esté equipada). "Si el portador es
+	de Raza Caballero, Guerrero y/o Héroe, gana 2 de Fuerza y no puede ser Barajado": StrengthAuras y
+	ProtectionRules.cannot_be_shuffled()."""
 	var lower := ability_text.to_lower()
 	if not ("mira la mano de tu oponente" in lower and "descarta de ah" in lower and "talismanes cuyos costes sumen 2 o menos" in lower):
 		return false
@@ -286,7 +226,7 @@ func try_execute_nodachi_enter_pattern(ability_text: String, card: Node, control
 		opponent_hand = null
 	if not opponent_hand:
 		return true
-	var hand_nodes: Array[Node] = opponent_hand.get_cards()
+	var hand_nodes: Array = PlayerSideScript.hand_cards(main, opponent_id)  # DynamicHand no tiene get_cards()
 	var talisman_nodes: Array = hand_nodes.filter(func(c: Node) -> bool:
 		return is_instance_valid(c) and c.get("card_data") != null and int(c.card_data.get("tipo", -1)) == Constants.CardType.TALISMAN)
 	if talisman_nodes.is_empty():
@@ -320,25 +260,12 @@ func try_execute_nodachi_enter_pattern(ability_text: String, card: Node, control
 # Armadura Celestial ("Ángeles y Demonios: Vigilantes")
 # =============================================================================
 func try_execute_armadura_celestial_leave_pattern(ability_text: String, card: Node, controller_id: int) -> bool:
-	"""'Cuando esta Arma salga del juego, puedes Descartar una carta para
-	ponerla en tu mano' (Armadura Celestial, 2026-09-20) — 'ponerla' concuerda
-	en género con 'esta Arma' (femenino), no con 'una carta' (también
-	femenino, ambigüedad real del español impreso): se interpretó como
-	recuperar la PROPIA Armadura Celestial del Cementerio a la mano pagando
-	el costo de descartar otra carta — lectura fiel al patrón real de MyL de
-	'reciclar' un Arma que se va al Cementerio, no 'guardar la carta recién
-	descartada'. Se resuelve DESPUÉS de que la carta ya está en el
-	Cementerio (no intenta interceptar la transición), así que funciona sin
-	importar el orden exacto de eventos de salida de juego.
-	'Puedes Destruir el portador para Anular un Talismán de coste 2 o menos o
-	cancelar la habilidad de una carta que afecte a un Aliado' queda SIN
-	implementar a propósito: es una habilidad ACTIVADA sin disparador fijo
-	(el jugador la usa cuando quiera, no en reacción a un evento concreto
-	como offer_counter_annul()/flechar xoon), y 'cancelar la habilidad de una
-	carta que afecte a un Aliado' no tiene un objetivo claro de a qué
-	apuntar en este motor (no hay una cola de efectos-en-curso interceptable,
-	ver arquitectura.md §2 sobre el clúster LinkedEffectRegistry/
-	TargetSelector) — no alcanzó el tiempo para diseñar esto con solidez."""
+	"""Armadura Celestial: "Cuando esta Arma salga del juego, puedes Descartar una carta para ponerla
+	en tu mano". "ponerla" = esta Arma: se recupera la propia Armadura del Cementerio a la mano
+	pagando un descarte. Se resuelve cuando ya está en el Cementerio, así que no depende del orden
+	de los eventos de salida.
+	"Puedes Destruir el portador para Anular un Talismán de coste 2 o menos o cancelar la habilidad
+	de una carta que afecte a un Aliado": InPlayAbilities.armadura_celestial() (botón)."""
 	var lower := ability_text.to_lower()
 	if not ("cuando esta arma salga del juego, puedes descartar una carta para ponerla en tu mano" in lower):
 		return false

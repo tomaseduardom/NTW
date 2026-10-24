@@ -97,6 +97,10 @@ func _card_has_exhumar(card_data: Dictionary, player_id: int = -1) -> bool:
 	"""Verifica si una carta tiene la habilidad Exhumar: la impresa, la ganada por un efecto (array
 	"keywords") o una condicional que se cumple ahora para 'player_id' (dueño del Cementerio; -1 = se
 	busca). Cuervo Nocturno: "Si atacaste en tu turno anterior, tiene Exhumar en tu Cementerio"."""
+	# Exhumar ganado por un efecto, por un tiempo (animita, laboratorio maldito, Cementerio Maldito...):
+	# "_exhumar_until" = último turn_serial en que vale.
+	if int(card_data.get("_exhumar_until", -1)) >= GameManager.turn_serial:
+		return true
 	# Verificar trait directo
 	var traits = card_data.get("traits", {})
 	if traits.get("has_exhumar", false):

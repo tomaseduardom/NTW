@@ -1,40 +1,30 @@
 extends RefCounted
 class_name EffectContext
-## EffectContext — qué carta y qué jugador controlan el efecto que se está
-## resolviendo AHORA, y el detector de paridad (2026-10-12, arquitectura.md
-## §56, a pedido del usuario).
-##
-## Lo empujan los tres puntos donde se resuelve un efecto: TriggerResolution.
-## resolve_next_trigger() (habilidades disparadas), TriggerSystem.
-## resolve_talisman() y StackStepResolver._resolve_ability() (activadas).
-##
+## EffectContext — qué carta y qué jugador controlan el efecto que se resuelve AHORA, y el detector
+## de paridad (arquitectura.md §56).
+## Lo empujan los tres puntos donde se resuelve un efecto: TriggerResolution.resolve_next_trigger()
+## (disparadas), TriggerSystem.resolve_talisman() y StackStepResolver._resolve_ability()
+## (activadas).
 ## Detector: las funciones de selección (CardInteractionModule.await_*,
-## SelectionManager.await_*/open_*, ZoneViewerModule.open_cemetery_target_
-## picker(), ActionSearch) y GoldManager.pagar_coste() llaman a check_*().
-## Si el efecto es del jugador 1 (Remoto o bot) pero elige/paga el jugador
-## 0, imprime una línea "[PARIDAD]" con la carta y qué se pidió — casi
-## siempre es un patrón viejo escrito solo para el Anfitrión. Es una
-## heurística: hay casos legítimos ("tu oponente elige", prevenciones que
-## ofrece el rival), por eso solo avisa, nunca cambia nada.
-##
-## Funciona también contra el bot: jugando una partida local, cada línea
-## [PARIDAD] marca una carta que con un Remoto real fallaría.
-##
-## Ventana de respuesta única por efecto (2026-10-12, §59, opción B elegida
-## por el usuario: el rival responde DESPUÉS de que se declaran los
-## objetivos). Cada entrada lleva 'window': "pending" (todavía no se le dio
-## la ventana al rival), "done" o "cancelled". TriggerSystem.
-## open_response_window() la consulta cuando la pide la propia carta del
-## efecto: si ya se abrió, no abre otra; si estaba pendiente, esa ES la
-## ventana. Si el patrón nunca la pide, ensure_window() la abre justo antes
-## de la primera acción real (ActionModule, poner Oros en juego, jugar
-## gratis). Si el rival la cancela, las acciones siguientes no se ejecutan.
+## SelectionManager.await_*/open_*, ZoneViewerModule.open_cemetery_target_picker(), ActionSearch) y
+## GoldManager.pagar_coste() llaman a check_*(). Si el efecto es del jugador 1 (Remoto o bot) pero
+## elige/paga el jugador 0, imprime "[PARIDAD]" con la carta y lo pedido: casi siempre un patrón
+## viejo escrito solo para el Anfitrión. Es heurístico (hay casos legítimos: "tu oponente elige",
+## prevenciones del rival), así que solo avisa. Funciona también contra el bot.
+## Ventana de respuesta única por efecto (§59: el rival responde después de que se declaran los
+## objetivos). Cada entrada lleva 'window': "pending", "done" o "cancelled".
+## TriggerSystem.open_response_window() la consulta: si ya se abrió no abre otra; si estaba
+## pendiente, esa es la ventana. Si el patrón nunca la pide, ensure_window() la abre antes de la
+## primera acción real (ActionModule, poner Oros en juego, jugar gratis). Si el rival la cancela,
+## las acciones siguientes no se ejecutan.
 
 const PlayerSideScript = preload("res://scripts/core/game/PlayerSide.gd")
 
 static var _stack: Array = []
 static var _next_token: int = 1
 static var _reported: Dictionary = {}
+## La ultima seleccion abierta ({chooser, what}); la usa tools/probe_handlers.gd para explicar una espera.
+static var last_prompt: Dictionary = {}
 
 
 static func push(card: Node, controller_id: int, kind: String, window: String = "done") -> int:
@@ -90,6 +80,7 @@ static func current() -> Dictionary:
 static func check_chooser(chooser_id: int, what: String) -> void:
 	"""Una selección se abre para 'chooser_id' — avisa si el efecto en curso
 	es del jugador 1 y elige el 0."""
+	last_prompt = {"chooser": chooser_id, "what": what}
 	var ctx := current()
 	if ctx.is_empty() or int(ctx.controller_id) != 1 or chooser_id != 0:
 		return

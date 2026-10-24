@@ -1,27 +1,14 @@
 extends RefCounted
-## GoldManagerTax — Impuestos de coste sobre Talismanes/Tótems/Oro ('jugar
-## Talismanes y Tótems cuesta un Oro adicional', Bernardo O'Higgins; 'cuesta
-## un Oro adicional si ya jugaste/pusiste uno este turno', Fuente de la
-## Juventud) y el descuento de coste por 'muestra X de tu mano/Cementerio/en
-## juego' (El Rey y el Verdugo, Shiji). Extraído de GoldManager.gd
-## (2026-09-06, "módulos gordos", Fase 3) — confirmado por grep de todo
-## scripts/ que ninguna de estas funciones tiene un llamador externo a
-## GoldManager.gd. GoldManager.gd sigue exponiendo las cuatro con llamador
-## interno propio (_register_talisman_totem_tax/_register_talisman_second_
-## play_tax desde _trigger_enter_play(); _get_reveal_cost_reduction_pattern/
-## _resolve_reveal_cost_reduction desde play_card()) bajo el mismo nombre,
-## como forwarder de una sola línea. _gather_showable_candidates() no tiene
-## ningún llamador fuera de _resolve_reveal_cost_reduction() (mismo módulo),
-## así que no necesita forwarder.
-##
-## _main es Main (mismo significado que en el resto de GoldManager.gd) — el
-## estado propio de GoldManager que este módulo necesita (oro_colocado_
-## conteo, _fix_mojibake()) se alcanza vía _main._gold_manager, el back-
-## reference que Main.gd ya mantiene hacia su propia instancia de GoldManager
-## (mismo patrón que ya usan CardInteractionModule/DropZone/CardManager/
-## LookRevealPatterns para llamar a GoldManager desde afuera).
+## GoldManagerTax — impuestos de coste sobre Talismanes/Tótems/Oro ("jugar Talismanes y Tótems
+## cuesta un Oro adicional", Bernardo O'Higgins; "cuesta un Oro adicional si ya jugaste/pusiste uno
+## este turno", Fuente de la Juventud) y descuentos al jugar ("muestra X de tu mano/Cementerio/en
+## juego", El Rey y el Verdugo, Shiji; "Descarta una carta", voragh el devorador). GoldManager.gd
+## los expone con reenvíos de una línea.
+## _main es Main; el estado de GoldManager que hace falta (oro_colocado_conteo, _fix_mojibake()) se
+## alcanza vía _main._gold_manager.
 
 const CemeteryPopupScript = preload("res://scripts/ui/zones/CemeteryRevealPopup.gd")
+const PlayerSideScript = preload("res://scripts/core/game/PlayerSide.gd")
 
 var _main: Node = null
 
@@ -31,26 +18,18 @@ func setup(main: Node) -> void:
 
 
 func _register_talisman_totem_tax(card: Node) -> void:
-	"""Detecta 'jugar Talismanes y Tótems cuesta un Oro adicional' (p.ej.
-	Bernardo O'Higgins) y registra el impuesto en PaymentManager — afecta a
-	CUALQUIER Talismán/Tótem que se calcule con calcular_coste_real(), del
-	dueño que sea (2026-08-26, a pedido del usuario: aplica a los dos
-	jugadores por igual).
-
-	PaymentManager.cost_modifiers se vacía entero en cada turno nuevo
-	(_on_turn_started_clear_modifiers, pensado para descuentos de un solo
-	uso como el de Lobo Sagrado) — para que este impuesto dure 'mientras la
-	carta esté en juego' (varios turnos), se re-registra en cada
-	turn_started mientras la carta siga válida y en juego, y se desconecta
-	sola apenas deja de estarlo. La limpieza al salir de juego de verdad la
-	hace Card._exit_tree() → PaymentManager.remover_modificador_coste()."""
+	""""jugar Talismanes y Tótems cuesta un Oro adicional" (p.ej. Bernardo O'Higgins): impuesto en
+	PaymentManager para cualquier Talismán/Tótem que pase por calcular_coste_real(), de los dos
+	jugadores.
+	PaymentManager.cost_modifiers se vacía en cada turno (descuentos de un uso como Lobo Sagrado),
+	así que se re-registra en cada turn_started mientras la carta siga en juego y se desconecta
+	solo cuando deja de estarlo. Al salir de juego lo limpia Card._exit_tree() →
+	PaymentManager.remover_modificador_coste()."""
 	var ability_text: String = card.get("card_ability") if card.get("card_ability") != null else ""
 	if ability_text.is_empty():
 		return
-	# _fix_mojibake() (2026-08-26): la API de ShadowForge trae "TalismÃ¡n"/
-	# "TÃ³tem" con doble codificación rota para varias cartas (Bernardo
-	# O'Higgins entre ellas) — sin normalizar, "talismán"/"tótem" nunca
-	# matcheaban y este impuesto quedaba inerte para esas cartas.
+	# _fix_mojibake(): la API trae "TalismÃ¡n"/"TÃ³tem" con doble codificación en varias cartas (p.ej.
+	# Bernardo O'Higgins); sin normalizar, el impuesto no se detectaba.
 	var lower: String = _main._gold_manager._fix_mojibake(ability_text).to_lower()
 	var mentions_tax := "oro adicional" in lower
 	var mentions_talisman_totem := ("talismán" in lower or "talisman" in lower) and ("tótem" in lower or "totem" in lower)
@@ -61,8 +40,8 @@ func _register_talisman_totem_tax(card: Node) -> void:
 		return c.get("card_type") in [Constants.CardType.TALISMAN, Constants.CardType.TOTEM]
 
 	PaymentManager.agregar_modificador_coste(card, 1, condition)
-	# Afecta a una CATEGORÍA de cartas (todo Talismán/Tótem), no una sola —
-	# refresca toda la mano, no un solo card_node (2026-08-30).
+	# Afecta a una CATEGORÍA de cartas (todo Talismán/Tótem), no una sola — refresca toda la mano, no
+	# un solo card_node.
 	PaymentManager.refresh_all_hand_cost_badges()
 
 	var reapply: Callable
@@ -77,27 +56,13 @@ func _register_talisman_totem_tax(card: Node) -> void:
 
 
 func _register_talisman_second_play_tax(card: Node) -> void:
-	"""Detecta 'A los jugadores les cuesta un Oro adicional jugar
-	Talismanes si han jugado Talismanes este turno y les cuesta un Oro
-	adicional poner Oros en juego si han puesto Oros en juego este turno'
-	(2026-09-04, p.ej. Fuente de la Juventud). A diferencia de
-	_register_talisman_totem_tax() (impuesto FIJO, siempre activo, propio
-	de Bernardo O'Higgins), aquí el impuesto es CONDICIONAL por jugador:
-	solo la SEGUNDA carta de ese tipo en el mismo turno lo paga, la
-	primera sigue gratis. 'A los jugadores' = ambos, no solo el rival —
-	la condición mira el owner_id de la carta candidata, no quién controla
-	esta fuente.
-
-	La mitad de Talismanes tiene un gancho de pago real: _play_talisman()
-	registra 'talisman_played:<owner_id>' en turn_registry apenas resuelve
-	el primero, ANTES de que un segundo se cotice. La mitad de Oro queda
-	registrada como dato correcto pero hoy INERTE: play_card() manda los
-	Oro directo a _place_card_as_gold() sin pasar nunca por PaymentManager.
-	calcular_coste_real() — no existe en este motor una acción de 'pagar
-	para colocar un Oro extra' a la que este impuesto pueda aplicarse (el
-	único otro camino para un segundo Oro es un efecto de búsqueda que lo
-	coloca directo y gratis, put_gold_directly_in_reserva). Si algún día
-	se agrega esa acción, esto ya la cubre sin tocar nada más."""
+	"""Fuente de la Juventud: "A los jugadores les cuesta un Oro adicional jugar Talismanes si han
+	jugado Talismanes este turno y les cuesta un Oro adicional poner Oros en juego si han puesto
+	Oros en juego este turno". Condicional por jugador: solo la SEGUNDA del tipo en el turno paga;
+	"a los jugadores" = ambos, según el owner_id de la carta.
+	Talismanes: _play_talisman() registra 'talisman_played:<owner_id>' en turn_registry al resolver
+	el primero. La mitad de Oros queda registrada pero sin efecto: poner un Oro no pasa por
+	PaymentManager.calcular_coste_real() (no hay acción de pagar para colocar un Oro)."""
 	var ability_text: String = card.get("card_ability") if card.get("card_ability") != null else ""
 	if ability_text.is_empty():
 		return
@@ -108,7 +73,7 @@ func _register_talisman_second_play_tax(card: Node) -> void:
 	var condition := func(c: Node) -> bool:
 		var owner: int = c.owner_id if c.get("owner_id") != null else 0
 		if c.get("card_type") == Constants.CardType.TALISMAN:
-			return UniversalCardParser.turn_registry.was_used("talisman_played:%d" % owner, 0, GameManager.current_turn)
+			return UniversalCardParser.turn_registry.was_used("talisman_played:%d" % owner, 0, GameManager.turn_serial)
 		if c.get("card_type") == Constants.CardType.ORO:
 			return _main._gold_manager.oro_colocado_conteo.get(owner, 0) >= 1
 		return false
@@ -128,39 +93,23 @@ func _register_talisman_second_play_tax(card: Node) -> void:
 
 
 func _get_reveal_cost_reduction_pattern(card: Node) -> Dictionary:
-	"""Detecta 'Reduce su coste en un Oro por cada X que muestres de tu
-	mano, Cementerio o que controles, hasta un mínimo de N' (2026-08-29,
-	p.ej. El Rey y el Verdugo: '...por cada Arma...') — escala con la
-	cantidad mostrada. También detecta 'Reduce su coste en un Oro si
-	muestras un X (o Y) de tu mano o Cementerio' (2026-09-03, p.ej. Shiji:
-	'...si muestras un Arma o Tótem...') — SINGULAR, no escala ('un X', no
-	'por cada X'): tope de 1 carta mostrada (ver max_reveal en
-	_resolve_reveal_cost_reduction()), el descuento de -1 sale solo de
-	limitar la cuenta a 0 o 1, no hace falta un cálculo de descuento
-	distinto. 'Arma o Tótem' es una lista de tipos válidos (no un elif que
-	corta en el primero, mismo criterio ya usado en _execute_targeted_
-	search() de TargetedEffectExecutor.gd para 'busca un Arma o un Oro').
-	A diferencia de _register_talisman_totem_tax()/_register_weapon_
-	first_play_discount() (modificadores PERSISTENTES de una carta ya en
-	juego, afectando a OTRAS), este es un descuento de UN SOLO USO sobre
-	la carta que se está jugando AHORA MISMO — se resuelve en play_card(),
-	no como un modifier registrado en turn_started.
-	Returns: {} si no aplica, si no {types: Array[Constants.CardType],
-	allow_zero: bool, single: bool}."""
+	"""Detecta "Reduce su coste en un Oro por cada X que muestres de tu mano, Cementerio o que
+	controles, hasta un mínimo de N" (p.ej. El Rey y el Verdugo: "...por cada Arma..."), que escala
+	con la cantidad mostrada, y "Reduce su coste en un Oro si muestras un X (o Y) de tu mano o
+	Cementerio" (p.ej. Shiji: "...un Arma o Tótem..."), singular: tope de 1 carta (max_reveal en
+	_resolve_reveal_cost_reduction()). "Arma o Tótem" es una lista de tipos válidos.
+	Es un descuento de un solo uso sobre la carta que se juega ahora (se resuelve en play_card()),
+	no un modificador persistente como _register_talisman_totem_tax().
+	Devuelve {} si no aplica; si no, {types: Array[Constants.CardType], allow_zero: bool, single:
+	bool}."""
 	var ability_text: String = card.get("card_ability") if card.get("card_ability") != null else ""
 	if ability_text.is_empty():
 		return {}
 	var lower: String = _main._gold_manager._fix_mojibake(ability_text).to_lower()
 	if not ("reduce su coste" in lower and ("que muestres" in lower or "si muestras" in lower)):
 		return {}
-	# Enmascarar 'reduce su coste en [un/N] Oro(s)' ANTES de buscar tipos
-	# (2026-09-04, bug reportado: Shiji — 'si muestras un Arma o Tótem' —
-	# también ofrecía Oro como tipo mostrable, porque esa frase de arriba
-	# menciona 'Oro' como la UNIDAD del descuento, no como un tipo de
-	# carta a revelar. La versión anterior de este detector era un elif
-	# (un solo tipo posible) y "arma"/"tótem" ganaban SIEMPRE antes de
-	# llegar a la rama "oro", así que nunca se notó — el cambio a lista
-	# (2026-09-03, para soportar 'Arma o Tótem' a la vez) sí lo expuso.
+	# Enmascarar "reduce su coste en [un/N] Oro(s)" ANTES de buscar tipos: ahí "Oro" es la unidad del
+	# descuento, no un tipo a mostrar (p.ej. Shiji).
 	var cost_amount_rx := RegEx.new()
 	cost_amount_rx.compile("reduce su coste en (?:un|una|\\d+|dos|tres|cuatro|cinco)\\s+oros?")
 	var type_scan_text: String = cost_amount_rx.sub(lower, "", true)
@@ -180,10 +129,9 @@ func _get_reveal_cost_reduction_pattern(card: Node) -> Dictionary:
 		return {}
 	var allow_zero := "mínimo de 0" in lower or "minimo de 0" in lower
 	var single := "si muestras un" in lower or "si muestras una" in lower
-	# Zonas de origen realmente mencionadas (2026-09-03, p.ej. Shiji: 'de tu
-	# mano o Cementerio', SIN 'que controles' — a diferencia de El Rey y el
-	# Verdugo que sí ofrece las tres). No ofrecer una zona que el texto no
-	# menciona.
+	# Zonas de origen realmente mencionadas (p.ej. Shiji: 'de tu mano o Cementerio', SIN 'que
+	# controles' — a diferencia de El Rey y el Verdugo que sí ofrece las tres). No ofrecer una zona que
+	# el texto no menciona.
 	var zones: Array = []
 	if "tu mano" in lower:
 		zones.append(0)
@@ -197,15 +145,10 @@ func _get_reveal_cost_reduction_pattern(card: Node) -> Dictionary:
 
 
 func _gather_showable_candidate_nodes(card_types, exclude_card: Node, source: int, player_id: int = 0) -> Array:
-	"""Igual que la vieja _gather_showable_candidates() pero devuelve los
-	NODOS reales (no card_data) para mano/en juego — 2026-09-13, a pedido
-	del usuario: reemplaza el modal de lista por click directo sobre las
-	cartas reales (ver arquitectura.md §10.14/§10.17). 'mostrar' (DAR) no
-	mueve ni gasta nada, la carta se queda donde está. card_types acepta un
-	int (un solo tipo) o un Array (2026-09-03, p.ej. Shiji: 'muestra un
-	Arma o Tótem' — dos tipos válidos). El Cementerio (source=1) NO se
-	resuelve aquí — no tiene nodos persistentes, ver _build_cemetery_reveal_
-	candidates() en _resolve_reveal_cost_reduction()."""
+	"""Devuelve los NODOS reales mostrables de la mano/en juego (para click directo; arquitectura.md
+	§10.14/§10.17). "Mostrar" (DAR) no mueve ni gasta nada. card_types acepta un int o un Array
+	(Shiji: "un Arma o Tótem"). El Cementerio (source = 1) no tiene nodos persistentes: ver
+	_build_cemetery_reveal_candidates() en _resolve_reveal_cost_reduction()."""
 	var types_array: Array = card_types if card_types is Array else [card_types]
 	var candidates: Array = []
 	var hand_container = _main.player_hand if player_id == 0 else _main._opponent_fan
@@ -239,18 +182,12 @@ const _CARD_TYPE_DISPLAY_NAMES: Dictionary = {
 
 
 func _resolve_reveal_cost_reduction(card: Node, pattern: Dictionary, player_id: int = 0) -> int:
-	"""2026-09-13, a pedido del usuario (arquitectura.md §10.17): reemplaza
-	el modal viejo de "¿desde dónde mostrar?" + lista por click directo
-	sobre las cartas reales de TODAS las zonas permitidas A LA VEZ — mano y
-	en juego ya son Nodos visibles en pantalla, Cementerio usa un popup
-	liviano (sin oscurecer el resto, ver _open_cemetery_reveal_popup()) con
-	Nodos temporales. El 'y/o' del texto sigue siendo "elige UNA zona, no
-	combines" (2026-08-31): se logra con lock_group_key en vez de preguntar
-	antes — el primer click define la zona, el resto de esa vuelta queda
-	restringido a esa misma zona (current_zone de cada candidato).
-	Returns: cantidad de cartas mostradas (0 si no había candidatos o no se
-	eligió ninguna). No remueve nada de su zona ('mostrar' no es 'gastar'
-	ni 'desterrar')."""
+	"""Click directo sobre las cartas de todas las zonas permitidas a la vez (arquitectura.md §10.17):
+	mano y en juego son Nodos visibles; el Cementerio usa un popup liviano con Nodos temporales
+	(_open_cemetery_reveal_popup()). El "y/o" del texto = elegir UNA zona: lock_group_key hace que
+	el primer click defina la zona (current_zone).
+	Devuelve cuántas cartas se mostraron (0 si no había o no se eligió ninguna). No saca nada de su
+	zona."""
 	var types: Array = pattern.get("types", [])
 	var type_name: String = " o ".join(types.map(func(t): return _CARD_TYPE_DISPLAY_NAMES.get(t, "carta(s)"))) if not types.is_empty() else "carta(s)"
 	var zone_choices: Array = pattern.get("zones", [0, 1, 2])
@@ -271,14 +208,9 @@ func _resolve_reveal_cost_reduction(card: Node, pattern: Dictionary, player_id: 
 			cemetery_popup.queue_free()
 		return 0
 
-	# Tope real de cartas ÚTILES a mostrar (2026-09-02, bug reportado por el
-	# usuario: con base_cost=2 y 'hasta un mínimo de 0', mostrar más de 2
-	# no reduce nada más). El piso real que aplica calcular_coste_real() es
-	# 0 con allow_zero, 1 si no (mismo criterio documentado ahí) — más allá
-	# de coste_base - piso, cada carta adicional mostrada es un no-op.
-	# 'single' (2026-09-03, p.ej. Shiji: 'si muestras un Arma o Tótem' — no
-	# escala, tope duro de 1) se aplica ADEMÁS del tope por utilidad, el
-	# que sea más chico gana.
+	# Tope de cartas útiles a mostrar: más allá de coste_base - piso no reducen nada (el piso de
+	# calcular_coste_real() es 0 con allow_zero, 1 si no). 'single' (Shiji, no escala) agrega un tope
+	# de 1; gana el menor.
 	var floor_val: int = 0 if pattern.get("allow_zero", false) else 1
 	var base_cost: int = int(card.get("card_cost")) if card.get("card_cost") != null else 0
 	var useful_cap: int = maxi(base_cost - floor_val, 0)
@@ -301,51 +233,101 @@ func _resolve_reveal_cost_reduction(card: Node, pattern: Dictionary, player_id: 
 	return chosen.size()
 
 
+const _PAY_REDUCTION_RX := "puedes (descartar o destruir|destruir o descartar|descartar|destruir|desterrar) " \
+	+ "(una|un|dos) (carta|cartas|aliado|aliados|de tus cartas)( (?!de |que )[a-záéíóúñ]+(?: o [a-záéíóúñ]+)?)?" \
+	+ "( de tu mano| que controles)? para (?:para )?reducir su coste en (un|dos) oros?( y no pueda ser anulado)?"
+
+
 func _get_discard_cost_reduction_pattern(card: Node) -> Dictionary:
-	"""Detecta 'Puedes Descartar una carta para reducir su coste en un Oro'
-	(voragh el devorador, id 20588/20598 — 2026-09-20, bug real reportado
-	por el usuario: "no puedo jugarlo reduciendo su coste en un oro", la
-	habilidad nunca se había implementado). Mismo criterio de detección por
-	substring que _get_reveal_cost_reduction_pattern() — costo ALTERNATIVO
-	opcional ('Puedes') resuelto al jugar la carta, no un modificador
-	persistente ni una habilidad activada aparte."""
+	"""Costo alternativo opcional "Puedes Descartar / Destruir / Desterrar <qué> para reducir su coste
+	en N Oros", resuelto al jugar la carta: voragh el devorador ("una carta"), colaborador titan
+	("Destruir o Descartar un Aliado Titán o Ignis"), "una carta que controles", "un Aliado Bestia",
+	"un Aliado de tu mano"... Descartar = de la mano; Destruir = una carta propia en juego;
+	Desterrar = de la mano ("de tu mano") o en juego ("que controles"). "...y no pueda ser Anulado"
+	(corte letal): no_annul.
+	{verbs, count, ally, races, where, reduce, no_annul} o {}."""
 	var ability_text: String = str(card.get("card_ability")) if card.get("card_ability") != null else ""
 	if ability_text.is_empty():
 		return {}
 	var lower: String = _main._gold_manager._fix_mojibake(ability_text).to_lower()
-	if not ("puedes descartar una carta para reducir su coste en un oro" in lower):
+	var m := RegEx.create_from_string(_PAY_REDUCTION_RX).search(lower)
+	if m == null:
 		return {}
-	return {"found": true}
+	var verbs: Array = []
+	for v in ["descartar", "destruir", "desterrar"]:
+		if v in m.get_string(1):
+			verbs.append(v)
+	var races: Array = []
+	var race_part := m.get_string(4).strip_edges()
+	if not race_part.is_empty():
+		for r in race_part.split(" o "):
+			races.append(r.strip_edges())
+	return {"found": true, "verbs": verbs, "count": 2 if m.get_string(2) == "dos" else 1,
+		"ally": m.get_string(3).begins_with("aliado"), "races": races,
+		"where": m.get_string(5).strip_edges(), "reduce": 2 if m.get_string(6) == "dos" else 1,
+		"no_annul": not m.get_string(7).is_empty()}
 
 
-func _resolve_discard_cost_reduction(card: Node, player_id: int = 0) -> bool:
-	"""Resuelve el descuento de voragh el devorador — mismo hook/momento que
-	_resolve_reveal_cost_reduction() (ANTES de calcular coste_real, ver
-	comentario en GoldManager.play_card()), pero con costo DISTINTO: la
-	carta a entregar se DESCARTA de verdad (ActionModule.discard()), no se
-	'muestra' sin gastar nada — y es un descuento fijo de 1 Oro por una
-	sola carta, no escalable. 'Puedes' = opcional: ESC en el picker
-	(cancellable=true) declina sin penalidad, igual que cualquier costo
-	alternativo opcional del resto del proyecto.
-	Returns: true si se descartó una carta (corresponde aplicar el -1)."""
+func _resolve_discard_cost_reduction(card: Node, player_id: int = 0, pattern: Dictionary = {}) -> int:
+	"""Resuelve el costo alternativo de _get_discard_cost_reduction_pattern() ANTES de calcular
+	coste_real (ver GoldManager.play_card()). 'Puedes' = opcional: ESC declina sin penalidad. Las
+	cartas se Descartan / Destruyen / Destierran de verdad. Devuelve cuántos Oros descontar (0 si no
+	se pagó)."""
+	if pattern.is_empty():
+		pattern = _get_discard_cost_reduction_pattern(card)
+	if pattern.is_empty():
+		return 0
 	var hand_container = _main.player_hand if player_id == 0 else _main._opponent_fan
-	if not hand_container or hand_container.cards.is_empty():
-		return false
-	# La carta que se está jugando (card) sigue en hand_container.cards en
-	# este punto del flujo (mismo motivo que _gather_showable_candidate_
-	# nodes() excluye 'exclude_card' arriba) — no tiene sentido descartarse
-	# a sí misma para pagar su propio descuento.
-	var candidates: Array = hand_container.cards.filter(func(c: Node) -> bool: return c != card)
-	if candidates.is_empty():
-		return false
-	var chosen: Node = await _main._card_interaction.await_target(
-		"Puedes descartar una carta para reducir el coste en 1 Oro (N para no hacerlo)",
-		func(c: Node) -> bool: return c in candidates,
-		true, player_id)
-	if not chosen or not is_instance_valid(chosen):
-		return false
-	var result: Dictionary = await ActionModule.discard(player_id, [chosen], "voragh el devorador", true)
-	return result.get("actual", 0) > 0
+	var fits := func(c: Node) -> bool:
+		if not is_instance_valid(c) or c == card:
+			return false
+		if pattern.ally and c.get("card_type") != Constants.CardType.ALIADO:
+			return false
+		if not pattern.races.is_empty():
+			var raza := str(c.get("card_raza")).to_lower()
+			if not pattern.races.any(func(r): return r.trim_suffix("s") in raza or r in raza):
+				return false
+		return true
+	var candidates: Array = []
+	var from_hand: bool = "descartar" in pattern.verbs or ("desterrar" in pattern.verbs and pattern.where != "que controles")
+	var from_play: bool = "destruir" in pattern.verbs or ("desterrar" in pattern.verbs and pattern.where == "que controles")
+	if from_hand and hand_container:
+		candidates.append_array(hand_container.cards.filter(fits))
+	if from_play:
+		var zones: Array = PlayerSideScript.line_containers(_main, player_id)
+		if not pattern.ally:
+			zones.append(PlayerSideScript.gold_reserva(_main, player_id))
+			zones.append(PlayerSideScript.oro_pagado(_main, player_id))
+		for z in zones:
+			if z:
+				candidates.append_array(z.get_children().filter(func(c): return fits.call(c) and c.get("controller_id") == player_id))
+	if candidates.size() < int(pattern.count) or PlayerSideScript.is_bot(player_id):
+		return 0
+	var verb_label := " o ".join(pattern.verbs.map(func(v): return v.capitalize()))
+	var prompt := "Puedes %s %d carta%s para reducir el coste en %d (N para no hacerlo)" % [
+		verb_label, pattern.count, "" if pattern.count == 1 else "s", pattern.reduce]
+	var chosen: Array = []
+	if int(pattern.count) == 1:
+		var one: Node = await _main._card_interaction.await_target(prompt, func(c: Node) -> bool: return c in candidates, true, player_id)
+		if one and is_instance_valid(one):
+			chosen = [one]
+	else:
+		chosen = await _main._card_interaction.await_multi_target(prompt, candidates, int(pattern.count), Callable(), Callable(),
+			true, null, player_id)
+	if chosen.size() < int(pattern.count):
+		return 0
+	var title: String = str(card.get("card_name"))
+	for c in chosen:
+		var in_hand: bool = c.get("current_zone") == Constants.Zone.MANO
+		if in_hand and "descartar" in pattern.verbs:
+			await ActionModule.discard(player_id, [c], title, true)
+		elif in_hand:
+			CardManager.add_to_exile(player_id, PlayerSideScript.take_from_hand(_main, player_id, c))
+		elif "destruir" in pattern.verbs:
+			await ActionModule.destroy([c], card, false, true)
+		else:
+			await ActionModule.banish([c], card, true, false)
+	return int(pattern.reduce)
 
 
 func _open_cemetery_reveal_popup(card_types, player_id: int = 0) -> Dictionary:

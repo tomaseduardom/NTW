@@ -124,21 +124,6 @@ func format_card_list(names: Array) -> String:
 	return ", ".join(formatted)
 
 
-func zone_to_string(zone: int) -> String:
-	"""Convierte enum de zona a string"""
-	match zone:
-		Constants.Zone.CASTILLO: return "castillo"
-		Constants.Zone.MANO: return "mano"
-		Constants.Zone.CEMENTERIO: return "cementerio"
-		Constants.Zone.DESTIERRO: return "destierro"
-		Constants.Zone.LINEA_ATAQUE: return "línea de ataque"
-		Constants.Zone.LINEA_DEFENSA: return "línea de defensa"
-		Constants.Zone.LINEA_APOYO: return "línea de apoyo"
-		Constants.Zone.RESERVA_ORO: return "reserva de oro"
-		Constants.Zone.ORO_PAGADO: return "oro pagado"
-		_: return "zona desconocida"
-
-
 func phase_to_string(phase: int) -> String:
 	"""Convierte enum de fase a string usando Constants.PHASE_NAMES"""
 	# Intentar usar Constants.PHASE_NAMES

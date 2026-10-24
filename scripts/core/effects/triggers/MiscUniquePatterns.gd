@@ -1,12 +1,8 @@
 extends RefCounted
-## MiscUniquePatterns — 7 de 7 mitades de LookAndPlayResolver.gd, dividido por
-## tamaño el 2026-09-06 ("módulos gordos"). Cuatro patrones únicos que no
-## encajaban limpio en ninguna de las otras 6 categorías: Fisión Nuclear
-## (burbuja de protección + programación de Fase Final), Transformación
-## (ventana de respuesta + exilio + elección multi-rama), shedo titan (robo de
-## control + renombrado), Malleus Maleficarum (candado de nombre). Llamada
-## solo desde LookAndPlayResolver.gd (facade) — ver ese archivo para la lista
-## completa de las 7 mitades hermanas.
+## MiscUniquePatterns — una de las mitades de LookAndPlayResolver.gd (fachada; ahí está la lista
+## completa). Patrones únicos: Fisión Nuclear (escudo de protección + efecto en la Fase Final),
+## Transformación (respuesta + elección), shedo titan (robo de control + renombrado), Malleus
+## Maleficarum (candado de nombre).
 
 const PlayerSideScript = preload("res://scripts/core/game/PlayerSide.gd")
 
@@ -18,18 +14,13 @@ func setup(main: Node) -> void:
 
 
 func try_execute_bubble_protection_and_schedule_final_phase_pattern(ability_text: String, controller_id: int, card: Node = null) -> bool:
-	"""Fisión Nuclear: 'Hasta tu próximo turno, no puedes ser afectado por
-	efectos oponentes y para afectar tus cartas en juego tu oponente debe
-	Desterrar una carta de su mano. En la próxima Fase Final oponente,
-	Baraja una carta de coste 2 o menos o Roba dos cartas.'
-	Rehecha el 2026-10-14 (a pedido del usuario). El escudo vive en
-	EffectController (activate_fision_shield, ver su comentario): protege al
-	jugador y cobra el Destierro al rival por cada carta en juego que quiera
-	afectar, también las que entren después. Antes eran 99 cargas sobre las
-	cartas que ya estaban en juego, que frenaban hasta tus propios efectos.
-	Fase Final oponente, sin popup: brillan las cartas en juego de coste 2 o
-	menos (no Oros) y tu Castillo; tu Castillo = Robar dos cartas. Sin
-	cartas que barajar, roba directo."""
+	"""Fisión Nuclear: "Hasta tu próximo turno, no puedes ser afectado por efectos oponentes y para
+	afectar tus cartas en juego tu oponente debe Desterrar una carta de su mano. En la próxima Fase
+	Final oponente, Baraja una carta de coste 2 o menos o Roba dos cartas." El escudo vive en
+	EffectController (activate_fision_shield): protege al jugador y cobra el Destierro al rival por
+	cada carta en juego que quiera afectar, también las que entren después.
+	Fase Final oponente, sin popup: brillan las cartas en juego de coste 2 o menos (no Oros) y tu
+	Castillo (= Robar dos cartas). Sin cartas que barajar, roba directo."""
 	var lower := ability_text.to_lower()
 	if not ("hasta tu próximo turno, no puedes ser afectado por efectos oponentes" in lower):
 		return false
@@ -90,30 +81,17 @@ func _fision_final_phase(controller_id: int) -> void:
 		await ActionModule.draw(controller_id, 2, "Fisión Nuclear", true)
 
 
-
-
 func try_execute_transformacion_pattern(ability_text: String, controller_id: int) -> bool:
-	"""'Puedes jugarlo en respuesta a que tu oponente juegue una carta o
-	utilice una habilidad y Destiérralo. Elige un efecto: - Prevén que una
-	carta que controles sea afectada y Roba una carta. - Prevén un efecto
-	que fuera a afectarte, busca un Aliado en tu Castillo y ponlo en tu
-	mano' (Transformación, 2026-09-06). El 'Destiérralo' lo maneja el
-	destino post-resolución genérico de GoldManager._play_talisman()
-	(self_exile), aquí solo la elección A/B.
-
-	Rama A usa el mismo mecanismo de cargas por carta que ya protege a
-	Estaca (EffectController.add_opponent_effect_prevention() +
-	try_consume_opponent_effect_prevention(), consultado en TODOS los
-	choque genéricos: destroy/banish/debuff/silence — ver
-	ActionModule.destroy()/banish(), TargetedEffectExecutor, KeywordManager).
-	Rama B ('Prevén un efecto que fuera a afectarte', sin carta puntual que
-	elegir) se aproxima con la misma idea pero repartida en TODAS las
-	cartas propias en juego a la vez, un solo cargo cada una — mismo
-	principio de aproximación ya usado y documentado en Fisión Nuclear
-	(bubble de protección), aquí a escala de un solo efecto en vez de 'hasta
-	tu próximo turno'. Límite conocido, igual que en Fisión Nuclear: no
-	cubre daño directo al Castillo (jugador), solo efectos que apunten a
-	una carta en juego."""
+	"""Transformación: "Puedes jugarlo en respuesta a que tu oponente juegue una carta o utilice una
+	habilidad y Destiérralo. Elige un efecto: - Prevén que una carta que controles sea afectada y
+	Roba una carta. - Prevén un efecto que fuera a afectarte, busca un Aliado en tu Castillo y
+	ponlo en tu mano". El "Destiérralo" lo hace GoldManager._play_talisman() (self_exile); aquí
+	solo la elección A/B.
+	Rama A: una carga de prevención sobre la carta elegida
+	(EffectController.add_opponent_effect_prevention() + try_consume_opponent_effect_prevention(),
+	consultado en destroy/banish/debuff/silence).
+	Rama B (sin carta puntual): una carga en cada carta propia en juego. Límite: no cubre daño
+	directo al Castillo, solo efectos que apuntan a cartas en juego."""
 	var lower := ability_text.to_lower()
 	if not lower.begins_with("puedes jugarlo en respuesta a que tu oponente juegue una carta o utilice una habilidad"):
 		return false
@@ -155,12 +133,9 @@ func try_execute_transformacion_pattern(ability_text: String, controller_id: int
 	return true
 
 
-
-
 func try_execute_gain_control_ally_rename_titan_pattern(ability_text: String, card: Node, controller_id: int) -> bool:
-	"""'Cuando entra en juego, gana el control de un Aliado y cambia su
-	nombre a Titán. Tu oponente Bota cartas igual a su coste' (shedo
-	titan, 2026-09-04) — usa ContinuousEffectManager.gain_control_of_card(),
+	"""'Cuando entra en juego, gana el control de un Aliado y cambia su nombre a Titán. Tu oponente
+	Bota cartas igual a su coste' (shedo titan) — usa ContinuousEffectManager.gain_control_of_card,
 	el primer uso real de robo de control en el motor."""
 	var lower := ability_text.to_lower()
 	if not ("gana el control de un aliado y cambia su nombre a tit" in lower):
@@ -172,7 +147,7 @@ func try_execute_gain_control_ally_rename_titan_pattern(ability_text: String, ca
 	var filter := func(c: Node) -> bool:
 		if c.get("card_type") != Constants.CardType.ALIADO:
 			return false
-		# 2026-09-12: current_zone en vez de get_parent() (ver §10.5)
+		# current_zone en vez de get_parent (ver §10.5)
 		return c.get("current_zone") in [Constants.Zone.LINEA_DEFENSA, Constants.Zone.LINEA_ATAQUE, Constants.Zone.LINEA_APOYO]
 	var target: Node = await main._card_interaction.await_target("Elige un Aliado para ganar su control", filter, true, controller_id)
 	if not target or not is_instance_valid(target):
@@ -198,17 +173,12 @@ func try_execute_gain_control_ally_rename_titan_pattern(ability_text: String, ca
 	return true
 
 
-
-
 func try_execute_malleus_name_lock_pattern(ability_text: String, card: Node, controller_id: int) -> bool:
-	"""'Cuando entra en juego, nombra una carta que no sea Malleus
-	Maleficarum. Si está en tu Reserva, las cartas nombradas con este Oro
-	pierden su habilidad' (Malleus Maleficarum, 2026-09-04) — reusa
-	KeywordManager.lock_ability_by_name()/is_name_locked() (Alicia en
-	Wonderland). Simplificación: is_name_locked() valida 'mientras la
-	fuente siga EN JUEGO' en general (Reserva u Oro Pagado), no
-	específicamente 'en tu Reserva' — el texto real excluye Oro Pagado, no
-	implementado por ahora (caso borde poco común)."""
+	"""Malleus Maleficarum: "Cuando entra en juego, nombra una carta que no sea Malleus Maleficarum.
+	Si está en tu Reserva, las cartas nombradas con este Oro pierden su habilidad" —
+	KeywordManager.lock_ability_by_name()/is_name_locked() (como Alicia en Wonderland).
+	Simplificación: vale mientras la fuente siga en juego (Reserva u Oro Pagado), no solo "en tu
+	Reserva"."""
 	var lower := ability_text.to_lower()
 	if not ("nombra una carta que no sea malleus maleficarum" in lower):
 		return false
@@ -226,11 +196,10 @@ func try_execute_malleus_name_lock_pattern(ability_text: String, card: Node, con
 
 
 func try_execute_look_hand_name_play_lock_pattern(ability_text: String, card: Node, controller_id: int) -> bool:
-	"""'Cuando ataca, mira la mano de tu oponente y nombra una carta. Esa
-	carta no puede ser jugada hasta tu próximo turno' (Zadquiel, 2026-10-14).
-	Candado por NOMBRE (GoldManager.lock_name_from_playing): cubre toda copia
-	del rival, también las que robe después. El bot nombra al azar una carta
-	que no sea Oro de la mano rival."""
+	"""'Cuando ataca, mira la mano de tu oponente y nombra una carta. Esa carta no puede ser jugada
+	hasta tu próximo turno' (Zadquiel). Candado por NOMBRE (GoldManager.lock_name_from_playing):
+	cubre toda copia del rival, también las que robe después. El bot nombra al azar una carta que
+	no sea Oro de la mano rival."""
 	var lower := ability_text.to_lower()
 	if not ("mira la mano de tu oponente y nombra una carta" in lower
 			and "no puede ser jugada hasta tu próximo turno" in lower):

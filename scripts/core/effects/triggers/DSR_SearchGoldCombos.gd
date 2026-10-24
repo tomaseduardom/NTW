@@ -1,16 +1,9 @@
 extends RefCounted
-## DSR_SearchGoldCombos — Slice de DrawShuffleResolver.gd: patrones que
-## combinan buscar/subir una carta (del Castillo, la mano o el Cementerio) o
-## generar Oro Virtual restringido, con un Robo u otro efecto secundario
-## (Legión Paladín, Levisterio, La Ouija, Shiji). Uno de 4 hermanos separados
-## de DrawShuffleResolver.gd (2026-09-06, "módulos gordos") — ver también
-## DSR_ShuffleDrawCombos.gd, DSR_CemeteryBanishDraw.gd y
-## DSR_DiscardChoicePatterns.gd. Opera sobre TriggerSystem via
-## _executor._main (mismo Node que TargetedEffectExecutor._main — ver ese
-## archivo). DrawShuffleResolver.gd queda como FACADE — cada función de este
-## archivo es llamada por un reenvío de una sola línea desde ahí, con el
-## mismo nombre y firma de siempre, así que TriggerResolution.gd (único
-## llamador) no necesitó cambiar una sola línea por este split.
+## DSR_SearchGoldCombos — parte de DrawShuffleResolver.gd (fachada con reenvíos de una línea;
+## hermanos: DSR_ShuffleDrawCombos.gd, DSR_CemeteryBanishDraw.gd, DSR_DiscardChoicePatterns.gd).
+## Buscar/subir una carta (Castillo, mano o Cementerio) o generar Oro Virtual restringido, con un
+## Robo u otro efecto (Legión Paladín, Levisterio, La Ouija, Shiji). Opera sobre TriggerSystem vía
+## _executor._main (ver TargetedEffectExecutor.gd).
 
 const CemeteryPopupScript = preload("res://scripts/ui/zones/CemeteryRevealPopup.gd")
 
@@ -66,10 +59,8 @@ func try_execute_free_play_weapon_or_totem_cost1_hand_cemetery_pattern(
 	if not main._card_interaction:
 		return true
 
-	# 2026-09-14, a pedido del usuario: click directo — mano (Nodos ya
-	# visibles) + un popup liviano con el Cementerio propio (mismo patrón
-	# que Golpe Solar, ver DSR_DiscardChoicePatterns.gd), en vez del modal
-	# de lista viejo combinando ambas zonas.
+	# Click directo: mano (Nodos visibles) + popup liviano con el Cementerio propio (como Golpe Solar,
+	# DSR_DiscardChoicePatterns.gd).
 	var popup_result: Dictionary = CemeteryPopupScript.open(main, cemetery_data, controller_id)
 	var cemetery_popup: CanvasLayer = popup_result.popup
 	var cemetery_nodes: Array = popup_result.nodes
@@ -106,18 +97,11 @@ func try_execute_free_play_weapon_or_totem_cost1_hand_cemetery_pattern(
 # Y O MÁS Y SUBE HASTA M CARTA(S) DE TU CEMENTERIO A TU MANO" (Legión Paladín)
 # =============================================================================
 func try_execute_draw_gold_search_pattern(ability_text: String, controller_id: int, card: Node = null) -> bool:
-	"""Detecta 'Roba N carta(s), genera un Oro para jugar Aliados o Armas de
-	coste X o más y sube hasta M carta(s) de tu Cementerio a tu mano' (Legión
-	Paladín — 2026-08-29: texto reconfirmado en vivo contra la API, que
-	resultó ser INESTABLE entre fetches para esta carta específica; esta es
-	la versión que la API acaba de devolver, la misma que ya se había
-	usado en una implementación anterior de este mismo desarrollo. Ver
-	[[feedback_api_is_source_of_truth]] — se sincronizó también el cache
-	local (user://card_cache/cards.json, id 20857) a este texto). Tres
-	efectos encadenados SIN 'puedes' (no son opcionales, y el trigger es
-	SOLO 'cuando entra en juego' — no incluye salir del juego). Se detecta
-	por texto y se ejecutan los tres en orden.
-	Returns: true si el patrón aplicaba."""
+	"""Legión Paladín: "Roba N carta(s), genera un Oro para jugar Aliados o Armas de coste X o más y
+	sube hasta M carta(s) de tu Cementerio a tu mano" (texto de la API, que varió entre consultas;
+	el caché local, id 20857, está sincronizado). Tres efectos encadenados sin "puedes", solo
+	"cuando entra en juego"; se ejecutan en orden.
+	Devuelve true si el patrón aplicaba."""
 	var lower := ability_text.to_lower()
 	if not ("genera un oro para jugar" in lower and "sube hasta" in lower and "cementerio" in lower):
 		return false
@@ -151,10 +135,8 @@ func try_execute_draw_gold_search_pattern(ability_text: String, controller_id: i
 	if draw_amount > 0:
 		await ActionModule.draw(controller_id, draw_amount, "etb_trigger", true)
 
-	# 2026-10-06 (ver arquitectura.md §33): generar_oro_virtual_restringido()
-	# y _resolve_search_cemetery_to_hand() ya son por jugador — el guard
-	# 'controller_id == 0' de 2026-09-11 (bug real: el Oro restringido del
-	# rival aparecía del lado del Anfitrión) ya no hace falta.
+	# generar_oro_virtual_restringido() y _resolve_search_cemetery_to_hand() son por jugador
+	# (arquitectura.md §33).
 	if min_cost > 0 and main._gold_manager:
 		var predicate := func(card_type: int, _card_race: String, card_cost: int) -> bool:
 			return card_type in [Constants.CardType.ALIADO, Constants.CardType.ARMA] and card_cost >= min_cost
@@ -169,19 +151,11 @@ func try_execute_draw_gold_search_pattern(ability_text: String, controller_id: i
 
 
 func try_execute_draw_reveal_talisman_gold_pattern(ability_text: String, controller_id: int, card: Node = null) -> bool:
-	"""Detecta 'Roba una carta y puedes mostrar tu mano. Si no tienes más de
-	un Talismán, genera un Oro para jugar Armas y Roba una carta adicional'
-	(Levisterio, 2026-08-31). El 'mostrar tu mano' es cómo el jugador
-	demuestra que cumple la condición del Talismán — no hay sistema de
-	revelado-verificable de mano en este motor (SelectionCanvas.
-	reveal_hand_cards() existe pero está huérfana/sin instanciar, ver
-	arquitectura.md), así que se resuelve leyendo la mano directamente y
-	dejando constancia en el log en vez de abrir una UI de revelado nueva
-	para un único caso. El bonus condicional solo se evalúa para
-	controller_id == 0 (mismo alcance ya usado por search_amount en
-	try_execute_draw_gold_search_pattern) — no hay mano de IA modelada
-	carta por carta para poder contar sus Talismanes.
-	Returns: true si el patrón aplicaba."""
+	"""Levisterio: "Roba una carta y puedes mostrar tu mano. Si no tienes más de un Talismán, genera
+	un Oro para jugar Armas y Roba una carta adicional". Mostrar la mano es cómo se demuestra la
+	condición: se lee la mano del controlador directamente y queda constancia en el log, sin UI de
+	revelado.
+	Devuelve true si el patrón aplicaba."""
 	var lower := ability_text.to_lower()
 	if not (
 		"puedes mostrar tu mano" in lower
@@ -198,9 +172,7 @@ func try_execute_draw_reveal_talisman_gold_pattern(ability_text: String, control
 
 	await ActionModule.draw(controller_id, 1, "etb_trigger", true)
 
-	# 2026-10-06 (ver arquitectura.md §33): generar_oro_virtual_restringido()
-	# ya es por jugador — el guard 'controller_id == 0' de arriba ya no hace
-	# falta; la mano a contar es la del jugador real que activó la carta.
+	# La mano a contar es la del jugador que activó la carta.
 	var hand_container_levisterio = main.player_hand if controller_id == 0 else main._opponent_fan
 	if hand_container_levisterio:
 		var talisman_count: int = 0
@@ -222,15 +194,11 @@ func try_execute_draw_reveal_talisman_gold_pattern(ability_text: String, control
 func try_execute_deck_top_or_bottom_to_hand_pattern(
 	ability_text: String, controller_id: int, card: Node = null
 ) -> bool:
-	"""Detecta 'pon la primera o la última carta de tu Castillo en tu mano'
-	(La Ouija, 2026-08-31 — carta promocional de 'IMP - Chile Oscuro 2', sin
-	myl_id real, no está en la API externa; ver nota de fuente en
-	_activate_ouija_play_from_cemetery_or_deck_top(), HandCementerioAbilityHandler.gd).
-	Sin 'puedes': mandatorio, pero con una elección real entre las dos
-	cartas (no 'la que sea al azar'). 'primera' = tope (índice 0, ver
-	convención real documentada en CardManager.add_to_deck_top()), 'última'
-	= fondo.
-	Returns: true si el patrón aplicaba."""
+	"""La Ouija: "pon la primera o la última carta de tu Castillo en tu mano" (carta promocional sin
+	myl_id; ver _activate_ouija_play_from_cemetery_or_deck_top() en
+	HandCementerioAbilityHandler.gd). Sin "puedes": obligatorio, pero con elección entre las dos.
+	"primera" = tope (índice 0, ver CardManager.add_to_deck_top()), "última" = fondo.
+	Devuelve true si el patrón aplicaba."""
 	var lower := ability_text.to_lower()
 	if not ("primera o la última carta de tu castillo" in lower and "en tu mano" in lower):
 		return false
@@ -243,16 +211,10 @@ func try_execute_deck_top_or_bottom_to_hand_pattern(
 	if deck.is_empty():
 		return true
 
-	# El revelado del tope (segunda mitad del texto de La Ouija: 'Juega
-	# mostrando la primera carta de tu Castillo') arranca DESDE EL PRIMER
-	# SEGUNDO que entra en juego (2026-08-31, corrección a pedido del
-	# usuario: antes esto solo se aplicaba a la habilidad de una vez por
-	# turno) — refrescar AQUÍ, antes de ofrecer la elección tope/fondo, para
-	# que el jugador ya sepa cuál es la del tope al decidir (la de fondo
-	# sigue a ciegas). La carta ya es hija de player_gold con zona
-	# RESERVA_ORO en este punto (_trigger_enter_play() se llama después de
-	# _place_card_as_gold() la deja en su lugar), así que la detección por
-	# texto en refresh_castillo_top_reveal() ya la encuentra.
+	# El revelado del tope ("Juega mostrando la primera carta de tu Castillo") rige desde que entra en
+	# juego: se refresca aquí, antes de elegir tope/fondo, para que el jugador vea cuál es la del tope
+	# (la del fondo sigue a ciegas). La carta ya está en player_gold con zona RESERVA_ORO
+	# (_trigger_enter_play() corre después de _place_card_as_gold()).
 	if main._zone_viewer:
 		main._zone_viewer.refresh_castillo_top_reveal()
 

@@ -3,7 +3,7 @@ class_name TemporaryBuffSystem
 ## TemporaryBuffSystem — Buffs/debuffs temporales con duración (this_turn,
 ## until_final, until_next_turn, permanent), independiente de
 ## ContinuousEffectManager. Opera sobre TriggerSystem via _main (señales
-## buff_applied/buff_expired/buffs_cleared, GameManager.current_turn).
+## buff_applied/buff_expired/buffs_cleared, GameManager.turn_serial).
 ## Extraído de TriggerSystem.gd (Fase 4 de reestructuración).
 
 var _main: Node
@@ -29,7 +29,7 @@ func apply_buff(source: Node, target: Node, buff_type: String, value: int, durat
 
 	Returns: El buff creado
 	"""
-	var current_turn = GameManager.current_turn if GameManager else 0
+	var current_turn = GameManager.turn_serial if GameManager else 0
 
 	var buff = {
 		"id": "%s_%d_%d" % [buff_type, target.get_instance_id(), Time.get_ticks_msec()],
@@ -119,7 +119,7 @@ func clear_expired_buffs(duration: String) -> int:
 	Returns: Cantidad de buffs eliminados
 	"""
 	var removed = 0
-	var current_turn = GameManager.current_turn if GameManager else 0
+	var current_turn = GameManager.turn_serial if GameManager else 0
 
 	for i in range(temporary_buffs.size() - 1, -1, -1):
 		var buff = temporary_buffs[i]
@@ -137,7 +137,9 @@ func clear_expired_buffs(duration: String) -> int:
 			"until_next_turn":
 				# Expiran al inicio del siguiente turno del controlador
 				if buff.duration == "until_next_turn":
-					should_remove = current_turn > buff.turn_applied
+					# turn_serial: el próximo turno del controlador es dos
+					# turnos de jugador después del que lo aplicó.
+					should_remove = current_turn >= buff.turn_applied + 2
 
 		if should_remove:
 			var target = buff.target

@@ -38,6 +38,8 @@ func is_blocked_by_continuous_effect(card: Node, trigger_type: String) -> bool:
 	"""Verifica si un trigger está bloqueado por un efecto continuo negativo
 	DAR: El efecto negativo (restricción) siempre gana
 	"""
+	if _blocked_by_rule_in_play(card, trigger_type):
+		return true
 	for effect in continuous_effects:
 		if not effect.get("is_negative", false):
 			continue
@@ -60,6 +62,30 @@ func is_blocked_by_continuous_effect(card: Node, trigger_type: String) -> bool:
 			if target_card == card:
 				return true
 
+	return false
+
+
+## Reglas impresas en cartas en juego que apagan disparadores del rival (se leen del texto, sin
+## registro): el fantasma y agentes de killbird.
+const FANTASMA_TEXT := "las cartas oponentes no disparan sus habilidades al salir del juego"
+const KILLBIRD_TEXT := "los aliados oponentes de fuerza 2 o menos no disparan sus habilidades al entrar ni al salir del juego"
+
+
+func _blocked_by_rule_in_play(card: Node, trigger_type: String) -> bool:
+	if not is_instance_valid(card):
+		return false
+	var leaving: bool = trigger_type in ["on_leave_play", "on_destroyed"]
+	var entering: bool = trigger_type == "on_enter_play"
+	if not leaving and not entering:
+		return false
+	var CardQuery = load("res://scripts/core/effects/mechanics/CardQuery.gd")
+	var opponent: int = 1 - CardQuery.controller_of(card)
+	if leaving and not CardQuery.cards_in_play_with(opponent, FANTASMA_TEXT).is_empty():
+		return true
+	if card.get("card_type") == Constants.CardType.ALIADO \
+			and ContinuousEffectManager.get_modified_strength(card) <= 2 \
+			and not CardQuery.cards_in_play_with(opponent, KILLBIRD_TEXT).is_empty():
+		return true
 	return false
 
 

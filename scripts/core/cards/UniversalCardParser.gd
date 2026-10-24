@@ -57,13 +57,14 @@ enum CostType {
 	GOLD,           # Paga X Oro
 	DISCARD,        # Descarta una carta
 	TAP,            # Gira esta carta
-	SELF_AS_GOLD,   # "Pagar este Oro" — la propia carta se gasta como Oro (2026-08-29, p.ej. Tyet)
-	SELF_BANISH,    # "Puedes Desterrarlo" — la propia carta se destierra como costo (2026-08-30, p.ej. Legión Paladín, Ramón Freire)
-	SELF_TO_DECK_BOTTOM, # "Puedes poner esta ... carta(s) en el fondo de tu Castillo" — la propia carta (+ otra) al fondo del mazo como costo (2026-08-30, p.ej. Tyet)
-	SELF_SHUFFLE,   # "Barajar esta carta desde tu mano/Barajarla" — la propia carta se baraja de vuelta al Castillo como costo (2026-09-06, p.ej. Sacrificio Solar, skofnung)
-	SELF_CONVERT,   # "Puedes convertirlo/la en un Oro sin habilidad" — la propia carta se convierte como costo (2026-09-07, p.ej. Perla de Sangre)
-	SELF_DISCARD,   # "Puedes Descartarlo/Descartarla" — la propia carta se descarta como costo (2026-09-07, p.ej. Sumi)
-	SELF_DESTROY,   # "Puedes Destruir esta Arma" — la propia carta se destruye como costo (2026-09-07, p.ej. Lanza Argenta)
+	SELF_AS_GOLD,   # "Pagar este Oro" — la propia carta se gasta como Oro (p.ej. Tyet)
+	SELF_BANISH,    # "Puedes Desterrarlo" — la propia carta se destierra como costo (p.ej. Legión Paladín, Ramón Freire)
+	SELF_TO_DECK_BOTTOM, # "Puedes poner esta ... carta(s) en el fondo de tu Castillo" — la propia carta (+ otra) al fondo del mazo como costo (p.ej. Tyet)
+	SELF_SHUFFLE,   # "Barajar esta carta desde tu mano/Barajarla" — la propia carta se baraja de vuelta al Castillo como costo (p.ej. Sacrificio Solar, skofnung)
+	SELF_CONVERT,   # "Puedes convertirlo/la en un Oro sin habilidad" — la propia carta se convierte como costo (p.ej. Perla de Sangre)
+	SELF_DISCARD,   # "Puedes Descartarlo/Descartarla" — la propia carta se descarta como costo (p.ej. Sumi)
+	SELF_DESTROY,   # "Puedes Destruir esta Arma" — la propia carta se destruye como costo (p.ej. Lanza Argenta)
+	EFFECT_COST,    # "Puedes <coste> para <efecto>" con un coste que entiende EffectCompiler.COST_PIECES (lo paga el intérprete, p.ej. hem hem real: "subir este Oro a tu mano")
 }
 
 enum TargetType {
@@ -204,13 +205,10 @@ const ABILITY_PATTERNS: Dictionary = {
 		"group_amount": 0,
 	},
 	"GOLD": {
-		# Cubre dígito o palabra ('un', 'dos'...) y el calificador opcional
-		# 'por el turno'/'virtual(es)' (2026-08-28, p.ej. Lobo Sagrado:
-		# 'Cuando ataques, genera un Oro por el turno') — antes exigía la
-		# palabra literal 'virtual' y solo dígitos, así que nunca matcheaba
-		# el texto real de ninguna carta. Ejecución real en
-		# TargetedEffectExecutor.execute_parsed_action() (case "GOLD"), no
-		# via manager_path/method (GoldManager no es autoload de /root).
+		# Cantidad en dígito o palabra ('un', 'dos'...) y el calificador opcional 'por el turno' /
+		# 'virtual(es)' (p.ej. Lobo Sagrado: "Cuando ataques, genera un Oro por el turno"). Se ejecuta en
+		# TargetedEffectExecutor.execute_parsed_action() (case "GOLD"), no vía manager_path/method
+		# (GoldManager no es autoload).
 		"regex":        "(?:genera|añade) (\\w+) oros?(?: virtuales?)?(?: por el turno)?",
 		"manager_path": "",
 		"method":       "",
@@ -269,14 +267,13 @@ const TRIGGER_EVENTS: Dictionary = {
 	"al entrar":         "ENTER",
 	"al salir":          "EXIT",
 	"cuando sale":       "EXIT",
-	# "Una vez en tu turno, cuando este u otro de tus Aliados salga del juego"
-	# (Vlad el Empalador, 2026-10-17): disparada, no un botón.
+	# "Una vez en tu turno, cuando este u otro de tus Aliados salga del juego" (Vlad el Empalador):
+	# disparada, no un botón.
 	"salga del juego":   "EXIT",
 	"al atacar":         "ATTACK",
 	"cuando ataca":      "ATTACK",
 	"al bloquear":       "BLOCK",
-	# "al morir" no es terminología real del juego (2026-08-28, a pedido
-	# del usuario) — se sacó, queda "cuando es destruida" para DIE.
+	# "al morir" no es terminología del juego: para DIE queda "cuando es destruida".
 	"cuando es destruida": "DIE",
 	"al comienzo de":    "TURN_START",
 	"al inicio de":      "TURN_START",
@@ -289,25 +286,27 @@ const TRIGGER_EVENTS: Dictionary = {
 class TurnRegistry:
 	## Registra qué habilidades "Una vez por turno" ya se usaron.
 	## Clave: "card_id|ability_index|turn_number"
-	var _used: Dictionary = {}
+	var _used: Dictionary = {}  # clave -> cantidad de usos en ese turno
 
 	func register(card_id: String, ability_index: int, turn: int) -> void:
-		_used["%s|%d|%d" % [card_id, ability_index, turn]] = true
+		var key := "%s|%d|%d" % [card_id, ability_index, turn]
+		_used[key] = int(_used.get(key, 0)) + 1
+
+	## Cuántas veces se usó en ese turno ("Hasta dos veces por turno").
+	func use_count(card_id: String, ability_index: int, turn: int) -> int:
+		return int(_used.get("%s|%d|%d" % [card_id, ability_index, turn], 0))
+
+	## ¿Ya agotó sus usos del turno? 'limit' = uses_per_turn de la habilidad.
+	func is_exhausted(card_id: String, ability_index: int, turn: int, limit: int = 1) -> bool:
+		return use_count(card_id, ability_index, turn) >= maxi(1, limit)
 
 	func register_ability_use(source_card: Node, ability: Dictionary) -> void:
-		"""Envoltorio de register() que extrae ability_index/turno y usa el
-		instance_id de source_card como clave — extraído (2026-08-30) de las
-		mismas 4 líneas que se repetían copiadas en prácticamente todas las
-		funciones _activate_* de CardInspectionLayer.gd (Don de Amma, Tesoro
-		de los Césares, Miguel, las dos de Tyet, Ramón Freire).
-		instance_id, NO card_data.id (2026-08-30, corrección: card_data.id es
-		el ID de la CARTA/impresión, compartido por TODAS las copias en juego
-		— con 2 Aho en juego, usar uno marcaba el cupo de 'una vez por turno'
-		también para el otro, un bug real reportado por el usuario. Cada copia
-		física necesita su propio cupo)."""
+		"""Envoltorio de register() que saca ability_index/turno y usa el instance_id de source_card como
+		clave. instance_id y no card_data.id (compartido por todas las copias): cada copia física
+		tiene su propio cupo de "una vez por turno"."""
 		var card_id: String = str(source_card.get_instance_id())
 		var ability_index: int = ability.get("ability_index", 0)
-		register(card_id, ability_index, GameManager.current_turn)
+		register(card_id, ability_index, GameManager.turn_serial)
 
 	func was_used(card_id: String, ability_index: int, turn: int) -> bool:
 		return _used.has("%s|%d|%d" % [card_id, ability_index, turn])
@@ -342,8 +341,9 @@ func _connect_signals() -> void:
 		GameManager.turn_started.connect(_on_turn_started_reset_registry)
 
 
-func _on_turn_started_reset_registry(_player_id: int, turn_number: int) -> void:
-	turn_registry.reset_for_turn(turn_number)
+func _on_turn_started_reset_registry(_player_id: int, _turn_number: int) -> void:
+	# turn_serial: el registro cuenta turnos de jugador, no rondas.
+	turn_registry.reset_for_turn(GameManager.turn_serial)
 
 
 func _parse_amount(amount_str: String) -> int:
@@ -374,57 +374,102 @@ func _detect_target(text: String) -> TargetType:
 	return TargetType.SELF
 
 
-
-# resolve_chain()/play_card_with_response_window() (ActionChainResolver.gd/
-# AbilityRegistry.gd) se eliminaron aquí (2026-08-27, limpieza — sin ningún
-# llamador real, ver ActionPipeline.gd para el detalle completo).
-
-
 # =============================================================================
 # PARSE_ABILITIES — Compilador Fase 1 (entrada pública unificada)
 # =============================================================================
-# get_activated_abilities() se eliminó aquí (2026-08-28, "módulos gordos"):
-# cero llamadores reales — solo aparecía nombrada en un comentario de
-# ActionPipeline.gd, nunca invocada. parse_abilities() de abajo es la que de
-# verdad usa CardInspectionLayer para los botones de habilidad activada.
+static var _event_phrases: Array = []
+
+
+## ¿Es un disparador por evento con handler propio (no un botón de habilidad activada)?
+static func _is_event_sentence(lower_s: String) -> bool:
+	if _event_phrases.is_empty():
+		for e in load("res://scripts/core/effects/triggers/LimitedEventTriggers.gd").ENTRIES:
+			_event_phrases.append(e[0])
+		var ally_events = load("res://scripts/core/effects/triggers/AllyEventTriggers.gd")
+		_event_phrases.append_array([ally_events.OGUN, ally_events.TROLL,
+			load("res://scripts/core/effects/triggers/CemeteryTriggers.gd").ESCUDO,
+			"cuando tu oponente juegue una carta, hasta tres veces por turno, el bota dos cartas",  # Dhampir
+			"cuando se resuelva el efecto de uno de tus talismanes sello",  # Los Siete Sellos (GoldManager)
+			"cuando ataque solo, puedes desterrarlo para que tu oponente"])  # uriko-hime (AttackPatterns)
+	var t: String = load("res://scripts/core/effects/triggers/CemeteryTriggers.gd").normalize(lower_s)
+	for ph in _event_phrases:
+		if ph in t:
+			return true
+	return false
+
+
+static func _has_compiled_cost(sentence: String) -> bool:
+	"""'Puedes <coste> para <efecto>' (sin disparador) con un coste de EffectCompiler.COST_PIECES: es una
+	activada propia, no la continuación de la anterior (hem hem real: "Puedes subir este Oro a tu mano
+	para Robar dos cartas...")."""
+	var norm: String = EffectCompiler.normalize(sentence)
+	if not norm.begins_with("puedes ") or not (" para " in norm):
+		return false
+	var costs: Dictionary = EffectCompiler._parse_costs(norm.substr(7))
+	if costs.is_empty():
+		return false
+	# Coste alternativo al jugarla ("para reducir su coste en dos Oros", "para jugarlo desde tu
+	# Cementerio": lo aplica el pago) y prevenciones reactivas ("para prevenir que...":
+	# EffectController._prevention_registry) no son botones.
+	for alt in ["reducir su coste", "jugarlo", "jugarla", "jugar este", "jugar esta", "prevenir"]:
+		if str(costs.rest).begins_with(alt):
+			return false
+	return true
+
+
+static func _fold_usage_qualifiers(raw: PackedStringArray) -> Array:
+	"""Oraciones que solo limitan la habilidad anterior, no son habilidades (si no, quedaba un botón
+	que no hacía nada):
+	- "Sólo puedes utilizar esta habilidad de Belial una vez por turno": la oración anterior pasa a
+	  empezar con "Una vez por turno, " (Belial: "Puedes Botar dos cartas para subirlo de tu
+	  Cementerio a tu mano" queda como activada una vez por turno). Si la anterior ya dice "por
+	  turno" se deja igual.
+	- "Puedes utilizar esta habilidad más de una vez por turno" (brown bess, Llave del Abismo): se
+	  descarta; la anterior no tiene límite."""
+	var out: Array = []
+	for s: String in raw:
+		var low := s.strip_edges().to_lower()
+		if low.begins_with("puedes utilizar esta habilidad m") and "de una vez por turno" in low:
+			continue
+		if (low.begins_with("sólo puedes utilizar esta habilidad") or low.begins_with("solo puedes utilizar esta habilidad")) \
+				and low.ends_with("una vez por turno") and not out.is_empty():
+			var prev: String = str(out[-1]).strip_edges()
+			# Un disparador ("Cuando Destierres cartas..., puedes jugar este Aliado", el horla) no pasa a
+			# activada: el límite lo lleva quien lo dispara.
+			if not ("por turno" in prev.to_lower()) and not prev.to_lower().begins_with("cuando"):
+				out[-1] = "Una vez por turno, " + prev.substr(0, 1).to_lower() + prev.substr(1)
+			continue
+		out.append(s)
+	return out
+
+
+# parse_abilities() es lo que usa CardInspectionLayer para los botones de habilidad activada.
 func parse_abilities(text: String, card_id: String = "") -> Array[Dictionary]:
-	"""Compilador Fase 1: analiza el texto de una carta y retorna habilidades estructuradas.
-
+	"""Compilador Fase 1: analiza el texto de una carta y devuelve habilidades estructuradas.
+	
 	Divide el texto por puntos y clasifica cada oración:
-	  - TRIGGER   : Se activa automáticamente por un evento ("Cuando entra", "Al atacar"…)
-	  - ACTIVATED : El jugador la activa desde el Zoom (tiene coste o "Una vez por turno")
-
-	Flags especiales:
-	  is_optional   — La oración contiene "Puedes". Para ACTIVATED no pide
-	                  confirmación aparte (clickear el botón ya es la
-	                  confirmación, 2026-08-28); para TRIGGER, el "declinar"
-	                  lo ofrece el propio can_cancel del SelectionManager que
-	                  abre TriggerResolution/LookAndPlayResolver.
-	  once_per_turn — Contiene "Una vez por turno". Se registra en TurnRegistry para
-	                  impedir múltiples usos por turno.
-	  once_per_turn_own_turn_only — Además "una vez EN tu/su turno" específicamente
-	                  (no solo "una vez por/al turno"): más restrictiva en CUÁNDO se
-	                  puede activar, no solo en frecuencia — ver §10.11 de
-	                  arquitectura.md. Consultado en CardInspectionLayer._build_
-	                  ability_buttons() para ocultar el botón durante una ventana
-	                  de prioridad anidada (Guerra de Talismanes, respuesta a un
-	                  trigger) aunque siga siendo tu turno.
-
-	Cada elemento retornado:
-	  {raw_text, ability_type, trigger_event,
-	   cost_text, cost_type, cost_amount,
-	   effect_text, actions,
-	   is_optional, once_per_turn, once_per_turn_own_turn_only,
-	   ability_index, card_id,
-	   manager_path, method}
-	"""
+	- TRIGGER: se activa sola por un evento ("Cuando entra", "Al atacar"...).
+	- ACTIVATED: el jugador la activa desde el Zoom (tiene coste o "Una vez por turno").
+	
+	Flags:
+	- is_optional: contiene "Puedes". En ACTIVATED no pide confirmación aparte (el botón ya lo es);
+	en TRIGGER el declinar lo ofrece el can_cancel del SelectionManager que abre
+	TriggerResolution/LookAndPlayResolver.
+	- once_per_turn: "Una vez por turno"; se registra en TurnRegistry. uses_per_turn: "Hasta
+	dos/tres veces por turno".
+	- once_per_turn_own_turn_only: "una vez EN tu/su turno": además solo en tu turno normal, nunca
+	en una ventana anidada (arquitectura.md §10.11; CardInspectionLayer oculta el botón).
+	
+	Cada elemento: {raw_text, ability_type, trigger_event, cost_text, cost_type, cost_amount,
+	effect_text, actions, is_optional, once_per_turn, once_per_turn_own_turn_only, uses_per_turn,
+	ability_index, card_id, manager_path, method}"""
 	var result: Array[Dictionary] = []
 	if text.is_empty():
 		return result
 
 	var ability_index := 0
 
-	for raw_sentence: String in text.split("."):
+	for raw_sentence: String in _fold_usage_qualifiers(text.split(".")):
 		var sentence: String = raw_sentence.strip_edges()
 		if sentence.is_empty():
 			continue
@@ -432,16 +477,10 @@ func parse_abilities(text: String, card_id: String = "") -> Array[Dictionary]:
 		var lower_s: String = sentence.to_lower()
 
 		# ── Continuación encadenada ("Luego, busca...") ────────────────────────
-		# Una oración que empieza con un conector de encadenamiento (Luego/
-		# Después/A continuación/Entonces) no es una habilidad nueva — es la
-		# continuación de la anterior (2026-08-29, p.ej. Don de Amma: "...puedes
-		# Desterrar un Oro con habilidad de tu Reserva. Luego, busca un Oro en
-		# tu Castillo y ponlo en tu Reserva."). Antes cada oración se evaluaba
-		# aislada y ésta, sin trigger ni coste propio, se descartaba en
-		# silencio — ni el raw_text que usa CardInspectionLayer para detectar
-		# patrones especiales por botón, ni el effect_text que llega a
-		# ActionPipeline.activate_ability(), veían nunca el "Luego...". Se
-		# concatena a la última entrada agregada en vez de perderse.
+		# Una oración que empieza con Luego/Después/A continuación/Entonces no es una habilidad nueva: se
+		# concatena a la última entrada (p.ej. Don de Amma: "...puedes Desterrar un Oro con habilidad de
+		# tu Reserva. Luego, busca un Oro en tu Castillo y ponlo en tu Reserva."). Si no, se perdía en
+		# silencio.
 		var is_luego_continuation: bool = false
 		for connector_word: String in ["luego,", "después,", "a continuación,", "entonces,"]:
 			if lower_s.begins_with(connector_word):
@@ -455,51 +494,43 @@ func parse_abilities(text: String, card_id: String = "") -> Array[Dictionary]:
 
 		# ── Flags globales de la oración ──────────────────────────────────────
 		var is_optional:   bool = "puedes" in lower_s
-		# "una vez EN tu/su turno" (p.ej. Padre de la Patria, 2026-08-28) es
-		# una tercera variante real de esta cláusula que no matcheaba antes.
+		# "una vez EN tu/su turno" (p.ej. Padre de la Patria) es una tercera variante de esta cláusula.
 		var once_per_turn: bool = ("una vez por turno" in lower_s
 			or "una vez al turno" in lower_s
 			or "una vez en tu turno" in lower_s
 			or "una vez en su turno" in lower_s)
-		# "una vez EN tu/su turno" es MÁS restrictiva que "una vez por/al
-		# turno" en CUÁNDO se puede activar, no solo en la frecuencia
-		# (2026-09-13, a pedido del usuario, ver arquitectura.md §10.11):
-		# "una vez por turno"/"puedes" sin más calificación = activable en tu
-		# turno normal Y durante cualquier ventana de prioridad abierta
-		# (Guerra de Talismanes, respuesta a un trigger, etc. — así está
-		# implementado hoy). "una vez EN tu/su turno" = SOLO durante tu turno
-		# normal, NUNCA en una ventana de prioridad anidada, aunque la propia
-		# habilidad pueda Anular/Cancelar (p.ej. paladín bestiarium: su
-		# segunda habilidad puede Anular pero el propio texto la restringe a
-		# "una vez en tu turno" — esa restricción explícita pesa más que la
-		# convención general de que Anular/Cancelar es de respuesta
+		# "una vez EN tu/su turno" restringe CUÁNDO (arquitectura.md §10.11): "una vez por turno" /
+		# "puedes" = en tu turno normal y en cualquier ventana de prioridad abierta; "una vez EN tu turno"
+		# = solo en tu turno normal, nunca en una ventana anidada, aunque pueda Anular/Cancelar (p.ej.
+		# paladín bestiarium: la restricción explícita pesa más que la convención de respuesta
 		# instantánea).
 		var once_per_turn_own_turn_only: bool = ("una vez en tu turno" in lower_s
 			or "una vez en su turno" in lower_s)
+		# "Hasta dos/tres veces por turno": mismo registro, con más usos (TurnRegistry.is_exhausted).
+		var uses_per_turn := 1
+		if "hasta dos veces por turno" in lower_s or "dos veces por turno" in lower_s:
+			uses_per_turn = 2
+		elif "hasta tres veces por turno" in lower_s or "tres veces por turno" in lower_s:
+			uses_per_turn = 3
+		if uses_per_turn > 1:
+			once_per_turn = true
 
-		# "Sólo puedes utilizar la habilidad de X una vez por turno" (2026-08-30,
-		# p.ej. Ramón Freire) — oración de CIERRE que solo reafirma la
-		# restricción de la habilidad ACTIVADA anterior, no una habilidad
-		# nueva. Sin este chequeo, 'una vez por turno' la clasificaba como su
-		# propia entrada ACTIVATED separada y espuria, sin ninguna acción
-		# real asociada (un botón que no hacía nada con sentido al clickear).
+		# "Sólo puedes utilizar la habilidad de X una vez por turno" (p.ej. Ramón Freire): oración de
+		# cierre que reafirma la restricción de la habilidad anterior, no una habilidad nueva (si no,
+		# quedaba un botón espurio).
 		var is_once_per_turn_qualifier_only: bool = once_per_turn and (
 			"solo puedes utilizar la habilidad" in lower_s
 			or "sólo puedes utilizar la habilidad" in lower_s
 			or "solo puedes usar esta habilidad" in lower_s
 			or "sólo puedes usar esta habilidad" in lower_s
-			# "Sólo puedes utilizar ESTA habilidad de X una vez por turno"
-			# (2026-09-06, p.ej. Cuervo Nocturno) — variante con "utilizar" +
-			# "esta" que faltaba: ninguna de las 4 combinaciones de arriba la
-			# cubría ("utilizar" solo se chequeaba con "la", "esta" solo con
-			# "usar"), así que esta oración de cierre quedaba como su propia
-			# entrada ACTIVATED espuria en vez de fusionarse con la anterior.
+			# Variante "Sólo puedes utilizar ESTA habilidad de X una vez por turno" (p.ej. Cuervo Nocturno).
 			or "solo puedes utilizar esta habilidad" in lower_s
 			or "sólo puedes utilizar esta habilidad" in lower_s
 		)
 		if is_once_per_turn_qualifier_only and not result.is_empty():
 			var prev_qual: Dictionary = result[result.size() - 1]
 			prev_qual["once_per_turn"] = true
+			prev_qual["uses_per_turn"] = uses_per_turn
 			if once_per_turn_own_turn_only:
 				prev_qual["once_per_turn_own_turn_only"] = true
 			continue
@@ -517,78 +548,38 @@ func parse_abilities(text: String, card_id: String = "") -> Array[Dictionary]:
 		var cost_text:   String = ""
 		var effect_text: String = sentence
 
-		# "Puedes pagarlo..." (2026-08-30, corrección: el texto real de Tyet en
-		# caché/API es "Puedes pagarlo para que..." con pronombre, no "pagar
-		# este Oro" — el chequeo original nunca matcheaba el texto real de la
-		# carta, así que esta oración (y por lo tanto también la siguiente,
-		# que dependía de que ÉSTA llegara a ACTIVATED para poder encadenarse)
-		# quedaban fuera de 'result' por completo, sin ningún botón.
+		# "Puedes pagarlo..." (Tyet: "Puedes pagarlo para que...", con pronombre): la carta se paga a sí
+		# misma como Oro.
 		var pays_self_as_gold: bool = ("pagar este oro" in lower_s or "pagar esta carta" in lower_s
 			or "puedes pagarlo" in lower_s)
-		# "Puedes Desterrarlo/Desterrarla..." (2026-08-30, p.ej. Legión
-		# Paladín, Ramón Freire — masculino; Estaca: 'Puedes Desterrarla
-		# para prevenir...' — femenino, "la Estaca") — coste de
-		# autodesterrarse, tampoco tiene 'una vez por turno' ni ':'. Sin
-		# este chequeo la oración quedaba fuera de 'result' igual que el
-		# caso de arriba — Legión Paladín parece no haber disparado nunca
-		# su botón real hasta este fix (el patrón especial que lo maneja en
-		# CardInspectionLayer nunca era alcanzable porque esta oración
-		# jamás llegaba a ability_type ACTIVATED).
+		# "Puedes Desterrarlo/Desterrarla..." (Legión Paladín, Ramón Freire; Estaca en femenino): coste de
+		# autodesterrarse, sin "una vez por turno" ni ':'.
 		var pays_self_banish: bool = "puedes desterrarlo" in lower_s or "puedes desterrarla" in lower_s
-		# "Puedes poner esta y otra carta de tu mano en el fondo de tu
-		# Castillo..." (2026-08-30, p.ej. Tyet) — coste de mandar esta carta
-		# (+ otra) al fondo del mazo, tampoco tiene 'una vez por turno' ni
-		# ':'. Sin este chequeo caía en la rama de "sin coste ni trigger", y
-		# como la oración ANTERIOR (la de pagarlo como Oro) no es ACTIVATED
-		# hasta el fix de arriba, tampoco encadenaba como continuación —
-		# quedaba fuera de 'result' por completo, sin botón.
+		# "Puedes poner esta y otra carta de tu mano en el fondo de tu Castillo..." (Tyet): coste de
+		# mandar esta carta (+ otra) al fondo del mazo.
 		var pays_self_to_deck_bottom: bool = "poner esta" in lower_s and "fondo de tu castillo" in lower_s
-		# "Barajar esta carta desde tu mano"/"Barajarla de tu mano"/
-		# "Barajarla" a secas (2026-09-06, bug real reportado por el
-		# usuario: Sacrificio Solar — 'Puedes pagar un Oro y Barajar esta
-		# carta desde tu mano para...' — no matcheaba NINGÚN cost_type,
-		# así que la oración entera quedaba fuera de 'result' sin
-		# ability_type ACTIVATED, y _build_ability_buttons() nunca le
-		# mostraba botón al jugador: la habilidad, literal, no se podía
-		# usar. skofnung tiene el mismo patrón ('Puedes Barajarla de tu
-		# mano para...') y compartía el mismo problema.
+		# "Barajar esta carta desde tu mano" / "Barajarla de tu mano" / "Barajarla" (Sacrificio Solar:
+		# "Puedes pagar un Oro y Barajar esta carta desde tu mano para..."; skofnung).
 		var pays_self_shuffle: bool = ("barajar esta carta" in lower_s and "mano" in lower_s) \
 			or "barajarla de tu mano" in lower_s or "puedes barajarla" in lower_s
-		# "Puedes convertirlo/la en un Oro sin habilidad para..." (2026-09-07,
-		# bug real reportado por el usuario: Perla de Sangre — dos habilidades
-		# ACTIVADAS separadas, pero la segunda no tiene 'una vez por turno' ni
-		# ':' ni ningún otro cost_type reconocido, así que caía en la rama de
-		# 'oración sin coste que sigue a una ACTIVATED abierta' y se fusionaba
-		# como continuación de la PRIMERA habilidad en vez de ser su propia
-		# entrada — solo se mostraba/podía usar el primer botón).
+		# "Puedes convertirlo/la en un Oro sin habilidad para..." (Perla de Sangre): su propia entrada
+		# ACTIVATED; si no, se fusionaba como continuación de la primera habilidad.
 		var pays_self_convert: bool = "convertirlo en un oro sin habilidad" in lower_s \
 			or "convertirla en un oro sin habilidad" in lower_s
-		# "Puedes Barajarlo..." (2026-09-07, bug real encontrado en auditoría:
-		# Tótem del Dragón Ancestral — variante MASCULINA de pays_self_shuffle,
-		# que solo cubría "barajarla"/"barajar esta carta...mano").
+		# "Puedes Barajarlo..." (Tótem del Dragón Ancestral): variante masculina de pays_self_shuffle.
 		var pays_self_shuffle_masc: bool = "puedes barajarlo" in lower_s
-		# "Puedes Descartarlo/Descartarla..." (2026-09-07, bug real encontrado
-		# en auditoría: Sumi — coste de autodescartarse, mismo molde que
-		# pays_self_banish pero con Descartar).
+		# "Puedes Descartarlo/Descartarla..." (Sumi): coste de autodescartarse, como pays_self_banish.
 		var pays_self_discard_self: bool = "puedes descartarlo" in lower_s or "puedes descartarla" in lower_s
-		# "Puedes Destruir esta Arma..." (2026-09-07, bug real encontrado en
-		# auditoría: Lanza Argenta — coste de autodestruirse).
+		# "Puedes Destruir esta Arma..." (Lanza Argenta): coste de autodestruirse.
 		var pays_self_destroy: bool = "puedes destruir esta arma" in lower_s
-		# "Puedes pagar un/N Oro(s) para..." SIN ':' (2026-09-07, bug real
-		# encontrado en auditoría: Sandraudiga, Visión Heroica — distinto de
-		# pays_self_as_gold ('puedes pagarlo', la carta SE PAGA A SÍ MISMA
-		# como Oro): aquí se paga Oro GENÉRICO de la Reserva como costo de un
-		# efecto, la carta de texto no es un Oro. El formato con ':' ya cubre
-		# esto cuando la carta lo imprime así; esta es la variante en prosa.
-		# Habilidad de Vigilia sin coste con condición (2026-10-13, Patria
-		# Vieja: "En tu Vigilia, si no has puesto Oros en juego este turno,
-		# puedes mirar...") y habilidad que la carta GANA en el Cementerio
-		# (Duelo Espacial: "En tu Cementerio... gana la habilidad 'En tu
-		# Vigilia, puedes Robar una carta'"). Sin esto ninguna llegaba a
-		# ACTIVATED y no tenían botón.
-		# Solo la variante "puedes mirar..." (Patria Vieja): las otras cartas con
-		# esta condición (Fuente de Ladurum, Karesansui, Corazón de Dragón...)
-		# son "ponerlo desde tu mano o Cementerio en tu Reserva", otra mecánica.
+		# "Puedes pagar un/N Oro(s) para..." sin ':' (Sandraudiga, Visión Heroica): se paga Oro genérico
+		# de la Reserva como costo; la variante con ':' ya la cubre el formato normal. Distinto de
+		# pays_self_as_gold (la carta se paga a sí misma).
+		# También: habilidad de Vigilia sin coste con condición (Patria Vieja: "En tu Vigilia, si no has
+		# puesto Oros en juego este turno, puedes mirar...") y la que la carta gana en el Cementerio
+		# (Duelo Espacial: "gana la habilidad 'En tu Vigilia, puedes Robar una carta'"). Solo la variante
+		# "puedes mirar...": las otras con esa condición (Fuente de Ladurum, Karesansui, Corazón de
+		# Dragón...) son "ponerlo desde tu mano o Cementerio en tu Reserva", otra mecánica.
 		var vigilia_no_gold_yet: bool = "si no has puesto oros en juego este turno" in lower_s \
 			and "puedes mirar las primeras" in lower_s
 		var cemetery_granted: bool = "en tu cementerio" in lower_s and "gana la habilidad" in lower_s and "puedes" in lower_s
@@ -596,7 +587,10 @@ func parse_abilities(text: String, card_id: String = "") -> Array[Dictionary]:
 		pay_gold_rx.compile("puedes pagar (\\w+) oros? para")
 		var m_pay_gold := pay_gold_rx.search(lower_s)
 
-		if once_per_turn or vigilia_no_gold_yet or cemetery_granted:
+		# La habilidad que dan tundra viva / isla de gigantes a cartas del Cementerio (el costo de Desterrar las
+		# otras lo paga ActivatedPatterns; la carta sale del Cementerio al usarla).
+		var granted_by_tundra_isla: bool = lower_s.begins_with("destierra dos cartas de tu cementerio para subirlo") 			or lower_s.begins_with("destierra tres cartas de tu cementerio para jugarlo")
+		if once_per_turn or vigilia_no_gold_yet or cemetery_granted or granted_by_tundra_isla:
 			cost_type = CostType.ONCE_PER_TURN
 		elif pays_self_as_gold:
 			cost_type = CostType.SELF_AS_GOLD
@@ -617,6 +611,8 @@ func parse_abilities(text: String, card_id: String = "") -> Array[Dictionary]:
 		elif m_pay_gold:
 			cost_type = CostType.GOLD
 			cost_amount = _parse_amount(m_pay_gold.get_string(1))
+		elif trigger_event == "" and _has_compiled_cost(sentence):
+			cost_type = CostType.EFFECT_COST
 		elif ":" in sentence:
 			var colon_pos: int = sentence.find(":")
 			cost_text   = sentence.substr(0, colon_pos).strip_edges()
@@ -635,6 +631,22 @@ func parse_abilities(text: String, card_id: String = "") -> Array[Dictionary]:
 				cost_type = CostType.TAP
 
 		# ── Determinar tipo de habilidad ──────────────────────────────────────
+		# Reglas estáticas que no son una habilidad que se activa (el mandinga, mi-go: "Exhumar"; flechar
+		# xoon: "El portador gana..."; duque glauru: "Sólo puedes utilizar la habilidad..."; Tablas del
+		# Juramento, Diente de Dragón, huevos de oro: "No se puede..." / "Cada jugador sólo puede..."): sin esto
+		# salía un botón que no hacía nada.
+		var static_rule_start := false
+		for rule_start in ["exhumar", "el portador ", "sólo puedes utilizar", "solo puedes utilizar", "no se puede",
+				"cada jugador sólo puede", "cada jugador solo puede"]:
+			if lower_s.strip_edges().begins_with(rule_start):
+				static_rule_start = true
+		if static_rule_start and trigger_event == "":
+			ability_index += 1
+			continue
+		# "(Hasta N veces) por turno, cuando <evento>, ..." que se resuelven por evento (LimitedEventTriggers,
+		# AllyEventTriggers, CemeteryTriggers, VampirePatterns): disparadas, no un botón.
+		if trigger_event == "" and _is_event_sentence(lower_s):
+			trigger_event = "EVENT"
 		var ability_type: String
 		if trigger_event != "":
 			ability_type = "TRIGGER"
@@ -650,6 +662,12 @@ func parse_abilities(text: String, card_id: String = "") -> Array[Dictionary]:
 				or lower_s.begins_with("juega mostrando") or lower_s.begins_with("mientras controles") \
 				or lower_s.begins_with("mientras esté en juego") or lower_s.begins_with("gana ") \
 				or lower_s.begins_with("pierde ") or lower_s.begins_with("no puede ser ")
+			# Otra habilidad, no la continuación de la activada (simurg: "...a tu mano. Cuando sea Destruido,
+			# ..."): un disparador o una regla de zona.
+			for other_start in ["cuando ", "al comienzo", "al final", "en tu fase final", "en la fase final",
+					"si está en tu", "si esta en tu", "sólo puedes", "solo puedes"]:
+				if lower_s.begins_with(other_start):
+					is_static_rule = true
 
 			if not is_static_rule and not result.is_empty() and result[result.size() - 1].get("ability_type", "") == "ACTIVATED":
 				var prev_open: Dictionary = result[result.size() - 1]
@@ -696,16 +714,10 @@ func parse_abilities(text: String, card_id: String = "") -> Array[Dictionary]:
 			})
 			break  # una acción principal por oración
 
-		# Errata retroactiva de Cuervo Nocturno/Tyet (2026-09-13, a pedido del
-		# usuario): la ÚLTIMA impresión de "Puedes poner esta y otra carta de
-		# tu mano en el fondo de tu Castillo y Robar dos cartas" agrega
-		# "Sólo puedes utilizar esta habilidad de [Nombre] una vez por turno".
-		# El usuario indica que en Mitos y Leyendas la versión más reciente de
-		# una habilidad rige para TODAS las impresiones de esa carta, no solo
-		# la que trae el texto actualizado — así que se fuerza el límite aquí
-		# (pays_self_to_deck_bottom detecta la habilidad por texto, sin
-		# depender de edición) en vez de solo confiar en que la oración de
-		# cierre esté impresa en esa copia puntual.
+		# Errata retroactiva de Cuervo Nocturno/Tyet: la última impresión de "Puedes poner esta y otra
+		# carta de tu mano en el fondo de tu Castillo y Robar dos cartas" agrega "Sólo puedes utilizar
+		# esta habilidad de [Nombre] una vez por turno". En Mitos y Leyendas la versión más reciente rige
+		# para todas las impresiones, así que se fuerza el límite aquí.
 		var effective_once_per_turn: bool = once_per_turn or pays_self_to_deck_bottom or vigilia_no_gold_yet
 		result.append({
 			"raw_text":      sentence,
@@ -718,6 +730,7 @@ func parse_abilities(text: String, card_id: String = "") -> Array[Dictionary]:
 			"actions":       actions,
 			"is_optional":   is_optional,
 			"once_per_turn": effective_once_per_turn,
+			"uses_per_turn": uses_per_turn,
 			"once_per_turn_own_turn_only": once_per_turn_own_turn_only,
 			"ability_index": ability_index,
 			"card_id":       card_id,
@@ -735,20 +748,15 @@ func parse_abilities(text: String, card_id: String = "") -> Array[Dictionary]:
 # Usado por TriggerSystem al resolver ETB y por debug en tiempo real.
 # =============================================================================
 
-## Regex de robo canónico — cubre "Roba dos cartas", "Robas 3 cartas", etc.
-## "(?:hasta\s+)?" agregado (2026-09-06, p.ej. Mecha-Daikaiju: "Roba hasta
-## tres cartas") — "hasta N" no reduce el robo real (nunca hay motivo para
-## robar menos de lo permitido), así que tratarlo igual que "Roba N cartas"
-## a secas es una simplificación segura.
+## Regex de robo canónico: "Roba dos cartas", "Robas 3 cartas", "Roba hasta tres cartas"
+## (Mecha-Daikaiju; "hasta N" se trata como N: nunca conviene robar menos).
 const DRAW_REGEX: String = "(?:Roba|Robas)\\s+(?:hasta\\s+)?(una|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez|\\d+)\\s+cartas?"
 
 
 func extract_action(text: String) -> Dictionary:
-	"""Ver _extract_action_impl(). Agrega "source_text": el texto que se
-	analizó (2026-10-14, bug real reportado por el usuario: Akari Musashi —
-	la búsqueda genérica releía el texto COMPLETO de la carta, encontraba
-	"oponente" en otra habilidad y buscaba en el Castillo rival, eligiendo
-	el bot)."""
+	"""Ver _extract_action_impl(). Agrega "source_text" (el texto analizado), para que la búsqueda
+	genérica no relea el texto completo de la carta (Akari Musashi: encontraba "oponente" en otra
+	habilidad y buscaba en el Castillo rival)."""
 	var action := _extract_action_impl(text)
 	if action.get("matched", false):
 		action["source_text"] = text
@@ -774,13 +782,10 @@ func _extract_action_impl(text: String) -> Dictionary:
 	if text.is_empty():
 		return {"matched": false}
 
-	# ── 0. Patrones compuestos "puedes [costo] y Roba N cartas" (2026-08-22) ──
-	# Van ANTES que todo lo demás, incluido el robo canónico (sección 1): si
-	# no, 'puedes barajar... y Roba dos cartas' se adelanta y ejecuta 'Roba
-	# dos cartas' suelto, ignorando el 'puedes' y el costo que lo condiciona
-	# — bug real visto con Bernardo O'Higgins y Lobo Sagrado. extract_action()
-	# solo soporta UN grupo de cantidad genérico y estos casos necesitan
-	# varios números a la vez, así que se resuelven aparte.
+	# ── 0. Patrones compuestos "puedes [costo] y Roba N cartas" ──
+	# Van antes que todo, incluido el robo canónico: si no, "Roba dos cartas" se ejecutaba suelto
+	# ignorando el "puedes" y el costo (Bernardo O'Higgins, Lobo Sagrado). Necesitan varios números a
+	# la vez, así que se resuelven aparte.
 	var shuffle_draw_rx := RegEx.new()
 	shuffle_draw_rx.compile("(?i)puedes barajar cartas? cuyos? costes? sum(?:en|an) hasta (\\w+)[^.]*?y robar? (\\w+) cartas?")
 	var m_sd := shuffle_draw_rx.search(text)
@@ -814,11 +819,9 @@ func _extract_action_impl(text: String) -> Dictionary:
 			"raw_text":     m_wd.get_string(0),
 		}
 
-	# Variante con portador restringido (2026-10-14, Zadquiel: "puedes jugar
-	# un Arma sobre este Aliado o uno oponente, reduciendo su coste en un
-	# Oro, hasta un mínimo de 1"). No dice "de tu mano": también Armas del
-	# Cementerio que tengan Exhumar (usuario, 2026-10-14); no se destierran
-	# al salir del juego, eso es solo para Talismanes.
+	# Variante con portador restringido (Zadquiel: "puedes jugar un Arma sobre este Aliado o uno
+	# oponente, reduciendo su coste en un Oro, hasta un mínimo de 1"). No dice "de tu mano": también
+	# Armas del Cementerio con Exhumar (no se destierran al salir: eso es solo para Talismanes).
 	var weapon_on_rx := RegEx.new()
 	weapon_on_rx.compile("(?i)puedes jugar un arma sobre este aliado o uno oponente,?\\s*reduciendo su coste en (\\w+) oros?,?\\s*hasta un m[ií]nimo de (\\w+)")
 	var m_wo := weapon_on_rx.search(text)
@@ -854,10 +857,9 @@ func _extract_action_impl(text: String) -> Dictionary:
 			"raw_text":     m_wh.get_string(0),
 		}
 
-	# Patrón "sube un Arma que controles a la mano de su dueño para jugar un
-	# Arma del mismo o menor coste desde tu mano sin pagar su coste" (p.ej.
-	# Padre de la Patria, 2026-08-28) — swap de Armas, no descuento fijo
-	# como Lobo Sagrado/Hanta, por eso no reusa weapon_draw_rx/weapon_hand_rx.
+	# "sube un Arma que controles a la mano de su dueño para jugar un Arma del mismo o menor coste
+	# desde tu mano sin pagar su coste" (Padre de la Patria): intercambio de Armas, no descuento fijo
+	# como Lobo Sagrado/Hanta.
 	var weapon_swap_rx := RegEx.new()
 	weapon_swap_rx.compile("(?i)subir un arma que controles a la mano de su due[ñn]o para jugar un arma del mismo o menor coste desde tu mano sin pagar su coste")
 	var m_ws := weapon_swap_rx.search(text)
@@ -872,11 +874,9 @@ func _extract_action_impl(text: String) -> Dictionary:
 			"raw_text":     m_ws.get_string(0),
 		}
 
-	# Patrón "convertir un Oro o una carta de coste N o menos en una carta
-	# del mismo tipo sin habilidad" (DAR Sección 8 - Convertir, p.ej.
-	# Capitán O'Brien, 2026-08-28) — misma carta física, misma
-	# tipo/coste/Fuerza, solo pierde la habilidad. Objetivo: dentro del
-	# juego (propio o enemigo), salvo que el texto diga lo contrario.
+	# "convertir un Oro o una carta de coste N o menos en una carta del mismo tipo sin habilidad" (DAR
+	# Sección 8 - Convertir, Capitán O'Brien): misma carta, mismo tipo/coste/Fuerza, sin habilidad.
+	# Objetivo dentro del juego (propio o enemigo), salvo que el texto diga otra cosa.
 	var convert_rx := RegEx.new()
 	convert_rx.compile("(?i)convertir un oro o una carta de coste (\\w+) o menos en una carta del mismo tipo sin habilidad")
 	var m_cv := convert_rx.search(text)
@@ -940,9 +940,3 @@ func _extract_action_impl(text: String) -> Dictionary:
 	return {"matched": false}
 
 
-# parse_text()/TRIGGER_RX/COST_RX/ACTION_RX/debug_parse() se eliminaron aquí
-# (2026-08-27, limpieza a pedido del usuario): sin ningún llamador real —
-# era una implementación paralela y más vieja de lo que parse_abilities()
-# hace hoy (que es lo que CardInspectionLayer usa de verdad para los
-# botones de habilidad activada, pese a que el docstring de parse_text()
-# decía que ERA esa fuente).

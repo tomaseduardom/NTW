@@ -92,10 +92,7 @@ func _ready() -> void:
 
 
 func _get_references() -> void:
-	# (2026-08-28, "módulos gordos" punto 1): TriggerSystem/AnimationQueue/
-	# DamageManager son autoloads garantizados — se sacó el cacheo redundante
-	# vía get_node_or_null() (EffectController se cacheaba pero nunca se
-	# usaba en este archivo).
+	# TriggerSystem/AnimationQueue/DamageManager son autoloads: se referencian directo.
 	if GameManager:
 		_game_board = GameManager.game_board
 
@@ -121,14 +118,24 @@ func validate_action(action_type: String, params: Dictionary, context: Dictionar
 func draw(player_id: int, amount: int, source: String = "", skip_validation: bool = false) -> Dictionary:
 	if await EffectContextScript.ensure_window():  # ventana única por efecto (§59)
 		return {"success": false, "cancelled": true}
-	return await _action_draw.draw(player_id, amount, source, skip_validation)
+	# sabiduría de la oruga: "sólo pueden Robar hasta tres cartas por efectos por turno".
+	if RuleState.active("draw_cap_3", player_id):
+		amount = mini(amount, maxi(0, 3 - RuleState.count("effect_draws", player_id)))
+		RuleState.add("effect_draws", player_id, amount)
+		if amount <= 0:
+			return {"success": false, "prevented": true}
+	var drawn: Dictionary = await _action_draw.draw(player_id, amount, source, skip_validation)
+	# Sesión Espiritista: "cada vez que tu oponente ponga cartas en su mano por un efecto, puedes poner esa
+	# misma cantidad de cartas del tope de tu Castillo en tu mano".
+	await load("res://scripts/core/effects/mechanics/TalismanPatterns.gd").on_opponent_effect_draw(player_id, amount)
+	load("res://scripts/core/effects/triggers/LimitedEventTriggers.gd").fire("effect_draw", {"pid": player_id, "amount": amount})  # berserker z
+	return drawn
 
 
 func draw_up_to(player_id: int, max_amount: int, source: String = "", skip_validation: bool = false) -> Dictionary:
-	"""'Roba hasta N cartas' (2026-10-17, a pedido del usuario, p.ej.
-	Mecha-Daikaiju): tu Castillo brilla y cada clic en él roba una carta;
-	N (o ESC) para no robar más. El bot roba todas. En el Remoto, el mismo
-	prompt de "carta o Castillo" que ya usa await_target_or_castillo_pick()."""
+	""""Roba hasta N cartas" (p.ej. Mecha-Daikaiju): tu Castillo brilla y cada clic roba una carta; N
+	(o ESC) para no robar más. El bot roba todas. El Remoto usa el mismo prompt "carta o Castillo"
+	de await_target_or_castillo_pick()."""
 	if await EffectContextScript.ensure_window():  # ventana única por efecto (§59)
 		return {"success": false, "cancelled": true}
 	var main: Node = get_tree().root.get_node_or_null("Main")
@@ -150,60 +157,59 @@ func draw_up_to(player_id: int, max_amount: int, source: String = "", skip_valid
 # SEARCH - Buscar en zona (implementación en ActionSearch.gd)
 # =============================================================================
 func shuffle_deck(player_id: int) -> void:
-	"""Baraja el Castillo (mazo) de un jugador — vía CardManager, sincronizado
-	por referencia con Main.player_deck/opponent_deck (ver sync_from_main).
-	Barajar no cambia el TAMAÑO del mazo, pero sí cambia qué carta queda en
-	el tope (índice 0) — refresca ZoneManager._update_castillo_counts() aquí
-	(2026-09-14, a pedido del usuario: La Ouija, 'del tope de tu Castillo',
-	quedaba mostrando la carta vieja tras un barajado que pasaba por este
-	wrapper genérico en vez del CardManager.shuffle_deck() + refresco manual
-	que ya usa la mayoría de los archivos de triggers) — único punto de
-	verdad para TODOS los llamadores de esta función, actuales y futuros."""
+	"""Baraja el Castillo de un jugador vía CardManager (sincronizado por referencia con
+	Main.player_deck/opponent_deck, ver sync_from_main). Barajar cambia qué carta queda en el tope
+	(índice 0): refresca ZoneManager._update_castillo_counts() (p.ej. el revelado de La Ouija) para
+	todos los llamadores."""
 	CardManager.shuffle_deck(player_id)
 	var main := get_node_or_null("/root/Main")
 	if main and main.get("_zone_manager"):
 		main._zone_manager._update_castillo_counts()
 
 
-func search(player_id: int, zone: int, filter: Dictionary, amount: int = 1, can_fail: bool = true, skip_validation: bool = false, may_play: bool = false, source_card: Node = null, destination: int = Constants.Zone.MANO, distinct_names: bool = false, chooser_id: int = -1) -> Dictionary:
+func search(player_id: int, zone: int, filter: Dictionary, amount: int = 1, can_fail: bool = true, skip_validation: bool = false, may_play: bool = false, source_card = null, destination: int = Constants.Zone.MANO, distinct_names: bool = false, chooser_id: int = -1) -> Dictionary:
 	if await EffectContextScript.ensure_window():  # ventana única por efecto (§59)
 		return {"success": false, "cancelled": true}
-	return await _action_search.search(player_id, zone, filter, amount, can_fail, skip_validation, may_play, source_card, destination, distinct_names, chooser_id)
+	return await _action_search.search(player_id, zone, filter, amount, can_fail, skip_validation, may_play, _live(source_card), destination, distinct_names, chooser_id)
 
 
-## Búsqueda en varias zonas a la vez con el selector del tablero (2026-10-11,
-## ver ActionSearch.search_zones()).
+## La carta fuente puede haber salido del juego (y liberarse) mientras el efecto esperaba: los
+## parámetros 'source' de la fachada van sin tipo (un Nodo liberado en un parámetro Node rompe la
+## llamada: "previously freed") y aquí se pasan como null.
+static func _live(node) -> Node:
+	return node if is_instance_valid(node) and node is Node else null
+
+
+## Búsqueda en varias zonas a la vez con el selector del tablero (ver ActionSearch.search_zones).
 func search_zones(player_id: int, zones: Array, filter: Dictionary, amount: int = 1, can_fail: bool = true,
-		skip_validation: bool = false, may_play: bool = false, source_card: Node = null,
+		skip_validation: bool = false, may_play: bool = false, source_card = null,
 		destination: int = Constants.Zone.MANO, distinct_names: bool = false, chooser_id: int = -1,
 		cost_reduction: int = 0) -> Dictionary:
 	if await EffectContextScript.ensure_window():  # ventana única por efecto (§59)
 		return {"success": false, "cancelled": true}
 	return await _action_search.search_zones(player_id, zones, filter, amount, can_fail, skip_validation, may_play,
-		source_card, destination, distinct_names, chooser_id, cost_reduction)
+		_live(source_card), destination, distinct_names, chooser_id, cost_reduction)
 
 
-## 'Busca en UN Castillo/Cementerio' (sin posesivo): selector con las zonas de
-## los dos jugadores, atado al primer Castillo que se mira (2026-10-14, ver
-## ActionSearch.search_either_owner()).
+## 'Busca en UN Castillo/Cementerio' (sin posesivo): selector con las zonas de los dos jugadores,
+## atado al primer Castillo que se mira (ver ActionSearch.search_either_owner).
 func search_either_owner(chooser: int, zones: Array, filter: Dictionary, amount: int, can_fail: bool = true,
-		source_card: Node = null, destination: int = Constants.Zone.MANO, distinct_names: bool = false,
+		source_card = null, destination: int = Constants.Zone.MANO, distinct_names: bool = false,
 		one_zone: bool = false) -> Dictionary:
 	if await EffectContextScript.ensure_window():  # ventana única por efecto (§59)
 		return {"success": false, "cancelled": true, "selected": []}
-	return await _action_search.search_either_owner(chooser, zones, filter, amount, can_fail, source_card,
+	return await _action_search.search_either_owner(chooser, zones, filter, amount, can_fail, _live(source_card),
 		destination, distinct_names, one_zone)
 
 
-## Selector de zonas (+ cartas de la mano) para quien elige: Anfitrión,
-## Remoto o bot (2026-10-12, ver ActionSearch.pick_in_zones()).
+## Selector de zonas (+ cartas de la mano) para quien elige: Anfitrión, Remoto o bot (ver
+## ActionSearch.pick_in_zones).
 func pick_in_zones(chooser: int, title: String, pools: Array, min_count: int, max_count: int,
 		distinct_names: bool = false, hand_nodes: Array = [], out_info: Dictionary = {}) -> Array:
 	return await _action_search.pick_in_zones(chooser, title, pools, min_count, max_count, distinct_names, hand_nodes, out_info)
 
 
-## BanishOpponentPatterns ya llamaba a esto vía ActionModule, pero la fachada
-## no existía (2026-10-11).
+## BanishOpponentPatterns ya llamaba a esto vía ActionModule, pero la fachada no existía.
 func _put_found_card_into_play(main: Node, player_id: int, card_data: Dictionary, may_play: bool) -> Node:
 	return await _action_search._put_found_card_into_play(main, player_id, card_data, may_play)
 
@@ -216,7 +222,17 @@ func mill(player_id: int, amount: int, to_exile: bool = false, source: String = 
 		return {"success": false, "cancelled": true}
 	if EffectController.fision_blocks_player_effect(player_id):  # Fisión Nuclear
 		return {"success": false, "prevented": true}
-	# Pan de Muerto (2026-10-18): hasta quince por Castillo por turno.
+	# Polvo de Hadas: "prevenir que Botes o Destierres cartas del tope de tu Castillo por un efecto oponente".
+	if EffectController._current_effect_controller(null) == 1 - player_id \
+			and await EffectController.offer_prevention_for_player(player_id, null, "mill"):
+		return {"success": false, "prevented": true}
+	# duelo mágico: "por el resto del juego no puede Botar más de diez cartas por turno".
+	if RuleState.active("mill_cap_10", player_id):
+		amount = mini(amount, maxi(0, 10 - RuleState.count("milled_cards", player_id)))
+		RuleState.add("milled_cards", player_id, amount)
+		if amount <= 0:
+			return {"success": false, "prevented": true}
+	# Pan de Muerto: hasta quince por Castillo por turno.
 	var limits = load("res://scripts/core/effects/mechanics/TurnLimits.gd")
 	var room: int = limits.castle_removal_room(player_id)
 	if room >= 0:
@@ -224,34 +240,40 @@ func mill(player_id: int, amount: int, to_exile: bool = false, source: String = 
 		if amount <= 0:
 			return {"success": false, "prevented": true}
 		limits.note_castle_removed(player_id, amount)
-	return await _action_mill.mill(player_id, amount, to_exile, source, skip_validation)
+	var ctx_card = EffectContextScript.current().get("card")
+	var out: Dictionary = await _action_mill.mill(player_id, amount, to_exile, source, skip_validation)
+	# Caos: "Cuando haga daño" incluye el daño directo (DAR: Botar) de un efecto del propio Aliado al rival.
+	if int(out.get("actual", 0)) > 0 and ctx_card is Node and is_instance_valid(ctx_card) and ctx_card.get_meta("caos_ally", false) \
+			and int(ctx_card.get("controller_id")) == 1 - player_id and get_node_or_null("/root/Main"):
+		load("res://scripts/core/effects/mechanics/ActivatedPatterns.gd").caos_back_to_gold(get_node_or_null("/root/Main"), ctx_card)
+	return out
 
 
 # =============================================================================
 # DESTROY - Destruir cartas (implementación en ActionDestroy.gd)
 # =============================================================================
-func destroy(targets: Array, source: Node = null, can_be_prevented: bool = true, skip_validation: bool = false) -> Dictionary:
+func destroy(targets: Array, source = null, can_be_prevented: bool = true, skip_validation: bool = false) -> Dictionary:
 	if await EffectContextScript.ensure_window():  # ventana única por efecto (§59)
 		return {"success": false, "cancelled": true}
-	return await _action_destroy.destroy(targets, source, can_be_prevented, skip_validation)
+	return await _action_destroy.destroy(targets, _live(source), can_be_prevented, skip_validation)
 
 
 # =============================================================================
 # BANISH - Desterrar cartas (implementación en ActionBanish.gd)
 # =============================================================================
-func banish(targets: Array, source: Node = null, skip_validation: bool = false, can_be_prevented: bool = true) -> Dictionary:
+func banish(targets: Array, source = null, skip_validation: bool = false, can_be_prevented: bool = true) -> Dictionary:
 	if await EffectContextScript.ensure_window():  # ventana única por efecto (§59)
 		return {"success": false, "cancelled": true}
-	return await _action_banish.banish(targets, source, skip_validation, can_be_prevented)
+	return await _action_banish.banish(targets, _live(source), skip_validation, can_be_prevented)
 
 
 # =============================================================================
 # RETURN TO DECK + DISCARD (implementación en ActionReturnDiscard.gd)
 # =============================================================================
-func return_to_deck(card: Node, player_id: int, to_top: bool = true, source: Node = null) -> bool:
+func return_to_deck(card: Node, player_id: int, to_top: bool = true, source = null) -> bool:
 	if await EffectContextScript.ensure_window():  # ventana única por efecto (§59)
 		return false
-	return await _action_return_discard.return_to_deck(card, player_id, to_top, source)
+	return await _action_return_discard.return_to_deck(card, player_id, to_top, _live(source))
 
 
 func discard(player_id: int, cards: Array, source: String = "", skip_validation: bool = false) -> Dictionary:
@@ -259,7 +281,19 @@ func discard(player_id: int, cards: Array, source: String = "", skip_validation:
 		return {"success": false, "cancelled": true}
 	if EffectController.fision_blocks_player_effect(player_id):  # Fisión Nuclear
 		return {"success": false, "prevented": true}
-	return await _action_return_discard.discard(player_id, cards, source, skip_validation)
+	# duelo mágico: "ni Descartar y/o Desterrar más de una carta de su mano por turno".
+	if RuleState.active("hand_loss_cap_1", player_id):
+		var room: int = maxi(0, 1 - RuleState.count("hand_cards_lost", player_id))
+		cards = cards.slice(0, room)
+		RuleState.add("hand_cards_lost", player_id, cards.size())
+		if cards.is_empty():
+			return {"success": false, "prevented": true}
+	var lost_cost: int = int(cards[0].get("card_cost")) if not cards.is_empty() and is_instance_valid(cards[0]) and cards[0].get("card_cost") != null else 0
+	var by_effect: bool = not EffectContextScript.current().is_empty()
+	var out: Dictionary = await _action_return_discard.discard(player_id, cards, source, skip_validation)
+	if not cards.is_empty():
+		load("res://scripts/core/effects/triggers/LimitedEventTriggers.gd").fire("hand_loss", {"pid": player_id, "cost": lost_cost, "by_effect": by_effect})  # inari
+	return out
 
 
 # =============================================================================
@@ -275,8 +309,10 @@ func _begin_trigger_collection() -> void:
 	"""Inicia la recolección de triggers para una acción"""
 	_collecting_triggers = true
 	_collected_triggers.clear()
-
-	TriggerSystem.begin_collecting()
+	# No toca TriggerSystem.begin_collecting(): marcaba is_collecting y, sin nada que recolectar (casi
+	# siempre: GameManager.game_board no se asigna), nadie lo bajaba. La siguiente carta que entraba en
+	# juego esperaba 3 s y TriggerSystem forzaba un reset que también apagaba is_resolving (un efecto
+	# podía resolverse encima de otro). También borraba los pendientes de una recolección real en curso.
 
 
 func _notify_trigger(trigger_type: String, event_data: Dictionary) -> void:
@@ -335,9 +371,6 @@ func _end_trigger_collection_and_resolve() -> void:
 
 	emit_signal("triggers_collected", active_triggers, opponent_triggers)
 
-	# Finalizar recolección en TriggerSystem
-	await TriggerSystem.end_collecting_and_queue()
-
 	# Resolver triggers
 	await _resolve_collected_triggers(active_triggers + opponent_triggers)
 
@@ -379,21 +412,19 @@ func _apply_card_filter(cards: Array, filter: Dictionary) -> Array:
 	for card_data in cards:
 		var matches = true
 
-		# Filtro por tipo — admite un tipo único o una lista ("busca un Arma
-		# o un Oro", p.ej. Tyet, 2026-08-22)
+		# Filtro por tipo — admite un tipo único o una lista ("busca un Arma o un Oro", p.ej. Tyet)
 		if filter.has("type"):
 			var card_type = card_data.get("tipo", -1)
 			if filter.type is Array:
-				# int() (2026-10-17): el tipo de los datos viene de JSON como
-				# float (2.0) y `2.0 in [2]` es false — "busca un Arma o un
-				# Oro" no encontraba nada.
+				# Int: el tipo de los datos viene de JSON como float (2.0) y `2.0 in [2]` es false — "busca un
+				# Arma o un Oro" no encontraba nada.
 				if not (int(card_type) in filter.type.map(func(t): return int(t))):
 					matches = false
 			elif int(card_type) != int(filter.type):
 				matches = false
 
-		# Filtro por raza — admite una raza única o una lista ("busca... una
-		# carta Ignis o Titán", p.ej. ignis desatado, 2026-09-04)
+		# Filtro por raza — admite una raza única o una lista ("busca... una carta Ignis o Titán", p.ej.
+		# ignis desatado)
 		if matches and filter.has("raza"):
 			var card_raza: String = card_data.get("raza", "")
 			if filter.raza is Array:
@@ -403,8 +434,7 @@ func _apply_card_filter(cards: Array, filter: Dictionary) -> Array:
 			elif card_raza.to_lower() != String(filter.raza).to_lower():
 				matches = false
 
-		# Filtro por coste máximo
-		# Un Oro no tiene coste (2026-10-17): no cumple filtros de coste.
+		# Filtro por coste máximo Un Oro no tiene coste: no cumple filtros de coste.
 		if matches and (filter.has("cost_max") or filter.has("cost_min")) and int(card_data.get("tipo", -1)) == Constants.CardType.ORO:
 			matches = false
 		if matches and filter.has("cost_max"):
@@ -430,21 +460,36 @@ func _apply_card_filter(cards: Array, filter: Dictionary) -> Array:
 			if not String(filter.name_contains).to_lower() in card_name.to_lower():
 				matches = false
 
-		# Filtro de exclusión por nombre exacto (2026-09-04, p.ej. Aurora de
-		# Chile: "busca... dos Oros que no sean Aurora de Chile" — evita que
-		# la propia carta buscadora, si hay otra copia en el Castillo, se
+		# Filtro de exclusión por nombre exacto (p.ej. Aurora de Chile: "busca... dos Oros que no sean
+		# Aurora de Chile" — evita que la propia carta buscadora, si hay otra copia en el Castillo, se
 		# encuentre a sí misma)
 		if matches and filter.has("name_not"):
 			var card_name_exact: String = card_data.get("nombre", "")
 			if card_name_exact.to_lower() == String(filter.name_not).to_lower():
 				matches = false
 
-		# Tipos excluidos: "una carta que no sea Aliado ni Talismán" (2026-10-18).
+		# Alternativas tipo + raza (EffectCompiler._object_groups(): "un Ángel, Eterno o Tótem", "un Aliado
+		# Dragón"): [{type: int (-1 = cualquiera), race: "dragon"}], sin tildes; basta con una.
+		if matches and filter.has("alts"):
+			var raza_norm: String = _strip_accents(str(card_data.get("raza", "")).to_lower())
+			var tipo_c := int(card_data.get("tipo", -1))
+			matches = filter.alts.any(func(alt) -> bool:
+				if int(alt.get("type", -1)) >= 0 and int(alt.type) != tipo_c:
+					return false
+				var race: String = str(alt.get("race", ""))
+				return race == "" or race.substr(0, 5) in raza_norm)
+
+		# Tipos excluidos: "una carta que no sea Aliado ni Talismán".
 		if matches and filter.has("types_not"):
 			if int(card_data.get("tipo", -1)) in filter.types_not.map(func(t): return int(t)):
 				matches = false
 
-		# Nombre exacto dentro de una lista (2026-10-18, Dos de Cada Uno).
+		# "un Oro sin habilidad" (fuerza de titan).
+		if matches and filter.get("no_ability", false):
+			if str(card_data.get("habilidad", "")).strip_edges() != "":
+				matches = false
+
+		# Nombre exacto dentro de una lista (Dos de Cada Uno).
 		if matches and filter.has("names_in"):
 			if not (str(card_data.get("nombre", "")).to_lower() in filter.names_in):
 				matches = false
@@ -460,3 +505,9 @@ func _apply_card_filter(cards: Array, filter: Dictionary) -> Array:
 			matching.append(card_data)
 
 	return matching
+
+
+static func _strip_accents(s: String) -> String:
+	for pair in [["á", "a"], ["é", "e"], ["í", "i"], ["ó", "o"], ["ú", "u"], ["ü", "u"], ["ñ", "n"]]:
+		s = s.replace(pair[0], pair[1])
+	return s

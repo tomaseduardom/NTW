@@ -1,16 +1,8 @@
 extends RefCounted
-## MiscTargetedPatterns — Slice de TargetedEffectExecutor.gd dividido por
-## tamaño (2026-09-06, "módulos gordos"). Agrupa los patrones sueltos que no
-## encajan ni en el toolkit genérico de selección de un solo objetivo (que se
-## quedó en TargetedEffectExecutor.gd) ni en el cluster compuesto de
-## Arma/Buscar/Barajar (WeaponSearchShuffleExecutor.gd):
+## MiscTargetedPatterns — parte de TargetedEffectExecutor.gd con los patrones sueltos:
 ## _resolve_search_cemetery_to_hand, _resolve_banish_from_both_cemeteries y
-## _refresh_rotation_for_name. Ninguna de las tres depende de otro método de
-## TargetedEffectExecutor — cada una opera directo sobre CardManager/
-## SelectionManager o recibe 'main' como parámetro, así que no hace falta el
-## back-reference _main salvo para el primer caso. Opera sobre TriggerSystem
-## via _main (mismo Node que TargetedEffectExecutor._main — ver ese archivo
-## para el facade que reune este slice y el resto del split).
+## _refresh_rotation_for_name. Operan directo sobre CardManager/SelectionManager o reciben 'main';
+## sobre TriggerSystem vía _main (ver TargetedEffectExecutor.gd).
 
 var _main: Node
 
@@ -20,18 +12,11 @@ func setup(main: Node) -> void:
 
 
 func _resolve_search_cemetery_to_hand(controller_id: int, max_amount: int, type_filter: Array = []) -> bool:
-	"""Elige hasta max_amount cartas del Cementerio propio (filtradas por
-	tipo si se pasa type_filter) y las sube a la mano.
-	2026-09-13, a pedido del usuario: click directo con ZoneViewerModule.
-	open_cemetery_target_picker() en vez del modal de lista viejo — filtro
-	restringido al lado propio (mismo criterio que la rama "Subir" de
-	Campanita, ver arquitectura.md §10.18/§10.21). El único llamador
-	(DSR_SearchGoldCombos.gd) ignora el valor de retorno, así que la vieja
-	distinción 'false=canceló del todo / true=aceptó eligiendo 0' ya no
-	tenía ningún efecto real — se simplifica a bool fijo true salvo el
-	caso 'no hay Main'.
-	Returns: false solo si no se pudo resolver Main (error), true en
-	cualquier otro caso, incluso sin candidatos o sin elegir nada."""
+	"""Elige hasta max_amount cartas del Cementerio propio (filtradas por tipo si se pasa type_filter)
+	y las sube a la mano, con ZoneViewerModule.open_cemetery_target_picker() restringido al lado
+	propio (como la rama "Subir" de Campanita, arquitectura.md §10.18/§10.21).
+	Devuelve false solo si no se pudo resolver Main; true en cualquier otro caso, incluso sin
+	candidatos o sin elegir nada."""
 	var main := _main.get_node_or_null("/root/Main")
 	if not main or not main._zone_viewer:
 		return false
@@ -61,24 +46,12 @@ func _resolve_search_cemetery_to_hand(controller_id: int, max_amount: int, type_
 # PATRÓN "TU OPONENTE DESCARTA N... Y TÚ ROBAS [HASTA] M CARTAS" (p.ej. Miguel)
 # =============================================================================
 func _resolve_banish_from_both_cemeteries(max_amount: int, card: Node = null, controller_id: int = 0) -> void:
-	"""Destierra hasta max_amount cartas combinadas entre ambos Cementerios
-	(Espada de O'Higgins — VERIFICADO 2026-09-13: esta es la función que
-	realmente se ejecuta para "Destierra hasta N cartas de los Cementerios y
-	Roba M cartas", ver arquitectura.md §10.21 — try_execute_banish_up_to_n_
-	cemeteries_then_draw_pattern(), convertida antes en §10.14 pensando que
-	era esta, resultó ser código muerto por orden de chequeo).
-
-	2026-09-13, a pedido del usuario: reemplaza las DOS selecciones
-	SEPARADAS (primero rival, después propio, con modales de lista — así se
-	evitaba la confusión de "¿de cuál Cementerio salió esta carta?") por
-	ZoneViewerModule.open_cemetery_target_picker(), que ya muestra ambos
-	Cementerios en columnas separadas y etiquetadas — resuelve esa misma
-	confusión mostrando de dónde es cada carta, sin necesitar dos pasos.
-
-	Reordenado (2026-09-09, Pila de Respuesta Universal): la selección se
-	declara primero, sin tocar nada — solo con lo elegido se abre UNA
-	ventana de respuesta, y solo si nadie anula/cancela se ejecutan los
-	destierros."""
+	"""Destierra hasta max_amount cartas entre los dos Cementerios (Espada de O'Higgins: "Destierra
+	hasta N cartas de los Cementerios y Roba M cartas"; arquitectura.md §10.21). Usa
+	ZoneViewerModule.open_cemetery_target_picker(), que muestra los dos Cementerios en columnas
+	etiquetadas.
+	Primero se declara la selección sin tocar nada; con lo elegido se abre una ventana de
+	respuesta, y solo si nadie anula/cancela se destierra (Pila de Respuesta Universal)."""
 	if CardManager.get_cemetery(0).is_empty() and CardManager.get_cemetery(1).is_empty():
 		return
 	var main := _main.get_node_or_null("/root/Main") if _main else null

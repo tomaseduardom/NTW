@@ -1,32 +1,25 @@
 extends RefCounted
-## TotemAbilityPatterns — Patrones "try_execute_*_pattern" para Tótems
-## detectados sin cobertura en la auditoría de 539 cartas (2026-09-20, ver
-## arquitectura.md). Mismo criterio que las 7 mitades de LookAndPlayResolver.gd
-## (detección por substring, no por nombre de carta) pero en su propio archivo
-## porque ninguna de esas 7 mitades cubría este tipo de carta todavía.
-## Instanciado directo en TriggerSystem._ready() como _totem_patterns (mismo
-## patrón que _convert_misc_resolver/_draw_shuffle_resolver), llamado desde
-## TriggerResolution.gd en los branches on_enter_play/on_leave_play.
+## TotemAbilityPatterns — patrones "try_execute_*_pattern" para Tótems (auditoría de cartas sin
+## cobertura, arquitectura.md). Detección por substring, como LookAndPlayResolver.gd. Instanciado en
+## TriggerSystem._ready() como _totem_patterns, llamado desde TriggerResolution.gd en
+## on_enter_play/on_leave_play.
 
 const PlayerSideScript = preload("res://scripts/core/game/PlayerSide.gd")
+const EffectContextScript = preload("res://scripts/core/effects/EffectContext.gd")
+const CardQuery = preload("res://scripts/core/effects/mechanics/CardQuery.gd")
+const InPlayAbilities = preload("res://scripts/core/effects/mechanics/InPlayAbilities.gd")
 var _main: Node
 
-## kotoku-in (2026-09-20): "hacer que el próximo Talismán que juegue tu
-## oponente este turno se resuelva sin efecto" — flag de una sola vez por
-## controller_id afectado, consumida por TriggerSystem.resolve_talisman() al
-## principio de la resolución (mismo canal de retorno que Anular/Cancelar:
-## true = no resuelve, va directo al Cementerio). Se guarda el número de
-## turno junto al flag para que nunca sobreviva al cambio de turno si el
-## rival no llega a jugar ningún Talismán (chequeado en el consumo, no hace
-## falta limpieza activa en TurnManager).
+## kotoku-in: "hacer que el próximo Talismán que juegue tu oponente este turno se resuelva sin
+## efecto". Bandera de un uso por controller_id afectado, que consume
+## TriggerSystem.resolve_talisman() al empezar (true = no resuelve, al Cementerio, como
+## Anular/Cancelar). Se guarda con el número de turno para que no sobreviva al cambio de turno (se
+## chequea al consumirla).
 var _kotoku_in_talisman_fizzle: Dictionary = {}
 
-## metropolitan (2026-09-20): "convertirlo en un Aliado con Fuerza 3 hasta la
-## Fase Final" — Card -> modifier_id de la Fuerza fija, para revertir tipo/
-## zona/modificador cuando la fase cambie a FINAL. GameManager.phase_changed
-## se conecta una sola vez (guard _metropolitan_signal_connected) la primera
-## vez que se usa esta conversión, no en setup() (evita un listener global
-## permanente para una carta que puede no estar nunca en la partida).
+## metropolitan: "convertirlo en un Aliado con Fuerza 3 hasta la Fase Final". Card → modifier_id de
+## la Fuerza fija, para revertir tipo/zona/modificador al llegar a FINAL. GameManager.phase_changed
+## se conecta la primera vez que se usa (_metropolitan_signal_connected), no en setup().
 var _metropolitan_pending_reverts: Dictionary = {}
 var _metropolitan_signal_connected: bool = false
 
@@ -35,16 +28,23 @@ func setup(main: Node) -> void:
 	_main = main
 
 
-func register_kotoku_in_talisman_fizzle(target_controller_id: int) -> void:
-	_kotoku_in_talisman_fizzle[target_controller_id] = GameManager.current_turn
+## max_cost >= 0: solo un Talismán de ese coste o menos (nuckelavee: "el próximo Talismán de coste 1 o
+## menos que juegue tu oponente este turno es Anulado").
+func register_kotoku_in_talisman_fizzle(target_controller_id: int, max_cost: int = -1) -> void:
+	_kotoku_in_talisman_fizzle[target_controller_id] = {"turn": GameManager.turn_serial, "max_cost": max_cost}
 
 
-func consume_kotoku_in_talisman_fizzle(controller_id: int) -> bool:
+func consume_kotoku_in_talisman_fizzle(controller_id: int, talisman_cost: int = -1) -> bool:
 	if not _kotoku_in_talisman_fizzle.has(controller_id):
 		return false
-	var set_turn: int = _kotoku_in_talisman_fizzle[controller_id]
+	var entry: Dictionary = _kotoku_in_talisman_fizzle[controller_id]
+	if int(entry.turn) != GameManager.turn_serial:
+		_kotoku_in_talisman_fizzle.erase(controller_id)
+		return false
+	if int(entry.max_cost) >= 0 and talisman_cost > int(entry.max_cost):
+		return false  # este Talismán no cuenta; sigue esperando al próximo
 	_kotoku_in_talisman_fizzle.erase(controller_id)
-	return set_turn == GameManager.current_turn
+	return true
 
 
 func try_execute_arco_del_triunfo_pattern(ability_text: String, card: Node, controller_id: int, is_entering: bool) -> bool:
@@ -82,17 +82,10 @@ func try_execute_arco_del_triunfo_pattern(ability_text: String, card: Node, cont
 			"static_ability": true,
 			"description": "arco del triunfo: +1 Fuerza a tus Aliados"
 		})
-		# "Su daño de combate es enviado al Destierro" — infraestructura
-		# MUERTA encontrada (2026-09-20, mismo hallazgo que Segundo Sello con
-		# Card.damage_goes_to_exile, pero esta vez el otro camino que
-		# BattleManager._check_damage_to_exile_effect() ya consultaba y
-		# nadie registraba nunca: TriggerSystem.get_active_continuous_
-		# effects("damage_to_exile"), filtrado por 'targets contiene
-		# player_id' donde player_id es SIEMPRE el DEFENSOR (quien recibe el
-		# daño) — no el atacante. Como esta aura cubre TODOS los Aliados
-		# propios, presentes y futuros, sin necesitar taggear cada Card, el
-		# target correcto es el oponente actual (1 - controller_id): "cuando
-		# el oponente reciba daño de mis Aliados, va al Destierro".
+		# "Su daño de combate es enviado al Destierro": se registra en
+		# TriggerSystem.get_active_continuous_effects("damage_to_exile"), que consulta
+		# BattleManager._check_damage_to_exile_effect() filtrando por el DEFENSOR. Como el aura cubre a
+		# todos los Aliados propios (presentes y futuros), el target es el oponente (1 - controller_id).
 		TriggerSystem.register_continuous_effect(card, {
 			"type": "damage_to_exile",
 			"targets": [1 - controller_id]
@@ -114,6 +107,7 @@ func try_execute_arco_del_triunfo_pattern(ability_text: String, card: Node, cont
 		if (t == Constants.CardType.ALIADO or t == Constants.CardType.TOTEM) and int(top.get("coste", -1)) == 2:
 			found = top
 
+	load("res://scripts/core/effects/mechanics/RevealedCards.gd").record(controller_id, revealed, (str(card.card_name) if card else "Arco del Triunfo"))
 	if not found.is_empty():
 		revealed.erase(found)
 		var options: Array = ["Ponerla en juego (sin pagar su coste)", "Ponerla en tu mano"]
@@ -147,8 +141,8 @@ func try_execute_kotoku_in_enter_pattern(ability_text: String, card: Node, contr
 	var lower := ability_text.to_lower()
 	if not ("genera un oro por el turno para jugar cartas que no sean talism" in lower):
 		return false
-	# 2026-10-12 (§57): sin elección de por medio — sirve igual para el
-	# jugador 1 (Remoto o bot), con su propio Oro Virtual restringido.
+	# Sin elección de por medio — sirve igual para el jugador 1 (Remoto o bot), con su propio Oro
+	# Virtual restringido.
 
 	var main := _main.get_node_or_null("/root/Main")
 	if not main or not main._gold_manager:
@@ -190,32 +184,15 @@ func try_execute_metropolitan_enter_pattern(ability_text: String, card: Node, co
 
 
 func try_execute_kotoku_in_vigilia_pattern(ability_text: String, card: Node, controller_id: int) -> bool:
-	"""'En tu Vigilia, una vez por turno, puedes Destruir una carta de coste
-	2 o menos o hacer que el próximo Talismán que juegue tu oponente este
-	turno se resuelva sin efecto' (kotoku-in, "Espíritu Samurái"). Habilidad
-	ACTIVADA — llega aquí vía TriggerSystem.resolve_ability_effect() (el
-	mismo _resolve_look_and_play_patterns() que usan los triggers, ver
-	arquitectura.md 2026-08-27), el botón y el cupo 'una vez por turno' ya
-	los resuelve genéricamente UniversalCardParser/ActionPipeline.
-	activate_ability() antes de llegar aquí — no hay que reimplementarlos.
-
-	La opción 'destruye coste 2 o menos' es directa (ActionModule.destroy());
-	la opción 'próximo Talismán rival sin efecto' es una bandera de una sola
-	vez consumida en TriggerSystem.resolve_talisman() (ver
-	consume_kotoku_in_talisman_fizzle() arriba) — sin precedente de un
-	'contador de anulación diferida' en el proyecto antes de esto.
-
-	Guardia 'genera un oro por el turno' (2026-09-20, bug real encontrado en
-	revisión de código, no reportado por el usuario): esta función SÍ está en
-	la lista compartida de _resolve_look_and_play_patterns() porque la
-	activación real necesita estarlo (StackStepResolver._resolve_ability() la
-	invoca con el texto YA AISLADO a esta sola cláusula) — pero esa misma
-	lista compartida también se recorre durante on_enter_play con el texto
-	COMPLETO de kotoku-in (sin aislar), donde SÍ aparece su otra cláusula
-	'genera un oro por el turno para jugar cartas que no sean Talismán'. Sin
-	esta guardia, jugar kotoku-in disparaba esta elección de inmediato en vez
-	de esperar a una activación real en Vigilia (mismo patrón de bug ya
-	corregido en sable_corto_vigilia, ver WeaponAbilityPatterns.gd)."""
+	"""kotoku-in ("Espíritu Samurái"): "En tu Vigilia, una vez por turno, puedes Destruir una carta de
+	coste 2 o menos o hacer que el próximo Talismán que juegue tu oponente este turno se resuelva
+	sin efecto". Habilidad ACTIVADA: llega vía TriggerSystem.resolve_ability_effect(); el botón y
+	el cupo los resuelve UniversalCardParser/ActionPipeline.activate_ability().
+	Destruir es directo (ActionModule.destroy()); "próximo Talismán sin efecto" es la bandera que
+	consume resolve_talisman() (consume_kotoku_in_talisman_fizzle()).
+	Guardia "genera un oro por el turno": la lista compartida también se recorre en on_enter_play
+	con el texto completo, que incluye esa otra cláusula; sin la guardia, jugar kotoku-in
+	dispararía esta elección (como sable corto, WeaponAbilityPatterns.gd)."""
 	var lower := ability_text.to_lower()
 	if not ("destruir una carta de coste 2 o menos" in lower and "se resuelva sin efecto" in lower):
 		return false
@@ -242,28 +219,14 @@ func try_execute_kotoku_in_vigilia_pattern(ability_text: String, card: Node, con
 
 
 func try_execute_metropolitan_vigilia_convert_pattern(ability_text: String, card: Node, controller_id: int) -> bool:
-	"""'En tu Vigilia, puedes convertirlo en un Aliado con Fuerza 3 hasta la
-	Fase Final' (metropolitan). Habilidad ACTIVADA — mismo camino genérico
-	que kotoku-in arriba. Mecanismo de conversión Tótem→Aliado calcado del
-	precedente real ya existente en el proyecto (ConvertAndMiscResolver.
-	try_execute_mill_convert_to_ally_pattern, Sherlock Holmes: mover de
-	contenedor, card_type = ALIADO, set_zone(LINEA_DEFENSA), modificador de
-	Fuerza fija operation='set') — la única diferencia real es que aquí la
-	conversión es TEMPORAL (revierte en la Fase Final, no permanente), por
-	eso el modificador se registra con source=card (para poder ubicarlo por
-	source_id al revertir) y se guarda el Node en _metropolitan_pending_
-	reverts hasta que GameManager.phase_changed emita FINAL.
-
-	Guardia 'genera un oro para aliados' (2026-09-20, bug real encontrado en
-	revisión de código, no reportado por el usuario): mismo motivo exacto que
-	la guardia de try_execute_kotoku_in_vigilia_pattern() de arriba — esta
-	función está en la lista compartida de _resolve_look_and_play_patterns()
-	porque la activación real la necesita ahí (texto ya aislado), pero esa
-	misma lista se recorre también durante on_enter_play con el texto
-	COMPLETO de metropolitan (sin aislar), donde SÍ aparece su otra cláusula
-	de entrada ('genera un oro para Aliados de coste 2 o más o Roba dos
-	cartas'). Sin esta guardia, jugar metropolitan lo convertía en Aliado de
-	inmediato en vez de esperar una activación real en Vigilia."""
+	"""metropolitan: "En tu Vigilia, puedes convertirlo en un Aliado con Fuerza 3 hasta la Fase
+	Final". Habilidad ACTIVADA (mismo camino que kotoku-in). Conversión Tótem → Aliado como
+	Sherlock Holmes (ConvertAndMiscResolver.try_execute_mill_convert_to_ally_pattern: mover de
+	contenedor, card_type = ALIADO, set_zone(LINEA_DEFENSA), Fuerza fija 'set'), pero temporal: el
+	modificador usa source = card para ubicarlo al revertir, y el Node queda en
+	_metropolitan_pending_reverts hasta que phase_changed emita FINAL.
+	Guardia "genera un oro para aliados": igual que kotoku-in, evita convertirlo al jugarlo
+	(on_enter_play con el texto completo)."""
 	var lower := ability_text.to_lower()
 	if not ("convertirlo en un aliado con fuerza 3 hasta la fase final" in lower):
 		return false
@@ -276,26 +239,7 @@ func try_execute_metropolitan_vigilia_convert_pattern(ability_text: String, card
 	if not main:
 		return true
 
-	var target_field: HBoxContainer = main.player_field if controller_id == 0 else main.opponent_field
-	var old_parent := card.get_parent()
-	if old_parent and old_parent != target_field:
-		old_parent.remove_child(card)
-		target_field.add_child(card)
-	card.card_type = Constants.CardType.ALIADO
-	if card.has_method("set_zone"):
-		card.set_zone(Constants.Zone.LINEA_DEFENSA)
-
-	ContinuousEffectManager.register_modifier({
-		"source": card,
-		"target": card,
-		"type": ContinuousEffectManager.ModifierType.STRENGTH,
-		"stat": "strength",
-		"value": 3,
-		"operation": "set",
-		"duration": ContinuousEffectManager.ModifierDuration.PERMANENT,
-		"layer": ContinuousEffectManager.ModifierLayer.LAYER_7A_CHAR_SETTING,
-		"description": "metropolitan convertido en Aliado: Fuerza 3"
-	})
+	_convert_totem_to_ally(card, controller_id, 3, "metropolitan convertido en Aliado: Fuerza 3")
 	_metropolitan_pending_reverts[card] = true
 	if not _metropolitan_signal_connected:
 		_metropolitan_signal_connected = true
@@ -309,21 +253,95 @@ func _on_phase_changed_revert_metropolitan(new_phase: Constants.Phase) -> void:
 	if _metropolitan_pending_reverts.is_empty():
 		return
 	for target_card: Node in _metropolitan_pending_reverts.keys():
-		if not is_instance_valid(target_card):
-			continue
-		if target_card.get("card_type") != Constants.CardType.ALIADO:
-			continue  # salió de juego o ya se revirtió por otro camino
-		ContinuousEffectManager.remove_modifiers_from_source(target_card)
-		target_card.card_type = Constants.CardType.TOTEM
-		var owner: int = target_card.get("controller_id") if target_card.get("controller_id") != null else 0
-		var totem_field: HBoxContainer = _main.get_node_or_null("/root/Main").player_linea_apoyo if owner == 0 else _main.get_node_or_null("/root/Main").opponent_linea_apoyo
-		var old_parent: Node = target_card.get_parent()
-		if totem_field and old_parent and old_parent != totem_field:
-			old_parent.remove_child(target_card)
-			totem_field.add_child(target_card)
-		if target_card.has_method("set_zone"):
-			target_card.set_zone(Constants.Zone.LINEA_APOYO)
+		_revert_ally_to_totem(target_card)
 	_metropolitan_pending_reverts.clear()
+
+
+func _convert_totem_to_ally(card: Node, controller_id: int, strength: int, description: String) -> void:
+	"""Tótem en juego → Aliado de Fuerza fija en la Línea de Defensa (modificador con source = card
+	para ubicarlo al revertir: _revert_ally_to_totem())."""
+	var main := _main.get_node_or_null("/root/Main")
+	var target_field: HBoxContainer = main.player_field if controller_id == 0 else main.opponent_field
+	var old_parent := card.get_parent()
+	if old_parent and old_parent != target_field:
+		old_parent.remove_child(card)
+		target_field.add_child(card)
+	card.card_type = Constants.CardType.ALIADO
+	if card.has_method("set_zone"):
+		card.set_zone(Constants.Zone.LINEA_DEFENSA)
+	ContinuousEffectManager.register_modifier({
+		"source": card,
+		"target": card,
+		"type": ContinuousEffectManager.ModifierType.STRENGTH,
+		"stat": "strength",
+		"value": strength,
+		"operation": "set",
+		"duration": ContinuousEffectManager.ModifierDuration.PERMANENT,
+		"layer": ContinuousEffectManager.ModifierLayer.LAYER_7A_CHAR_SETTING,
+		"description": description
+	})
+
+
+func _revert_ally_to_totem(target_card: Node) -> void:
+	if not is_instance_valid(target_card) or target_card.get("card_type") != Constants.CardType.ALIADO:
+		return  # salió de juego o ya se revirtió por otro camino
+	if not (target_card.get("current_zone") in Constants.ZONES_IN_PLAY):
+		return
+	ContinuousEffectManager.remove_modifiers_from_source(target_card)
+	target_card.card_type = Constants.CardType.TOTEM
+	var owner: int = target_card.get("controller_id") if target_card.get("controller_id") != null else 0
+	var main := _main.get_node_or_null("/root/Main")
+	var totem_field: HBoxContainer = main.player_linea_apoyo if owner == 0 else main.opponent_linea_apoyo
+	var old_parent: Node = target_card.get_parent()
+	if totem_field and old_parent and old_parent != totem_field:
+		old_parent.remove_child(target_card)
+		totem_field.add_child(target_card)
+	if target_card.has_method("set_zone"):
+		target_card.set_zone(Constants.Zone.LINEA_APOYO)
+
+
+## iga ryu: Tótems convertidos "por el turno"; vuelven a ser Tótem al comenzar el turno siguiente.
+var _turn_convert_reverts: Dictionary = {}
+
+
+func try_execute_iga_ryu_convert_totems_pattern(ability_text: String, card: Node, controller_id: int) -> bool:
+	"""iga ryu: 'Una vez por turno, puedes convertir hasta tres Tótem en Aliados de Fuerza 4 por el
+	turno' (activada). Cualquier Tótem en juego; el bot elige los propios."""
+	if not (InPlayAbilities.IGA_RYU_CONVERT_TEXT in ability_text.to_lower()):
+		return false
+	var main := _main.get_node_or_null("/root/Main")
+	if not main or not main._card_interaction:
+		return true
+	var totems: Array = []
+	# El bot no le da Aliados al rival: solo sus Tótems.
+	for pid in ([controller_id] if PlayerSideScript.is_bot(controller_id) else [controller_id, 1 - controller_id]):
+		for line in PlayerSideScript.line_containers(main, pid):
+			for c in line.get_children():
+				if is_instance_valid(c) and c.get("card_type") == Constants.CardType.TOTEM:
+					totems.append(c)
+	if totems.is_empty():
+		main._update_debug("No hay Tótems en juego para convertir")
+		return true
+	var chosen: Array = await main._card_interaction.await_multi_target(
+		"Elige hasta tres Tótem para convertir en Aliados de Fuerza 4 por el turno", totems, 3,
+		Callable(), Callable(), true, null, controller_id)
+	if chosen.is_empty():
+		return true
+	if await EffectContextScript.ensure_window():
+		return true
+	for t in chosen:
+		if is_instance_valid(t) and t.get("card_type") == Constants.CardType.TOTEM:
+			_convert_totem_to_ally(t, CardQuery.controller_of(t), 4, "%s convertido en Aliado: Fuerza 4" % str(t.get("card_name")))
+			_turn_convert_reverts[t] = true
+	if not GameManager.turn_started.is_connected(_on_turn_started_revert_converted):
+		GameManager.turn_started.connect(_on_turn_started_revert_converted)
+	return true
+
+
+func _on_turn_started_revert_converted(_player_id: int, _turn: int) -> void:
+	for t: Node in _turn_convert_reverts.keys():
+		_revert_ally_to_totem(t)
+	_turn_convert_reverts.clear()
 
 
 func try_execute_metropolitan_attack_pattern(ability_text: String, card: Node, controller_id: int) -> bool:
@@ -393,6 +411,9 @@ func try_execute_rueda_fortuna_reveal_pattern(ability_text: String, card: Node, 
 		return true
 	var top: Dictionary = deck[0]
 	var top_cost: int = int(top.get("coste", 0))
+	var revealed_script = load("res://scripts/core/effects/mechanics/RevealedCards.gd")
+	revealed_script.record(controller_id, [top], "la rueda de la fortuna")
+	var taken := false
 
 	var allies: Array = []
 	var ally_fields: Array = [main.player_field, main.player_linea_ataque] if controller_id == 0 else [main.opponent_field, main.opponent_linea_ataque]
@@ -416,6 +437,7 @@ func try_execute_rueda_fortuna_reveal_pattern(ability_text: String, card: Node, 
 		var options: Array = ["Ponerlo en tu mano y robar una carta", "Dejarlo en el Castillo"]
 		var choice: int = await SelectionManager.await_choice(main, "%s: ¿qué hacer con el Oro revelado?" % (card.card_name if card.get("card_name") else "la rueda de la fortuna"), options, controller_id)
 		if choice == 0:
+			taken = true
 			deck.pop_front()
 			var card_node = main._create_card(top, false)
 			var rueda_hand_container = main.player_hand if controller_id == 0 else main._opponent_fan
@@ -424,6 +446,9 @@ func try_execute_rueda_fortuna_reveal_pattern(ability_text: String, card: Node, 
 			await ActionModule.draw(controller_id, 1, "la rueda de la fortuna", true)
 			if main.get("_zone_manager"):
 				main._zone_manager._update_castillo_counts()
+	# La carta mostrada que no se tomó sigue en el Castillo, que se Baraja.
+	if not taken:
+		revealed_script.shuffle_back(main, controller_id, [], "la rueda de la fortuna")
 	return true
 
 
@@ -458,17 +483,12 @@ func try_execute_rueda_fortuna_sacrifice_pattern(ability_text: String, card: Nod
 
 func try_execute_iga_ryu_enter_pattern(ability_text: String, card: Node, controller_id: int) -> bool:
 	"""'Cuando entra en juego, agrupa dos cartas o gana el control de
-	cualquier carta oponente' (iga ryu, "Espíritu Samurái"). Solo la rama
-	'gana el control' — reutiliza ContinuousEffectManager.gain_control_of_
-	card(), el mismo helper real ya usado por shedo titan (MiscUniquePatterns.
-	gd). La rama 'agrupa dos cartas' queda SIN implementar a propósito:
-	'Agrupar' no es un verbo con acción propia en ningún otro lugar del
-	motor (no existe ningún Card.is_tapped ni ActionModule.agrupar()) y no
-	alcanzó el tiempo para confirmar con certeza a qué corresponde en las
-	reglas reales antes de inventar un mecanismo nuevo sin precedente. Las
-	otras dos cláusulas ('el primer Aliado que entre bajo el control de tu
-	oponente cada turno pierde su habilidad' y 'una vez por turno, convertir
-	hasta tres Tótem en Aliados de Fuerza 4') también quedan pendientes."""
+	cualquier carta oponente' (iga ryu, "Espíritu Samurái"). 'Gana el control'
+	reutiliza ContinuousEffectManager.gain_control_of_card() (shedo titan);
+	'agrupa dos cartas' es GoldManager.agrupar_cartas() (lo de la Agrupación,
+	DAR 5.1: Oro Pagado → Reserva, Línea de Ataque → Defensa). Las
+	otras dos: InPlayAbilities.iga_ryu_on_ally_enters() y
+	try_execute_iga_ryu_convert_totems_pattern()."""
 	var lower := ability_text.to_lower()
 	if not ("gana el control de cualquier carta oponente" in lower):
 		return false
@@ -483,6 +503,21 @@ func try_execute_iga_ryu_enter_pattern(ability_text: String, card: Node, control
 			return false
 		var owner: int = c.get("controller_id") if c.get("controller_id") != null else 0
 		return owner == opponent_id and c.get("current_zone") in in_play_zones
+	if "agrupa dos cartas o gana el control" in lower:
+		var has_target := false
+		for line in PlayerSideScript.line_containers(main, opponent_id):
+			if line and line.get_children().any(func(c): return is_instance_valid(c) and filter.call(c)):
+				has_target = true
+				break
+		var regroup: bool = not has_target
+		if has_target and not PlayerSideScript.is_bot(controller_id):
+			regroup = await SelectionManager.await_two_choice(main, str(card.card_name) if card.get("card_name") else "iga ryu",
+				"Agrupar dos cartas", "Ganar el control de una carta oponente", controller_id)
+		if regroup:
+			if await TriggerSystem.open_response_window(card, str(card.card_name) if card.get("card_name") else "iga ryu", controller_id):
+				return true
+			await main._gold_manager.agrupar_cartas(controller_id, 2)
+			return true
 	var target: Node = await main._card_interaction.await_target("Elige una carta oponente para ganar su control", filter, true, controller_id)
 	if not target or not is_instance_valid(target):
 		return true
@@ -504,14 +539,13 @@ func try_execute_estacion_fantasma_name_pattern(ability_text: String, card: Node
 	— busca solo en Línea de Defensa/Ataque/Apoyo del oponente (Aliados,
 	Armas equipadas, Tótems; Oro excluido por el propio filtro del nombrado,
 	no hace falta revisar Reserva/Oro Pagado). La segunda cláusula ('Cuando
-	ataques, elige hasta dos Aliados con Furia...') queda pendiente — no
-	alcanzó el tiempo para resolver con solidez la selección + prevención de
-	daño + destierro proporcional a Fuerza desde el fondo del Castillo."""
+	ataques, elige hasta dos Aliados con Furia...'):
+	InPlayAbilities.estacion_fantasma_on_attack()."""
 	var lower := ability_text.to_lower()
 	if not ("nombra una carta que no sea oro" in lower and "tu oponente baraja las cartas que controle con ese nombre" in lower):
 		return false
 	if PlayerSideScript.is_bot(controller_id):
-		return true  # el bot no sabe nombrar cartas (2026-10-12: el Remoto sí)
+		return true  # el bot no sabe nombrar cartas (el Remoto sí)
 
 	var picked: Dictionary = await _main._card_name_search.open_and_wait(
 		"Nombra una carta que no sea Oro (tu oponente baraja las que controle con ese nombre)", controller_id)

@@ -1,16 +1,8 @@
 extends RefCounted
-## LookRevealPatternsA — mitad A (alfabética) de LookRevealPatterns.gd,
-## dividido por tamaño el 2026-09-06 ("módulos gordos", split anidado: este
-## archivo es una de las 2 mitades de una de las 7 mitades de
-## LookAndPlayResolver.gd). Cubre de try_execute_look_dynamic_gold_count_pattern
-## a try_execute_look_play_or_hand_pattern (alfabético) — el corte no cae
-## justo a la mitad de los 16 patrones (6 aquí, 10 en la mitad B) porque los
-## try_execute_look_play_* (free/or_gold/or_hand) son, con su filtro
-## compartido _make_look_play_free_filter(), los 3 patrones más largos de
-## todo el grupo; agruparlos aquí balancea el tamaño real de ambos archivos
-## en vez del simple conteo de funciones. Llamada solo desde
-## LookRevealPatterns.gd (facade) — ver ese archivo para la lista completa y
-## la mitad hermana (LookRevealPatternsB.gd).
+## LookRevealPatternsA — mitad A (alfabética) de LookRevealPatterns.gd (fachada; ahí está la lista
+## completa y la mitad B). Desde try_execute_look_dynamic_gold_count_pattern hasta
+## try_execute_look_play_or_hand_pattern: 6 patrones aquí y 10 en B, porque los
+## try_execute_look_play_* (con su filtro _make_look_play_free_filter()) son los más largos.
 
 const PlayerSideScript = preload("res://scripts/core/game/PlayerSide.gd")
 var _main: Node
@@ -25,15 +17,12 @@ func setup(main: Node) -> void:
 # RESTO" (cantidad de MIRADO dinámica, p.ej. Tesoro de los Césares)
 # =============================================================================
 func try_execute_look_dynamic_gold_count_pattern(ability_text: String, controller_id: int, card: Node = null) -> bool:
-	"""Detecta 'Mira cartas del tope de tu Castillo como Oros controles. Pon
-	dos cartas de ahí en tu mano y ordena el resto' (2026-08-29, Tesoro de
-	los Césares) — a diferencia de try_execute_look_pick_pattern() (cantidad
-	FIJA a mirar, reparto 1 mano/1 Cementerio), aquí la cantidad a MIRAR es
-	dinámica (= Oros que el jugador controla, Reserva + Oro Pagado) y las no
-	elegidas vuelven TODAS al Castillo, no hay Cementerio involucrado.
-	'Ordena el resto' queda pendiente (mismo gap ya documentado en
-	try_execute_look_pick_pattern) — vuelven al tope en su orden actual.
-	Returns: true si el patrón aplicaba (se haya podido resolver o no)."""
+	"""Tesoro de los Césares: "Mira cartas del tope de tu Castillo como Oros controles. Pon dos cartas
+	de ahí en tu mano y ordena el resto". A diferencia de try_execute_look_pick_pattern() (cantidad
+	fija), aquí se mira tantas como Oros controla (Reserva + Oro Pagado) y las no elegidas vuelven
+	todas al Castillo. Normalmente lo resuelve antes CastleLook.try_execute_text() (con "ordena el resto");
+	este patrón queda para los textos que no entiende, y ahí vuelven al tope en su orden.
+	Devuelve true si el patrón aplicaba (se haya podido resolver o no)."""
 	var lower := ability_text.to_lower()
 	if "cementerio" in lower:
 		return false  # eso es try_execute_look_pick_pattern
@@ -71,8 +60,6 @@ func try_execute_look_dynamic_gold_count_pattern(ability_text: String, controlle
 	return true
 
 
-
-
 func _resolve_look_pick_hand_only(player_id: int, top_cards: Array, pick_amount: int) -> void:
 	"""Como _resolve_look_pick_hand_and_mill() pero para N cartas a la mano
 	(no fijo a 1) y sin Cementerio de por medio — todas las no elegidas
@@ -88,8 +75,7 @@ func _resolve_look_pick_hand_only(player_id: int, top_cards: Array, pick_amount:
 	pick_amount = mini(pick_amount, remaining.size())
 
 	var main = _main.get_node_or_null("/root/Main")
-	# 2026-09-14, a pedido del usuario: click directo sobre las cartas
-	# reveladas (open_reveal_picker) en vez del modal de lista viejo.
+	# Click directo sobre las cartas reveladas (open_reveal_picker) en vez del modal de lista viejo.
 	var to_hand: Array = []
 	if main and main._zone_viewer:
 		to_hand = await main._zone_viewer.open_reveal_picker(
@@ -111,13 +97,10 @@ func _resolve_look_pick_hand_only(player_id: int, top_cards: Array, pick_amount:
 		main._zone_manager._update_castillo_counts()
 
 
-
-
 func try_execute_look_opponent_hand_discard_then_search_ally_pattern(ability_text: String, card: Node, controller_id: int) -> bool:
-	"""'Cuando entra en juego, mira la mano de tu oponente y Descarta una
-	carta que no sea Oro. Si Descartaste un Aliado, busca en tu Castillo un
-	Aliado y ponlo en tu mano o Cementerio' (kitsune - sp, 2026-09-04) —
-	mismo picker de mano rival que _activate_chakram_look_and_lock()
+	"""'Cuando entra en juego, mira la mano de tu oponente y Descarta una carta que no sea Oro. Si
+	Descartaste un Aliado, busca en tu Castillo un Aliado y ponlo en tu mano o Cementerio' (kitsune
+	- sp) — mismo picker de mano rival que _activate_chakram_look_and_lock
 	(SearchAbilityHandler.gd), aquí sin costo/candado, con Descarte real."""
 	var lower := ability_text.to_lower()
 	if not ("mira la mano de tu oponente y descarta una carta que no sea oro" in lower):
@@ -143,8 +126,8 @@ func try_execute_look_opponent_hand_discard_then_search_ally_pattern(ability_tex
 	if not candidates.any(func(c): return c.get("card_type") != Constants.CardType.ORO):
 		return true
 
-	# 2026-09-14, a pedido del usuario: click directo sobre la mano rival
-	# (Nodos ya visibles en el abanico) en vez del modal de lista viejo.
+	# Click directo sobre la mano rival (Nodos ya visibles en el abanico) en vez del modal de lista
+	# viejo.
 	if not main._card_interaction:
 		return true
 	var not_oro_filter := func(c: Node) -> bool:
@@ -167,8 +150,6 @@ func try_execute_look_opponent_hand_discard_then_search_ally_pattern(ability_tex
 	return true
 
 
-
-
 # =============================================================================
 # PATRÓN "MIRA N... UNA A TU MANO, OTRA AL CEMENTERIO" (p.ej. Signo Amarillo)
 # =============================================================================
@@ -178,8 +159,8 @@ func try_execute_look_pick_pattern(ability_text: String, controller_id: int, car
 	varias cartas de Mitos y Leyendas, no solo Signo Amarillo. No es un motor
 	genérico de acciones compuestas (extract_action() solo maneja una acción
 	simple a la vez): es un patrón reconocido a mano por regex.
-	'Ordena el resto' queda pendiente — las cartas no elegidas vuelven al
-	tope en su orden actual.
+	Normalmente lo resuelve antes CastleLook.try_execute_text() (deja ordenar el
+	resto); aquí, las no elegidas vuelven al tope en su orden actual.
 	Returns: true si el patrón aplicaba (se haya podido resolver o no)."""
 	var lower := ability_text.to_lower()
 	if not ("tu mano" in lower and "cementerio" in lower):
@@ -205,8 +186,6 @@ func try_execute_look_pick_pattern(ability_text: String, controller_id: int, car
 	return true
 
 
-
-
 func _resolve_look_pick_hand_and_mill(player_id: int, top_cards: Array) -> void:
 	"""Muestra las cartas miradas (privado, vía SelectionManager — el mismo
 	panel que usa Exhumar/límite de mano), deja elegir 1 para la mano y 1
@@ -223,8 +202,7 @@ func _resolve_look_pick_hand_and_mill(player_id: int, top_cards: Array) -> void:
 	var remaining: Array = top_cards.duplicate()
 	var main = _main.get_node_or_null("/root/Main")
 
-	# 2026-09-14, a pedido del usuario: click directo sobre las cartas
-	# reveladas (open_reveal_picker) en vez del modal de lista viejo.
+	# Click directo sobre las cartas reveladas (open_reveal_picker) en vez del modal de lista viejo.
 	var to_hand: Dictionary = {}
 	if main and main._zone_viewer:
 		var picked1: Array = await main._zone_viewer.open_reveal_picker(
@@ -249,7 +227,7 @@ func _resolve_look_pick_hand_and_mill(player_id: int, top_cards: Array) -> void:
 	if cm and not to_cemetery.is_empty():
 		cm.add_to_cemetery(player_id, to_cemetery)
 
-	# "Ordena el resto" queda pendiente — se devuelven al tope en su orden actual
+	# Sin ordenar (lo ordenado lo resuelve antes CastleLook): vuelven al tope en su orden actual
 	for i in range(remaining.size() - 1, -1, -1):
 		deck.push_front(remaining[i])
 
@@ -257,25 +235,17 @@ func _resolve_look_pick_hand_and_mill(player_id: int, top_cards: Array) -> void:
 		main._zone_manager._update_castillo_counts()
 
 
-
-
 # =============================================================================
 # PATRÓN "MUESTRA N... JUEGA UNA DE COSTE X O MENOS SIN PAGAR SU COSTE"
 # (p.ej. Tangata Manu)
 # =============================================================================
 func try_execute_look_play_free_pattern(ability_text: String, source_card: Node, controller_id: int) -> bool:
-	"""Detecta y resuelve 'Muestra N cartas del tope de tu Castillo y juega
-	una carta de coste X o menos de ahí sin pagar su coste' (2026-08-25,
-	p.ej. Tangata Manu). Simplificaciones a propósito, documentadas al
-	usuario: no cuenta Oros entre las candidatas (su 'coste' no es
-	numérico en los datos de la API) y no hay tracking de 'una vez por
-	turno' para esta habilidad EN CONCRETO — es un disparador de 'cuando
-	entra en juego', que ya solo se dispara una vez por entrada normalmente.
-	Returns: true si el patrón aplicaba (se haya podido resolver o no)."""
-	# 2026-08-25: la palabra antes de "de tu Castillo" NO se exige literal
-	# ("tope") — los datos de la API traen typos reales (Tangata Manu:
-	# "del topde de tu Castillo", con la 'd' de más). Se tolera cualquier
-	# palabra ahí (\\S+) para no depender de que la fuente esté bien escrita.
+	""""Muestra N cartas del tope de tu Castillo y juega una carta de coste X o menos de ahí sin pagar
+	su coste" (p.ej. Tangata Manu). No cuenta Oros entre las candidatas (su coste no es numérico en
+	los datos) y no lleva cupo de "una vez por turno" propio (es un "cuando entra en juego").
+	Devuelve true si el patrón aplicaba (se haya podido resolver o no)."""
+	# La palabra antes de "de tu Castillo" no se exige literal ("tope"): los datos traen typos (Tangata
+	# Manu: "del topde de tu Castillo"). Se tolera cualquier palabra (\\S+).
 	var lower := ability_text.to_lower()
 	if not ("sin pagar su coste" in lower and "de tu castillo" in lower and "juega" in lower):
 		return false
@@ -305,17 +275,10 @@ func try_execute_look_play_free_pattern(ability_text: String, source_card: Node,
 
 	var main := _main.get_node_or_null("/root/Main")
 	var to_play: Dictionary = {}
-	# 2026-10-12 (§58): el Remoto real también elige (antes elegía el bot al
-	# azar por él, y solo Aliados).
+	# El Remoto real también elige (§58).
 	if controller_id == 0 or PlayerSideScript.is_remote(controller_id):
-		# Una sola ventana (2026-08-26, a pedido del usuario — "más visual,
-		# menos texto"): antes eran dos ventanas seguidas, una de solo mirar
-		# (sin poder hacer click en nada) y solo en la segunda se podía
-		# elegir. Ahora se ven las N cartas reveladas de una — es información
-		# pública (DAR) — con las que cumplen coste ya clickeables a color, y
-		# el resto atenuada como cualquier carta no seleccionable.
-		# 2026-09-14, a pedido del usuario: click directo (open_reveal_picker)
-		# en vez del modal de lista viejo.
+		# Una sola ventana: las N cartas reveladas se ven juntas (información pública, DAR), con las que
+		# cumplen coste clickeables y el resto atenuado. Click directo (open_reveal_picker).
 		if main and main._zone_viewer:
 			var node_filter := func(c: Node) -> bool: return is_eligible.call(c.card_data)
 			var picked: Array = await main._zone_viewer.open_reveal_picker(
@@ -324,13 +287,8 @@ func try_execute_look_play_free_pattern(ability_text: String, source_card: Node,
 			if not picked.is_empty():
 				to_play = picked[0]
 	else:
-		# El bot resuelve solo, sin abrir el diálogo al jugador humano
-		# (2026-09-09, bug real reportado por el usuario: SelectionManager no
-		# distingue de quién es la carta, así que este trigger del BOT
-		# terminaba dejando elegir al humano en su lugar). Solo Aliados
-		# (mismo alcance v1 que EasyBotController — un Arma aquí necesitaría
-		# elegir portador, algo que el bot no resuelve todavía), al azar
-		# entre lo elegible.
+		# El bot resuelve solo, sin abrir el diálogo al humano (SelectionManager no distingue de quién es
+		# la carta). Solo Aliados (un Arma necesitaría elegir portador), al azar entre lo elegible.
 		var bot_eligible: Array = top_cards.filter(func(c: Dictionary) -> bool:
 			return c.get("tipo", -1) == Constants.CardType.ALIADO and is_eligible.call(c))
 		if not bot_eligible.is_empty():
@@ -340,11 +298,9 @@ func try_execute_look_play_free_pattern(ability_text: String, source_card: Node,
 	if not to_play.is_empty():
 		_remove_data_from_array(remaining, to_play)
 
-	# El resto se baraja de vuelta al mazo (2026-08-26, regla del usuario):
-	# "Muestra"/"revela" del tope sin instrucción explícita de orden
-	# obliga a barajar el Castillo después — a diferencia de "Mira", que sí
-	# deja al jugador elegir el orden en el que vuelven, y de Destierra/
-	# Bota, que no importa porque esas cartas ya no vuelven al mazo.
+	# El resto se baraja de vuelta: "Muestra"/"revela" del tope sin instrucción de orden obliga a
+	# barajar el Castillo, a diferencia de "Mira" (el jugador elige el orden) y de Destierra/Bota (no
+	# vuelven al mazo).
 	for c in remaining:
 		deck.append(c)
 	cm.shuffle_deck(controller_id)
@@ -353,10 +309,9 @@ func try_execute_look_play_free_pattern(ability_text: String, source_card: Node,
 		main._zone_manager._update_castillo_counts()
 
 	if not to_play.is_empty() and not await TriggerSystem.open_response_window(source_card, str(source_card.card_name), controller_id):
-		# play_card_for_free() ya sabe jugar cualquier tipo para cualquier
-		# jugador (§25: Arma con portador elegido por quien corresponde) — el
-		# bot local sigue con su camino propio (solo Aliados) porque elegir
-		# portador le abriría la selección al Anfitrión (2026-10-12, §58).
+		# play_card_for_free ya sabe jugar cualquier tipo para cualquier jugador (§25: Arma con portador
+		# elegido por quien corresponde) — el bot local sigue con su camino propio (solo Aliados) porque
+		# elegir portador le abriría la selección al Anfitrión (§58).
 		if not PlayerSideScript.is_bot(controller_id):
 			if main and main._gold_manager:
 				await main._gold_manager.play_card_for_free(to_play, controller_id)
@@ -366,31 +321,19 @@ func try_execute_look_play_free_pattern(ability_text: String, source_card: Node,
 	return true
 
 
-
-
 func _make_look_play_free_filter(source_card: Node, max_cost: int, exclude_self: bool = true) -> Callable:
-	"""Filtro de elegibilidad compartido por los patrones 'muestra N... juega
-	una de coste ≤X sin pagar su coste' (Tangata Manu, Presente, y
-	cualquier otro con el mismo molde): sin Oros (su 'coste' no es
-	comparable en los datos de la API), sin Talismanes de solo-respuesta
-	(Red de Plata, Sacrificio Solar, etc. — misma detección que
-	GoldManager._is_response_only_talisman(), adaptada a Dictionary porque
-	aquí todavía no existe el nodo Card). exclude_self controla si además se
-	excluye una copia de la carta fuente misma entre lo revelado — por
-	defecto sí (Tangata Manu, Presente), pero Perder la Razón sí puede
-	jugarse a sí mismo (2026-08-27, a pedido del usuario)."""
+	"""Filtro de elegibilidad compartido por los patrones "muestra N... juega una de coste ≤X sin
+	pagar su coste" (Tangata Manu, Presente...): sin Oros (coste no comparable), sin Talismanes de
+	solo respuesta (Red de Plata, Sacrificio Solar...; misma detección que
+	GoldManager._is_response_only_talisman(), sobre Dictionary). exclude_self: excluye copias de la
+	carta fuente (por defecto sí; Perder la Razón y Presente pasan false)."""
 	var self_name: String = str(source_card.card_name if source_card.get("card_name") != null else "").to_lower()
 	return func(c: Dictionary) -> bool:
 		if c.get("tipo", -1) == Constants.CardType.ORO:
 			return false
-		# Un Arma sin ningún Aliado libre en juego para portarla no es una
-		# jugada válida (2026-08-29, a pedido del usuario) — antes se ofrecía
-		# igual como clickeable, y GoldManager.play_card_for_free() la
-		# rechazaba solo AL EJECUTAR (chequea _player_has_ally_in_play()),
-		# momento en el que la carta ya se había sacado de 'remaining' dando
-		# por hecho que la jugada iba a funcionar — quedaba destruida
-		# (card.queue_free()) sin ir a ningún lado. Se descarta aquí antes,
-		# para que ni siquiera aparezca como opción.
+		# Un Arma sin ningún Aliado en juego que la porte no es una jugada válida: se descarta aquí. Si
+		# no, se sacaba de 'remaining' y play_card_for_free() la rechazaba al ejecutar, perdiéndose la
+		# carta.
 		if c.get("tipo", -1) == Constants.CardType.ARMA:
 			var main := _main.get_node_or_null("/root/Main")
 			if not main or not main._gold_manager or not main._gold_manager._player_has_ally_in_play():
@@ -413,22 +356,17 @@ func _make_look_play_free_filter(source_card: Node, max_cost: int, exclude_self:
 		return true
 
 
-
-
 # =============================================================================
 # PATRÓN "MUESTRA N... JUEGA UNA DE COSTE X O MENOS SIN PAGAR SU COSTE O
 # PONER UN ORO DE AHÍ EN TU ORO PAGADO" (p.ej. Perder la Razón)
 # =============================================================================
 func try_execute_look_play_or_gold_pattern(ability_text: String, source_card: Node, controller_id: int) -> bool:
-	"""Detecta y resuelve 'Muestra seis cartas del tope de tu Castillo.
-	Puedes jugar una carta de coste X o menos de ahí sin pagar su coste o
-	poner un Oro de ahí en tu Oro Pagado' (2026-08-27, p.ej. Perder la
-	Razón). Variante de look_play_free: la alternativa aquí es tomar UN Oro
-	puntual de lo revelado y ponerlo directo en la Reserva, no toda la
-	pila ni a la mano. Misma ventana única: los no-Oro jugables (coste ≤X)
-	y CUALQUIER Oro revelado quedan clickeables a la vez — según qué tipo
-	sea la carta elegida se resuelve como 'jugar gratis' o 'a Oro Pagado'.
-	Returns: true si el patrón aplicaba (se haya podido resolver o no)."""
+	""""Muestra seis cartas del tope de tu Castillo. Puedes jugar una carta de coste X o menos de ahí
+	sin pagar su coste o poner un Oro de ahí en tu Oro Pagado" (p.ej. Perder la Razón). Variante de
+	look_play_free: la alternativa es poner UN Oro revelado en el Oro Pagado. Misma ventana única:
+	las jugables (coste ≤X) y cualquier Oro revelado quedan clickeables; según el tipo elegido se
+	resuelve como jugar gratis o Oro Pagado.
+	Devuelve true si el patrón aplicaba (se haya podido resolver o no)."""
 	var lower := ability_text.to_lower()
 	if not ("en tu oro pagado" in lower and "sin pagar su coste" in lower):
 		return false
@@ -454,18 +392,9 @@ func try_execute_look_play_or_gold_pattern(ability_text: String, source_card: No
 			return true
 		return play_filter.call(c)
 
-	# Igual que Presente (2026-08-29, a pedido del usuario): el 'Puedes' aquí
-	# también autoriza la alternativa de jugar gratis, no autoriza declinar
-	# el efecto entero — mientras exista AL MENOS UNA acción legal (un Oro
-	# revelado, o una carta jugable gratis), can_cancel queda en false. Pero
-	# a diferencia de Presente, aquí no hay un tercer botón de respaldo tipo
-	# 'Poner' — si de las 6 reveladas ninguna es un Oro y ninguna es jugable
-	# gratis (p.ej. 6 Armas sin ningún portador libre), no hay NINGUNA acción
-	# legal posible. Ahí can_cancel SÍ va en true (2026-08-29, corregido a
-	# pedido del usuario: mostrar igual el panel con lo revelado, para que
-	# el jugador tenga certeza de qué salió, en vez de resolver en silencio
-	# sin mostrar nada — Cancelar queda como única salida posible, no como
-	# alternativa a una acción legal disponible).
+	# El "Puedes" elige entre las dos alternativas, no permite declinar todo: con al menos una acción
+	# legal (un Oro revelado o una carta jugable), can_cancel = false. Si no hay ninguna (p.ej. 6 Armas
+	# sin portador), se muestra igual lo revelado y Cancelar es la única salida.
 	var any_legal_action := false
 	for c in top_cards:
 		if is_pickable.call(c):
@@ -474,14 +403,11 @@ func try_execute_look_play_or_gold_pattern(ability_text: String, source_card: No
 
 	var main := _main.get_node_or_null("/root/Main")
 	var picked: Dictionary = {}
-	# 2026-10-12 (§57/§58): el Remoto real también elige (antes elegía el
-	# bot al azar por él). Las dos opciones del texto son distintas: JUGAR
-	# gratis una carta (Aliado/Arma/Tótem/Talismán, abajo con play_card_
-	# for_free()) o PONER EN JUEGO un Oro en el Oro Pagado — un Oro nunca se
-	# "juega" (regla confirmada por el usuario).
+	# El Remoto real también elige (§57/§58). Las dos opciones son distintas: JUGAR gratis una carta
+	# (Aliado/Arma/Tótem/Talismán, con play_card_for_free()) o PONER EN JUEGO un Oro en el Oro Pagado
+	# (un Oro nunca se juega).
 	if controller_id == 0 or PlayerSideScript.is_remote(controller_id):
-		# 2026-09-14, a pedido del usuario: click directo (open_reveal_picker)
-		# en vez del modal de lista viejo.
+		# Click directo (open_reveal_picker) en vez del modal de lista viejo.
 		if main and main._zone_viewer:
 			var node_filter := func(c: Node) -> bool: return is_pickable.call(c.card_data)
 			var picked_list: Array = await main._zone_viewer.open_reveal_picker(
@@ -537,10 +463,8 @@ func try_execute_look_play_or_gold_pattern(ability_text: String, source_card: No
 
 	if picked.get("tipo", -1) == Constants.CardType.ORO:
 		if main and main.has_method("_create_card") and main._gold_manager:
-			# Va directo a Oro Pagado, NO a Reserva (2026-08-28, corrección —
-			# el texto de la carta dice literal 'poner un Oro de ahí en tu
-			# Oro Pagado', no en la Reserva; a diferencia de _place_card_as_gold()
-			# este Oro nunca estuvo disponible para pagar nada, entra ya-gastado).
+			# Directo al Oro Pagado, no a la Reserva ("poner un Oro de ahí en tu Oro Pagado"): entra ya
+			# gastado.
 			var data: Dictionary = picked.duplicate()
 			data["esta_oculta"] = false
 			var gold_node = main._create_card(data)
@@ -554,9 +478,8 @@ func try_execute_look_play_or_gold_pattern(ability_text: String, source_card: No
 			gold_node.set_zone(Constants.Zone.ORO_PAGADO)
 			GameState.agregar_oro_pagado(controller_id, 1)
 			main.gold_cards.append(gold_node)
-			# Los Oros también pueden disparar "cuando entra en juego", sea
-			# cual sea la zona donde entren (2026-08-26, regla del usuario) —
-			# mismo camino que _place_card_as_gold().
+			# Los Oros también pueden disparar "cuando entra en juego", sea cual sea la zona donde entren
+			# (regla del usuario) — mismo camino que _place_card_as_gold.
 			await main._gold_manager._trigger_enter_play(gold_node, Constants.Zone.ORO_PAGADO)
 	elif main and main._gold_manager and main._gold_manager.has_method("play_card_for_free"):
 		await main._gold_manager.play_card_for_free(picked)
@@ -564,20 +487,16 @@ func try_execute_look_play_or_gold_pattern(ability_text: String, source_card: No
 	return true
 
 
-
-
 # =============================================================================
 # PATRÓN "MUESTRA LAS PRIMERAS N... JUEGA UNA DE COSTE X O MENOS SIN PAGAR
 # SU COSTE O PONERLAS EN TU MANO" (p.ej. Presente)
 # =============================================================================
 func try_execute_look_play_or_hand_pattern(ability_text: String, source_card: Node, controller_id: int) -> bool:
-	"""Detecta y resuelve 'Muestra las primeras N cartas de tu Castillo.
-	Puedes jugar una carta de coste X o menos de ahí sin pagar su coste o
-	ponerlas en tu mano' (2026-08-26, p.ej. Presente). Variante de
-	try_execute_look_play_free_pattern() con una alternativa extra: en vez
-	de jugar una gratis, el jugador puede llevarse las N cartas completas a
-	la mano — o declinar del todo (nada gratis en 'Puedes').
-	Returns: true si el patrón aplicaba (se haya podido resolver o no)."""
+	"""Detecta y resuelve 'Muestra las primeras N cartas de tu Castillo. Puedes jugar una carta de
+	coste X o menos de ahí sin pagar su coste o ponerlas en tu mano' (p.ej. Presente). Variante de
+	try_execute_look_play_free_pattern con una alternativa extra: en vez de jugar una gratis, el
+	jugador puede llevarse las N cartas completas a la mano — o declinar del todo (nada gratis en
+	'Puedes'). Returns: true si el patrón aplicaba (se haya podido resolver o no)."""
 	var lower := ability_text.to_lower()
 	if not ("ponerlas en tu mano" in lower and "sin pagar su coste" in lower):
 		return false
@@ -597,46 +516,25 @@ func try_execute_look_play_or_hand_pattern(ability_text: String, source_card: No
 	if top_cards.is_empty():
 		return true
 
-	# exclude_self=false (2026-09-19, bug real reportado por el usuario: "no
-	# puedo jugar presente con el presente"). Texto real (card_cache/cards.json,
-	# id 19936): "Puedes jugar una carta de coste 3 o menos de ahí sin pagar su
-	# coste o ponerlas en tu mano" — sin ninguna cláusula que excluya otra
-	# copia de sí misma. El default true de _make_look_play_free_filter()
-	# (pensado originalmente para Presente, según el comentario de la función)
-	# no tiene base en el texto real de la carta — mismo caso que Perder la
-	# Razón, que ya pasa false explícito. No se tocó el default compartido de
-	# la función ni el llamador de Tangata Manu (línea ~293): ese sí usa el
-	# default sin haberse verificado todavía contra su propio texto — no
-	# cambiar sin que el usuario lo confirme primero (mismo criterio que
-	# arquitectura.md §10.3).
+	# exclude_self = false: el texto de Presente ("Puedes jugar una carta de coste 3 o menos de ahí sin
+	# pagar su coste o ponerlas en tu mano") no excluye otra copia de sí misma. El default true de
+	# _make_look_play_free_filter() lo sigue usando Tangata Manu, sin verificar contra su texto: no
+	# cambiarlo sin confirmarlo (arquitectura.md §10.3).
 	var is_eligible := _make_look_play_free_filter(source_card, max_cost, false)
 	var to_play: Dictionary = {}
 	var to_hand: bool = false
 
 	if controller_id == 0:
-		# Una sola ventana (2026-08-27, a pedido del usuario): las N cartas se
-		# ven de una — las que cumplen coste ya clickeables a color para jugar
-		# gratis (mismo filtro/estilo que Tangata Manu) — y se agrega un botón
-		# extra "Poner en tu mano" al panel de SelectionManager para la otra
-		# alternativa, sin abrir un popup de elección aparte primero.
-		# DEJADO A PROPÓSITO en SelectionManager (2026-09-14, barrido de
-		# pickers modales → click directo): este panel inyecta un tercer
-		# botón custom ("Poner", ver más abajo) que open_reveal_picker() no
-		# soporta (solo pick-por-click puro) — mismo criterio de complejidad
-		# real que Duelo de Dragones/Ofrendas al Dragón en el barrido de
-		# triggers (ver docs/plans/2026-09-09-pila-respuesta-universal-design.md).
+		# Una sola ventana: las N cartas a la vista, las que cumplen coste clickeables para jugar gratis
+		# (como Tangata Manu), más un botón "Poner en tu mano" en el panel de SelectionManager para la
+		# otra alternativa. Queda en SelectionManager a propósito: open_reveal_picker() no soporta un
+		# botón extra.
 		SelectionManager.open_selection(top_cards, SelectionManager.SelectionMode.CUSTOM, {
 			"title": "Juega una carta de coste %d o menos gratis, o llévate las %d a tu mano" % [max_cost, top_cards.size()],
 			"max_selections": 1,
 			"min_selections": 0,
-			# can_cancel=false a propósito (2026-08-29, a pedido del usuario): el
-			# 'Puedes' del texto de esta carta autoriza la alternativa de jugar
-			# gratis, NO autoriza declinar el efecto entero — la obligación real
-			# es elegir UNA de las dos acciones (jugar gratis o llevarse todo a
-			# la mano). Antes, con can_cancel=true, "Cancelar" resolvía exacto
-			# igual que 0 elegidas + no tocar 'Poner' — un tercer camino ilegal
-			# que no debería existir. El botón 'Poner' de abajo sigue siendo
-			# obligatorio si nada es elegible para jugar gratis.
+			# can_cancel = false: el "Puedes" elige entre jugar gratis o llevarse todo a la mano, no permite
+			# declinar el efecto. "Poner" es obligatorio si nada es jugable gratis.
 			"can_cancel": false,
 			"filter": is_eligible,
 		})
@@ -652,15 +550,9 @@ func try_execute_look_play_or_hand_pattern(ability_text: String, source_card: No
 		var on_cancelled := func():
 			state.resolved = true
 
-		# Ocultar el botón "Confirmar" base (2026-08-29, a pedido del usuario:
-		# 'debe tener 1 botón nada más que diga Poner'): con min_selections=0 y
-		# max_selections=1, Confirmar con 0 elegidas y Cancelar terminaban en
-		# EXACTAMENTE el mismo resultado (to_play/to_hand ambos vacíos, el resto
-		# se baraja de vuelta) — un botón redundante de más. Clickear una carta
-		# ya auto-confirma sola (elige y juega gratis); Cancelar cubre 'declinar
-		# del todo'; el único botón propio que aporta algo distinto es 'Poner en
-		# tu mano'. Se restaura la visibilidad al cerrar — es el mismo botón
-		# compartido por TODOS los diálogos de SelectionManager.
+		# Se oculta el botón "Confirmar" base: con 0 elegidas daba lo mismo que Cancelar. Clickear una
+		# carta ya confirma (juega gratis) y "Poner en tu mano" es la otra opción. Se restaura al cerrar
+		# (el botón es compartido por todos los diálogos de SelectionManager).
 		var confirm_btn = SelectionManager.get("_confirm_button")
 		if confirm_btn:
 			confirm_btn.visible = false
@@ -695,10 +587,9 @@ func try_execute_look_play_or_hand_pattern(ability_text: String, source_card: No
 		to_play = state.picked
 		to_hand = state.to_hand
 	elif PlayerSideScript.is_remote(controller_id):
-		# 2026-10-12 (§58): el panel de arriba es local (botón "Poner"
-		# agregado a mano) y no viaja por red. El Remoto elige con clic en
-		# las cartas reveladas; si no elige ninguna, se le ofrece la otra
-		# opción del texto (llevárselas a la mano) o declinar.
+		# El panel de arriba es local (botón "Poner" agregado a mano) y no viaja por red. El Remoto elige
+		# con clic en las cartas reveladas; si no elige ninguna, se le ofrece la otra opción del texto
+		# (llevárselas a la mano) o declinar.
 		var main_r := _main.get_node_or_null("/root/Main")
 		if main_r and main_r._zone_viewer:
 			var node_filter_r := func(c: Node) -> bool: return is_eligible.call(c.card_data)
@@ -711,12 +602,8 @@ func try_execute_look_play_or_hand_pattern(ability_text: String, source_card: No
 				to_hand = await SelectionManager.await_two_choice(main_r, str(source_card.card_name),
 					"Poner las cartas en tu mano", "No hacer nada", controller_id)
 	else:
-		# El bot resuelve solo (2026-09-09, mismo bug real que ya se corrigió
-		# en Tangata Manu/Perder la Razón: esto abría el mismo diálogo de
-		# arriba sin fijarse de quién era la carta, dejando elegir al humano
-		# en su lugar). Solo Aliados para jugar gratis (mismo alcance v1 que
-		# el resto del bot); si no hay ninguno elegible, la única alternativa
-		# legal es llevarse todo a la mano.
+		# El bot resuelve solo (no se abre el diálogo al humano). Solo Aliados para jugar gratis; si no
+		# hay ninguno elegible, se lleva todo a la mano.
 		var bot_eligible: Array = top_cards.filter(func(c: Dictionary) -> bool:
 			return c.get("tipo", -1) == Constants.CardType.ALIADO and is_eligible.call(c))
 		if not bot_eligible.is_empty() and randf() < 0.5:
@@ -764,10 +651,9 @@ func try_execute_look_play_or_hand_pattern(ability_text: String, source_card: No
 		main._zone_manager._update_castillo_counts()
 
 	if not to_play.is_empty() and not await TriggerSystem.open_response_window(source_card, str(source_card.card_name), controller_id):
-		# play_card_for_free() ya sabe jugar cualquier tipo para cualquier
-		# jugador (§25: Arma con portador elegido por quien corresponde) — el
-		# bot local sigue con su camino propio (solo Aliados) porque elegir
-		# portador le abriría la selección al Anfitrión (2026-10-12, §58).
+		# play_card_for_free ya sabe jugar cualquier tipo para cualquier jugador (§25: Arma con portador
+		# elegido por quien corresponde) — el bot local sigue con su camino propio (solo Aliados) porque
+		# elegir portador le abriría la selección al Anfitrión (§58).
 		if not PlayerSideScript.is_bot(controller_id):
 			if main and main._gold_manager:
 				await main._gold_manager.play_card_for_free(to_play, controller_id)
@@ -775,8 +661,6 @@ func try_execute_look_play_or_hand_pattern(ability_text: String, source_card: No
 			await main._easy_bot.play_free_ally_from_data(to_play)
 
 	return true
-
-
 
 
 func _remove_data_from_array(array: Array, data: Dictionary) -> void:

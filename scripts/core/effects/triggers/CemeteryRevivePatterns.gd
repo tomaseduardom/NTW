@@ -1,8 +1,7 @@
 extends RefCounted
-## Alto Prime (2026-10-17, a pedido del usuario): "Puedes Descartar una carta
-## para poner este Aliado en juego desde tu Cementerio como un Aliado sin
-## habilidad." — habilidad usable desde el Cementerio (no es Exhumar). Mismo
-## "sin habilidad" que Belta: entra con el texto vacío. Se usa con preload.
+## Alto Prime: "Puedes Descartar una carta para poner este Aliado en juego desde tu Cementerio como
+## un Aliado sin habilidad." — habilidad usable desde el Cementerio (no es Exhumar). Mismo "sin
+## habilidad" que Belta: entra con el texto vacío. Se usa con preload.
 
 const PlayerSideScript = preload("res://scripts/core/game/PlayerSide.gd")
 const DISCARD_TEXT := "descartar una carta para poner este aliado en juego desde tu cementerio como un aliado sin habilidad"
@@ -47,10 +46,9 @@ static func discard_to_revive_without_ability(source_card: Node) -> void:
 	main._update_debug("%s entra en juego desde tu Cementerio como un Aliado sin habilidad" % card_name)
 
 
-## Kaitai (2026-10-17, bug real reportado por el usuario: en la Fase Final
-## resolvía "Roba tres cartas y Descarta dos", que es la de entrada):
-## "En tu Fase Final, una vez por turno, puedes Desterrar hasta tantas cartas
-## de los Cementerios como Fuerza tenga este Aliado."
+## Kaitai: "En tu Fase Final, una vez por turno, puedes Desterrar hasta tantas cartas de los
+## Cementerios como Fuerza tenga este Aliado." (no la de entrada, "Roba tres cartas y Descarta
+## dos").
 static func try_execute(card: Node, text: String, controller_id: int) -> bool:
 	var lower := text.to_lower().replace("\n", " ")
 	# Al atacar, la cláusula aislada es solo la primera oración ("...tu
@@ -72,11 +70,9 @@ static func try_execute(card: Node, text: String, controller_id: int) -> bool:
 	return true
 
 
-## Antonio Pincheira (2026-10-17, a pedido del usuario): "tu oponente Bota
-## seis cartas. Pon hasta un Oro de su Cementerio en tu Reserva [y busca dos
-## Aliados en tu Castillo y ponlos en tu mano]." — las dos versiones de la
-## carta. El Oro sigue siendo de su dueño (vuelve a SU Cementerio) pero lo
-## controlas tú.
+## Antonio Pincheira: "tu oponente Bota seis cartas. Pon hasta un Oro de su Cementerio en tu Reserva
+## [y busca dos Aliados en tu Castillo y ponlos en tu mano]." — las dos versiones de la carta. El
+## Oro sigue siendo de su dueño (vuelve a SU Cementerio) pero lo controlas tú.
 static func _pincheira(card: Node, lower: String, controller_id: int) -> void:
 	var main := _main_node()
 	if not main or not main._gold_manager:

@@ -2,6 +2,7 @@ extends Node
 const Deck170Script = preload("res://scripts/core/effects/triggers/Deck170Patterns.gd")
 const AziScript = preload("res://scripts/core/effects/triggers/AziPatterns.gd")
 const NoeScript = preload("res://scripts/core/effects/triggers/NoePatterns.gd")
+const BlockScript = preload("res://scripts/core/effects/triggers/BlockPatterns.gd")
 ## BattleManager - Gestiona el combate y asignación de daño (DAR Sección 5.C4)
 ## Calcula el resultado de combate entre atacantes y bloqueadores
 
@@ -32,34 +33,23 @@ var combat_in_progress: bool = false
 
 
 func _ready() -> void:
-	# (2026-08-28, "módulos gordos" punto 1): aquí había una conexión a
-	# 'TurnManager.phase_changed' para auto-disparar calculate_combat_damage()
-	# en ASIGNACION_DANIO — TurnManager.gd NO tiene (ni tuvo nunca) esa señal,
-	# así que el 'has_signal()' que la envolvía siempre daba falso y esto
-	# jamás se conectó. No hacía falta: PhaseFlowController.gd sí llama
-	# BattleManager.calculate_combat_damage() directo al entrar a esa fase
-	# (ver PhaseFlowController.gd línea ~273) — ese es el camino real. Se
-	# sacó la conexión rota y el handler _on_phase_changed() que quedaba
-	# huérfano sin ella.
+	# calculate_combat_damage() lo llama PhaseFlowController al entrar a ASIGNACION_DANIO (TurnManager
+	# no tiene señal phase_changed).
 	pass
 
 
 # =============================================================================
 # CÁLCULO DE DAÑO DE COMBATE (DAR Sección 5.C4)
 # =============================================================================
-## Último turno (GameManager.current_turn) en que cada jugador atacó
-## (2026-10-14, Cuervo Nocturno: "Si atacaste en tu turno anterior...").
+# Último turno de jugador (GameManager.turn_serial) en que cada jugador atacó (Cuervo Nocturno: "Si
+# atacaste en tu turno anterior...").
 var attacked_on_turn: Dictionary = {0: -1, 1: -1}
 
 
 func attacked_in_previous_own_turn(player_id: int) -> bool:
-	"""¿'player_id' atacó en su turno anterior? El contador de turnos avanza
-	cuando el turno vuelve al jugador 0."""
-	var prev: int
-	if GameManager.active_player_id == player_id:
-		prev = GameManager.current_turn - 1
-	else:
-		prev = GameManager.current_turn if player_id == 0 else GameManager.current_turn - 1
+	"""¿'player_id' atacó en su turno anterior? Los turnos de jugador se
+	alternan: en tu turno, el anterior tuyo es dos atrás; en el del rival, uno."""
+	var prev: int = GameManager.turn_serial - (2 if GameManager.active_player_id == player_id else 1)
 	return int(attacked_on_turn.get(player_id, -1)) == prev
 
 
@@ -87,15 +77,12 @@ func calculate_combat_damage() -> Dictionary:
 	var active_player = GameManager.active_player_id
 	var defender_id = 1 - active_player
 	if not attackers.is_empty():
-		attacked_on_turn[active_player] = GameManager.current_turn  # Cuervo Nocturno
+		attacked_on_turn[active_player] = GameManager.turn_serial  # Cuervo Nocturno
 
 	var result = {
 		"total_damage_to_castle": 0,
-		# Daño de atacantes con "hace doble daño de combate al Destierro"
-		# (2026-09-04, a pedido del usuario — p.ej. atenea en wonderland,
-		# manuel rodriguez) — YA VIENE DOBLADO aquí, separado del pool normal
-		# porque va a una zona distinta (Destierro, no Cementerio) al
-		# aplicarse más abajo.
+		# Daño de atacantes con "hace doble daño de combate al Destierro" (p.ej. atenea en wonderland,
+		# manuel rodriguez): ya viene doblado y va aparte porque se aplica al Destierro, no al Cementerio.
 		"total_damage_to_exile": 0,
 		"attackers_destroyed": [],
 		"blockers_destroyed": [],
@@ -109,10 +96,8 @@ func calculate_combat_damage() -> Dictionary:
 
 	# Procesar cada atacante
 	for attacker in attackers:
-		# Una carta que salió del juego durante el combate (destruida o
-		# desterrada por un efecto en la ventana de respuesta) ya no está:
-		# no hace ni recibe daño (2026-10-14, bug real reportado por el
-		# usuario: "_get_strength ... previously freed").
+		# Una carta que salió del juego durante el combate (destruida o desterrada en la ventana de
+		# respuesta) no hace ni recibe daño.
 		if not is_instance_valid(attacker):
 			continue
 		var attacker_strength = _get_strength(attacker)
@@ -131,15 +116,22 @@ func calculate_combat_damage() -> Dictionary:
 
 			var pair_result = _resolve_combat_pair(attacker, blocker, attacker_strength, blocker_strength)
 			result.combat_pairs.append(pair_result)
+			# Estación Fantasma: un atacante que "no hace daño este turno" no destruye a su bloqueador.
+			var deals_no_damage: bool = int(attacker.get_meta("no_damage_turn", -1)) == GameManager.turn_serial
 
 			emit_signal("combat_pair_resolved", attacker, blocker, pair_result)
 
 			# Aplicar resultado según DAR 5.C4
 			match pair_result.outcome:
 				"attacker_wins":
-					# Atacante > Bloqueador: Bloqueador destruido, diferencia = daño
-					result.blockers_destroyed.append(blocker)
+					# Atacante > Bloqueador: Bloqueador destruido, diferencia = daño. Un bloqueador puede
+					# estar en dos pares (Elías bloquea hasta dos Aliados): se destruye una sola vez.
+					if not deals_no_damage and not (blocker in result.blockers_destroyed):
+						result.blockers_destroyed.append(blocker)
 					var overflow_damage = attacker_strength - blocker_strength
+					# Elías: "no recibes daño de Aliados bloqueados por este Aliado".
+					if BlockScript.shields_castle(blocker):
+						overflow_damage = 0
 
 					# DAR 5.C4: el daño excedente siempre pasa al Castillo — no es
 					# una keyword especial ("Arrollar" no existe en Mitos y
@@ -159,7 +151,8 @@ func calculate_combat_damage() -> Dictionary:
 				"tie":
 					# Atacante = Bloqueador: Ambos destruidos, 0 daño
 					result.attackers_destroyed.append(attacker)
-					result.blockers_destroyed.append(blocker)
+					if not deals_no_damage and not (blocker in result.blockers_destroyed):
+						result.blockers_destroyed.append(blocker)
 					print("[BattleManager] %s (F:%d) = %s (F:%d) → Ambos destruidos" % [
 						attacker_name, attacker_strength, blocker_name, blocker_strength
 					])
@@ -186,23 +179,21 @@ func calculate_combat_damage() -> Dictionary:
 			])
 			emit_signal("unblocked_damage", attacker, attacker_strength)
 
-	# Prevenir el daño al Castillo con un Oro (Alicanto, Escritura Sagrada,
-	# 2026-10-14) — antes de aplicarlo.
+	# Prevenir el daño al Castillo con un Oro (Alicanto, Escritura Sagrada), antes de aplicarlo.
 	if result.total_damage_to_castle + result.total_damage_to_exile > 0 \
 			and await EffectController.offer_castle_damage_prevention(defender_id,
 				result.total_damage_to_castle + result.total_damage_to_exile):
 		result.total_damage_to_castle = 0
 		result.total_damage_to_exile = 0
 
-	# Fisión Nuclear (2026-10-14): el "doble daño al Destierro" es una
-	# habilidad del rival — contra un jugador protegido es daño normal.
+	# Fisión Nuclear: el "doble daño al Destierro" es una habilidad del rival — contra un jugador
+	# protegido es daño normal.
 	if EffectController.is_fision_shielded(defender_id) and result.total_damage_to_exile > 0:
 		result.total_damage_to_castle += result.total_damage_to_exile / 2
 		result.total_damage_to_exile = 0
 
-	# Emitir señal con el daño total calculado (ambos pools combinados —
-	# 2026-09-04: total_damage_to_exile ya viene doblado, ver
-	# _accumulate_castle_damage())
+	# Emitir la señal con el daño total (ambos pools; total_damage_to_exile ya viene doblado, ver
+	# _accumulate_castle_damage()).
 	var total_damage_combined: int = result.total_damage_to_castle + result.total_damage_to_exile
 	emit_signal("on_damage_assigned", total_damage_combined)
 	print("[BattleManager] Daño asignado: %d normal + %d al Destierro (de %d fuentes)" % [
@@ -253,12 +244,9 @@ func calculate_combat_damage() -> Dictionary:
 			emit_signal("combat_finished", result)
 			return result
 
-	# Destruir cartas (respetando Indestructible)
-	#
-	# Protección "no son Destruidos cuando bloquean" (2026-08-24, p.ej.
-	# Patria Vieja): solo se filtra de blockers_destroyed, NUNCA de
-	# attackers_destroyed — la protección es específicamente por bloquear,
-	# no una Indestructible general.
+	# Destruir cartas (respetando Indestructible).
+	# "No son Destruidos cuando bloquean" (p.ej. Patria Vieja): solo se filtra de blockers_destroyed,
+	# nunca de attackers_destroyed (protege al bloquear, no es Indestructible general).
 	var protected_blockers = result.blockers_destroyed.filter(
 		func(b): return ContinuousEffectManager.has_protection(b, "BLOCK_DESTROY")
 	)
@@ -314,20 +302,22 @@ func _check_damage_to_exile_effect(player_id: int) -> bool:
 
 
 func _accumulate_castle_damage(result: Dictionary, attacker: Node, amount: int) -> void:
-	"""Suma 'amount' al pool correcto según si 'attacker' tiene 'hace doble
-	daño de combate al Destierro' (2026-09-04, a pedido del usuario — p.ej.
-	atenea en wonderland, manuel rodriguez): ese daño se DOBLA y va a un
-	pool separado que _apply_castle_damage() manda al Destierro en vez del
-	Cementerio. El resto de atacantes en el mismo combate sigue sumando al
-	pool normal sin verse afectado."""
-	# "haga doble daño de combate este turno" (2026-10-17, Kai Piloto
-	# Prodigio): meta con el turno en que vale.
-	if is_instance_valid(attacker) and int(attacker.get_meta("double_combat_damage_turn", -1)) == GameManager.current_turn:
+	"""Suma 'amount' al pool que corresponde: si 'attacker' tiene "hace doble daño de combate al
+	Destierro" (p.ej. atenea en wonderland, manuel rodriguez), se dobla y va al pool que
+	_apply_castle_damage() manda al Destierro. Los demás atacantes suman al pool normal."""
+	# Estación Fantasma: "para que no hagan daño este turno".
+	if is_instance_valid(attacker) and int(attacker.get_meta("no_damage_turn", -1)) == GameManager.turn_serial:
+		return
+	# "haga doble daño de combate este turno" (Kai Piloto Prodigio): meta con el turno en que vale.
+	if is_instance_valid(attacker) and int(attacker.get_meta("double_combat_damage_turn", -1)) == GameManager.turn_serial:
 		amount *= 2
-	if is_instance_valid(attacker) and attacker.get("doubles_damage_to_exile") == true:
+	if is_instance_valid(attacker) and (attacker.get("doubles_damage_to_exile") == true \
+			or int(attacker.get_meta("double_exile_damage_turn", -1)) == GameManager.turn_serial):
 		result.total_damage_to_exile += amount * 2
-	elif is_instance_valid(attacker) and int(attacker.get_meta("damage_to_exile_turn", -1)) == GameManager.current_turn:
+	elif is_instance_valid(attacker) and int(attacker.get_meta("damage_to_exile_turn", -1)) == GameManager.turn_serial:
 		result.total_damage_to_exile += amount  # Ira: "hace daño al Destierro por el turno"
+	elif load("res://scripts/core/effects/mechanics/ProtectionRules.gd").combat_damage_to_exile(attacker):
+		result.total_damage_to_exile += amount  # Nefandos
 	else:
 		result.total_damage_to_castle += amount
 
@@ -376,17 +366,25 @@ func _apply_castle_damage(defender_id: int, damage: int, to_exile: bool = false)
 
 	var destination = Constants.Zone.DESTIERRO if to_exile else Constants.Zone.CEMENTERIO
 	var dest_name = "Destierro" if to_exile else "Cementerio"
-	# Oro de Azi del Abismo (2026-10-17): "Reduce el daño recibido por tu
-	# Castillo en 1 por cada Oro Azi que controles".
-	# Linaje Maldito (2026-10-18): "no puedes recibir daño de combate hasta tu
-	# próximo turno".
-	if damage > 0 and NoeScript.damage_immune(defender_id, "combat"):
+	# Oro de Azi del Abismo: "Reduce el daño recibido por tu Castillo en 1 por cada Oro Azi que
+	# controles". Linaje Maldito: "no puedes recibir daño de combate hasta tu próximo turno".
+	# Comer Insectos: "su daño no puede ser prevenido" (los Aliados del atacante, este turno).
+	var unpreventable: bool = not RuleState.turn_data("unpreventable_damage:%d" % (1 - defender_id)).is_empty()
+	if damage > 0 and not unpreventable and NoeScript.damage_immune(defender_id, "combat"):
 		print("[BattleManager] Jugador %d no recibe daño de combate (Linaje Maldito)" % (defender_id + 1))
 		damage = 0
+	if not unpreventable:
+		damage = load("res://scripts/core/effects/mechanics/DamageShields.gd").filter(defender_id, damage)  # puertas, arlequín
+	# Sesión Espiritista: "Por el resto del juego el daño de combate a tu Castillo se reduce en dos" (por copia).
+	var sesion: int = load("res://scripts/core/effects/mechanics/DamageShields.gd").permanent_reduction(defender_id)
+	if sesion > 0 and damage > 0:
+		damage = maxi(0, damage - sesion)
 	var azi_reduction: int = AziScript.castle_damage_reduction(defender_id)
 	if azi_reduction > 0 and damage > 0:
 		print("[BattleManager] Oros Azi reducen el daño en %d" % mini(azi_reduction, damage))
 		damage = maxi(0, damage - azi_reduction)
+	if damage > 0:
+		load("res://scripts/core/effects/triggers/LimitedEventTriggers.gd").fire("damage", {"pid": defender_id, "amount": damage})  # yamabushi
 
 	if Constants.VERBOSE_DIAG_LOGS:
 		print("[BattleManager] Procesando %d daño al Castillo del Jugador %d → %s" % [
@@ -461,6 +459,10 @@ func _destroy_cards_with_indestructible_check(cards: Array) -> Array:
 			print("[BattleManager] %s tiene INDESTRUCTIBLE - no se destruye" % _get_card_name(card))
 			emit_signal("destruction_prevented", card, "indestructible")
 			continue
+		# ayyappan: "Tus Aliados que porten Armas ... no pueden ser Destruidos en Asignación de Daño".
+		if load("res://scripts/core/effects/mechanics/ActivatedPatterns.gd").ayyappan_protects(card):
+			emit_signal("destruction_prevented", card, "ayyappan")
+			continue
 
 		var controller = card.controller_id if card.get("controller_id") != null else 0
 		await EffectController.destroy_card(controller, card)
@@ -472,16 +474,9 @@ func _destroy_cards_with_indestructible_check(cards: Array) -> Array:
 
 
 func _has_indestructible(card: Node) -> bool:
-	"""Verifica si una carta tiene Indestructible (DAR Sección 8)
-	Delegado a KeywordManager para centralización.
-	(2026-08-28, "módulos gordos" punto 1: esto llamaba a _keyword_mgr, una
-	referencia cacheada en _ready() ANTES de que KeywordManager (autoload
-	#22) terminara de cargar — BattleManager es autoload #11, así que
-	_keyword_mgr quedaba null para siempre y esta función corría el
-	fallback manual de abajo toda la partida, nunca la lógica real
-	centralizada de KeywordManager. Confirmado y corregido junto con
-	can_be_blocked() más abajo, mismo bug.)
-	"""
+	"""Verifica si una carta tiene Indestructible (DAR Sección 8), delegando en KeywordManager. Se
+	consulta el autoload en cada llamada: BattleManager carga antes que KeywordManager y una
+	referencia cacheada en _ready() quedaba null."""
 	return not KeywordManager.can_be_destroyed(card)
 
 
@@ -530,18 +525,8 @@ func _get_card_name(card: Node) -> String:
 # =============================================================================
 # CONSULTAS
 # =============================================================================
-# NOTA (2026-09-08): Se eliminó un segundo sistema de "modificadores de
-# combate" (combat_strength_modifiers/add_combat_modifier()/get_modified_
-# strength()/clear_combat_modifiers()) que vivía aquí, paralelo y desconectado
-# del real: calculate_combat_damage() siempre calculó la Fuerza vía
-# ContinuousEffectManager.get_modified_strength(card) (ver _get_strength()
-# más arriba), nunca a través de este — auditoría 2026-09-07 confirmó cero
-# llamadores reales en todo el proyecto. Cualquier efecto de "+X de Fuerza
-# este combate" debe registrarse en ContinuousEffectManager (duration
-# UNTIL_END_TURN o similar), no aquí.
+# La Fuerza de combate sale de ContinuousEffectManager.get_modified_strength(card) (ver
+# _get_strength()). Un "+X de Fuerza este combate" se registra ahí (UNTIL_END_TURN o similar).
 
-# NOTA (2026-08-20): "Golpe Primero" y "Arrollar" no son keywords en Mitos y
-# Leyendas — se eliminó has_first_strike()/has_trample()/
-# calculate_first_strike_damage() (sin llamadores reales, siempre un TODO
-# que devolvía 0). El daño excedente al Castillo ya se aplica por defecto
-# en _resolve_combat_pair() (DAR 5.C4), sin necesidad de ninguna keyword.
+# "Golpe Primero" y "Arrollar" no son keywords de Mitos y Leyendas. El daño excedente al Castillo se
+# aplica por defecto en _resolve_combat_pair() (DAR 5.C4).

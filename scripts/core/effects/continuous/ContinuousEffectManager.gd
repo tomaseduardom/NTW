@@ -126,8 +126,8 @@ func _get_references() -> void:
 
 
 func _connect_signals() -> void:
-	# Conectar a GameManager (el único conductor de turnos, ver consolidación
-	# 2026-08-19) para limpiar modificadores temporales al final de cada turno.
+	# Conectar a GameManager (único conductor de turnos) para limpiar los modificadores temporales al
+	# final de cada turno.
 	if GameManager and GameManager.has_signal("turn_ended"):
 		GameManager.turn_ended.connect(_on_turn_ended)
 
@@ -140,9 +140,45 @@ func _connect_signals() -> void:
 	# verdad (on_card_entered_play/on_card_left_play).
 	EffectController.on_card_entered_play.connect(_on_effect_controller_card_entered)
 	EffectController.on_card_left_play.connect(_on_effect_controller_card_left)
+	# La Fuerza de las auras con condición (StrengthAuras: "Si tienes tres o más Aliados en tu
+	# Cementerio...", "por cada Tótem...") cambia sin que se registre ningún modificador: se refrescan
+	# los contadores de Fuerza cuando cambia algo de lo que dependen.
+	EffectController.on_card_entered_play.connect(func(_p, _c, _z): request_strength_badge_refresh())
+	EffectController.on_card_left_play.connect(func(_p, _c, _z): request_strength_badge_refresh())
+	for sig in ["card_put_in_cemetery", "card_put_in_exile", "hand_count_changed", "cemetery_count_changed",
+			"exile_count_changed", "field_count_changed"]:
+		CardManager.connect(sig, func(_a = null, _b = null): request_strength_badge_refresh())
+	GameManager.turn_started.connect(func(_p, _t): request_strength_badge_refresh())
+	GameManager.phase_changed.connect(func(_ph): request_strength_badge_refresh())
+
+
+var _badge_refresh_pending := false
+
+
+func request_strength_badge_refresh() -> void:
+	"""Refresca (una vez por frame) el contador de Fuerza de todas las cartas en juego."""
+	if _badge_refresh_pending:
+		return
+	_badge_refresh_pending = true
+	_refresh_strength_badges.call_deferred()
+
+
+func _refresh_strength_badges() -> void:
+	_badge_refresh_pending = false
+	_invalidate_cache()
+	for card in _get_all_cards_in_play():
+		if is_instance_valid(card) and card.has_method("refresh_strength_badge"):
+			card.refresh_strength_badge()
 
 
 func _on_effect_controller_card_entered(_player_id: int, card: Node, zone: int) -> void:
+	# "este turno" desde que entró (shade).
+	if is_instance_valid(card):
+		card.set_meta("entered_play_turn", GameManager.turn_serial)
+		load("res://scripts/core/effects/continuous/SilenceAuras.gd").mark_entered(card)
+		# Supremacia Kaiju: "El próximo Oro que ponga en juego tu oponente
+		# entra sin habilidad por el turno."
+		load("res://scripts/core/effects/mechanics/SearchPatterns.gd").on_card_entered(card, zone)
 	_on_card_entered_zone(card, zone, _player_id)
 
 
@@ -157,7 +193,43 @@ func _on_effect_controller_card_left(_player_id: int, card: Node, from_zone: int
 # vía _main, igual que ContinuousVisualSync.gd ya lo hacía)
 # =============================================================================
 func register_modifier(params: Dictionary) -> String:
-	return _modifier_registry.register_modifier(params)
+	# Marca de los Justos: "Este turno, cada vez que un Aliado fuera a ganar Fuerza en vez de eso gana el
+	# doble, hasta un máximo de 4 de Fuerza por vez. No puede modificar su Fuerza de otra forma este
+	# turno." Solo lo que se registra después de jugarla (lo anterior no cambia).
+	if not RuleState.turn_data("marca_justos").is_empty() and params.get("type") == ModifierType.STRENGTH:
+		var target = params.get("target")
+		if is_instance_valid(target) and target.get("card_type") == Constants.CardType.ALIADO:
+			var value: int = int(params.get("value", 0))
+			if params.get("operation", "add") != "add" or value <= 0:
+				print("[ContinuousEffectManager] Marca de los Justos: la Fuerza de %s no se modifica de otra forma" % str(target.get("card_name")))
+				return ""
+			params["value"] = mini(value * 2, 4)
+	var mod_id: String = _modifier_registry.register_modifier(params)
+	_note_strength_gain(params, mod_id)
+	# Shakar Raj: "Aliados que hayan modificado su Fuerza este turno" (cualquier efecto, de cualquier jugador).
+	var mod_target = params.get("target")
+	if not mod_id.is_empty() and params.get("type") == ModifierType.STRENGTH and is_instance_valid(mod_target) \
+			and mod_target.get("card_type") == Constants.CardType.ALIADO:
+		mod_target.set_meta("strength_mod_turn", GameManager.turn_serial)
+	return mod_id
+
+
+## pirata wokou, lobo malvado, Dinosaurio Megalosaurus: "cuando un Aliado gane Fuerza (permanentemente)".
+## Las auras (PERMANENT con otra carta como fuente) no cuentan: se vuelven a registrar al recalcular.
+func _note_strength_gain(params: Dictionary, mod_id: String) -> void:
+	if mod_id.is_empty() or params.get("type") != ModifierType.STRENGTH or params.get("operation", "add") != "add" \
+			or int(params.get("value", 0)) <= 0:
+		return
+	var target = params.get("target")
+	if not is_instance_valid(target) or target.get("card_type") != Constants.CardType.ALIADO:
+		return
+	var source = params.get("source")
+	var duration = params.get("duration", ModifierDuration.PERMANENT)
+	var permanent: bool = duration == ModifierDuration.PERMANENT and source == null
+	if duration == ModifierDuration.PERMANENT and source != null and source != target:
+		return
+	load("res://scripts/core/effects/triggers/LimitedEventTriggers.gd").fire("strength_gain",
+		{"target": target, "permanent": permanent, "source": source})
 
 
 func unregister_modifier(modifier_id: String) -> bool:
@@ -176,9 +248,9 @@ func get_modified_cost(card: Node) -> int:
 	return _modifier_registry.get_modified_cost(card)
 
 
-## "Carta de coste N o menos" (2026-10-17, regla confirmada por el usuario):
-## un Oro NO tiene coste salvo que esté en juego como Aliado, así que nunca
-## cumple un filtro de coste. get_modified_cost() sigue igual (pagos, badge).
+## "Carta de coste N o menos" (regla confirmada por el usuario): un Oro NO tiene coste salvo que
+## esté en juego como Aliado, así que nunca cumple un filtro de coste. get_modified_cost sigue igual
+## (pagos, badge).
 func cost_at_most(card, max_cost: int) -> bool:
 	if card == null or not is_instance_valid(card) or card.get("card_type") == Constants.CardType.ORO:
 		return false
@@ -233,6 +305,10 @@ func get_active_keywords(card: Node) -> Array:
 
 func has_keyword(card: Node, keyword) -> bool:
 	return _keyword_query.has_keyword(card, keyword)
+
+
+func aura_removes_keyword(card: Node, keyword: int) -> bool:
+	return _keyword_query.aura_removes_keyword(card, keyword)
 
 
 func has_protection(card: Node, protection_type: String = "") -> bool:
@@ -324,61 +400,25 @@ func _invalidate_cache() -> void:
 	"""Invalida el cache de valores calculados"""
 	_cache_dirty = true
 	_calculated_cache.clear()
-
-
-func recalculate_all() -> void:
-	"""Recalcula todos los valores modificados
-
-	Llamar después de cambios masivos.
-	"""
-	_invalidate_cache()
-
-	# Obtener todas las cartas en juego
-	var affected_cards: Array = []
-
-	if _game_board:
-		for zone in [Constants.Zone.LINEA_ATAQUE, Constants.Zone.LINEA_DEFENSA, Constants.Zone.LINEA_APOYO]:
-			for player_id in [0, 1]:
-				var cards = _game_board.get_cards_in_zone(zone, player_id)
-				affected_cards.append_array(cards)
-
-	# Recalcular cada carta
-	for card in affected_cards:
-		get_modified_strength(card)
-		get_modified_cost(card)
-
-	_cache_dirty = false
-	emit_signal("recalculation_completed", affected_cards)
-	print("[ContinuousEffectManager] Recálculo completado: %d cartas" % affected_cards.size())
+	KeywordManager.queue_aura_refresh()
 
 
 # =============================================================================
 # UTILIDADES
 # =============================================================================
 func _get_card_id(card) -> String:
-	"""Obtiene un ID único para una carta (2026-09-06, bug real reportado
-	por el usuario: dos copias de la misma carta impresa compartían buffs
-	de Fuerza — 'card_id' es el ID de la CARTA IMPRESA en la base de datos
-	(myl_id, p.ej. '17757' para Espada del Juicio), igual en TODAS las
-	copias físicas de esa carta. Usarlo como clave de _calculated_cache
-	hacía que el valor calculado de UNA copia (con sus propios
-	modificadores) quedara cacheado bajo una clave que la OTRA copia (sin
-	esos modificadores) también consultaba, heredando el mismo resultado.
-	El instance_id de Godot SIEMPRE es único por Node, incluso entre
-	copias idénticas — es la única clave correcta aquí."""
+	"""ID único de una carta para _calculated_cache: el instance_id de Godot, único por Node.
+	'card_id' es el de la carta impresa (myl_id), igual en todas las copias, y hacía que una copia
+	heredara los buffs cacheados de otra."""
 	if card == null:
 		return "null"
 
 	if card is String:
 		return card
 
-	# is_instance_valid() PRIMERO (2026-09-19, misma clase de bug que
-	# ContinuousVisualSync.gd — "Left operand of 'is' is a previously freed
-	# instance"): un 'is Node' bare sobre una carta ya liberada (destruida/
-	# desterrada sin limpiar el modificador que la referencia) revienta aquí
-	# — is_instance_valid() es seguro sobre cualquier Variant, incluida una
-	# referencia liberada, así que corta ANTES de que 'is Node' llegue a
-	# evaluarse sobre ella.
+	# is_instance_valid() PRIMERO: 'is Node' sobre una carta ya liberada (destruida/desterrada sin
+	# limpiar su modificador) falla con "Left operand of 'is' is a previously freed instance";
+	# is_instance_valid() es seguro sobre cualquier Variant.
 	if is_instance_valid(card) and card is Node:
 		return str(card.get_instance_id())
 
@@ -423,14 +463,9 @@ func _get_card_type(card: Node) -> String:
 
 
 func _get_card_owner(card: Node) -> int:
-	"""Obtiene el jugador que CONTROLA la carta ahora mismo (pese al nombre
-	histórico de la función) — usado para targeting ALLIES/ENEMIES real.
-	Preferir controller_id (2026-09-04, a pedido del usuario: 'ganar el
-	control' ya es un mecanismo real — ver ContinuousEffectManager.
-	gain_control_of_card()) — controller_id se inicializa igual a owner_id
-	en el setter de Card.gd y SOLO diverge cuando un efecto de robo de
-	control lo cambia explícitamente, así que este cambio es transparente
-	para toda carta que nunca haya cambiado de controlador."""
+	"""Jugador que CONTROLA la carta ahora (pese al nombre), para targeting ALLIES/ENEMIES. Usa
+	controller_id, que sigue a owner_id salvo que un efecto gane el control
+	(gain_control_of_card())."""
 	if card == null:
 		return -1
 	if card.get("controller_id") != null:
@@ -453,27 +488,24 @@ func _abu_simbel_in_play(main: Node) -> bool:
 
 
 func gain_control_of_card(card: Node, new_controller_id: int) -> void:
-	"""'Gana el control de' una carta EN JUEGO (2026-09-04, a pedido del
-	usuario — p.ej. shedo titan: 'gana el control de un Aliado') —
-	reparenta el nodo al contenedor del NUEVO controlador (Aliado → Línea
-	de Defensa, Tótem → Línea de Apoyo, Oro → Reserva) y actualiza
-	controller_id, NO owner_id (DAR: la carta sigue siendo del dueño
-	original — vuelve a su Cementerio/Destierro si sale del juego, ya que
-	CardManager.destroy_card()/exile_card() reciben el player_id de
-	destino como parámetro explícito del llamador, no lo leen de la carta).
-	_get_card_owner() ya prefiere controller_id sobre owner_id, así que
-	todo target ALLIES/ENEMIES y aura 'tus Aliados' ve el cambio de
-	inmediato, sin tocar cada consumidor uno por uno."""
+	""""Gana el control de" una carta en juego (p.ej. shedo titan: "gana el control de un Aliado"):
+	reparenta el nodo al contenedor del nuevo controlador (Aliado → Línea de Defensa, Tótem → Línea
+	de Apoyo, Oro → Reserva) y cambia controller_id, no owner_id (DAR: sigue siendo del dueño y
+	vuelve a su Cementerio/Destierro). Como _get_card_owner() usa controller_id, los targets
+	ALLIES/ENEMIES y las auras "tus Aliados" ven el cambio de inmediato."""
 	if not is_instance_valid(card) or new_controller_id == card.controller_id:
 		return
 	var main := get_node_or_null("/root/Main")
 	if not main:
 		return
-	# Abu Simbel (2026-10-18): "Los jugadores no pueden ganar el control de
-	# cartas de las que no sean dueño."
+	# Abu Simbel: "Los jugadores no pueden ganar el control de cartas de las que no sean dueño."
 	var owner_of: int = card.owner_id if card.get("owner_id") != null else new_controller_id
 	if new_controller_id != owner_of and _abu_simbel_in_play(main):
 		main._update_debug("Abu Simbel: no se puede ganar el control de cartas ajenas")
+		return
+	# duelo en ganryu: "no puede ... cambiar de controlador hasta tu próximo turno" (meta = último turn_serial).
+	if GameManager.turn_serial <= int(card.get_meta("no_control_change_until", -1)):
+		main._update_debug("%s no puede cambiar de controlador" % str(card.get("card_name")))
 		return
 	var card_type: int = card.get("card_type") if card.get("card_type") != null else -1
 	var old_parent = card.get_parent()
@@ -504,21 +536,11 @@ func gain_control_of_card(card: Node, new_controller_id: int) -> void:
 
 
 func count_other_copies_in_play(card: Node) -> int:
-	"""Cuenta cuántas OTRAS copias (mismo nombre, EXCLUYENDO a 'card' misma)
-	del mismo controlador de 'card' hay ahora mismo EN JUEGO — usado por
-	restricciones tipo 'si no controla otra copia de esa carta' (2026-09-04,
-	Tamales). Es relativo a LA COPIA PUNTUAL cuya habilidad se quiere usar,
-	confirmado con el ejemplo completo del usuario (Drácula, 2026-09-04):
-	con 3 copias en el Castillo y 1 jugada (controlada, en juego), la que
-	está en juego SÍ puede usar su habilidad (0 OTRAS copias en juego), pero
-	las 2 que quedan fuera de juego (mano/Cementerio/Castillo) NO PUEDEN —
-	para ellas, la que sí está en juego cuenta como 'otra copia controlada'.
-	Si se juega una segunda copia, cada una de las dos ve a la otra como
-	'otra copia' y ambas quedan bloqueadas (ni la que entra roba/dispara su
-	'Cuando entra en juego', ni ninguna de las dos puede usar su activada).
-	Incluye Reserva/Oro Pagado además de las 3 líneas de campo (a diferencia
-	de _get_all_cards_in_play(), pensada solo para auras ALLIES/ENEMIES) —
-	Tamales habla explícitamente de 'Oros', que viven ahí."""
+	"""Cuenta las OTRAS copias (mismo nombre, sin contar 'card') del controlador de 'card' que hay en
+	juego, para "si no controla otra copia de esa carta" (Tamales). Es relativo a la copia puntual:
+	con 1 copia en juego, esa funciona y las de mano/Cementerio/Castillo no (para ellas la de juego
+	es "otra copia"); con 2 en juego, ambas quedan bloqueadas. Incluye Reserva y Oro Pagado
+	(Tamales habla de Oros)."""
 	if not is_instance_valid(card):
 		return 0
 	var name: String = str(card.get("card_name")).to_lower() if card.get("card_name") != null else ""
@@ -544,29 +566,23 @@ func count_other_copies_in_play(card: Node) -> int:
 	return count
 
 
+## Mártires: "no se pueden utilizar habilidades ni jugar cartas por el resto del turno" (turn_serial).
+var no_abilities_turn: int = -1
+
+
 func tamales_ability_restriction_reason(card: Node) -> String:
-	"""'Tu oponente sólo puede utilizar las habilidades de Oros y cartas de
-	coste 2 o más si no controla otra copia de esa carta' (2026-09-04,
-	Tamales — texto de errata confirmado por el usuario) — combina el
-	chequeo de JUGADOR (¿hay un Tamales de mi oponente en juego? si no,
-	esta restricción ni me toca) y el de CARTA: relativo a la COPIA
-	PUNTUAL que intenta usar la habilidad (count_other_copies_in_play),
-	confirmado con el ejemplo completo del usuario (Drácula, 2026-09-04):
-	con 1 copia en juego (0 otras copias controladas) esa copia funciona
-	normal, pero cualquier OTRA copia del mismo nombre (en mano/Cementerio/
-	Castillo) queda bloqueada — para ELLA, la que sí está en juego cuenta
-	como 'otra copia controlada'. Con 2 copias en juego, cada una ve a la
-	otra como 'otra copia' y ambas quedan bloqueadas (ni dispara su 'Cuando
-	entra en juego' la que recién entra, ni puede usar su activada
-	ninguna de las dos). Usado tanto para habilidades ACTIVADAS
-	(CardInspectionLayer._validate_ability()) como DISPARADAS (TriggerSystem.
-	_check_trigger_conditions(), 'ni disparar'); las auras/efectos
-	CONTINUOS no pasan por ninguno de esos dos choke points, así que
-	quedan afuera por construcción (confirmado por el usuario: 'las
-	continuas siguen estando en pie').
-	Returns: '' si no aplica, si no un motivo legible."""
+	"""Tamales: "Tu oponente sólo puede utilizar las habilidades de Oros y cartas de coste 2 o más si
+	no controla otra copia de esa carta". Combina el chequeo de jugador (¿hay un Tamales rival en
+	juego?) y el de carta, relativo a la copia que intenta usar la habilidad
+	(count_other_copies_in_play(); con 2 copias en juego, ninguna dispara ni activa). Se usa para
+	habilidades ACTIVADAS (CardInspectionLayer._validate_ability()) y DISPARADAS
+	(TriggerSystem._check_trigger_conditions()); los efectos continuos siguen en pie.
+	También corta todas las habilidades el turno de Mártires (no_abilities_turn).
+	Devuelve '' si no aplica; si no, un motivo legible."""
 	if not is_instance_valid(card):
 		return ""
+	if no_abilities_turn == GameManager.turn_serial:
+		return "no se pueden utilizar habilidades por el resto del turno"
 	var card_type = card.get("card_type")
 	var card_cost: int = int(card.get("card_cost")) if card.get("card_cost") != null else 0
 	if card_type != Constants.CardType.ORO and card_cost < 2:
@@ -600,11 +616,10 @@ func tamales_ability_restriction_reason(card: Node) -> String:
 
 
 func _get_all_cards_in_play() -> Array:
-	"""Todas las cartas de ambos jugadores en las 3 líneas del campo
-	(2026-08-25) — usado para refrescar el badge visual de TODOS los
-	afectados cuando se registra/quita un aura de target dinámico (ALL/
-	ALLIES/ENEMIES/OTHER), ya que _resolve_targets() no las enumera (se
-	resuelven carta por carta en _get_applicable_modifiers(), no aquí)."""
+	"""Todas las cartas de ambos jugadores en las 3 líneas del campo — usado para refrescar el badge
+	visual de TODOS los afectados cuando se registra/quita un aura de target dinámico
+	(ALL/ALLIES/ENEMIES/OTHER), ya que _resolve_targets no las enumera (se resuelven carta por
+	carta en _get_applicable_modifiers, no aquí)."""
 	var main = get_node_or_null("/root/Main")
 	if not main:
 		return []
@@ -619,12 +634,11 @@ func _get_all_cards_in_play() -> Array:
 
 
 func _controls_n_allies_of_same_race(player_id: int, threshold: int) -> bool:
-	"""¿'player_id' controla al menos 'threshold' Aliados que compartan UNA
-	misma Raza? (2026-09-03, p.ej. Trono del Dragón: 'Si controlas tres o
-	más Aliados de la misma Raza') — no es 'threshold Aliados en total',
-	necesitan compartir Raza entre sí. Se recuenta desde cero en cada
-	llamada (sin cache): se usa como condition Callable de un modificador
-	CONDITIONAL, que ContinuousEffectManager reevalúa en cada consulta."""
+	"""¿'player_id' controla al menos 'threshold' Aliados que compartan UNA misma Raza? (p.ej. Trono
+	del Dragón: 'Si controlas tres o más Aliados de la misma Raza') — no es 'threshold Aliados en
+	total', necesitan compartir Raza entre sí. Se recuenta desde cero en cada llamada (sin cache):
+	se usa como condition Callable de un modificador CONDITIONAL, que ContinuousEffectManager
+	reevalúa en cada consulta."""
 	if threshold <= 0:
 		return true
 	var race_counts: Dictionary = {}
@@ -644,16 +658,9 @@ func _controls_n_allies_of_same_race(player_id: int, threshold: int) -> bool:
 
 
 func _get_card_zone(card: Node) -> int:
-	"""Obtiene la zona actual de una carta.
-
-	2026-09-04, bug real encontrado (Armería del Guerrero no daba su aura):
-	esto usaba 'if card.get("current_zone"):' — un chequeo de verdad/falsedad,
-	no de null. Constants.Zone.RESERVA_ORO es el PRIMER valor del enum (= 0),
-	y en GDScript 'if 0:' es false — así que CUALQUIER carta en Reserva de
-	Oro (incluida cualquier carta de tipo Oro con aura continua, no solo
-	Armería) se trataba como sin zona, _is_card_in_play() la daba por fuera
-	de juego, y _is_modifier_active() rechazaba su modificador PERMANENT
-	entero (exige que la fuente esté en juego)."""
+	"""Zona actual de una carta. Se compara contra null, no por verdad: Constants.Zone.RESERVA_ORO
+	vale 0 y 'if 0:' es false, lo que dejaba fuera de juego a todo Oro de la Reserva (y sin efecto
+	sus auras PERMANENT, p.ej. Armería del Guerrero)."""
 	if card == null:
 		return -1
 
@@ -662,24 +669,6 @@ func _get_card_zone(card: Node) -> int:
 		return -1
 
 	return zone
-
-
-func _card_has_keyword(card: Node, keyword) -> bool:
-	"""Verifica si una carta tiene una keyword base"""
-	if card == null:
-		return false
-
-	var keywords = []
-	if card.get("keywords"):
-		keywords = card.keywords
-	elif card.get("base_keywords"):
-		keywords = card.base_keywords
-
-	for kw in keywords:
-		if kw == keyword:
-			return true
-
-	return false
 
 
 func _is_card_in_play(card: Node) -> bool:
@@ -699,11 +688,8 @@ func _resolve_targets(modifier: Dictionary) -> Array:
 	if target == null:
 		return targets
 
-	# is_instance_valid() PRIMERO — mismo motivo que _get_card_id()/
-	# _get_card_name() arriba: modifier.target puede ser una carta que ya
-	# salió de juego sin que este modificador se haya limpiado de
-	# _modifiers/_modifiers_by_target (2026-09-19, bug real de la misma
-	# familia reportado por el usuario en ContinuousVisualSync.gd).
+	# is_instance_valid() PRIMERO (como _get_card_id()/_get_card_name()): modifier.target puede ser una
+	# carta que salió de juego sin limpiar el modificador.
 	if is_instance_valid(target) and target is Node:
 		targets.append(target)
 	elif target is Array:

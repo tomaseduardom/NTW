@@ -29,10 +29,9 @@ var loaded_decks: Dictionary = {}  # player_id -> Array[Dictionary] (card data)
 # INICIALIZACIÓN
 # =============================================================================
 func _ready() -> void:
-	# (2026-08-28, "módulos gordos" punto 1): CardDatabase/CardFactory/
-	# GameManager son autoloads garantizados — se saca el cacheo redundante
-	# vía get_node_or_null() (CardFactory y GameManager tampoco se usaban
-	# en este archivo más allá de la asignación).
+	# ("módulos gordos" punto 1): CardDatabase/CardFactory/GameManager son autoloads garantizados — se
+	# saca el cacheo redundante vía get_node_or_null (CardFactory y GameManager tampoco se usaban en
+	# este archivo más allá de la asignación).
 	print("[DeckLoader] Inicializado")
 
 
@@ -50,10 +49,8 @@ func load_deck_from_data(player_id: int, deck_data: Dictionary) -> void:
 
 
 func load_deck_from_external_data(player_id: int, deck_data: Dictionary) -> void:
-	"""Carga un mazo obtenido de ExternalApiClient (API nueva, ver hallazgo
-	de integración en docs/audit-2026-08-13.html). Usa un parser más
-	defensivo que load_deck_from_data() porque la forma exacta de la
-	respuesta de /external/my-decks/ no se pudo verificar sin credenciales."""
+	"""Carga un mazo de ExternalApiClient (ShadowForge). Parser más defensivo que
+	load_deck_from_data(), por si la respuesta varía de forma."""
 	_process_external_deck_data(player_id, deck_data)
 
 
@@ -119,20 +116,10 @@ func _process_deck_data(player_id: int, deck_data: Dictionary) -> void:
 	var main_deck: Dictionary = datos_json.get("main", {})
 	var side_deck: Dictionary = datos_json.get("side", {})
 
-	# Alternativa: {"entries": [{"card_detail": {"myl_id": ...}, "quantity"}, ...]}
-	# (2026-08-24, mazos preset descargados de /decks/public/{id}/ — ver
-	# DeckSelector._get_preset_decks()). Mismo fallback que ya tenía
-	# _process_external_deck_data() para /external/my-decks/, pero aquí
-	# faltaba: los mazos locales solo miraban datos_json.main y fallaban con
-	# 'El mazo no tiene cartas en el main deck' aunque el archivo sí tuviera
-	# cartas, solo que en forma de entries en vez de datos_json.main.
-	#
-	# 2026-09-23, bug real confirmado con curl contra la API real: "id" en
-	# cada entry es la fila de ShadowForge (DeckEntry.id, ej. 25652), NO la
-	# carta — el myl_id real está anidado en entry.card_detail.myl_id (ej.
-	# "20584"). Usarlo directamente hacía que ningún mazo de ShadowForge
-	# cargara nunca sus propias cartas (caía siempre al mazo aleatorio de
-	# respaldo, en silencio).
+	# Alternativa: {"entries": [{"card_detail": {"myl_id": ...}, "quantity"}, ...]} (mazos de
+	# /decks/public/{id}/ y presets, ver DeckSelector._get_preset_decks()), además de datos_json.main.
+	# El "id" de cada entry es la fila de ShadowForge (DeckEntry.id), NO la carta: el myl_id está en
+	# entry.card_detail.myl_id.
 	if main_deck.is_empty() and deck_data.get("entries") is Array:
 		var main_dict := {}
 		for entry in deck_data.entries:

@@ -107,7 +107,14 @@ func setup(main: Node) -> void:
 				ally.set_meta("combat_damage_turn", GameManager.turn_serial)
 		BattleManager.unblocked_damage.connect(func(attacker, damage: int) -> void:
 			if damage > 0 and is_instance_valid(attacker):
-				attacker.set_meta("combat_damage_turn", GameManager.turn_serial))
+				attacker.set_meta("combat_damage_turn", GameManager.turn_serial)
+				attacker.set_meta("castle_damage_turn", GameManager.turn_serial))  # Los Señalados
+		# nagaraja (robar el primer Aliado o Tótem que juegue el rival) y trapezoedro (tercera carta del rival).
+		var ap8 = load("res://scripts/core/effects/mechanics/ActivatedPatterns.gd")
+		EffectController.on_card_entered_play.connect(func(pid: int, card, _zone: int) -> void:
+			ap8.nagaraja_on_entered(pid, card)
+			ap8.trapezoedro_on_put(_main, pid))
+		GameManager.turn_started.connect(func(_p: int, _t: int) -> void: ap8.trapezoedro_turn_start())
 		BattleManager.combat_pair_resolved.connect(func(attacker, blocker, _result) -> void:
 			mark_combat_damage.call(attacker)
 			mark_combat_damage.call(blocker))
@@ -699,6 +706,13 @@ func play_card(card: Node) -> bool:
 		return false
 	if is_instant_response and not _responding_to_opponent(player_id):
 		_main._update_debug("%s solo se puede jugar en respuesta a una carta o habilidad oponente" % card.card_name)
+		await _return_card_rejected(card)
+		return false
+	# DAR abril 2026 (Respuesta): sin nada que pueda Anular/Cancelar (tipo, coste, "no puede ser Anulado/cancelada"),
+	# no se puede jugar, aunque otra parte de su efecto pudiera resolverse (Red de Plata).
+	if is_instant_response and not load("res://scripts/core/effects/triggers/Deck170Patterns.gd").annul_response_has_target(
+			card, str(card.get("card_ability")), player_id):
+		_main._update_debug("%s: no hay nada en la pila que pueda Anular o Cancelar" % card.card_name)
 		await _return_card_rejected(card)
 		return false
 

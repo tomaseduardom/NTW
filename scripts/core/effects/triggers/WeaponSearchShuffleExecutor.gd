@@ -1,19 +1,10 @@
 extends RefCounted
 const TriggerTollScript = preload("res://scripts/core/effects/triggers/TriggerTollPatterns.gd")
-## WeaponSearchShuffleExecutor — Slice de TargetedEffectExecutor.gd dividido
-## por tamaño (2026-09-06, "módulos gordos"). Agrupa el cluster compuesto de
-## Buscar/Barajar-para-robar/Arma-con-descuento: _execute_targeted_search,
-## _execute_shuffle_for_draw (selección de presupuesto de coste vía
-## CardInteractionModule.await_multi_target() con dynamic_filter — 2026-09-13,
-## reemplazó al helper _select_cards_by_cost_budget() de modal, eliminado por
-## quedar sin llamadores),
-## _execute_play_weapon_discount_draw, _execute_return_weapon_swap_free (+ su
-## helper _return_equipped_weapon_to_hand) y _count_allies_in_play. Opera
-## sobre TriggerSystem via _main (mismo Node que TargetedEffectExecutor._main
-## — ver ese archivo para el facade que reune este slice, el de
-## MiscTargetedPatterns.gd, y el resto del toolkit de selección de un solo
-## objetivo que se quedó en TargetedEffectExecutor.gd por ser el cluster de
-## mayor tráfico externo de todo este archivo).
+## WeaponSearchShuffleExecutor — parte de TargetedEffectExecutor.gd: Buscar / Barajar para robar /
+## Arma con descuento. _execute_targeted_search, _execute_shuffle_for_draw (presupuesto de coste con
+## CardInteractionModule.await_multi_target() y dynamic_filter), _execute_play_weapon_discount_draw,
+## _execute_return_weapon_swap_free (+ _return_equipped_weapon_to_hand) y _count_allies_in_play.
+## Opera sobre TriggerSystem vía _main (ver TargetedEffectExecutor.gd).
 
 const PlayerSideScript = preload("res://scripts/core/game/PlayerSide.gd")
 
@@ -33,15 +24,13 @@ func _execute_targeted_search(card: Node, controller_id: int, source_text: Strin
 	(fija o 'por cada Aliado que controles'), destino (mano/Destierro) y si
 	la carta encontrada se juega directamente pagando su coste."""
 	var ability_text: String = card.get("card_ability") if card.get("card_ability") != null else ""
-	# Solo la habilidad que se está resolviendo, si se conoce (2026-10-14,
-	# Akari Musashi: "Destierra una carta oponente" de OTRA habilidad hacía
-	# buscar en el Castillo rival).
+	# Solo la habilidad que se está resolviendo, si se conoce (Akari Musashi: "Destierra una carta
+	# oponente" de OTRA habilidad hacía buscar en el Castillo rival).
 	if not source_text.strip_edges().is_empty():
 		ability_text = source_text
-	# Solo la oración de la búsqueda (2026-10-17, bug real reportado por el
-	# usuario: Mecha-Daikaiju "busca en tu Castillo un Oro, ponlo en tu Oro
-	# Pagado y hasta tu próximo turno tu oponente no puede..." buscaba en el
-	# Castillo rival por el "oponente" de la otra parte).
+	# Solo la oración de la búsqueda: Mecha-Daikaiju "busca en tu Castillo un Oro, ponlo en tu Oro
+	# Pagado y hasta tu próximo turno tu oponente no puede..." buscaba en el Castillo rival por el
+	# "oponente" de la otra parte.
 	var full_text_before_trim: String = ability_text
 	var busca_at: int = ability_text.to_lower().find("busca")
 	if busca_at >= 0:
@@ -56,10 +45,9 @@ func _execute_targeted_search(card: Node, controller_id: int, source_text: Strin
 	if "cementerio" in ability_lower:
 		zone = Constants.Zone.CEMENTERIO
 
-	# Dueño de la zona a buscar (2026-08-25): 'tu Castillo'/'tu Cementerio'
-	# es siempre propio; 'Castillo/Cementerio de tu oponente' (o 'rival') es
-	# siempre del rival; 'un Castillo' sin posesivo (p.ej. Rey de Amarillo)
-	# es AMBIGUO — el jugador elige a cuál apunta.
+	# Dueño de la zona a buscar: 'tu Castillo'/'tu Cementerio' es siempre propio; 'Castillo/Cementerio
+	# de tu oponente' (o 'rival') es siempre del rival; 'un Castillo' sin posesivo (p.ej. Rey de
+	# Amarillo) es AMBIGUO — el jugador elige a cuál apunta.
 	var opponent_id := 1 - controller_id
 	var zone_owner := controller_id
 	var owner_is_ambiguous := false
@@ -134,10 +122,7 @@ func _execute_targeted_search(card: Node, controller_id: int, source_text: Strin
 		if shuffled_type >= 0:
 			filter["type"] = shuffled_type
 
-	# Tipos mencionados (no 'elif' — 2026-08-22): "busca un Arma o un Oro"
-	# (p.ej. Tyet) menciona DOS tipos válidos a la vez, un elif que corta en
-	# el primero que encuentra (antes 'arma' ganaba siempre sobre 'oro')
-	# dejaba la búsqueda incompleta.
+	# Todos los tipos mencionados (no 'elif'): "busca un Arma o un Oro" (p.ej. Tyet) admite los dos.
 	if not filter.has("type"):
 		var wanted_types: Array = []
 		if "aliado" in ability_lower:
@@ -155,17 +140,16 @@ func _execute_targeted_search(card: Node, controller_id: int, source_text: Strin
 			filter["type"] = wanted_types[0]
 		elif wanted_types.size() > 1:
 			filter["type"] = wanted_types
-	# Raza (2026-10-14, Akari Musashi: "un Aliado Héroe" buscaba cualquier
-	# Aliado): la palabra con mayúscula justo después de "Aliado(s)".
+	# Raza (Akari Musashi: "un Aliado Héroe" buscaba cualquier Aliado): la palabra con mayúscula justo
+	# después de "Aliado(s)".
 	var race_rx := RegEx.new()
 	race_rx.compile("[Aa]liados?\\s+([A-ZÁÉÍÓÚÑ][a-záéíóúñ]+)")
 	var race_m := race_rx.search(ability_text)
 	if race_m:
 		filter["raza"] = race_m.get_string(1)
 
-	# Cantidad: fija ("busca 2 cartas") o dinámica "una carta por cada
-	# Aliado que controles (más N)" (2026-08-25, p.ej. Rey de Amarillo:
-	# 'una carta por cada Aliado que controles más una').
+	# Cantidad: fija ("busca 2 cartas") o dinámica "una carta por cada Aliado que controles (más N)"
+	# (p.ej. Rey de Amarillo: 'una carta por cada Aliado que controles más una').
 	var amount := 1
 	var per_ally_rx := RegEx.new()
 	per_ally_rx.compile("por cada aliado que controles(?:\\s+m[aá]s\\s+(\\w+))?")
@@ -189,22 +173,20 @@ func _execute_targeted_search(card: Node, controller_id: int, source_text: Strin
 		or "pagando su coste" in ability_lower
 	)
 
-	# Destino: Destierro directo si el texto lo dice (p.ej. 'y Destiérralas'),
-	# Reserva de Oro directa si dice 'ponlo/ponla en tu Reserva' (2026-08-29,
-	# p.ej. Don de Amma: 'busca un Oro en tu Castillo y ponlo en tu
-	# Reserva' — va derecho a Reserva, no a la mano), si no, el default de
-	# siempre (mano / juego con may_play).
+	# Destino: Destierro directo si el texto lo dice (p.ej. 'y Destiérralas'), Reserva de Oro directa
+	# si dice 'ponlo/ponla en tu Reserva' (p.ej. Don de Amma: 'busca un Oro en tu Castillo y ponlo en
+	# tu Reserva' — va derecho a Reserva, no a la mano), si no, el default de siempre (mano / juego con
+	# may_play).
 	var destination := Constants.Zone.MANO
 	if "destiérra" in ability_lower or "destierra" in ability_lower:
 		destination = Constants.Zone.DESTIERRO
 	elif "en tu oro pagado" in ability_lower:
-		destination = Constants.Zone.ORO_PAGADO  # Mecha-Daikaiju (2026-10-17)
+		destination = Constants.Zone.ORO_PAGADO  # Mecha-Daikaiju
 	elif "en tu reserva" in ability_lower or "en su reserva" in ability_lower:
 		destination = Constants.Zone.RESERVA_ORO
 
-	# 'de distinto nombre'/'distintos nombres' (2026-08-25, p.ej. necro-titan:
-	# 'busca... dos cartas de distinto nombre') — no puede repetirse nombre
-	# entre las elegidas.
+	# 'de distinto nombre'/'distintos nombres' (p.ej. necro-titan: 'busca... dos cartas de distinto
+	# nombre') — no puede repetirse nombre entre las elegidas.
 	var distinct_names := "distinto nombre" in ability_lower or "distintos nombres" in ability_lower
 
 	# search() no consulta Prevención internamente (confirmado en el resto
@@ -214,9 +196,8 @@ func _execute_targeted_search(card: Node, controller_id: int, source_text: Strin
 	# Mecha-Daikaiju: "...y hasta tu próximo turno tu oponente no puede
 	# utilizar habilidades disparadas a menos que pague un Oro".
 	TriggerTollScript.register_if_text(full_text_before_trim, controller_id)
-	# "un Castillo/un Cementerio" (2026-10-14, a pedido del usuario): el
-	# selector del tablero con las zonas de los dos jugadores, en vez de
-	# elegir primero de quién (popup en el caso del Cementerio).
+	# "un Castillo/un Cementerio": el selector del tablero con las zonas de los dos jugadores, en vez
+	# de elegir primero de quién (popup en el caso del Cementerio).
 	if owner_is_ambiguous and not may_play:
 		await ActionModule.search_either_owner(controller_id, [zone], filter, amount, true, card, destination,
 			distinct_names)
@@ -232,9 +213,8 @@ static func _wants_play(ability_lower: String) -> bool:
 
 
 func _count_allies_in_play(player_id: int) -> int:
-	"""Cuenta los Aliados que controla un jugador (Línea de Defensa +
-	Ataque) — usado por cantidades dinámicas tipo 'por cada Aliado que
-	controles' (2026-08-25)."""
+	"""Cuenta los Aliados que controla un jugador (Línea de Defensa + Ataque) — usado por cantidades
+	dinámicas tipo 'por cada Aliado que controles'."""
 	var main := _main.get_node_or_null("/root/Main")
 	if not main:
 		return 0
@@ -251,29 +231,13 @@ func _count_allies_in_play(player_id: int) -> int:
 
 
 func _execute_shuffle_for_draw(action: Dictionary, controller_id: int, card: Node = null) -> void:
-	"""'Puedes Barajar cartas cuyos costes sumen hasta N y Roba M cartas'
-	(patrón SHUFFLE_FOR_DRAW, UniversalCardParser.gd — regex "puedes
-	barajar cartas? cuyos? costes? sum(en|an) hasta N ... y robar M
-	cartas"). 2026-09-13, corrección a pedido del usuario: el comentario
-	original decía "p.ej. Bernardo O'Higgins" — VERIFICADO FALSO contra
-	cards.json. El texto real de Bernardo O'Higgins (ids 20312/20478) es
-	"Una vez por turno, puedes Barajar un Arma o Aliado Caballero de tu
-	mano o que controles para cancelar una habilidad o Desterrar una carta
-	de coste 3 o menos" — sin ningún "cuyos costes sumen", ya cubierto por
-	BernardoAbilityHandler.gd, un patrón totalmente distinto. Se corrió el
-	regex de este patrón contra las ~1900 cartas de cards.json: CERO
-	coincidencias — no hay ninguna carta conocida en el caché local que lo
-	dispare hoy. Puede ser una carta real no incluida en este caché
-	puntual, o un patrón agregado por error en algún momento sin una carta
-	real verificada detrás — no se investigó más a fondo, se deja
-	documentado en vez de borrar por las dudas de que sí exista.
-	DAR: como dice 'puedes', el robo queda condicionado a barajar de
-	verdad, no es gratis. Solo el jugador humano por ahora (controller_id
-	== 0); el bot simplemente declina. NOTA: solo mira main.player_hand —
-	si la carta real (si existe) dijera 'cartas EN JUEGO' en vez de 'de tu
-	mano', habría que ampliar los candidatos más allá de la mano."""
+	""""Puedes Barajar cartas cuyos costes sumen hasta N y Roba M cartas" (SHUFFLE_FOR_DRAW,
+	UniversalCardParser.gd). Ninguna carta del caché local calza con este regex hoy; se deja por si
+	existe una carta fuera del caché.
+	DAR: con "puedes", el robo depende de barajar de verdad. Solo el jugador 0 (el bot declina).
+	Solo mira main.player_hand: si la carta dijera "en juego", habría que ampliar los candidatos."""
 	if PlayerSideScript.is_bot(controller_id):
-		return  # el bot declina (2026-10-12: el Remoto sí puede, §57)
+		return  # el bot declina (el Remoto sí puede, §57)
 	var params: Dictionary = action.get("params", {})
 	var max_sum: int = params.get("max_cost_sum", 0)
 	var draw_amount: int = params.get("draw_amount", 0)
@@ -286,10 +250,7 @@ func _execute_shuffle_for_draw(action: Dictionary, controller_id: int, card: Nod
 	if not main._card_interaction:
 		return
 
-	# 2026-09-13, a pedido del usuario: click directo con presupuesto en
-	# vivo (dynamic_filter, ver arquitectura.md §10.20/Tempilcahue) en vez
-	# del modal viejo que reintentaba toda la selección si te pasabas del
-	# presupuesto.
+	# Click directo con presupuesto en vivo (dynamic_filter, arquitectura.md §10.20/Tempilcahue).
 	var budget_filter := func(chosen_so_far: Array, c: Node) -> bool:
 		var sum_cost: int = 0
 		for x in chosen_so_far:
@@ -326,24 +287,14 @@ func _execute_shuffle_for_draw(action: Dictionary, controller_id: int, card: Nod
 
 
 func _execute_play_weapon_discount_draw(action: Dictionary, controller_id: int, card: Node = null) -> void:
-	"""'Puedes jugar un Arma desde tu mano o Cementerio reduciendo su coste
-	en N Oros, hasta un mínimo de M, y Robar K cartas' (p.ej. Lobo Sagrado)
-	— NO es "hasta" un Arma: jugarla es obligatorio para robar, el texto no
-	permite jugar 0 Armas y robar igual (confirmado por el usuario,
-	2026-08-26 — revertido un intento anterior de hacer el robo
-	incondicional). Orden: primero se confirma que hay portador y qué Arma
-	jugar; solo con eso resuelto se paga y se retira de su zona de
-	origen, para que cancelar a mitad de camino no deje nada a medio mover
-	ni cobre Oro de más.
-
-	Variante 'hand_only' (p.ej. Hanta: 'puedes jugar un Arma de tu mano
-	reduciendo su coste...' sin Cementerio ni robo) reusa toda esta lógica
-	— solo cambia el origen elegible y si al final se roba o no.
-
-	2026-10-12, bug real reportado por el usuario ("jugué un Lobo Sagrado
-	desde el jugador 2 y no sucedió nada"): antes solo el jugador 0. Ahora
-	también el Remoto real (elige por red: Arma con clic en su mano o en el
-	popup del Cementerio, y portador). El bot local sigue declinando."""
+	""""Puedes jugar un Arma desde tu mano o Cementerio reduciendo su coste en N Oros, hasta un mínimo
+	de M, y Robar K cartas" (p.ej. Lobo Sagrado). Jugar el Arma es obligatorio para robar (no se
+	puede jugar 0 y robar igual). Orden: primero se confirma portador y Arma; recién entonces se
+	paga y se saca de su zona, para que cancelar no deje nada a medio mover ni cobre Oro de más.
+	Variante 'hand_only' (Hanta: "puedes jugar un Arma de tu mano reduciendo su coste...", sin
+	Cementerio ni robo): misma lógica, cambia el origen y si se roba.
+	También para el Remoto (elige por red: Arma en su mano o en el popup del Cementerio, y
+	portador). El bot local declina."""
 	if PlayerSideScript.is_bot(controller_id):
 		return
 	var params: Dictionary = action.get("params", {})
@@ -366,14 +317,11 @@ func _execute_play_weapon_discount_draw(action: Dictionary, controller_id: int, 
 			if d.get("tipo") != Constants.CardType.ARMA:
 				continue
 			# Zadquiel: del Cementerio solo Armas con Exhumar.
-			if params.get("cemetery_needs_exhumar", false) and not ("exhumar" in str(d.get("habilidad", "")).to_lower()):
+			if params.get("cemetery_needs_exhumar", false) and not PaymentManager.card_has_exhumar(d, controller_id):
 				continue
 			cemetery_weapons.append(d)
-	# 2026-09-25, bug real reportado por el usuario ("con lobo sagrado no me
-	# permite jugar armas del cementerio"): confirma qué encontró de verdad
-	# esta función antes de construir nada — si el Cementerio real tenía un
-	# Arma pero acá aparece vacío, el problema está en cómo quedó guardada
-	# esa carta (campo 'tipo'), no en la selección en sí.
+	# Log de diagnóstico: qué Armas encontró en mano y Cementerio, con el campo 'tipo' de cada carta
+	# del Cementerio.
 	print("[WeaponSearchShuffleExecutor] _execute_play_weapon_discount_draw: mano=%d cementerio=%d (hand_only=%s) — cementerio completo: %s" % [
 		hand_weapons.size(), cemetery_weapons.size(), str(hand_only),
 		str(CardManager.get_cemetery(controller_id).map(func(d): return "%s(tipo=%s)" % [str(d.get("nombre", d.get("name", "?"))), str(d.get("tipo", "?"))]))
@@ -383,29 +331,24 @@ func _execute_play_weapon_discount_draw(action: Dictionary, controller_id: int, 
 
 	if not main._card_interaction:
 		return
-	# Título corto (2026-08-26, a pedido del usuario — "más visual, menos
-	# texto"): el botón Cancelar ya cubre "declinar", no hace falta
+	# Título corto — "más visual, menos texto"): el botón Cancelar ya cubre "declinar", no hace falta
 	# explicarlo en el título.
 	var title: String = "Arma con -%d oro (mín %d), roba %d" % [discount, floor_val, draw_amount]
 	if draw_amount <= 0:
 		title = "Arma con -%d oro (mín %d)" % [discount, floor_val]
 
-	# 2026-09-13, a pedido del usuario: click directo — mano (Nodos ya
-	# visibles) + un popup liviano con el Cementerio propio (mismo patrón
-	# que Sake, arquitectura.md §10.23) — en vez del modal de lista viejo.
+	# Click directo — mano (Nodos ya visibles) + un popup liviano con el Cementerio propio (mismo
+	# patrón que Sake, arquitectura.md §10.23) — en vez del modal de lista viejo.
 	var popup_result: Dictionary = CemeteryPopupScript.open(main, cemetery_weapons, controller_id, controller_id == 0)
 	var cemetery_popup: CanvasLayer = popup_result.popup
 	var cemetery_nodes: Array = popup_result.nodes
 
 	var weapon_candidates: Array = hand_weapons + cemetery_nodes
 	var weapon_filter := func(c: Node) -> bool: return c in weapon_candidates
-	# 2026-09-25, bug real reportado por el usuario ("con lobo sagrado no me
-	# permite jugar armas del cementerio"): el jugador seguía clickeando el
-	# visor de Cementerio de SIEMPRE (no este popup nuevo) y caía en Exhumar
-	# en vez de elegir el Arma — ver CardInteractionModule.
-	# try_resolve_cemetery_click()/_cemetery_target_nodes. Registrar los
-	# Nodos temporales de este popup ahí les da a ambos caminos la misma
-	# salida real.
+	# ("con lobo sagrado no me permite jugar armas del cementerio"): el jugador seguía clickeando el
+	# visor de Cementerio de SIEMPRE (no este popup nuevo) y caía en Exhumar en vez de elegir el Arma —
+	# ver CardInteractionModule. try_resolve_cemetery_click/_cemetery_target_nodes. Registrar los Nodos
+	# temporales de este popup ahí les da a ambos caminos la misma salida real.
 	main._card_interaction._cemetery_target_nodes = cemetery_nodes
 	var picked_node: Node = await main._card_interaction.await_target(title, weapon_filter, true, controller_id)
 	if is_instance_valid(cemetery_popup):
@@ -478,12 +421,11 @@ func _execute_play_weapon_discount_draw(action: Dictionary, controller_id: int, 
 
 
 func _execute_return_weapon_swap_free(controller_id: int, card: Node = null) -> void:
-	"""'Puedes subir un Arma que controles a la mano de su dueño para jugar
-	un Arma del mismo o menor coste desde tu mano sin pagar su coste'
-	(Padre de la Patria, 2026-08-28). Dos elecciones encadenadas: primero
-	qué Arma equipada devolver, después qué Arma de la mano (coste ≤ la
-	devuelta) jugar gratis con play_card_for_free() — mismo camino final
-	que usan los patrones de LookAndPlayResolver."""
+	"""'Puedes subir un Arma que controles a la mano de su dueño para jugar un Arma del mismo o menor
+	coste desde tu mano sin pagar su coste' (Padre de la Patria). Dos elecciones encadenadas:
+	primero qué Arma equipada devolver, después qué Arma de la mano (coste ≤ la devuelta) jugar
+	gratis con play_card_for_free — mismo camino final que usan los patrones de
+	LookAndPlayResolver."""
 	var main := _main.get_node_or_null("/root/Main")
 	if not main or not main._gold_manager:
 		return
@@ -504,9 +446,8 @@ func _execute_return_weapon_swap_free(controller_id: int, card: Node = null) -> 
 	if equipped_weapons.is_empty():
 		return
 
-	# Hace falta un Arma YA en la mano para que la habilidad tenga algo que
-	# jugar gratis — sin esto no vale la pena ni ofrecer el "puedes"
-	# (2026-08-28, a pedido del usuario, mismo criterio que Lobo Sagrado).
+	# Hace falta un Arma YA en la mano para que la habilidad tenga algo que jugar gratis — sin esto no
+	# vale la pena ni ofrecer el "puedes", mismo criterio que Lobo Sagrado
 	var hand_container_padre = main.player_hand if controller_id == 0 else main._opponent_fan
 	var hand_weapons: Array = []
 	if hand_container_padre:
@@ -518,27 +459,23 @@ func _execute_return_weapon_swap_free(controller_id: int, card: Node = null) -> 
 
 	if not main._card_interaction:
 		return
-	# 2026-09-13, a pedido del usuario: click directo sobre las Armas
-	# equipadas en vez del modal de lista viejo.
+	# Click directo sobre las Armas equipadas en vez del modal de lista viejo.
 	var return_filter := func(c: Node) -> bool: return c in equipped_weapons
 	var weapon_to_return: Node = await main._card_interaction.await_target(
 		"Sube un Arma que controles a la mano de su dueño", return_filter, true, controller_id)
 	if not weapon_to_return or not is_instance_valid(weapon_to_return):
 		return
 
-	# get_modified_cost(), no card_cost crudo (2026-09-04) — weapon_to_return
-	# está EN JUEGO en este punto (solo se devuelve a la mano en la línea
-	# de abajo), así que puede tener el coste reducido de forma continua
+	# get_modified_cost, no card_cost crudo — weapon_to_return está EN JUEGO en este punto (solo se
+	# devuelve a la mano en la línea de abajo), así que puede tener el coste reducido de forma continua
 	# (p.ej. Samael).
 	var returned_cost: int = ContinuousEffectManager.get_modified_cost(weapon_to_return)
 	_return_equipped_weapon_to_hand(weapon_to_return, main)
 
-	# 2) Elegir qué Arma de la mano (coste ≤ la devuelta) jugar gratis. Debe
-	# ser OTRA Arma, distinta de la que se acaba de devolver (2026-08-30, a
-	# pedido del usuario) — weapon_to_return ya quedó insertada en
-	# main.player_hand.cards por _return_equipped_weapon_to_hand() (línea de
-	# arriba), así que sin esta exclusión aparecía como su propio candidato
-	# válido (cualquier carta cumple costo ≤ su propio costo).
+	# 2) Elegir qué Arma de la mano (coste ≤ la devuelta) jugar gratis. Debe ser OTRA Arma, distinta de
+	# la que se acaba de devolver — weapon_to_return ya quedó insertada en main.player_hand.cards por
+	# _return_equipped_weapon_to_hand (línea de arriba), así que sin esta exclusión aparecía como su
+	# propio candidato válido (cualquier carta cumple costo ≤ su propio costo.
 	var eligible_hand: Array = []
 	if hand_container_padre:
 		for c in hand_container_padre.cards:
@@ -548,8 +485,7 @@ func _execute_return_weapon_swap_free(controller_id: int, card: Node = null) -> 
 		main._update_debug("No tienes otra Arma de coste %d o menos en la mano" % returned_cost)
 		return
 
-	# 2026-09-13, a pedido del usuario: click directo en la mano en vez del
-	# modal de lista viejo.
+	# Click directo en la mano en vez del modal de lista viejo.
 	var eligible_filter := func(c: Node) -> bool: return c in eligible_hand
 	var picked2_node: Node = await main._card_interaction.await_target(
 		"Juega un Arma de coste %d o menos gratis" % returned_cost, eligible_filter, true, controller_id)
@@ -578,9 +514,7 @@ func _return_equipped_weapon_to_hand(weapon: Node, main: Node) -> void:
 		ally.remove_child(weapon)
 	weapon.can_interact = true
 	weapon.set_zone(Constants.Zone.MANO)
-	# 2026-09-30, bug real encontrado al convertir más cartas: 'main.player_hand'
-	# fijo mandaba el Arma del rival a la mano del Anfitrión. owner_id del
-	# Arma decide la mano real de destino.
+	# La mano de destino es la del owner_id del Arma, no siempre main.player_hand.
 	var weapon_owner: int = weapon.owner_id if weapon.get("owner_id") != null else 0
 	var hand_container = main.player_hand if weapon_owner == 0 else main._opponent_fan
 	hand_container.cards.append(weapon)

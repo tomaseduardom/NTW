@@ -6,6 +6,8 @@ class_name ContinuousEffectParser
 ## etc). Opera sobre ContinuousEffectManager via _main. Extraído de
 ## ContinuousEffectManager.gd (Fase 4 de reestructuración).
 
+const StrengthAuras = preload("res://scripts/core/cards/StrengthAuras.gd")
+
 var _main: Node
 
 
@@ -21,12 +23,7 @@ func _register_card_continuous_effects(card: Node) -> void:
 	if card == null:
 		return
 
-	# 2026-08-25: antes leía card.get_meta("card_data", {}) — metadata de
-	# Godot que NUNCA se asigna en el juego real (solo en TestScene.gd, una
-	# escena de prueba vieja). Siempre volvía {}, así que ability_text
-	# siempre estaba vacío y este detector nunca encontraba nada, para
-	# ninguna carta — confirmado con Patria Vieja, que no aplicaba su aura
-	# a pesar de tener el patrón ya soportado.
+	# El texto sale de card.card_data (no de la metadata "card_data" de Godot, que el juego no asigna).
 	var ability_text: String = card.card_ability if card.get("card_ability") != null else ""
 	if ability_text.is_empty():
 		var card_data = card.get("card_data") if card.get("card_data") != null else {}
@@ -44,15 +41,10 @@ func _parse_and_register_continuous_effects(card: Node, ability_text: String) ->
 
 	var text = ability_text.to_lower()
 
-	# 'Hace doble daño de combate al Destierro' EN PRIMERA PERSONA/pasiva
-	# propia (2026-09-04, p.ej. manuel rodriguez: 'Furia. Hace doble daño
-	# de combate al Destierro.') — flag propio de la carta, consultado por
-	# BattleManager durante ASIGNACION_DANIO. Excluye la variante delegada
-	# a un Aliado ELEGIDO por una activada ('Una vez por turno, un Aliado
-	# hace doble daño...', p.ej. atenea en wonderland) — esa NO es
-	# autoaplicación, se resuelve aparte como target puntual temporal (ver
-	# CardInspectionLayer/PreventionAbilityHandler), todavía sin
-	# implementar para ese caso.
+	# "Hace doble daño de combate al Destierro" como pasiva propia (p.ej. manuel rodriguez: "Furia.
+	# Hace doble daño de combate al Destierro."): flag de la carta que consulta BattleManager en
+	# ASIGNACION_DANIO. Excluye la variante en que una activada se lo da a un Aliado elegido ("Una vez
+	# por turno, un Aliado hace doble daño...", atenea en wonderland: PreventionAbilityHandler_AE).
 	if "hace doble daño de combate al destierro" in text and "un aliado hace doble daño" not in text \
 			and card.get("doubles_damage_to_exile") != null:
 		card.doubles_damage_to_exile = true
@@ -61,6 +53,8 @@ func _parse_and_register_continuous_effects(card: Node, ability_text: String) ->
 	var ally_buff_regex = RegEx.new()
 	ally_buff_regex.compile("(?:tus |los )?(aliados|criaturas).+obtienen?\\s*\\+(\\d+)")
 	var ally_match = ally_buff_regex.search(text)
+	if ally_match and not _in_static_sentence(text, ally_match.get_start()):
+		ally_match = null
 
 	if ally_match:
 		var buff_value = int(ally_match.get_string(2))
@@ -76,23 +70,17 @@ func _parse_and_register_continuous_effects(card: Node, ability_text: String) ->
 			"description": "Buff a aliados +%d" % buff_value
 		})
 
-	# Detectar buffs a aliados con calificador de coste, forma "ganan N de
-	# Fuerza" (2026-08-24, p.ej. Patria Vieja: "Tus Aliados de coste 1 o más
-	# ganan 1 de Fuerza") — distinto del patrón de arriba, que solo cubre
-	# "obtienen +N" sin calificador de coste.
-	# "(?:que controlas)?" agregado (2026-08-30, p.ej. Sable de Napoleón:
-	# "Los Aliados que controlas ganan 1 de Fuerza") — antes exigía "aliados"
-	# seguido DIRECTO de "ganan" (salvo el calificador de coste), así que
-	# "que controlas" en el medio rompía el match y esta variante quedaba
-	# sin ningún patrón que la reconociera.
-	# "Tus Aliados Titán ganan 1 de Fuerza" (2026-09-06, p.ej. Cuerno de
-	# Titán) — calificador de RAZA en vez de coste, patrón separado a
-	# propósito para no reordenar los grupos de captura de
-	# qualified_buff_regex (varios llamadores de abajo dependen de que el
-	# grupo 1 sea el coste mínimo).
+	# Buffs con calificador de coste, forma "ganan N de Fuerza" (p.ej. Patria Vieja: "Tus Aliados de
+	# coste 1 o más ganan 1 de Fuerza"); el patrón de arriba solo cubre "obtienen +N". "(?:que
+	# controlas)?" para "Los Aliados que controlas ganan 1 de Fuerza" (Sable de Napoleón).
+	# "Tus Aliados Titán ganan 1 de Fuerza" (Cuerno de Titán): calificador de RAZA, en un patrón aparte
+	# para no mover los grupos de qualified_buff_regex (los llamadores dependen de que el grupo 1 sea
+	# el coste mínimo).
 	var race_qualified_buff_regex = RegEx.new()
 	race_qualified_buff_regex.compile("(?:tus |los )?aliados (titán|titan|ignis) ganan?\\s*(\\d+)\\s*de fuerza")
 	var race_qualified_match = race_qualified_buff_regex.search(text)
+	if race_qualified_match and not _in_static_sentence(text, race_qualified_match.get_start()):
+		race_qualified_match = null
 	if race_qualified_match:
 		var race_word := race_qualified_match.get_string(1).to_lower().replace("titan", "titán")
 		var race_value := int(race_qualified_match.get_string(2))
@@ -112,6 +100,12 @@ func _parse_and_register_continuous_effects(card: Node, ability_text: String) ->
 	var qualified_buff_regex = RegEx.new()
 	qualified_buff_regex.compile("(?:tus |los )?aliados(?:\\s+de coste\\s+(\\d+)\\s+o\\s+m[aá]s)?(?:\\s+que controlas)?\\s+ganan?\\s*(\\d+)\\s*de fuerza")
 	var qualified_match = qualified_buff_regex.search(text)
+	# Con condición o zona ("Si está en tu Reserva, ...", "De lo contrario, ...") lo resuelve
+	# StrengthAuras en vivo; "Si controlas tres o más Aliados de la misma Raza" (Trono del Dragón) sigue
+	# aquí abajo.
+	if qualified_match and not _in_static_sentence(text, qualified_match.get_start()) \
+			and not "de la misma raza" in _sentence_at(text, qualified_match.get_start()):
+		qualified_match = null
 
 	if qualified_match:
 		var min_cost_str := qualified_match.get_string(1)
@@ -120,19 +114,10 @@ func _parse_and_register_continuous_effects(card: Node, ability_text: String) ->
 		if not min_cost_str.is_empty():
 			qualified_filter["min_cost"] = int(min_cost_str)
 
-		# "Si controlas N o más Aliados de la misma Raza" (2026-09-03, p.ej.
-		# Trono del Dragón: 'Si controlas tres o más Aliados de la misma
-		# Raza, tus Aliados ganan 1 de Fuerza...') — qualified_buff_regex
-		# de arriba NO ve este prefijo condicional: matchea sobre la
-		# SEGUNDA mención de 'Aliados' (la del propio buff, 'tus Aliados
-		# ganan'), ignorando la condición racial que la antecede. Sin este
-		# chequeo, el buff se registraría PERMANENT incondicional. Aquí se
-		# detecta aparte y, si está presente, el modificador pasa a
-		# CONDITIONAL con un Callable que recuenta por Raza en cada
-		# consulta (_is_modifier_active() lo reevalúa siempre, nunca
-		# cachea el resultado) — a diferencia de PERMANENT, CONDITIONAL no
-		# chequea solo que la fuente siga en juego, así que el propio
-		# Callable lo verifica también.
+		# "Si controlas N o más Aliados de la misma Raza" (p.ej. Trono del Dragón): qualified_buff_regex
+		# no ve este prefijo (calza con "tus Aliados ganan"). Si está, el modificador pasa a CONDITIONAL
+		# con un Callable que recuenta por Raza en cada consulta (_is_modifier_active() no cachea).
+		# CONDITIONAL no chequea que la fuente siga en juego, así que el Callable lo verifica.
 		var same_race_rx := RegEx.new()
 		same_race_rx.compile("si controlas\\s+(\\w+)\\s+o\\s+m[aá]s\\s+aliados\\s+de\\s+la\\s+misma\\s+raza")
 		var race_cond_match := same_race_rx.search(text)
@@ -163,15 +148,11 @@ func _parse_and_register_continuous_effects(card: Node, ability_text: String) ->
 			]
 		})
 
-		# Cláusula adicional: "...y no pueden ser afectados por habilidades
-		# de cartas fuera del juego mientras atacan" (2026-09-03, Trono del
-		# Dragón) — el recorte 'mientras atacan' es POR ALIADO puntual (no
-		# tiene sentido en el condition Callable de arriba, que no recibe
-		# la carta objetivo), así que solo se registra la mitad 'racial' aquí
-		# (protection_type OFF_BOARD_WHILE_ATTACKING) y el chequeo real de
-		# 'está atacando ahora' vive en el punto de consulta
-		# (TargetedEffectExecutor._select_ally_target(), igual que la
-		# inmunidad a Talismanes de Kotaix más abajo).
+		# "...y no pueden ser afectados por habilidades de cartas fuera del juego mientras atacan" (Trono
+		# del Dragón): "mientras atacan" es por Aliado y el Callable no recibe el objetivo. Aquí se
+		# registra la parte racial (protection_type OFF_BOARD_WHILE_ATTACKING) y el "está atacando" se
+		# chequea al elegir objetivo (TargetedEffectExecutor._select_ally_target(), como la inmunidad a
+		# Talismanes de Kotaix).
 		if race_cond_match and "no pueden ser afectados por habilidades de cartas fuera del juego" in text:
 			_register_static({
 				"source": card,
@@ -207,23 +188,19 @@ func _parse_and_register_continuous_effects(card: Node, ability_text: String) ->
 				"description": "No son destruidos cuando bloquean"
 			})
 
-		# Cláusula adicional: "...y no pueden perder su habilidad" SIN
-		# calificador de Arma (2026-09-04, p.ej. Abu Simbel: "Tus Aliados
-		# ganan 1 de Fuerza y no pueden perder su habilidad") — a diferencia
-		# de "Aliados que porten Arma no pueden perder su habilidad" (Manuel
-		# Bulnes, ya cubierto por register_weapon_wielder_silence_immunity()
-		# en otra parte de este mismo archivo), esta protege a TODOS los
-		# Aliados del controlador, consultada desde KeywordManager.silence_
-		# card() vía register_all_allies_silence_immunity().
+		# Cláusula adicional: "...y no pueden perder su habilidad" SIN calificador de Arma (p.ej. Abu
+		# Simbel: "Tus Aliados ganan 1 de Fuerza y no pueden perder su habilidad") — a diferencia de
+		# "Aliados que porten Arma no pueden perder su habilidad" (Manuel Bulnes, ya cubierto por
+		# register_weapon_wielder_silence_immunity en otra parte de este mismo archivo), esta protege a
+		# TODOS los Aliados del controlador, consultada desde KeywordManager.silence_card vía
+		# register_all_allies_silence_immunity.
 		if "no pueden perder su habilidad" in text and "porten arma" not in text:
 			KeywordManager.register_all_allies_silence_immunity(card)
 
-		# Cláusula adicional: "...Furia..." en la misma oración (2026-09-02,
-		# p.ej. Espíritu Kotaix: "Tus Aliados ganan 2 de Fuerza, Furia y no
-		# pueden ser afectados por Talismanes") — mismo criterio que la
-		# cláusula de BLOCK_DESTROY de arriba, pero para el patrón de
-		# keyword_regex más abajo (que exige 'tienen', no matchea 'ganan...
-		# Furia' en lista separada por comas).
+		# Cláusula adicional: "...Furia..." en la misma oración (p.ej. Espíritu Kotaix: "Tus Aliados ganan
+		# 2 de Fuerza, Furia y no pueden ser afectados por Talismanes") — mismo criterio que la cláusula
+		# de BLOCK_DESTROY de arriba, pero para el patrón de keyword_regex más abajo (que exige 'tienen',
+		# no matchea 'ganan... Furia' en lista separada por comas).
 		if "furia" in text:
 			_register_static({
 				"source": card,
@@ -239,13 +216,12 @@ func _parse_and_register_continuous_effects(card: Node, ability_text: String) ->
 				"description": "Otorga Furia a aliados"
 			})
 
-		# Cláusula adicional: "...no pueden ser afectados por Talismanes"
-		# (2026-09-02, Espíritu Kotaix) — protección otorgada a OTRAS cartas
-		# (a diferencia de Constants.gd/TargetedEffectExecutor._target_text_denies(),
-		# que solo detecta cuando una carta se protege a SÍ MISMA con su
-		# propio texto impreso). ContinuousEffectManager.has_protection(card,
-		# "TALISMAN") es la consulta; TargetedEffectExecutor._select_ally_target()
-		# la respeta cuando source_card es un Talismán.
+		# Cláusula adicional: "...no pueden ser afectados por Talismanes" (Espíritu Kotaix) — protección
+		# otorgada a OTRAS cartas (a diferencia de
+		# Constants.gd/TargetedEffectExecutor._target_text_denies, que solo detecta cuando una carta se
+		# protege a SÍ MISMA con su propio texto impreso). ContinuousEffectManager.has_protection(card,
+		# "TALISMAN") es la consulta; TargetedEffectExecutor._select_ally_target la respeta cuando
+		# source_card es un Talismán.
 		if "no pueden ser afectados por talismanes" in text or "no puede ser afectado por talismanes" in text:
 			_register_static({
 				"source": card,
@@ -261,12 +237,10 @@ func _parse_and_register_continuous_effects(card: Node, ability_text: String) ->
 				"description": "Inmune a Talismanes"
 			})
 
-	# Cláusula independiente (fuera del bloque qualified_match, no exige
-	# "ganan N de Fuerza" en la misma oración): "En tu turno, tus Aliados no
-	# pueden ser afectados por Talismanes oponentes" (2026-09-04, Aurora de
-	# Chile) — protección de Talismanes acotada SOLO al turno del propio
-	# controlador, vía duration CONDITIONAL (a diferencia de la protección
-	# permanente de Espíritu Kotaix de más arriba).
+	# Cláusula independiente (fuera del bloque qualified_match, no exige "ganan N de Fuerza" en la
+	# misma oración): "En tu turno, tus Aliados no pueden ser afectados por Talismanes oponentes"
+	# (Aurora de Chile) — protección de Talismanes acotada SOLO al turno del propio controlador, vía
+	# duration CONDITIONAL (a diferencia de la protección permanente de Espíritu Kotaix de más arriba).
 	if "en tu turno" in text and ("no pueden ser afectados por talismanes" in text or "no puede ser afectado por talismanes" in text):
 		var turn_scoped_owner: int = _main._get_card_owner(card)
 		var turn_scoped_condition: Callable = func() -> bool:
@@ -286,56 +260,41 @@ func _parse_and_register_continuous_effects(card: Node, ability_text: String) ->
 			"description": "Inmune a Talismanes oponentes en tu turno (Aurora de Chile)"
 		})
 
-	# Cláusula independiente: "...No puede perder su habilidad" EN SINGULAR
-	# referido a sí misma (2026-09-04, p.ej. lagrima del dragon: "Oro
-	# Inicial. Indesterrable. No puede perder su habilidad.") — distinto de
-	# "no pueden perder su habilidad" en plural de más arriba (protege a
-	# Aliados de TERCEROS); aquí "puede" en singular protege a la PROPIA
-	# carta. "no puede" nunca matchea dentro de "no pueden" (falta el
-	# espacio tras "puede"), así que no hay colisión entre ambas cláusulas.
+	# "No puede perder su habilidad" en singular, sobre sí misma (p.ej. lagrima del dragon: "Oro
+	# Inicial. Indesterrable. No puede perder su habilidad."). Distinto de "no pueden..." en plural
+	# (protege a otros); "no puede " con espacio no calza dentro de "no pueden".
 	if "no puede perder su habilidad" in text:
 		KeywordManager.register_self_silence_immunity(card)
 
-	# "Tus Armas no pueden perder su habilidad" (2026-09-04, p.ej.
-	# skofnung) — variante de la cláusula de Abu Simbel pero para Armas en
-	# vez de Aliados.
+	# "Tus Armas no pueden perder su habilidad" (p.ej. skofnung) — variante de la cláusula de Abu
+	# Simbel pero para Armas en vez de Aliados.
 	if "tus armas" in text and "no pueden perder su habilidad" in text:
 		KeywordManager.register_all_weapons_silence_immunity(card)
 
-	# "Los Oros oponentes pierden su habilidad" (2026-09-06, p.ej. Daikaiju
-	# Furioso) — inverso de las inmunidades de arriba: FUERZA el silencio en
-	# vez de proteger contra él.
-	if "oros oponentes pierden su habilidad" in text:
-		KeywordManager.register_opponent_type_silence(card, Constants.CardType.ORO)
+	# "Los Oros oponentes pierden su habilidad" (p.ej. Daikaiju Furioso) — inverso de las inmunidades
+	# de arriba: FUERZA el silencio en vez de proteger contra él.
+	# Ahora lo evalúa SilenceAuras (con la condición de skofnung y la regla de bucles).
 
-	# "No puedes recibir daño" (2026-09-06, p.ej. Cetro Demoniaco) —
-	# prevención TOTAL y continua para el controlador de 'card' mientras
-	# siga en juego (DamageManager.add_damage_prevention con source=card,
-	# one_shot=false; el chequeo de 'source' en juego en
-	# _apply_damage_prevention() la limpia sola cuando 'card' sale).
-	# 'tu oponente no puede Desterrar cartas de tu Castillo' (segunda mitad
-	# de la misma oración) NO implementada: no hay un choke point único
-	# donde interceptar todos los "Destierra del tope del Castillo" del
-	# proyecto (cada patrón manipula CardManager.get_deck() directo).
+	# "No puedes recibir daño" (p.ej. Cetro Demoniaco): prevención total y continua para el controlador
+	# mientras 'card' siga en juego (DamageManager.add_damage_prevention, source = card, one_shot =
+	# false; _apply_damage_prevention() la limpia cuando sale). "Tu oponente no puede Desterrar cartas
+	# de tu Castillo" es ProtectionRules.castle_banish_blocked().
 	if "no puedes recibir daño" in text:
 		var damage_immunity_controller: int = _main._get_card_owner(card)
 		DamageManager.add_damage_prevention(damage_immunity_controller, -1, -1, false, card)
 
-	# Cláusula independiente: "Si está en tu Reserva, las cartas que
-	# controles no pueden perder su habilidad por habilidades y efectos
-	# oponentes" (2026-09-04, p.ej. Terminal P-12) — protección amplia
-	# (TODAS las cartas del controlador, no solo Aliados) pero condicionada
-	# a que 'card' esté específicamente en Reserva de Oro, no en juego en
-	# general (a diferencia de las otras variantes de silence-immunity de
-	# más arriba, todas PERMANENT mientras la fuente esté en juego).
+	# Cláusula independiente: "Si está en tu Reserva, las cartas que controles no pueden perder su
+	# habilidad por habilidades y efectos oponentes" (p.ej. Terminal P-12) — protección amplia (TODAS
+	# las cartas del controlador, no solo Aliados) pero condicionada a que 'card' esté específicamente
+	# en Reserva de Oro, no en juego en general (a diferencia de las otras variantes de
+	# silence-immunity de más arriba, todas PERMANENT mientras la fuente esté en juego).
 	if ("si está en tu reserva" in text or "si esta en tu reserva" in text) \
 			and "no pueden perder su habilidad" in text:
 		KeywordManager.register_reserva_conditional_full_silence_immunity(card)
 
-	# Cláusula independiente: "Tus Aliados Ignis o Titán ganan Fuerza igual
-	# a su coste y Furia" (2026-09-04, shedo titan) — valor DINÁMICO por
-	# carta (no un número fijo, por eso no matchea qualified_buff_regex),
-	# vía Callable en 'value' (_calculate_modifier_value() ya lo soporta).
+	# Cláusula independiente: "Tus Aliados Ignis o Titán ganan Fuerza igual a su coste y Furia" (shedo
+	# titan) — valor DINÁMICO por carta (no un número fijo, por eso no matchea qualified_buff_regex),
+	# vía Callable en 'value' (_calculate_modifier_value ya lo soporta).
 	if "ganan fuerza igual a su coste" in text:
 		var race_match_rx := RegEx.new()
 		race_match_rx.compile("tus aliados ([a-záéíóúñ]+(?: o [a-záéíóúñ]+)?) ganan fuerza igual a su coste")
@@ -377,6 +336,8 @@ func _parse_and_register_continuous_effects(card: Node, ability_text: String) ->
 	var enemy_debuff_regex = RegEx.new()
 	enemy_debuff_regex.compile("(?:los )?(enemigos|oponente).+obtienen?\\s*-(\\d+)")
 	var enemy_match = enemy_debuff_regex.search(text)
+	if enemy_match and not _in_static_sentence(text, enemy_match.get_start()):
+		enemy_match = null
 
 	if enemy_match:
 		var debuff_value = int(enemy_match.get_string(2))
@@ -392,14 +353,15 @@ func _parse_and_register_continuous_effects(card: Node, ability_text: String) ->
 			"description": "Debuff a enemigos -%d" % debuff_value
 		})
 
-	# "Los Aliados oponentes pierden N de Fuerza" (2026-09-06, p.ej. amazona
-	# desafiante) — misma idea que enemy_debuff_regex de arriba ("obtienen
-	# -N"), pero con la fórmula "pierden N de Fuerza" en vez de "obtienen -N".
+	# "Los Aliados oponentes pierden N de Fuerza" (p.ej. amazona desafiante) — misma idea que
+	# enemy_debuff_regex de arriba ("obtienen -N"), pero con la fórmula "pierden N de Fuerza" en vez de
+	# "obtienen -N".
 	var ally_lose_strength_regex = RegEx.new()
-	# "(?: [^.]*?,)?" (2026-10-14, Sariel: "Los Aliados oponentes no pueden
-	# portar Armas, pierden 1 de Fuerza").
+	# "(?: [^.]*?,)?" (Sariel: "Los Aliados oponentes no pueden portar Armas, pierden 1 de Fuerza").
 	ally_lose_strength_regex.compile("aliados (?:oponentes?|del oponente|rivales?)(?: [^.]*?,)? pierden?\\s*(\\d+)\\s*de fuerza")
 	var ally_lose_match = ally_lose_strength_regex.search(text)
+	if ally_lose_match and not _in_static_sentence(text, ally_lose_match.get_start()):
+		ally_lose_match = null  # zorya, el mandinga, dotaku: StrengthAuras; troll soberano: disparada
 	if ally_lose_match:
 		var lose_value := int(ally_lose_match.get_string(1))
 		_register_static({
@@ -414,22 +376,36 @@ func _parse_and_register_continuous_effects(card: Node, ability_text: String) ->
 			"description": "Debuff a Aliados oponentes -%d" % lose_value
 		})
 
-	# "Las cartas oponentes en juego reducen su coste en N Oro(s)" (2026-
-	# 09-04, p.ej. Samael) — debuff de COSTE (no Fuerza) mientras la
-	# fuente siga en juego, a diferencia de un descuento de UN SOLO USO al
-	# jugarse (GoldManager._get_reveal_cost_reduction_pattern() y
-	# similares): este es un modificador PERMANENT sobre el stat "cost",
-	# que get_modified_cost() ya soporta (_get_modified_stat(), floor 0).
-	# Importante para cualquier filtro 'de coste N o menos' sobre una carta
-	# YA EN JUEGO (Destruir/Anular/Convertir/etc., ver TargetedEffectExecutor)
-	# — esos deben leer get_modified_cost(c), no card_cost crudo, para ver
-	# este debuff.
-	# "Tus cartas en juego aumentan su coste en un Oro" (2026-09-06, p.ej.
-	# Asmodeus) / "Tus Aliados en juego aumentan su coste en un Oro"
-	# (Belcebú, calificado a solo Aliados) — espejo del debuff de coste
-	# rival de abajo, pero como autoimpuesto (ALLIES en vez de ENEMIES,
-	# "aumentan" en vez de "reducen"). Aplica a cartas futuras tuyas
-	# también (stat "cost" vía get_modified_cost(), no solo a lo ya en juego).
+	# "Los Aliados en juego pierden N de Fuerza" (Escudo de Vlad III): todos, los tuyos y los del
+	# oponente.
+	var all_lose_regex = RegEx.new()
+	all_lose_regex.compile("(?:^|[.\\n]\\s*)los aliados en juego pierden\\s*(\\d+)\\s*de fuerza")
+	var all_lose_match = all_lose_regex.search(text)
+	# get_end(): el match puede empezar en el punto de la oración anterior.
+	if all_lose_match and not _in_static_sentence(text, all_lose_match.get_end() - 1):
+		all_lose_match = null  # "... por cada otro Aliado de su controlador" (campus de muerte): StrengthAuras
+	if all_lose_match:
+		var all_value := int(all_lose_match.get_string(1))
+		for side in ["ALLIES", "ENEMIES"]:
+			_register_static({
+				"source": card,
+				"target": side,
+				"type": _main.ModifierType.STRENGTH,
+				"stat": "strength",
+				"value": -all_value,
+				"operation": "add",
+				"duration": _main.ModifierDuration.PERMANENT,
+				"layer": _main.ModifierLayer.LAYER_7B_CHAR_MODIFY,
+				"description": "Aliados en juego -%d" % all_value
+			})
+
+	# "Las cartas oponentes en juego reducen su coste en N Oro(s)" (p.ej. Samael): modificador
+	# PERMANENT sobre el stat "cost" mientras la fuente siga en juego (get_modified_cost(), piso 0);
+	# distinto de un descuento de un uso al jugar. Los filtros "de coste N o menos" sobre cartas en
+	# juego deben leer get_modified_cost(c), no card_cost.
+	# "Tus cartas en juego aumentan su coste en un Oro" (Asmodeus) / "Tus Aliados en juego aumentan su
+	# coste en un Oro" (Belcebú): el espejo, autoimpuesto (ALLIES, "aumentan"). También afecta a cartas
+	# tuyas futuras (vía get_modified_cost()).
 	var self_cost_tax_regex = RegEx.new()
 	self_cost_tax_regex.compile("tus (cartas|aliados) en juego aumentan su coste en (\\d+|un|una|dos|tres)\\s*oros?")
 	var self_cost_tax_match = self_cost_tax_regex.search(text)
@@ -492,13 +468,11 @@ func _parse_and_register_continuous_effects(card: Node, ability_text: String) ->
 				"description": "Otorga %s a aliados" % keyword_name
 			})
 
-	# "Gana N de Fuerza por cada Arma que controles" (2026-08-30, p.ej.
-	# Manuel Bulnes) — buff a SÍ MISMA (no 'tus Aliados'), con valor
-	# DINÁMICO que se recalcula solo (value como Callable, ya soportado por
-	# _calculate_modifier_value()). Cuenta Armas equipadas en cualquier
-	# Aliado del mismo controlador — las Armas son hijas de su portador,
-	# no children directos del campo, así que no alcanza con
-	# _get_all_cards_in_play() + filtro de tipo.
+	# "Gana N de Fuerza por cada Arma que controles" (p.ej. Manuel Bulnes) — buff a SÍ MISMA (no 'tus
+	# Aliados'), con valor DINÁMICO que se recalcula solo (value como Callable, ya soportado por
+	# _calculate_modifier_value). Cuenta Armas equipadas en cualquier Aliado del mismo controlador —
+	# las Armas son hijas de su portador, no children directos del campo, así que no alcanza con
+	# _get_all_cards_in_play + filtro de tipo.
 	var self_scaling_weapon_regex = RegEx.new()
 	self_scaling_weapon_regex.compile("gana\\s+(\\d+)\\s+de\\s+fuerza\\s+por\\s+cada\\s+arma\\s+que\\s+controles")
 	var self_scaling_match = self_scaling_weapon_regex.search(text)
@@ -526,9 +500,8 @@ func _parse_and_register_continuous_effects(card: Node, ability_text: String) ->
 			"description": "Gana %d de Fuerza por cada Arma que controle" % per_unit_value
 		})
 
-	# "Gana N de Fuerza por cada otro Aliado que controles" (2026-09-04,
-	# p.ej. La Torre) — mismo mecanismo que el de Arma de Manuel Bulnes de
-	# arriba, pero contando Aliados (excluyendo a la carta misma, 'otro')
+	# "Gana N de Fuerza por cada otro Aliado que controles" (p.ej. La Torre) — mismo mecanismo que el
+	# de Arma de Manuel Bulnes de arriba, pero contando Aliados (excluyendo a la carta misma, 'otro')
 	# en las tres zonas de campo del mismo controlador.
 	var self_scaling_ally_regex = RegEx.new()
 	self_scaling_ally_regex.compile("gana\\s+(\\d+)\\s+de\\s+fuerza\\s+por\\s+cada\\s+otro\\s+aliado\\s+que\\s+controles")
@@ -558,11 +531,38 @@ func _parse_and_register_continuous_effects(card: Node, ability_text: String) ->
 			"description": "Gana %d de Fuerza por cada otro Aliado que controle" % per_unit_value2
 		})
 
-	# "Tus Aliados que porten Arma no pueden perder su habilidad" (2026-08-30,
-	# Manuel Bulnes) — protección contra KeywordManager.silence_card(),
-	# consultada directo desde ahí (choke point único).
+	# "Tus Aliados que porten Arma no pueden perder su habilidad" (Manuel Bulnes) — protección contra
+	# KeywordManager.silence_card, consultada directo desde ahí (choke point único).
 	if "aliados que porten arma" in text and "no pueden perder su habilidad" in text:
 		KeywordManager.register_weapon_wielder_silence_immunity(card)
+
+
+func _sentence_at(text: String, pos: int) -> String:
+	"""La oración del texto que contiene la posición 'pos'."""
+	var start: int = max(text.rfind(".", pos), text.rfind("\n", pos)) + 1
+	var end_dot: int = text.find(".", pos)
+	var end_nl: int = text.find("\n", pos)
+	var end: int = text.length()
+	for e in [end_dot, end_nl]:
+		if e >= 0 and e < end:
+			end = e
+	return text.substr(start, end - start).strip_edges()
+
+
+func _in_static_sentence(text: String, pos: int) -> bool:
+	"""¿La oración es un aura fija? No lo es si tiene condición o zona (las resuelve StrengthAuras), si se
+	dispara o se activa ("Cuando entra en juego, ...", "Una vez por turno, ...": las resuelve su
+	disparador) o si dura un tiempo ("por el turno", "permanentemente": es un efecto, no un aura)."""
+	var sentence := _sentence_at(text, pos)
+	if StrengthAuras.is_conditional_sentence(sentence) or StrengthAuras.handles_sentence(sentence):
+		return false
+	for prefix in ["cuando ", "una vez", "al comienzo", "al final", "en tu ", "en la ", "en su ", "-", "puedes "]:
+		if sentence.begins_with(prefix):
+			return false
+	for timed in ["por el turno", "este turno", "permanentemente", "hasta tu próximo turno", "hasta el final"]:
+		if timed in sentence:
+			return false
+	return true
 
 
 func _register_static(params: Dictionary) -> String:

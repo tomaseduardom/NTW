@@ -1,13 +1,11 @@
 extends RefCounted
-## Padre Dagón (2026-10-17, a pedido del usuario): dos habilidades en un solo
-## texto, como Bernardo O'Higgins, que comparten el "Una vez por turno":
-##   - Activada (tu turno o Guerra de Talismanes), global, sin objetivo: "las
-##     cartas oponentes que no sean Oro pierden su habilidad y son
-##     Destruidas". Primero pierden la habilidad, así que lo que dirían al
-##     salir del juego no ocurre.
-##   - Prevención (EffectController._prevention_registry, "Padre Dagón"):
-##     "prevén que uno o más Aliados sean afectados por un efecto oponente",
-##     como Estaca o Cañón Helios.
+## Padre Dagón: dos habilidades en un texto (como Bernardo O'Higgins) que comparten el "Una vez por
+## turno":
+## - Activada (tu turno o Guerra de Talismanes), global, sin objetivo: "las cartas oponentes que no
+## sean Oro pierden su habilidad y son Destruidas". Primero pierden la habilidad, así que lo que
+## dirían al salir del juego no ocurre.
+## - Prevención (EffectController._prevention_registry, "Padre Dagón"): "prevén que uno o más
+## Aliados sean afectados por un efecto oponente", como Estaca o Cañón Helios.
 ## Se usa con preload.
 
 const PlayerSideScript = preload("res://scripts/core/game/PlayerSide.gd")
@@ -24,11 +22,11 @@ static func usage_key(card: Node) -> String:
 
 
 static func used_this_turn(card: Node) -> bool:
-	return UniversalCardParser.turn_registry.was_used(usage_key(card), 0, GameManager.current_turn)
+	return UniversalCardParser.turn_registry.was_used(usage_key(card), 0, GameManager.turn_serial)
 
 
 static func mark_used(card: Node) -> void:
-	UniversalCardParser.turn_registry.register(usage_key(card), 0, GameManager.current_turn)
+	UniversalCardParser.turn_registry.register(usage_key(card), 0, GameManager.turn_serial)
 
 
 static func try_execute(card: Node, text: String, controller_id: int) -> bool:
@@ -59,9 +57,8 @@ static func try_execute(card: Node, text: String, controller_id: int) -> bool:
 	if victims.is_empty():
 		main._update_debug("%s: tu oponente no tiene cartas que no sean Oro" % card_name)
 		return true
-	# 0) Antes de que pase nada (2026-10-17, a pedido del usuario): el
-	# oponente puede prevenir que cada carta sea afectada (Estaca, Cañón
-	# Helios...) — la que se previene no pierde su habilidad ni es Destruida.
+	# 0) Antes de nada, el oponente puede prevenir que cada carta sea afectada (Estaca, Cañón
+	# Helios...): la que se previene no pierde su habilidad ni es Destruida.
 	var affected: Array = []
 	for v in victims:
 		if not is_instance_valid(v) or not (v.get("current_zone") in Constants.ZONES_IN_PLAY):

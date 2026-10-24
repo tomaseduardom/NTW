@@ -1,14 +1,11 @@
 extends RefCounted
 class_name PaymentValidation
-## PaymentValidation — Consultas de solo-lectura para el pago: validación de
-## cartas Únicas (DAR Sección 4.1) y disponibilidad de Oro/Cementerio del
-## jugador. Ninguna de estas funciones toca el estado de pago en curso
-## (_current_card/_payment_popup/etc. se quedan en PaymentManager — están
-## entrelazados con ExhumarSystem.gd/XCostSelector.gd como estado compartido,
-## sacarlos de ahí sería mucho más riesgo para poco beneficio). Opera sobre
-## PaymentManager via _main.
-## Extraído de PaymentManager.gd (2026-08-28, "módulos gordos" — mismo corte
-## que ya separó ExhumarSystem/CostModifiers/XCostSelector).
+## PaymentValidation — consultas de solo lectura para el pago: cartas Únicas (DAR Sección 4.1) y
+## disponibilidad de Oro/Cementerio. No toca el estado del pago en curso
+## (_current_card/_payment_popup quedan en PaymentManager, compartidos con
+## ExhumarSystem.gd/XCostSelector.gd). Opera sobre PaymentManager vía _main.
+
+const KeywordParser = preload("res://scripts/core/cards/KeywordParser.gd")
 
 var _main: Node
 
@@ -37,10 +34,10 @@ func _card_is_unique(card_data: Dictionary) -> bool:
 		if kw is int and kw == Constants.Keyword.UNICA:
 			return true
 
-	# Verificar texto de habilidad
-	var ability = str(card_data.get("habilidad", card_data.get("ability", "")))
-	if "única" in ability.to_lower():
-		return true
+	# Datos sin array "keywords": las impresas en el texto.
+	if not card_data.has("keywords"):
+		var ability = str(card_data.get("habilidad", card_data.get("ability", "")))
+		return KeywordParser.has_own(ability, Constants.Keyword.UNICA)
 
 	return false
 
@@ -115,13 +112,8 @@ func _check_unique_in_stack(card_name: String) -> Dictionary:
 
 
 func _get_cards_in_zone(player_id: int, _zone: int) -> Array:
-	"""Obtiene las cartas en juego (campo) de un jugador. Antes buscaba
-	métodos que no existen en GameManager (get_zone_cards/get_cards_in_zone)
-	y como fallback un '_game_board' que tampoco existe — siempre devolvía
-	[], así que la validación de la palabra clave Única jamás encontraba
-	una copia ya en juego. Se ignora el parámetro de zona: agrega las 3
-	líneas reales (Defensa/Ataque/Apoyo, consolidación 2026-08-20) — Única
-	puede aplicar a cualquier tipo de carta en juego."""
+	"""Cartas en juego de un jugador: las 3 líneas (Defensa/Ataque/Apoyo); se ignora el parámetro de
+	zona. Única puede aplicar a cualquier tipo de carta en juego."""
 	var main = _main.get_node_or_null("/root/Main")
 	if not main:
 		return []
