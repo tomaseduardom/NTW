@@ -65,6 +65,7 @@ enum CostType {
 	SELF_DISCARD,   # "Puedes Descartarlo/Descartarla" — la propia carta se descarta como costo (p.ej. Sumi)
 	SELF_DESTROY,   # "Puedes Destruir esta Arma" — la propia carta se destruye como costo (p.ej. Lanza Argenta)
 	EFFECT_COST,    # "Puedes <coste> para <efecto>" con un coste que entiende EffectCompiler.COST_PIECES (lo paga el intérprete, p.ej. hem hem real: "subir este Oro a tu mano")
+	HAND_BANISH,    # "Puedes Desterrar una carta de tu mano para <efecto>" — lo paga el handler de la carta (p.ej. sandraudiga, desde el Destierro)
 }
 
 enum TargetType {
@@ -79,6 +80,7 @@ enum TargetType {
 }
 
 # Patrones de objetivo
+const CardTextScript = preload("res://scripts/core/cards/CardText.gd")
 const TARGET_PATTERNS = {
 	"opponent": ["el oponente", "tu oponente", "oponente", "rival"],
 	"self": ["tú", "tu ", "robas", "buscas", "descartas"],
@@ -589,6 +591,11 @@ func parse_abilities(text: String, card_id: String = "") -> Array[Dictionary]:
 
 		# La habilidad que dan tundra viva / isla de gigantes a cartas del Cementerio (el costo de Desterrar las
 		# otras lo paga ActivatedPatterns; la carta sale del Cementerio al usarla).
+		# "Si está en tu Destierro, puedes Desterrar una carta de tu mano para Barajarlo" (sandraudiga). No los
+		# costes alternativos al jugarla ("para reducir su coste", geminis).
+		var folded_s: String = CardTextScript.fold(lower_s)
+		var pays_hand_banish: bool = "puedes desterrar una carta de tu mano para " in folded_s \
+			and not ("reducir su coste" in folded_s or "para jugarlo" in folded_s)
 		var granted_by_tundra_isla: bool = lower_s.begins_with("destierra dos cartas de tu cementerio para subirlo") 			or lower_s.begins_with("destierra tres cartas de tu cementerio para jugarlo")
 		if once_per_turn or vigilia_no_gold_yet or cemetery_granted or granted_by_tundra_isla:
 			cost_type = CostType.ONCE_PER_TURN
@@ -608,6 +615,8 @@ func parse_abilities(text: String, card_id: String = "") -> Array[Dictionary]:
 			cost_type = CostType.SELF_DISCARD
 		elif pays_self_destroy:
 			cost_type = CostType.SELF_DESTROY
+		elif pays_hand_banish and trigger_event == "":
+			cost_type = CostType.HAND_BANISH
 		elif m_pay_gold:
 			cost_type = CostType.GOLD
 			cost_amount = _parse_amount(m_pay_gold.get_string(1))
