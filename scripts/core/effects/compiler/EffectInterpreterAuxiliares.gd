@@ -141,6 +141,7 @@ static func describe_steps(steps: Array) -> String:
 					"self_bounce": "Subir esta carta a tu mano", "self_destroy": "Destruir esta carta",
 					"shuffle_hand": "Barajar %d de tu mano" % st.amount,
 					"banish_hand": "Desterrar %d de tu mano" % st.amount,
+					"banish_cemetery": "Desterrar %d de tu Cementerio" % st.amount,
 					"sacrifice_any": "%s %d que controles" % [{"destroy": "Destruir", "banish": "Desterrar",
 						"shuffle": "Barajar"}.get(str(st.get("verb", "")), ""), st.amount]}.get(st.kind, st.kind))
 			"hand_peek":

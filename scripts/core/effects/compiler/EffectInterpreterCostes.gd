@@ -45,6 +45,13 @@ func _cost_candidates(main: Node, c: Dictionary, card: Node, controller_id: int)
 	return []
 
 
+func _own_cemetery_cost_pool(card: Node, controller_id: int) -> Array:
+	"""Cartas del Cementerio propio que pueden pagar "Desterrar N cartas de tu Cementerio": todas menos la
+	carta misma (si la habilidad se usa desde el Cementerio)."""
+	var self_data = card.card_data if card and card.get("card_data") != null else null
+	return CardManager.get_cemetery(controller_id).filter(func(d): return not is_same(d, self_data))
+
+
 func _controlled_in_play(main: Node, pid: int) -> Array:
 	"""Cartas en juego que controla 'pid': Líneas, Armas portadas, Reserva y Oro Pagado."""
 	var out: Array = []
@@ -97,6 +104,9 @@ func _cost_unpayable(main: Node, c: Dictionary, card: Node, controller_id: int) 
 		"mill":
 			if CardManager.get_deck_count(controller_id) < int(c.amount):
 				return "no tienes %d cartas en tu Castillo" % int(c.amount)
+		"banish_cemetery":
+			if _own_cemetery_cost_pool(card, controller_id).size() < int(c.amount):
+				return "no tienes %d cartas en tu Cementerio" % int(c.amount)
 		"discard", "reveal", "sacrifice", "banish_hand", "sacrifice_any":
 			if _cost_candidates(main, c, card, controller_id).size() < int(c.amount):
 				return "no tienes con qué pagar el coste"
@@ -164,6 +174,26 @@ func _pay_cost(main: Node, c: Dictionary, card: Node, controller_id: int) -> boo
 			return true
 		"mill":
 			await ActionModule.mill(controller_id, int(c.amount), false, "coste", true)
+			return true
+		"banish_cemetery":
+			var cem_pool := _own_cemetery_cost_pool(card, controller_id)
+			var need: int = int(c.amount)
+			var chosen: Array = []
+			if _is_bot(controller_id):
+				chosen = cem_pool.slice(0, need)
+			else:
+				var entries: Array = cem_pool.map(func(d): return {"data": d, "eligible": true})
+				var raw: Array = await ActionModule.pick_in_zones(controller_id, "%s: Destierra %d carta(s) de tu Cementerio" % [name, need],
+					[{"is_own": true, "zone": Constants.Zone.CEMENTERIO, "cards": entries, "exclusive": true}], need, need)
+				for r in raw:
+					if r is Array and r.size() == 2 and int(r[1]) >= 0 and int(r[1]) < entries.size():
+						chosen.append(entries[int(r[1])].data)
+			if chosen.size() < need:
+				return false
+			for d in chosen:
+				if CardManager.take_from_cemetery(controller_id, d):
+					d["esta_oculta"] = false
+					CardManager.append_to_exile(controller_id, d)
 			return true
 		"discard", "reveal", "sacrifice", "banish_hand", "sacrifice_any":
 			var pool := _cost_candidates(main, c, card, controller_id)

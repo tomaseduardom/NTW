@@ -163,6 +163,9 @@ const COST_PIECES := [
 	["self_destroy", "destruirl[oa]"],
 	["gold", "(?:pagar|paga) (?<n>" + NUM + ") oros?"],
 	["discard", "descartar (?:(?<dn>" + NUM + ") cartas?(?: de tu mano)?|(?:un|una) (?<types>" + TALT + ")(?: de tu mano)?)"],
+	# "Desterrar (otra) una/dos cartas de tu Cementerio para..." (udjat, grendel, argos, rosa pincheira,
+	# forma canina). Nunca la carta misma. No "de tu Cementerio o mano" (van helsing, sigue en su patrón).
+	["banish_cemetery", "desterrar (?:otra |otras )?(?<cn>" + NUM + ") cartas? de tu cementerio(?! o )"],
 	# "Desterrar una carta de tu mano para..." (hijo de la tierra, melmoth, yekamus...). No "de tu mano o
 	# cementerio" ni "o que controles": esos siguen en sus patrones.
 	["banish_hand", "desterrar (?:(?<bn>" + NUM + ") cartas?|(?:un|una) (?<types>" + TALT + ")) de tu mano(?! o )"],
@@ -943,6 +946,8 @@ static func _cost_step(kind: String, m: RegExMatch) -> Dictionary:
 				"verb": "destroy" if sv == "destruir" else ("banish" if sv == "desterrar" else "shuffle"),
 				"cost_val": int(m.get_string("cval")) if not m.get_string("cval").is_empty() else -1,
 				"cost_cmp": m.get_string("ccmp")}
+		"banish_cemetery":
+			return {"op": "cost", "kind": "banish_cemetery", "amount": parse_amount(m.get_string("cn"))}
 		"banish_hand":
 			if not m.get_string("bn").is_empty():
 				return {"op": "cost", "kind": "banish_hand", "amount": parse_amount(m.get_string("bn")), "types": []}
