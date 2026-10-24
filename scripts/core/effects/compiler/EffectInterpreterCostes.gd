@@ -8,10 +8,10 @@ extends "res://scripts/core/effects/compiler/EffectInterpreterAuxiliares.gd"
 
 
 func _cost_candidates(main: Node, c: Dictionary, card: Node, controller_id: int) -> Array:
-	"""Cartas entre las que se elige el coste: la mano (Descartar / mostrar) o tus otros Aliados en
-	juego (Destruir otro Aliado que controles)."""
+	"""Cartas entre las que se elige el coste: la mano (Descartar / mostrar / Desterrar de la mano) o
+	tus otros Aliados en juego (Destruir otro Aliado que controles)."""
 	match c.kind:
-		"discard", "reveal":
+		"discard", "reveal", "banish_hand":
 			var types: Array = c.get("types", [])
 			var race := str(c.get("race", ""))
 			var in_hand: Array = []
@@ -66,7 +66,7 @@ func _cost_unpayable(main: Node, c: Dictionary, card: Node, controller_id: int) 
 		"mill":
 			if CardManager.get_deck_count(controller_id) < int(c.amount):
 				return "no tienes %d cartas en tu Castillo" % int(c.amount)
-		"discard", "reveal", "sacrifice":
+		"discard", "reveal", "sacrifice", "banish_hand":
 			if _cost_candidates(main, c, card, controller_id).size() < int(c.amount):
 				return "no tienes con qué pagar el coste"
 	return ""
@@ -134,7 +134,7 @@ func _pay_cost(main: Node, c: Dictionary, card: Node, controller_id: int) -> boo
 		"mill":
 			await ActionModule.mill(controller_id, int(c.amount), false, "coste", true)
 			return true
-		"discard", "reveal", "sacrifice":
+		"discard", "reveal", "sacrifice", "banish_hand":
 			var pool := _cost_candidates(main, c, card, controller_id)
 			var n: int = int(c.amount)
 			var picked: Array = []
@@ -144,7 +144,9 @@ func _pay_cost(main: Node, c: Dictionary, card: Node, controller_id: int) -> boo
 			elif c.kind == "discard":
 				picked = await _ts._targeted_executor._select_hand_cards_for_discard(pool, n, controller_id)
 			else:
-				var prompt := "%s: %s" % [name, "muestra una carta de tu mano" if c.kind == "reveal" else "Destruye otro Aliado que controles"]
+				var what := {"reveal": "muestra una carta de tu mano", "sacrifice": "Destruye otro Aliado que controles",
+					"banish_hand": "Destierra %d carta(s) de tu mano" % n}
+				var prompt := "%s: %s" % [name, what.get(c.kind, "")]
 				picked = await main._card_interaction.await_multi_target(prompt, pool, n, Callable(), Callable(),
 					false, null, controller_id)
 			picked = picked.filter(func(p): return is_instance_valid(p))
@@ -157,6 +159,12 @@ func _pay_cost(main: Node, c: Dictionary, card: Node, controller_id: int) -> boo
 					load("res://scripts/core/effects/mechanics/RevealedCards.gd").record(controller_id, picked.map(func(p): return p.card_data), name)
 				"sacrifice":
 					await ActionModule.destroy(picked, card, false, true)
+				"banish_hand":
+					for p in picked:
+						var data: Dictionary = PlayerSideScript.take_from_hand(main, controller_id, p)
+						if not data.is_empty():
+							data["esta_oculta"] = false
+							CardManager.add_to_exile(controller_id, data)
 			return true
 	return false
 

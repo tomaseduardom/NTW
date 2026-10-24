@@ -34,6 +34,7 @@ func _ready() -> void:
 	_turn_clock_defaults()
 	_history()
 	_match_reset()
+	_compiler()
 	print("Core: %d/%d casos OK" % [passed, passed + failed])
 	get_tree().quit(1 if failed > 0 else 0)
 
@@ -226,3 +227,21 @@ func _match_reset() -> void:
 	check("reset: se conserva lo armado en _ready", EffectController._prevention_registry.size(), registry_size)
 	check("reset: submódulos siguen vivos", is_instance_valid(TriggerSystem._effect_interpreter), true)
 	check("reset: las cartas no se tocan", CardDatabase.cards.is_empty(), false)
+
+
+func _compiler() -> void:
+	# Piezas del compilador: cada frase debe compilar completa (ok) en vez de quedar para un handler suelto.
+	for text in [
+		"Una vez por turno, puedes Desterrar una carta de tu mano para Robar una carta.",
+		"En tu Fase Final, puedes Desterrar una carta de tu mano para agrupar un Oro.",
+		"En tu Fase Final, busca una carta en tu Castillo, ponla en tu mano y Roba una carta.",
+		"Cuando entra en juego, busca un Aliado en tu Castillo o Cementerio, ponlo en tu mano y tus Aliados ganan 1 de Fuerza permanentemente.",
+		"Busca en tu Castillo un Aliado, ponlo en tu mano y Roba dos cartas.",
+	]:
+		check("compila: %s" % text, EffectCompilerScript.compile_clause(text).get("ok", false), true)
+	var c: Dictionary = EffectCompilerScript.compile_clause("Una vez por turno, puedes Desterrar una carta de tu mano para Robar una carta.")
+	var costs: Array = c.get("steps", []).filter(func(s): return s.get("op") == "cost")
+	check("coste: desterrar de la mano", costs[0].get("kind", "") if not costs.is_empty() else "", "banish_hand")
+	# "de tu mano o Cementerio" sigue en su patrón (no es solo de la mano).
+	check("no compila: de tu mano o Cementerio",
+		EffectCompilerScript.compile_clause("Una vez por turno, puedes Desterrar una carta de tu mano o Cementerio para Desterrar una carta oponente de coste 3 o menos.").get("ok", false), false)

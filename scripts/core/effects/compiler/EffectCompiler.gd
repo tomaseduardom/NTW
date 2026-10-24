@@ -163,6 +163,9 @@ const COST_PIECES := [
 	["self_destroy", "destruirl[oa]"],
 	["gold", "(?:pagar|paga) (?<n>" + NUM + ") oros?"],
 	["discard", "descartar (?:(?<dn>" + NUM + ") cartas?(?: de tu mano)?|(?:un|una) (?<types>" + TALT + ")(?: de tu mano)?)"],
+	# "Desterrar una carta de tu mano para..." (hijo de la tierra, melmoth, yekamus...). No "de tu mano o
+	# cementerio" ni "o que controles": esos siguen en sus patrones.
+	["banish_hand", "desterrar (?:(?<bn>" + NUM + ") cartas?|(?:un|una) (?<types>" + TALT + ")) de tu mano(?! o )"],
 	["mill", "botar (?<n>" + NUM + ")(?: cartas?)?"],
 	["reveal", "mostrar (?:un|una) (?<types>" + T1 + ")(?: (?<race>" + RACE + "))? de tu mano"],
 	["sacrifice", "destruir otro aliado que controles"],
@@ -299,7 +302,8 @@ const ATOMS := [
 	["discard_self", "descarta(?:s|r)? (?<n>" + NUM + ") cartas?(?: de tu mano)?(?! de la mano)"],
 	["shuffle_from_hand", "baraja(?:r)? (?<upto>hasta )?(?<n>" + NUM + ") cartas? de tu mano(?: en tu castillo)?"],
 	["shuffle_from_cemetery", "baraja(?:r)? (?<upto>hasta )?(?<n>" + NUM + ") cartas? de tu cementerio en tu castillo"],
-	# Buscar: varios tipos, "que no sea X ni Y", "de coste N o más/menos".
+	# Buscar: varios tipos, "que no sea X ni Y", "de coste N o más/menos". El destino va tras "y" o tras una
+	# coma ("busca un Aliado, ponlo en tu mano y roba una carta").
 	# "...y jugarlo sin pagar su coste / reduciendo su coste en un Oro / por dos Oros menos".
 	["search", "busca(?:r)? (?:en tu (?<z1>castillo|cementerio)(?: (?:o|y/o) (?:tu )?(?<z2>castillo|cementerio))?,? )?" \
 		+ "(?<objs>" + OBJS + ")" \
@@ -307,7 +311,7 @@ const ATOMS := [
 		+ "(?:,? de coste (?<cval>" + NUM + ")(?: o (?<ccmp>menos|mas))?)?" \
 		+ "(?<nohab> sin habilidad)?" \
 		+ "(?: en tu (?<z3>castillo|cementerio)(?: (?:o|y/o) (?:tu )?(?<z4>castillo|cementerio))?)?" \
-		+ ",? y (?:(?:ponla|ponlo|ponerla|ponerlo|ponlas|ponlos|ponerlas|ponerlos) en tu (?<dest>mano|oro pagado|cementerio)" \
+		+ "(?:,? y |, )(?:(?:ponla|ponlo|ponerla|ponerlo|ponlas|ponlos|ponerlas|ponerlos) en tu (?<dest>mano|oro pagado|cementerio)" \
 		+ "|(?<play>jugarlo|jugarla|juegalo|juegala|jugarlos|jugarlas|juegalos|juegalas)(?: (?<free>sin pagar su coste)" \
 		+ "| reduciendo su coste en (?<red>" + NUM + ") oros?(?:, hasta un minimo de (?<floor>\\d+))?" \
 		+ "| por (?<red2>" + NUM + ") oros? menos))"],
@@ -908,6 +912,10 @@ static func _cost_step(kind: String, m: RegExMatch) -> Dictionary:
 			return {"op": "cost", "kind": "discard", "amount": 1, "types": _type_list(m.get_string("types"))}
 		"mill", "shuffle_hand":
 			return {"op": "cost", "kind": kind, "amount": parse_amount(m.get_string("n"))}
+		"banish_hand":
+			if not m.get_string("bn").is_empty():
+				return {"op": "cost", "kind": "banish_hand", "amount": parse_amount(m.get_string("bn")), "types": []}
+			return {"op": "cost", "kind": "banish_hand", "amount": 1, "types": _type_list(m.get_string("types"))}
 		"reveal":
 			return {"op": "cost", "kind": "reveal", "amount": 1, "types": _type_list(m.get_string("types")),
 				"race": m.get_string("race")}
