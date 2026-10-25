@@ -108,6 +108,18 @@ static func describe_steps(steps: Array) -> String:
 					var tl: Array = TYPE_LABELS.get(sp.types[0] if sp.types.size() == 1 else "", TYPE_LABELS[""])
 					wanted.append(tl[0] if int(sp.count) == 1 else "%d %s" % [sp.count, tl[1]])
 				parts.append("Mostrar del tope hasta %s" % " y ".join(wanted))
+				var dist_words := {"hand": "a tu mano", "cemetery": "a tu Cementerio", "exile": "a tu Destierro",
+					"play_free": "se juega", "shuffle": "se baraja"}
+				var dist_parts: Array = []
+				for it in st.get("dist", []):
+					dist_parts.append("%d %s" % [int(it.count), dist_words.get(it.dest, "")])
+				if not dist_parts.is_empty():
+					parts.append("Repartir: %s" % ", ".join(dist_parts))
+				elif st.get("dest", "") in ["put", "gold"]:
+					parts.append("Ponerlas en juego" if st.dest == "put" else "Ponerlas en tu Oro pagado")
+			"reveal_top":
+				parts.append("Mostrar %d del tope y %s %s%d" % [int(st.count), "jugar" if st.get("dest", "") == "play" else "elegir",
+					"hasta " if st.get("up_to", false) else "", int(st.get("pick", 1))])
 			"discard":
 				parts.append("Descartar %d" % st.amount)
 			"shuffle_from_hand":

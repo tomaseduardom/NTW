@@ -1,6 +1,8 @@
 extends "res://scripts/core/effects/compiler/EffectInterpreterDeclaracion.gd"
 ## EffectInterpreterEjecucion — familia Ejecucion de EffectInterpreter.gd (ver EffectInterpreterBase.gd).
 
+const KeywordParserScript = preload("res://scripts/core/cards/KeywordParser.gd")
+
 
 func _execute_steps(main: Node, steps: Array, chosen_targets: Dictionary, card: Node, controller_id: int) -> bool:
 	"""Ejecuta en orden; corta en un paso 'then' si el anterior no se
@@ -47,6 +49,8 @@ func _execute_step(main: Node, st: Dictionary, targets: Array, card: Node, contr
 			return true
 		"reveal_until":
 			return await _reveal_until(main, st, card, controller_id)
+		"reveal_top":
+			return await _reveal_top(main, st, card, controller_id)
 		"hand_peek":
 			return await _hand_peek(main, st, card, controller_id)
 		"shuffle_from_cemetery":
@@ -735,26 +739,64 @@ func _reveal_until(main: Node, st: Dictionary, card: Node, controller_id: int) -
 		need.append(int(sp.count))
 	var revealed: Array = []
 	var taken: Array = []
+	var taken_names: Array = []  # por spec, para "de distinto nombre"
+	for _sp in st.specs:
+		taken_names.append([])
 	while not deck.is_empty() and need.any(func(n): return n > 0):
 		var top: Dictionary = deck.pop_front()
 		revealed.append(top)
+		var top_name: String = str(top.get("nombre", "")).to_lower()
 		for i in range(st.specs.size()):
-			if need[i] > 0 and _spec_matches(st.specs[i], top):
+			if need[i] > 0 and _spec_matches(st.specs[i], top) \
+					and not (st.specs[i].get("distinct", false) and top_name in taken_names[i]):
 				need[i] -= 1
 				taken.append(top)
+				taken_names[i].append(top_name)
 				break
 	var title := _card_name(card)
 	load("res://scripts/core/effects/mechanics/RevealedCards.gd").record(controller_id, revealed, title)
+	var dest: String = str(st.get("dest", "play_free" if st.get("play_free", false) else "hand"))
+	# Reparto ("pon uno en tu mano, tres en tu Cementerio"): quien controla el efecto elige cuáles van a
+	# cada destino, en el orden del texto; lo que sobre se baraja.
+	var moves: Array = []  # [[datos, destino]]
+	if dest == "dist":
+		var pool: Array = taken.duplicate()
+		for item in st.get("dist", []):
+			if pool.is_empty():
+				break
+			var n: int = mini(int(item.count), pool.size())
+			var chosen: Array = pool.slice(0, n)
+			if n < pool.size() and not _is_bot(controller_id):
+				var entries: Array = pool.map(func(d): return {"data": d, "eligible": true})
+				var raw: Array = await ActionModule.pick_in_zones(controller_id, "%s: elige %d para %s" % [title, n,
+					REVEAL_DEST_LABELS.get(item.dest, "")], [{"is_own": true, "zone": Constants.Zone.CASTILLO, "cards": entries,
+					"exclusive": true}], n, n)
+				var picked: Array = []
+				for r in raw:
+					if r is Array and r.size() == 2 and int(r[1]) >= 0 and int(r[1]) < entries.size():
+						picked.append(entries[int(r[1])].data)
+				if picked.size() == n:
+					chosen = picked
+			for d in chosen:
+				pool.erase(d)
+				moves.append([d, str(item.dest)])
+		taken = taken.filter(func(d): return not pool.has(d))  # lo que no tuvo destino vuelve al Castillo
+	else:
+		for d in taken:
+			moves.append([d, dest])
 	# Visor de mostrar para quien controla el efecto: solo las cartas que indica (RevealWindow).
 	if not taken.is_empty():
 		var reveal_window = load("res://scripts/ui/zones/RevealWindow.gd")
-		if st.get("play_free", false) and taken.size() > 1:
+		if dest == "play_free" and taken.size() > 1:
 			taken = await reveal_window.choose_order(main, controller_id, taken, title)
+			moves = taken.map(func(d): return [d, dest])
 		else:
 			await reveal_window.show_cards(main, controller_id, taken, title,
-				"Se juega sin pagar su coste" if st.get("play_free", false) else "Van a tu mano")
-	for d in taken:
-		revealed.erase(d)
+				"Se reparten" if dest == "dist" else ("Van a %s" % REVEAL_DEST_LABELS.get(dest, "tu mano") if dest in ["hand", "cemetery", "exile", "gold"]
+					else "Se juega sin pagar su coste"))
+	for mv in moves:
+		if mv[1] != "shuffle":
+			revealed.erase(mv[0])
 	for d in revealed:
 		deck.append(d)
 	CardManager.shuffle_deck(controller_id)
@@ -762,14 +804,123 @@ func _reveal_until(main: Node, st: Dictionary, card: Node, controller_id: int) -
 	if main.get("_zone_manager"):
 		main._zone_manager._update_castillo_counts()
 	var queue_before: int = _ts.trigger_queue.size() if _ts else 0
-	for d in taken:
-		if st.get("play_free", false) and main.get("_gold_manager") and int(d.get("tipo", -1)) != Constants.CardType.ORO:
-			await main._gold_manager.play_card_for_free(d.duplicate(), controller_id)  # "y juégalo sin pagar su coste"
-		else:
-			PlayerSideScript.put_in_hand(main, controller_id, d.duplicate())
-	if st.get("play_free", false) and taken.size() > 1:
+	var played := 0
+	for mv in moves:
+		if mv[1] in ["play_free", "put"]:
+			played += 1
+		await _move_revealed(main, mv[0].duplicate(), str(mv[1]), controller_id)
+	if played > 1:
 		await load("res://scripts/core/effects/mechanics/SearchPatterns.gd").reorder_new_triggers(queue_before, controller_id)
 	return not need.any(func(n): return n > 0)
+
+
+const REVEAL_DEST_LABELS := {"hand": "tu mano", "cemetery": "tu Cementerio", "exile": "tu Destierro",
+	"play_free": "jugar sin pagar su coste", "put": "poner en juego", "gold": "tu Oro pagado", "shuffle": "barajar en tu Castillo"}
+
+
+func _move_revealed(main: Node, d: Dictionary, dest: String, controller_id: int) -> void:
+	"""Lleva una carta mostrada (ya fuera del Castillo) a su destino. Un Oro nunca se juega: "ponlo en
+	juego" lo pone en tu Reserva, "juégalo" lo deja en tu mano."""
+	d["esta_oculta"] = false
+	var is_gold: bool = int(d.get("tipo", -1)) == Constants.CardType.ORO
+	var gm = main.get("_gold_manager")
+	match dest:
+		"cemetery":
+			CardManager.add_to_cemetery(controller_id, d)
+		"exile":
+			CardManager.add_to_exile(controller_id, d)
+		"gold":
+			if is_gold and gm:
+				await gm.put_gold_directly_in_pagado(controller_id, d)
+			else:
+				PlayerSideScript.put_in_hand(main, controller_id, d)
+		"put":
+			if is_gold and gm:
+				await gm.put_gold_directly_in_reserva(controller_id, d)
+			elif gm:
+				await gm.play_card_for_free(d, controller_id)  # "ponlo en juego": entra sin pagar su coste
+			else:
+				PlayerSideScript.put_in_hand(main, controller_id, d)
+		"play_free":
+			if not is_gold and gm:
+				await gm.play_card_for_free(d, controller_id)  # "y juégalo sin pagar su coste"
+			else:
+				PlayerSideScript.put_in_hand(main, controller_id, d)
+		_:
+			PlayerSideScript.put_in_hand(main, controller_id, d)
+
+
+func _reveal_top(main: Node, st: Dictionary, card: Node, controller_id: int) -> bool:
+	"""'Muestra N cartas del tope de tu Castillo, pon (hasta) K <tipo> de ahí en tu mano y baraja el resto'
+	(o 'el resto en tu Destierro / mano', o 'juega un Aliado de ahí por un Oro menos'). Quien controla el
+	efecto ve las N y elige; las que no se mueven vuelven barajadas."""
+	var deck: Array = CardManager.get_deck(controller_id)
+	var revealed: Array = []
+	for _i in range(int(st.count)):
+		if deck.is_empty():
+			break
+		revealed.append(deck.pop_front())
+	var title := _card_name(card)
+	load("res://scripts/core/effects/mechanics/RevealedCards.gd").record(controller_id, revealed, title)
+	var spec := {"types": st.get("pick_types", [])}
+	var playing: bool = st.get("dest", "hand") == "play"
+	var eligible: Array = []
+	for i in range(revealed.size()):
+		var d: Dictionary = revealed[i]
+		if _spec_matches(spec, d) and not (playing and int(d.get("tipo", -1)) == Constants.CardType.ORO):
+			eligible.append(i)
+	var k: int = mini(int(st.get("pick", 1)), eligible.size())
+	var chosen_idx: Array = eligible.slice(0, k)
+	if not _is_bot(controller_id) and not revealed.is_empty():
+		var entries: Array = []
+		for i in range(revealed.size()):
+			entries.append({"data": revealed[i], "eligible": i in eligible})
+		var raw: Array = await ActionModule.pick_in_zones(controller_id, "%s: elige hasta %d" % [title, k] if st.get("up_to", false)
+			else "%s: elige %d" % [title, k], [{"is_own": true, "zone": Constants.Zone.CASTILLO, "cards": entries, "exclusive": true}],
+			0 if st.get("up_to", false) else k, k)
+		chosen_idx = []
+		for r in raw:
+			if r is Array and r.size() == 2 and int(r[1]) in eligible and not chosen_idx.has(int(r[1])):
+				chosen_idx.append(int(r[1]))
+		if chosen_idx.size() < k and not st.get("up_to", false):
+			for i in eligible:
+				if chosen_idx.size() >= k:
+					break
+				if not chosen_idx.has(i):
+					chosen_idx.append(i)
+	var chosen: Array = chosen_idx.map(func(i): return revealed[i])
+	var rest: Array = []
+	for i in range(revealed.size()):
+		if not chosen_idx.has(i):
+			rest.append(revealed[i])
+	var rest_dest: String = str(st.get("rest", "shuffle"))
+	if rest_dest == "shuffle":
+		for d in rest:
+			deck.append(d)
+		CardManager.shuffle_deck(controller_id)
+		AnimationQueue.queue_shuffle(controller_id, "Barajar mazo (%s)" % title)
+	if main.get("_zone_manager"):
+		main._zone_manager._update_castillo_counts()
+	for d in chosen:
+		var data: Dictionary = d.duplicate()
+		data["esta_oculta"] = false
+		if not playing:
+			PlayerSideScript.put_in_hand(main, controller_id, data)
+			continue
+		# "Juega un Aliado de ahí por un Oro menos": pasa por la mano con el descuento; si no se juega, queda ahí.
+		var node: Node = PlayerSideScript.put_in_hand(main, controller_id, data)
+		var reduce: int = int(st.get("reduce", 0))
+		if node and reduce > 0:
+			PaymentManager.agregar_modificador_coste(node, -reduce, func(c: Node) -> bool: return c == node, false)
+		if node:
+			await PlayerSideScript.play_from_hand(main, controller_id, node)
+			if is_instance_valid(node) and reduce > 0:
+				PaymentManager.remover_modificador_coste(node)
+	if rest_dest != "shuffle":
+		for d in rest:
+			await _move_revealed(main, d.duplicate(), {"mano": "hand", "destierro": "exile", "cementerio": "cemetery"}.get(rest_dest, "hand"),
+				controller_id)
+	return not chosen.is_empty() or st.get("up_to", false)
 
 
 func _hand_peek(main: Node, st: Dictionary, card: Node, controller_id: int) -> bool:
@@ -820,6 +971,35 @@ func _spec_matches(spec: Dictionary, data: Dictionary) -> bool:
 	var race: String = str(spec.get("race", ""))
 	if race != "" and not (race.substr(0, 5) in ActionModule._strip_accents(str(data.get("raza", "")).to_lower())):
 		return false
+	var name_not: String = str(spec.get("name_not", ""))
+	if name_not != "" and name_not in ActionModule._strip_accents(str(data.get("nombre", "")).to_lower()):
+		return false  # "dos Aliados Héroe que no sean Odiseo"
+	var ability: String = str(data.get("habilidad", "")).strip_edges()
+	match str(spec.get("ability", "")):
+		"con":
+			if ability.is_empty():
+				return false
+		"sin":
+			if not ability.is_empty():
+				return false
+	var kw: String = str(spec.get("keyword", ""))
+	if kw != "" and not KeywordParserScript.has_own(ability, KeywordParserScript.keyword_of(kw)):
+		return false  # "un Aliado con Furia"
+	var sval: int = int(spec.get("str_val", -1))
+	if sval >= 0:
+		if int(data.get("tipo", -1)) != Constants.CardType.ALIADO:
+			return false
+		var strength: int = int(data.get("fuerza", 0))
+		match str(spec.get("str_cmp", "")):
+			"menos":
+				if strength > sval:
+					return false
+			"mas":
+				if strength < sval:
+					return false
+			_:
+				if strength != sval:
+					return false
 	var cval: int = int(spec.get("cost_val", -1))
 	if cval >= 0:
 		if int(data.get("tipo", -1)) == Constants.CardType.ORO:

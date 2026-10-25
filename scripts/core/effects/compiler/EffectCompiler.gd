@@ -34,8 +34,12 @@ class_name EffectCompiler
 ## {op: "gold", amount} — Genera N Oros (por el turno, sin restricción)
 ## {op: "buff", count, up_to, amount, keywords, to_exile, permanent, turn_only, target} — Un Aliado
 ## gana Furia, N de Fuerza y hace daño al Destierro
-## {op: "reveal_until", specs: [{count, types, cost_val, cost_cmp}]} — Muestra del tope hasta
-## mostrar ... y ponlos en tu mano
+## {op: "reveal_until", specs: [{count, types, race, types_not, name_not, cost_val, cost_cmp, str_val,
+## str_cmp, ability, keyword, distinct}], dest, dist: [{count, dest}]} — Muestra del tope hasta mostrar
+## ... y ponlos en tu mano / juégalos / ponlos en juego / en tu Oro pagado, o reparte ("pon uno en tu
+## mano, tres en tu Cementerio y baraja el resto")
+## {op: "reveal_top", count, pick, pick_types, up_to, dest, reduce, rest} — Muestra N cartas del tope,
+## pon (hasta) K de ahí en tu mano (o juega una por N Oros menos) y el resto se baraja / va a otra zona
 ## {op: "if", cond: {kind: "controls", count, type, race, other, min_strength, attack_line}, steps}
 ## — "si controlas (otro) (N o más) <tipo/raza>, ..."
 ## {op: "pay", amount} — costo "pagar N Oros para ..." (se paga antes)
@@ -226,6 +230,8 @@ const STATIC_STARTS := [
 	"tu aliado de mayor", "cancelar las habilidades", "cancelar habilidad", "anular tus", "el dano directo",
 	"jugar talismanes cuesta", "jugar aliados cuesta", "si controlas aliados de fuerza", "si esta en tu reserva",
 	"si esta en tu cementerio", "si esta en juego", "los jugadores solo pueden", "cada jugador solo puede",
+	# Reglas que siguen a un "mostrar" (anillo de vacío, shurijo, castillo matsumoto).
+	"no se pueden", "los jugadores deben", "a los jugadores les cuesta",
 	"solo puedes utilizar", "mientras este totem", "a tu oponente le cuesta",
 ]
 
@@ -264,8 +270,20 @@ const RACE := "(?:angel(?:es)?|eternos?|dragon(?:es)?|caballeros?|paladin(?:es)?
 const OBJ1 := "(?:(?:hasta )?" + NUM + " )?(?:" + T1 + "(?: " + RACE + "(?: o " + RACE + ")*)?|" + RACE + ")"
 const OBJS := OBJ1 + "(?:(?:, y |, | o | u | y )" + OBJ1 + ")*"
 ## "hasta mostrar un Oro y un Arma o Tótem de coste 2 o menos"
-const REVEAL_SPEC := NUM + " " + TALT + "(?: " + RACE + ")?(?: que no sean? (?:un |una )?" + T1 + ")?" \
-	+ "(?: (?:de )?coste \\d+(?: o (?:menos|mas))?)?"  # "un Arma coste 1" (fat-frumos)
+## Tipos dentro de "hasta mostrar": la coma separa cartas pedidas ("un Aliado, un Arma y un Tótem",
+## megumi), no alternativas como en TALT.
+const TALT_R := T1 + "(?:(?: o | u )(?:un |una )?" + T1 + ")*"
+const REVEAL_KW := "(?:furia|imbloqueable|indestructible|indesterrable|guardian|retador)"
+## "un Aliado Guerrero de coste 2 o menos", "un Oro con habilidad", "un Aliado con Furia", "dos Aliados
+## Héroe que no sean Odiseo", "un Aliado de fuerza 4 o más", "dos Oros de distinto nombre".
+const REVEAL_SPEC := NUM + " " + TALT_R + "(?: " + RACE + ")?(?: (?:con|sin) habilidad)?(?: con " + REVEAL_KW + ")?" \
+	+ "(?: que no sean? (?:un |una )?[a-z]+)?" \
+	+ "(?: (?:de )?coste \\d+(?: o (?:menos|mas))?)?"  \
+	+ "(?: de fuerza \\d+(?: o (?:menos|mas))?)?(?: de distinto nombre)?"  # "un Arma coste 1" (fat-frumos)
+## Un destino del reparto de reveal_until: "pon uno en tu mano", "tres en tu Cementerio", "la otra en tu
+## Cementerio", "juega uno sin pagar su coste", "baraja el otro".
+const REVEAL_DIST_ITEM := "(?:(?:pon )?(?:" + NUM + "|otro|otra|el otro|la otra)(?: carta)? en tu (?:mano|cementerio|destierro)" \
+	+ "|juega (?:uno|una|el otro|la otra) sin pagar su coste|baraja (?:el otro|la otra))"
 
 ## Átomos en orden de prioridad (los más específicos primero: p.ej.
 ## 'descarta... de la mano de tu oponente al azar' antes que 'descarta N
@@ -386,9 +404,23 @@ const ATOMS := [
 	# y ponlos en tu mano (y baraja el resto)" — el resto siempre se baraja.
 	# También "puedes mostrar cartas de tu Castillo hasta mostrar dos Aliados Guerrero y ponerlos en tu
 	# mano", "...que no sean Talismán" y "...un Tótem de coste 1 y juégalo sin pagar su coste".
-	["reveal_until", "(?:muestra|mostrar) cartas (?:del tope |de la parte superior )?de tu castillo hasta mos(?:tr|t)a(?:r|s) (?<specs>" \
-		+ REVEAL_SPEC + "(?: y " + REVEAL_SPEC + ")*)(?:,? y |, )(?:(?:ponlos|ponlas|ponlo|ponla|ponerlos|ponerlas|ponerlo|ponerla|pon esa carta|pon esas cartas)" \
-		+ " en tu mano(?:,? y baraja el resto)?|(?<play>juegalo|juegala|jugarlo|jugarla|juegalos|jugarlos) sin pagar su coste)"],
+	# Destinos: a la mano, "juégalo sin pagar su coste", "ponlo en juego" (anillo de vacío), "ponlos en tu
+	# Oro pagado" (cae megido) o un reparto (nace la furia, monte fuji, megumi, ataque feérico, papa legba).
+	["reveal_until", "(?:muestra|muestras|mostrar) cartas (?:del tope |de la parte superior )?de tu castillo hasta (?:mos(?:tr|t)a(?:r|s)|que muestres) (?<specs>" \
+		+ REVEAL_SPEC + "(?:(?:,| y) " + REVEAL_SPEC + ")*)(?:,? y |, )(?:(?:ponlos|ponlas|ponlo|ponla|ponerlos|ponerlas|ponerlo|ponerla|pon esa carta|pon esas cartas|pon ese [a-z]+)" \
+		+ " en tu mano|(?<gold>ponlos|ponlas|ponlo|ponla) en tu oro pagado|(?<put>ponlo|ponla|ponlos|ponlas) en juego" \
+		+ "|(?<play>juegalo|juegala|jugarlo|jugarla|juegalos|jugarlos|juega ese aliado|juega esa carta) sin pagar su coste" \
+		+ "|(?<dist>" + REVEAL_DIST_ITEM + "(?:(?:, | y )" + REVEAL_DIST_ITEM + ")+))(?:(?:,? y |, )baraja el resto)?"],
+	# "Muestra cuatro cartas del tope de tu Castillo. Pon dos cartas de ahí en tu mano y el resto en tu
+	# Destierro" (warlock), "muestra las primeras cinco cartas de tu Castillo, pon hasta dos Aliados u Oros
+	# de ahí en tu mano y baraja el resto" (castillo matsumoto, frasco canópico), "mostrar seis cartas del
+	# tope de tu Castillo, elige un Aliado de ahí, ponlo en tu mano" (shurijo), "juega un Aliado de ahí por
+	# un Oro menos y pon el resto en tu mano" (yari).
+	["reveal_top", "(?:muestra|mostrar) (?:las primeras (?<n>" + NUM + ") cartas de tu castillo|(?<n2>" + NUM + ") cartas del tope de tu castillo)" \
+		+ "(?:,? y |, )(?:elige (?<ek>" + NUM + ") (?<et>" + TALT + ") de ahi, (?:ponlo|ponla|ponlos|ponlas) en tu mano" \
+		+ "|pon (?<upto>hasta )?(?<k>" + NUM + ") (?<kt>" + TALT + ") de ahi en tu mano" \
+		+ "|juega (?<pk>" + NUM + ") (?<pt>" + TALT + ") de ahi por (?<red>" + NUM + ") oros? menos)" \
+		+ "(?:,? y (?:pon )?el resto en tu (?<rd>mano|destierro|cementerio)|(?:,? y |, )baraja el resto)?"],
 	["mass", "(?<verb>destruye|destierra) todos los (?<kind>aliados|totems|armas)(?<opp> oponentes)?(?: en juego)?" \
 		+ "(?: de (?<stat>fuerza|coste) (?<val>\\d+) o (?<cmp>menos|mas))?"],
 	["bounce", "sub(?:e|ir) " + TARGET_RX + " a la mano de su dueno"],
@@ -474,7 +506,7 @@ const ATOMS := [
 ## autoloads. El compilador puede entender más de lo que se ejecuta (p.ej.
 ## "bounce"): esos planes se dejan a la cadena de patrones vieja.
 const EXECUTABLE_OPS := ["castle_look", "draw", "draw_to_match", "mill", "discard", "shuffle_from_hand", "search", "target", "mass", "choice",
-	"shuffle_from_cemetery", "self", "if", "cemetery_cleanup", "gold", "regroup_gold", "buff", "mass_buff", "reveal_until", "pay", "hand_peek", "annul", "talisman_fizzle",
+	"shuffle_from_cemetery", "self", "if", "cemetery_cleanup", "gold", "regroup_gold", "buff", "mass_buff", "reveal_until", "reveal_top", "pay", "hand_peek", "annul", "talisman_fizzle",
 	"regroup_cards", "gold_to_paid", "deck_to_hand", "no_damage", "play_from", "peek_hand", "show_hand", "cost", "castle_exile", "cancel_attack", "self_raise", "mill_x", "opp_gold_to_paid", "revive_blank", "self_buff_per"]
 const EXECUTABLE_VERBS := ["destroy", "banish", "shuffle", "silence", "cost_shift"]
 
@@ -658,8 +690,16 @@ static func _split_sentences(t: String) -> Array:
 			continue
 		# "...hasta mostrar un Aliado de coste 2. Ponlo en tu mano y Baraja el resto" (mochizuki
 		# chiyome): el destino de reveal_until en la oración siguiente va con la anterior.
-		if not out.is_empty() and "hasta mostrar" in out.back() \
-				and RegEx.create_from_string("^(?:ponlos|ponlas|ponlo|ponla|pon esa carta|pon esas cartas) en tu mano").search(s) != null:
+		# También el reparto ("...hasta mostrar cuatro Aliados. Pon uno en tu mano, tres en tu Cementerio",
+		# nace la furia) y "Muestra cuatro cartas del tope de tu Castillo. Pon dos cartas de ahí" (warlock).
+		if not out.is_empty() and ("hasta mostrar" in out.back() or "hasta que muestres" in out.back()) \
+				and RegEx.create_from_string("^(?:(?:ponlos|ponlas|ponlo|ponla|pon esa carta|pon esas cartas) en tu mano" \
+					+ "|pon (?:un|una|uno|dos|tres|el otro|la otra)\\b|juega (?:uno|una)\\b)").search(s) != null:
+			out[out.size() - 1] = out.back() + " y " + s
+			continue
+		if not out.is_empty() and RegEx.create_from_string("(?:^|, )(?:puedes )?(?:muestra|mostrar) (?:las primeras [a-z0-9]+ cartas de tu castillo" \
+					+ "|[a-z0-9]+ cartas del tope de tu castillo)$").search(out.back()) != null \
+				and RegEx.create_from_string("^(?:pon|juega|elige) ").search(s) != null:
 			out[out.size() - 1] = out.back() + " y " + s
 			continue
 		out.append(s)
@@ -1340,17 +1380,61 @@ static func _build(atom_name: String, m: RegExMatch) -> Dictionary:
 		"reveal_until":
 			var specs: Array = []
 			var spec_rx := RegEx.new()
-			spec_rx.compile("(?<n>" + NUM + ") (?<types>" + TALT + ")(?: (?<race>" + RACE + "))?" \
-				+ "(?: que no sean? (?:un |una )?(?<nt>" + T1 + "))?(?: (?:de )?coste (?<cval>\\d+)(?: o (?<ccmp>menos|mas))?)?")
+			spec_rx.compile("(?<n>" + NUM + ") (?<types>" + TALT_R + ")(?: (?<race>" + RACE + "))?(?: (?<hab>con|sin) habilidad)?" \
+				+ "(?: con (?<kw>" + REVEAL_KW + "))?(?: que no sean? (?:un |una )?(?<nt>[a-z]+))?" \
+				+ "(?: (?:de )?coste (?<cval>\\d+)(?: o (?<ccmp>menos|mas))?)?" \
+				+ "(?: de fuerza (?<sval>\\d+)(?: o (?<scmp>menos|mas))?)?(?<dn> de distinto nombre)?")
 			for sm in spec_rx.search_all(m.get_string("specs")):
-				var nt: String = TYPE_WORDS.get(sm.get_string("nt"), "")
+				var nt_word: String = sm.get_string("nt")
+				var nt: String = TYPE_WORDS.get(nt_word, "?") if not nt_word.is_empty() else ""
 				specs.append({"count": parse_amount(sm.get_string("n")), "types": _type_list(sm.get_string("types")),
-					"race": sm.get_string("race"), "types_not": [nt] if nt != "" else [],
+					"race": sm.get_string("race"), "types_not": [nt] if nt != "" and nt != "?" else [],
+					"name_not": nt_word if nt == "?" else "",  # "que no sean Odiseo"
 					"cost_val": int(sm.get_string("cval")) if not sm.get_string("cval").is_empty() else -1,
-					"cost_cmp": sm.get_string("ccmp")})
+					"cost_cmp": sm.get_string("ccmp"),
+					"str_val": int(sm.get_string("sval")) if not sm.get_string("sval").is_empty() else -1,
+					"str_cmp": sm.get_string("scmp"), "ability": sm.get_string("hab"), "keyword": sm.get_string("kw"),
+					"distinct": not sm.get_string("dn").is_empty()})
 			if specs.is_empty():
 				return {}
-			return {"op": "reveal_until", "specs": specs, "play_free": not m.get_string("play").is_empty()}
+			var dest := "hand"
+			if not m.get_string("play").is_empty():
+				dest = "play_free"
+			elif not m.get_string("put").is_empty():
+				dest = "put"
+			elif not m.get_string("gold").is_empty():
+				dest = "gold"
+			var dist: Array = []
+			if not m.get_string("dist").is_empty():
+				dest = "dist"
+				var item_rx := RegEx.create_from_string("(?:pon )?(?<n>" + NUM + "|otro|otra|el otro|la otra)(?: carta)? en tu (?<z>mano|cementerio|destierro)" \
+					+ "|(?<play>juega) (?<pn>uno|una|el otro|la otra) sin pagar su coste|(?<sh>baraja) (?:el otro|la otra)")
+				for im in item_rx.search_all(m.get_string("dist")):
+					if not im.get_string("play").is_empty():
+						dist.append({"count": 1, "dest": "play_free"})
+					elif not im.get_string("sh").is_empty():
+						dist.append({"count": 1, "dest": "shuffle"})
+					else:
+						var nw: String = im.get_string("n")
+						dist.append({"count": 1 if nw in ["otro", "otra", "el otro", "la otra"] else parse_amount(nw),
+							"dest": {"mano": "hand", "cementerio": "cemetery", "destierro": "exile"}[im.get_string("z")]})
+			return {"op": "reveal_until", "specs": specs, "play_free": dest == "play_free", "dest": dest, "dist": dist}
+		"reveal_top":
+			var rt_n: String = m.get_string("n") if not m.get_string("n").is_empty() else m.get_string("n2")
+			var rt := {"op": "reveal_top", "count": parse_amount(rt_n), "up_to": not m.get_string("upto").is_empty(),
+				"dest": "hand", "reduce": 0, "rest": m.get_string("rd") if not m.get_string("rd").is_empty() else "shuffle"}
+			if not m.get_string("ek").is_empty():
+				rt["pick"] = parse_amount(m.get_string("ek"))
+				rt["pick_types"] = _type_list(m.get_string("et"))
+			elif not m.get_string("k").is_empty():
+				rt["pick"] = parse_amount(m.get_string("k"))
+				rt["pick_types"] = _type_list(m.get_string("kt"))
+			else:
+				rt["pick"] = parse_amount(m.get_string("pk"))
+				rt["pick_types"] = _type_list(m.get_string("pt"))
+				rt["dest"] = "play"
+				rt["reduce"] = parse_amount(m.get_string("red"))
+			return rt
 		"bounce":
 			return _target_step("bounce", m)
 		"annul":
