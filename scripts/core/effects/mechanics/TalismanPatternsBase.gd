@@ -122,6 +122,7 @@ const KINDS := {
 	"ambos jugadores muestran su mano, comenzando por ti cada jugador elige una carta de la mano oponente y la coloca en su mano": "_corromper",
 	"sube cualquier cantidad de aliados que controles a tu mano. al comienzo de tu proximo turno juegalos sin pagar su coste": "_julio_verne",
 	"preven que una carta que controles sea afectada por un efecto oponente": "_fuego_purificador",
+	"busca en el castillo oponente una carta y juegala bajo tu control por un oro menos": "_koi_dragon",
 	"preven que una carta de nombre ignis o titan sea anulada, cancelada o afectada por un efecto oponente": "_rugido_titan",
 }
 

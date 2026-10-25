@@ -624,3 +624,39 @@ static func _invocar_angeles(main: Node, card: Node, pid: int) -> void:
 	RuleState.set_until("hand_revealed", 1 - pid, 1 << 30)  # HandReveal: por el resto del juego
 	load("res://scripts/core/effects/mechanics/HandReveal.gd").refresh()
 	main._update_debug("%s: tu oponente juega mostrando su mano por el resto del juego" % _name(card))
+
+
+## koi dragon: "Convierte todos los Oros en juego en Oros sin habilidad. Busca en el Castillo oponente una
+## carta y juégala bajo tu control por un Oro menos". Elige quien juega el Talismán (antes caía en el
+## analizador viejo, que le preguntaba al rival). Un Oro no se juega: se pone en tu Reserva.
+static func _koi_dragon(main: Node, card: Node, pid: int) -> void:
+	for p in [0, 1]:
+		for cont in [PlayerSideScript.gold_reserva(main, p), PlayerSideScript.oro_pagado(main, p)]:
+			if not cont:
+				continue
+			for g in cont.get_children():
+				if is_instance_valid(g) and g.get("card_type") == Constants.CardType.ORO and not KeywordManager.is_silenced(g):
+					await KeywordManager.silence_card(g, card, "permanent")
+	var opp: int = 1 - pid
+	var deck: Array = CardManager.get_deck(opp)
+	if deck.is_empty() or not main.get("_gold_manager"):
+		return
+	var entries: Array = deck.map(func(d): return {"data": d, "eligible": true})
+	var raw: Array = await ActionModule.pick_in_zones(pid, "%s: busca una carta en el Castillo oponente" % _name(card),
+		[{"is_own": false, "zone": Constants.Zone.CASTILLO, "cards": entries, "exclusive": true}], 1, 1)
+	var d: Dictionary = {}
+	if not raw.is_empty() and raw[0] is Array and raw[0].size() == 2 and int(raw[0][1]) >= 0 and int(raw[0][1]) < entries.size():
+		d = entries[int(raw[0][1])].data
+	CardManager.shuffle_deck(opp)
+	AnimationQueue.queue_shuffle(opp, "Barajar mazo (%s)" % _name(card))
+	if d.is_empty():
+		return
+	deck.erase(d)
+	d["esta_oculta"] = false
+	if int(d.get("tipo", -1)) == Constants.CardType.ORO:
+		await main._gold_manager.put_gold_directly_in_reserva(pid, d)
+	elif not await _play_paying(main, pid, d, maxi(0, int(d.get("coste", 0)) - 1)):
+		# No se pudo pagar: queda en tu mano.
+		PlayerSideScript.put_in_hand(main, pid, d)
+	if main.get("_zone_manager"):
+		main._zone_manager._update_castillo_counts()
