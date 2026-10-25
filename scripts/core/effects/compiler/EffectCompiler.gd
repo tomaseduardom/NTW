@@ -314,7 +314,8 @@ const ATOMS := [
 	# "Tu oponente Destierra dos cartas del tope de su Castillo" / "Destierra cinco cartas del tope del
 	# Castillo oponente" (CardManager.banish_from_deck()).
 	["castle_exile", "(?:tu oponente destierra (?<n>" + NUM + ") cartas? del (?<pos>tope|fondo) de su castillo" \
-		+ "|(?:destierra|desterrar) (?<n2>" + NUM + ") cartas? del (?<pos2>tope|fondo) del castillo oponente)"],
+		+ "|(?:destierra|desterrar) (?<n2>" + NUM + ") cartas? del (?<pos2>tope|fondo) del castillo oponente" \
+		+ "|tu oponente destierra las primeras (?<n3>" + NUM + ") cartas de su castillo)"],
 	["discard_self", "descarta(?:s|r)? (?<n>" + NUM + ") cartas?(?: de tu mano)?(?! de la mano)"],
 	["shuffle_from_hand", "baraja(?:r)? (?<upto>hasta )?(?<n>" + NUM + ") cartas? de tu mano(?: en tu castillo)?"],
 	# "Baraja (hasta) N cartas de tu Cementerio" ya es en tu Castillo (Barajar = al Castillo de su dueño).
@@ -368,6 +369,8 @@ const ATOMS := [
 	# "Mira la mano de tu oponente" / "Muestra tu mano", sin nada más (después de hand_peek, que lleva
 	# verbo).
 	["peek_hand", "mira(?:r)? la mano de tu oponente(?=$|,? y luego|, luego)"],
+	# "Tu oponente muestra su mano" (semyazza): la ve quien controla el efecto, como mirarla.
+	["peek_hand", "tu oponente (?:te )?muestra su mano(?=$|,? y luego|, luego)"],
 	["show_hand", "muestra(?:r)? tu mano(?=$|,? y |, )"],
 	# "No recibes daño (de combate) hasta tu próximo turno".
 	["no_damage", "no (?:recibes|puedes recibir) dano(?<combat> de combate)? hasta tu proximo turno"],
@@ -1105,6 +1108,8 @@ static func _build(atom_name: String, m: RegExMatch) -> Dictionary:
 				"random": not m.get_string("rnd").is_empty()}
 		"castle_exile":
 			var ce_n: String = m.get_string("n") if not m.get_string("n").is_empty() else m.get_string("n2")
+			if ce_n.is_empty():
+				ce_n = m.get_string("n3")  # "las primeras N cartas de su Castillo" (cadenas de titán)
 			var ce_pos: String = m.get_string("pos") if not m.get_string("pos").is_empty() else m.get_string("pos2")
 			return {"op": "castle_exile", "amount": parse_amount(ce_n), "bottom": ce_pos == "fondo"}
 		"discard_self":

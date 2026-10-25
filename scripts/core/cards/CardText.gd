@@ -15,6 +15,7 @@ class_name CardText
 const GRAMMAR_FIXES := [
 	["Los Oros oponentes pierde su habilidad", "Los Oros oponentes pierden su habilidad"],  # wayra tata
 	["busca un Oto en tu Castillo", "busca un Oro en tu Castillo"],  # trofeo de cazador
+	["una carta carta", "una carta"],  # lucy
 ]
 
 const _FOLD_PAIRS := [["á", "a"], ["é", "e"], ["í", "i"], ["ó", "o"], ["ú", "u"], ["ü", "u"], ["ñ", "n"],

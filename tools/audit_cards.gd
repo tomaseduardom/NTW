@@ -27,6 +27,7 @@ extends SceneTree
 ## — conviene revisarlas).
 
 const EffectCompilerScript = preload("res://scripts/core/effects/compiler/EffectCompiler.gd")
+const CardTextScript = preload("res://scripts/core/cards/CardText.gd")
 const CACHE_PATH := "user://card_cache/cards.json"
 const ONCE_MARKERS := ["una vez por turno", "una vez al turno", "una vez en tu turno", "una vez en su turno"]
 
@@ -64,7 +65,8 @@ func _run(ed_filter: String, out_path: String) -> void:
 		var ed: String = str(c.get("edicion", ""))
 		if ed_filter != "*" and ed_filter != "" and ed_filter.to_lower() not in ed.to_lower():
 			continue
-		var text: String = str(c.get("habilidad", ""))
+		# Mismo texto que ve el juego: CardDatabase lo limpia al cargar (CardText.clean()).
+		var text: String = CardTextScript.clean(str(c.get("habilidad", "")))
 		if text.strip_edges().is_empty():
 			continue
 		considered += 1
