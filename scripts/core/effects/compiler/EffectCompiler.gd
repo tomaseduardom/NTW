@@ -334,7 +334,7 @@ const ATOMS := [
 	# "Tu oponente Destierra dos cartas del tope de su Castillo" / "Destierra cinco cartas del tope del
 	# Castillo oponente" (CardManager.banish_from_deck()).
 	["castle_exile", "(?:tu oponente destierra (?<n>" + NUM + ") cartas? del (?<pos>tope|fondo) de su castillo" \
-		+ "|(?:destierra|desterrar) (?<n2>" + NUM + ") cartas? del (?<pos2>tope|fondo) del castillo oponente" \
+		+ "|(?:destierra|desterrar) (?<n2>" + NUM + ") cartas? (?:del (?<pos2>tope|fondo)|de la parte superior) del castillo oponente" \
 		+ "|tu oponente destierra las primeras (?<n3>" + NUM + ") cartas de su castillo)"],
 	["discard_self", "descarta(?:s|r)? (?<n>" + NUM + ") cartas?(?: de tu mano)?(?! de la mano)"],
 	["shuffle_from_hand", "baraja(?:r)? (?<upto>hasta )?(?<n>" + NUM + ") cartas? de tu mano(?: en tu castillo)?"],
@@ -449,7 +449,7 @@ const ATOMS := [
 	["self", "(?<v>destruyelo|destruyela|destierralo|destierrala)"],
 	# Cementerios: "Baraja y/o Destierra hasta N cartas de los Cementerios" y sus formas de un solo
 	# verbo.
-	["cemetery_both", "(?:baraja|barajar) y/o (?:destierra|desterrar) hasta (?<n>" + NUM + ") cartas? de los cementerios"],
+	["cemetery_both", "(?:baraja|barajar) y/o (?:destierra|desterrar) (?:hasta )?(?<n>" + NUM + ") cartas? de los cementerios"],
 	# "de un Cementerio" (Carro Szgany, shoki): todas del mismo Cementerio.
 	# Sin "hasta" (suzaku: "Desterrar dos cartas de un Cementerio") igual se eligen hasta N: un
 	# Cementerio con menos no impide resolverlo.
@@ -1056,6 +1056,26 @@ static func _compile_sequence(s: String) -> Dictionary:
 			if not step.is_empty():
 				consumed = m.get_end()
 				break
+		# "Baraja hasta tantas cartas de tu Cementerio como Fuerza tenga este Aliado": si ningún átomo lo
+		# entiende entero (mill_x sí entiende algunos), se compila como "hasta una carta" y el paso lleva la
+		# cantidad a contar al resolver (qty).
+		var set_qty := {}
+		var tm: RegExMatch = null
+		if step.is_empty():
+			tm = RegEx.create_from_string("^(?<a>(?:(?!, | y ).)*?)\\btantas (?<b>(?:(?!, | y ).)*?) como (?<q>.+)$").search(rest)
+		if tm:
+			var tq := _parse_quantity(tm.get_string("q"))
+			if not tq.is_empty():
+				set_qty = tq.q
+				rest = tm.get_string("a") + "una " + tm.get_string("b") + tm.get_string("q").substr(tq.len)
+				for atom in _get_atoms():
+					var m2: RegExMatch = atom.rx.search(rest)
+					if m2 == null:
+						continue
+					step = _build(atom.name, m2)
+					if not step.is_empty():
+						consumed = m2.get_end()
+						break
 		if step.is_empty():
 			return {"ok": false, "steps": [], "unparsed": rest}
 		var expanded: Array = step.steps if step.op == "multi" else [step]  # "busca un Aliado y un Tótem"
@@ -1063,11 +1083,88 @@ static func _compile_sequence(s: String) -> Dictionary:
 			expanded[0]["then"] = true
 		steps.append_array(expanded)
 		rest = rest.substr(consumed).strip_edges()
+		# "Roba una carta por cada Aliado que controles", "tu oponente Bota dos cartas por cada Aliado Faerie".
+		var per_qty := {}
+		if rest.begins_with("por cada "):
+			var pq := _parse_quantity(rest.substr(9))
+			if pq.is_empty():
+				return {"ok": false, "steps": [], "unparsed": rest}
+			per_qty = pq.q
+			rest = rest.substr(9 + pq.len).strip_edges()
+		for q_pair in [[set_qty, "set"], [per_qty, "per"]]:
+			if q_pair[0].is_empty():
+				continue
+			if expanded.size() != 1 or not QTY_KEYS.has(expanded[0].op) or expanded[0].has("per"):
+				return {"ok": false, "steps": [], "unparsed": rest if not rest.is_empty() else s}
+			expanded[0]["qty"] = {"mode": q_pair[1], "q": q_pair[0], "key": QTY_KEYS[expanded[0].op]}
 		var c := _connector_rx.search(rest)
 		next_is_then = c != null and "luego" in c.get_string()
 		if c and c.get_end() > 0:
 			rest = rest.substr(c.get_end()).strip_edges()
 	return {"ok": not steps.is_empty(), "steps": steps, "unparsed": ""}
+
+
+## Pasos que aceptan una cantidad variable y qué campo cambia (ver _parse_quantity()). Los objetivos en
+## juego no: se eligen antes de resolver, con la cantidad impresa.
+const QTY_KEYS := {"draw": "amount", "mill": "amount", "discard": "amount", "cemetery_cleanup": "amount",
+	"shuffle_from_cemetery": "amount", "shuffle_from_hand": "amount", "castle_exile": "amount", "buff": "amount"}
+static var _qty_rxs: Array = []
+
+
+static func _parse_quantity(t: String) -> Dictionary:
+	"""{q, len}: la cantidad que empieza en 't' ("Aliados Titán controles", "Fuerza tenga este Aliado",
+	"tipo de carta en tu Destierro", "Aliados haya en tu Cementerio y Destierro") y cuánto texto ocupa.
+	{} si no se entiende. La cuenta la hace EffectInterpreter._quantity_value() al resolver."""
+	if _qty_rxs.is_empty():
+		for pair in [
+			["types", "tipos? de cartas? en tu destierro"],
+			["zone", "(?<t>" + T1 + ")(?: (?<race>" + RACE + "))? (?:haya |hayan )?en tu (?<z>cementerio|destierro)" \
+				+ "(?: y (?:en )?(?:tu )?(?<z2>cementerio|destierro))?"],
+			["stat", "(?<stat>fuerza impresa|fuerza|coste) tenga (?<of>este aliado|esta carta|un aliado que controles" \
+				+ "|un aliado en juego|un aliado|una carta que controles|una carta en juego)(?![a-z])"],
+			["play", "(?<t>" + T1 + ")(?: (?<race>" + RACE + "))?(?<opp> oponentes?)?(?: que no sean? (?<nt>" + T1 + "))?" \
+				+ "(?: (?<kw>exhumar|furia|imbloqueable|indestructible))?(?<dc> de distinto coste)?" \
+				+ "(?: de fuerza (?<sv>\\d+) o (?<sc>menos|mas))?(?: de coste (?<cv>\\d+) o (?<cc>menos|mas))?" \
+				+ "(?: (?<w>que controles|controles|que controle tu oponente|controle tu oponente|controle un jugador|en juego" \
+				+ "|en tu linea de defensa))?(?![a-z])"],
+		]:
+			_qty_rxs.append({"kind": pair[0], "rx": RegEx.create_from_string("^" + pair[1])})
+	for pat in _qty_rxs:
+		var m: RegExMatch = pat.rx.search(t)
+		if m == null:
+			continue
+		var q := {}
+		match pat.kind:
+			"types":
+				q = {"kind": "distinct_types", "zones": ["destierro"]}
+			"zone":
+				var zs: Array = [m.get_string("z")]
+				if not m.get_string("z2").is_empty():
+					zs.append(m.get_string("z2"))
+				q = {"kind": "zone_count", "zones": zs, "types": _type_list(m.get_string("t")), "race": m.get_string("race")}
+			"stat":
+				q = {"kind": "stat", "stat": "coste" if m.get_string("stat") == "coste" else "fuerza",
+					"printed": m.get_string("stat") == "fuerza impresa", "of": m.get_string("of")}
+			"play":
+				var w: String = m.get_string("w")
+				if w.is_empty() and m.get_string("opp").is_empty():
+					continue
+				var who := "any"
+				if w in ["que controles", "controles", "en tu linea de defensa"]:
+					who = "self"
+				elif not m.get_string("opp").is_empty() or "tu oponente" in w:
+					who = "opponent"
+				elif w == "controle un jugador":
+					who = "choose"
+				var nt: String = TYPE_WORDS.get(m.get_string("nt"), "")
+				q = {"kind": "play_count", "who": who, "defense": w == "en tu linea de defensa",
+					"types": _type_list(m.get_string("t")), "race": m.get_string("race"), "types_not": [nt] if nt != "" else [],
+					"keyword": m.get_string("kw"), "distinct_cost": not m.get_string("dc").is_empty(),
+					"str_val": int(m.get_string("sv")) if not m.get_string("sv").is_empty() else -1, "str_cmp": m.get_string("sc"),
+					"cost_val": int(m.get_string("cv")) if not m.get_string("cv").is_empty() else -1, "cost_cmp": m.get_string("cc")}
+		if not q.is_empty():
+			return {"q": q, "len": m.get_end()}
+	return {}
 
 
 static func _get_atoms() -> Array:

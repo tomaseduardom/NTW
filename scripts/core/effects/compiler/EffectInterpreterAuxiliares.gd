@@ -92,6 +92,11 @@ static func describe_steps(steps: Array) -> String:
 	"""Texto corto en español neutro para los botones de una elección."""
 	var parts: Array = []
 	for st in steps:
+		if st.has("qty"):
+			var plain: Dictionary = st.duplicate()
+			plain.erase("qty")
+			parts.append("%s (%s)" % [describe_steps([plain]), "multiplicado al resolver" if st.qty.mode == "per" else "cantidad al resolver"])
+			continue
 		match st.op:
 			"draw":
 				parts.append(("Robar hasta %d" if st.get("up_to", false) else "Robar %d") % st.amount)

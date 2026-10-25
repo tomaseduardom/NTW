@@ -16,8 +16,94 @@ func _execute_steps(main: Node, steps: Array, chosen_targets: Dictionary, card: 
 		if st.get("then", false) and not last_ok:
 			print("[EffectInterpreter] %s: 'Luego' cortado (el paso anterior no se resolvió)" % _card_name(card))
 			break
+		if st.has("qty"):
+			# Cantidad variable: se cuenta ahora ("por cada Aliado que controles", "tantas como su Fuerza").
+			var v: int = await _quantity_value(main, st.qty.q, card, controller_id)
+			st = st.duplicate()
+			st[st.qty.key] = int(st[st.qty.key]) * v if st.qty.mode == "per" else v
+			print("[EffectInterpreter] %s: cantidad variable = %d" % [_card_name(card), int(st[st.qty.key])])
+			if int(st[st.qty.key]) <= 0:
+				last_ok = true
+				continue
 		last_ok = await _execute_step(main, st, chosen_targets.get(i, []), card, controller_id)
 	return last_ok
+
+
+func _quantity_value(main: Node, q: Dictionary, card: Node, controller_id: int) -> int:
+	"""Cuenta una cantidad de EffectCompiler._parse_quantity() al resolver."""
+	match str(q.get("kind", "")):
+		"distinct_types":
+			var seen := {}
+			for d in CardManager.get_exile(controller_id):
+				seen[int(d.get("tipo", -1))] = true
+			return seen.size()
+		"zone_count":
+			var n := 0
+			for z in q.zones:
+				var pool: Array = CardManager.get_cemetery(controller_id) if z == "cementerio" else CardManager.get_exile(controller_id)
+				for d in pool:
+					if _spec_matches({"types": q.get("types", []), "race": q.get("race", "")}, d):
+						n += 1
+			return n
+		"stat":
+			var of: String = str(q.of)
+			var pool: Array = []
+			if of in ["este aliado", "esta carta"]:
+				pool = [card] if is_instance_valid(card) else []
+			else:
+				for pid in ([controller_id] if "que controles" in of else [0, 1]):
+					pool.append_array(_cards_in_play_of(main, pid))
+				if "aliado" in of:
+					pool = pool.filter(func(x): return x.get("card_type") == Constants.CardType.ALIADO)
+			if pool.is_empty():
+				return 0
+			var value := func(x: Node) -> int:
+				if q.stat == "coste":
+					return 0 if x.get("card_type") == Constants.CardType.ORO else int(x.card_data.get("coste", 0))
+				return int(x.card_data.get("fuerza", 0)) if q.get("printed", false) else int(ContinuousEffectManager.get_modified_strength(x))
+			pool.sort_custom(func(a: Node, b: Node) -> bool: return value.call(a) > value.call(b))
+			var pick: Node = pool[0]
+			if pool.size() > 1 and not _is_bot(controller_id) and main.get("_card_interaction"):
+				var chosen: Node = await main._card_interaction.await_target("%s: elige la carta (cuenta su %s)" % [_card_name(card),
+					"Coste" if q.stat == "coste" else "Fuerza"], func(c: Node) -> bool: return c in pool, false, controller_id)
+				if chosen and is_instance_valid(chosen):
+					pick = chosen
+			return value.call(pick)
+		"play_count":
+			var counts: Array = []
+			var pids: Array = {"self": [controller_id], "opponent": [1 - controller_id]}.get(str(q.who), [0, 1])
+			for pid in pids:
+				var pool: Array = []
+				if q.get("defense", false):
+					var lines: Array = PlayerSideScript.line_containers(main, pid)
+					pool = lines[0].get_children().filter(func(x): return is_instance_valid(x)) if not lines.is_empty() else []
+				else:
+					pool = _cards_in_play_of(main, pid)
+				var matched: Array = pool.filter(func(x: Node) -> bool:
+					if not is_instance_valid(x) or x.get("card_data") == null:
+						return false
+					var d: Dictionary = x.card_data.duplicate()
+					d["tipo"] = int(x.card_type)
+					d["fuerza"] = int(ContinuousEffectManager.get_modified_strength(x)) if x.card_type == Constants.CardType.ALIADO else 0
+					return _spec_matches(q, d))
+				if q.get("distinct_cost", false):
+					var costs := {}
+					for x in matched:
+						costs[int(x.card_data.get("coste", 0))] = true
+					counts.append(costs.size())
+				else:
+					counts.append(matched.size())
+			if str(q.who) == "any":
+				return counts.reduce(func(a, b): return a + b, 0)
+			if str(q.who) == "choose" and counts.size() == 2:
+				# "como Aliados controle un jugador": se elige el jugador (el bot, el que más tenga).
+				if _is_bot(controller_id):
+					return maxi(counts[0], counts[1])
+				var mine: bool = await SelectionManager.await_two_choice(main, _card_name(card),
+					"Tú (%d)" % counts[controller_id], "Tu oponente (%d)" % counts[1 - controller_id], controller_id)
+				return counts[controller_id] if mine else counts[1 - controller_id]
+			return counts[0] if not counts.is_empty() else 0
+	return 0
 
 # =============================================================================
 # EJECUCIÓN
