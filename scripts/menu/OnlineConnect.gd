@@ -3,8 +3,8 @@ extends Control
 ## Permite crear una sala privada (Anfitrión) o unirse con código (Invitado)
 ## usando cartas medievales ilustradas con ranuras interactivas para el código.
 
-# Relay local mientras no haya un hosting nuevo (2026-10-21: se cortó Railway por un aviso de seguridad).
-const DEFAULT_RELAY_URL := "ws://localhost:8080"
+# Relay en producción (Railway, plan Hobby, 2026-10-25). Para probar en local: ws://localhost:8080.
+const DEFAULT_RELAY_URL := "wss://mitos-relay-server-production.up.railway.app"
 const TEX_HOST := preload("res://assets/ui/menu/online/card_host.png")
 const TEX_HOST_HOVER := preload("res://assets/ui/menu/online/card_host_hover.png")
 const TEX_HOST_CREATED := preload("res://assets/ui/menu/online/card_host_created.png")
