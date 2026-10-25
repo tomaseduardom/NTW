@@ -3,6 +3,9 @@ extends "res://scripts/core/effects/compiler/EffectInterpreterDeclaracion.gd"
 
 const KeywordParserScript = preload("res://scripts/core/cards/KeywordParser.gd")
 
+## Lo que encontró la última búsqueda ("si buscaste un Dinosaurio, ...").
+var _last_found: Array = []
+
 
 func _execute_steps(main: Node, steps: Array, chosen_targets: Dictionary, card: Node, controller_id: int) -> bool:
 	"""Ejecuta en orden; corta en un paso 'then' si el anterior no se
@@ -89,14 +92,39 @@ func _execute_step(main: Node, st: Dictionary, targets: Array, card: Node, contr
 			var play: Dictionary = st.get("play", {})
 			var dest: int = {"pagado": Constants.Zone.ORO_PAGADO, "cementerio": Constants.Zone.CEMENTERIO,
 				"destierro": Constants.Zone.DESTIERRO}.get(st.get("dest", "mano"), Constants.Zone.MANO)
-			if play.get("free", false):
-				dest = -1  # "y jugarlo sin pagar su coste": se juega desde los datos, sin pasar por la mano
-			var res: Dictionary = await ActionModule.search_zones(controller_id, zones, filter, st.amount, true, false,
-				not play.is_empty() and not play.get("free", false), card, dest, false, -1, int(play.get("reduce", 0)))
-			if play.get("free", false) and main.get("_gold_manager"):
-				for d in res.get("selected", []):
+			var free_play: bool = play.get("free", false)
+			var deliver_later: bool = st.has("dest_alts") or st.has("dist")
+			if free_play or deliver_later:
+				dest = -1  # se entrega desde los datos: jugarla sin pagar, elegir destino o repartir
+			# "en el Castillo oponente" / "en un Castillo": busca en el Castillo de ese jugador y elige
+			# quien controla el efecto; Destierro/Cementerio son los de su dueño.
+			var owner: int = controller_id
+			match str(st.get("owner", "")):
+				"opponent":
+					owner = 1 - controller_id
+				"any":
+					owner = 1 - controller_id if _is_bot(controller_id) else (controller_id if await SelectionManager.await_two_choice(
+						main, _card_name(card), "Tu Castillo", "Castillo oponente", controller_id) else 1 - controller_id)
+			var res: Dictionary = await ActionModule.search_zones(owner, zones, filter, st.amount, true, false,
+				not play.is_empty() and not free_play, card, dest, st.get("distinct", false),
+				controller_id if owner != controller_id else -1, int(play.get("reduce", 0)))
+			var found_cards: Array = res.get("selected", [])
+			_last_found = found_cards.duplicate()  # para "si buscaste un X, ..."
+			if st.has("dist"):
+				for mv in await _distribute(main, found_cards, st.dist, _card_name(card), controller_id):
+					await _move_revealed(main, mv[0], str(mv[1]), controller_id)
+			elif st.has("dest_alts"):
+				var words := {"mano": "hand", "cementerio": "cemetery", "destierro": "exile", "jugar": "play_free", "pagado": "gold"}
+				var labels := {"mano": "A tu mano", "cementerio": "A tu Cementerio", "destierro": "A tu Destierro",
+					"jugar": "Jugarla sin pagar su coste", "pagado": "A tu Oro pagado"}
+				for d in found_cards:
+					var first: bool = true if _is_bot(controller_id) else await SelectionManager.await_two_choice(main,
+						str(d.get("nombre", _card_name(card))), labels.get(st.dest_alts[0], ""), labels.get(st.dest_alts[1], ""), controller_id)
+					await _move_revealed(main, d, words.get(st.dest_alts[0 if first else 1], "hand"), controller_id)
+			elif free_play and main.get("_gold_manager"):
+				for d in found_cards:
 					await main._gold_manager.play_card_for_free(d, controller_id)
-			return res.get("success", false) and not res.get("selected", []).is_empty()
+			return res.get("success", false) and not found_cards.is_empty()
 		"gold_to_paid":
 			return await _gold_to_paid(main, st, card, controller_id)
 		"play_from":
@@ -760,27 +788,9 @@ func _reveal_until(main: Node, st: Dictionary, card: Node, controller_id: int) -
 	# cada destino, en el orden del texto; lo que sobre se baraja.
 	var moves: Array = []  # [[datos, destino]]
 	if dest == "dist":
-		var pool: Array = taken.duplicate()
-		for item in st.get("dist", []):
-			if pool.is_empty():
-				break
-			var n: int = mini(int(item.count), pool.size())
-			var chosen: Array = pool.slice(0, n)
-			if n < pool.size() and not _is_bot(controller_id):
-				var entries: Array = pool.map(func(d): return {"data": d, "eligible": true})
-				var raw: Array = await ActionModule.pick_in_zones(controller_id, "%s: elige %d para %s" % [title, n,
-					REVEAL_DEST_LABELS.get(item.dest, "")], [{"is_own": true, "zone": Constants.Zone.CASTILLO, "cards": entries,
-					"exclusive": true}], n, n)
-				var picked: Array = []
-				for r in raw:
-					if r is Array and r.size() == 2 and int(r[1]) >= 0 and int(r[1]) < entries.size():
-						picked.append(entries[int(r[1])].data)
-				if picked.size() == n:
-					chosen = picked
-			for d in chosen:
-				pool.erase(d)
-				moves.append([d, str(item.dest)])
-		taken = taken.filter(func(d): return not pool.has(d))  # lo que no tuvo destino vuelve al Castillo
+		moves = await _distribute(main, taken, st.get("dist", []), title, controller_id)
+		var placed: Array = moves.map(func(mv): return mv[0])
+		taken = taken.filter(func(d): return placed.has(d))  # lo que no tuvo destino vuelve al Castillo
 	else:
 		for d in taken:
 			moves.append([d, dest])
@@ -812,6 +822,34 @@ func _reveal_until(main: Node, st: Dictionary, card: Node, controller_id: int) -
 	if played > 1:
 		await load("res://scripts/core/effects/mechanics/SearchPatterns.gd").reorder_new_triggers(queue_before, controller_id)
 	return not need.any(func(n): return n > 0)
+
+
+func _distribute(main: Node, cards: Array, dist: Array, title: String, controller_id: int) -> Array:
+	"""Reparto "pon uno en tu mano, tres en tu Cementerio": quien controla el efecto elige cuáles van a cada
+	destino, en el orden del texto (el bot, las primeras). Devuelve [[datos, destino]]; lo que no entra en
+	ningún destino queda afuera (quien llama decide: barajarlo)."""
+	var moves: Array = []
+	var pool: Array = cards.duplicate()
+	for item in dist:
+		if pool.is_empty():
+			break
+		var n: int = mini(int(item.count), pool.size())
+		var chosen: Array = pool.slice(0, n)
+		if n < pool.size() and not _is_bot(controller_id):
+			var entries: Array = pool.map(func(d): return {"data": d, "eligible": true})
+			var raw: Array = await ActionModule.pick_in_zones(controller_id, "%s: elige %d para %s" % [title, n,
+				REVEAL_DEST_LABELS.get(item.dest, "")], [{"is_own": true, "zone": Constants.Zone.CASTILLO, "cards": entries,
+				"exclusive": true}], n, n)
+			var picked: Array = []
+			for r in raw:
+				if r is Array and r.size() == 2 and int(r[1]) >= 0 and int(r[1]) < entries.size():
+					picked.append(entries[int(r[1])].data)
+			if picked.size() == n:
+				chosen = picked
+		for d in chosen:
+			pool.erase(d)
+			moves.append([d, str(item.dest)])
+	return moves
 
 
 const REVEAL_DEST_LABELS := {"hand": "tu mano", "cemetery": "tu Cementerio", "exile": "tu Destierro",
@@ -1018,6 +1056,10 @@ func _spec_matches(spec: Dictionary, data: Dictionary) -> bool:
 func _condition_holds(cond, card: Node) -> bool:
 	if cond is Dictionary and cond.get("kind", "") == "controls":
 		return _controls_holds(cond, card)
+	if cond is Dictionary and cond.get("kind", "") == "searched":
+		var word: String = str(cond.get("word", "")).substr(0, 5)
+		return _last_found.any(func(d): return word in ActionModule._strip_accents(str(d.get("raza", "")).to_lower()) \
+			or word in ActionModule._strip_accents(str(d.get("nombre", "")).to_lower()))
 	match str(cond):
 		"not_attacked_this_turn":
 			return int(card.get_meta("declared_attacker_turn", -1)) != GameManager.turn_serial

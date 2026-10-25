@@ -76,6 +76,8 @@ const NUM := "(?:\\d+|un|una|uno|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|die
 const TRIGGER_PREFIXES := [
 	# Disparadores combinados: el compilador solo ve el efecto; cuándo dispara lo decide quien llama.
 	"cuando entra en juego o ataques con un solo aliado", "cuando entra en juego o ataques con tres o mas aliados",
+	"cuando entra en juego o el portador ataque", "cuando entra en juego o el portador haga dano de combate",
+	"cuando una carta sea descartada", "cuando sea descartado por un aliado",
 	"cuando entra en juego o haga dano", "cuando entra en juego o bloquee", "cuando entra en juego o salga del juego",
 	"cuando entra en juego o al comienzo de tu vigilia", "cuando entra en juego y al comienzo de tu vigilia",
 	"cuando entra en juego y al comienzo de la vigilia oponente", "cuando entra en juego y al comienzo de cada vigilia",
@@ -341,7 +343,11 @@ const ATOMS := [
 	# Buscar: varios tipos, "que no sea X ni Y", "de coste N o más/menos". El destino va tras "y" o tras una
 	# coma ("busca un Aliado, ponlo en tu mano y roba una carta").
 	# "...y jugarlo sin pagar su coste / reduciendo su coste en un Oro / por dos Oros menos".
-	["search", "busca(?:r)? (?:en tu (?<z1>castillo|cementerio)(?: (?:o|y/o) (?:tu )?(?<z2>castillo|cementerio))?,? )?" \
+	# "en un Castillo" / "en el Castillo oponente" (el horla, sin tregua, chashkel): solo para Desterrar o
+	# mandar al Cementerio de su dueño (no pasa a tu mano). "con distinto nombre" (espectros vindicantes).
+	# Destino a elegir ("ponlo en tu mano o Destierro", "juégalo sin pagar su coste o ponlo en tu mano") y
+	# reparto ("busca tres Aliados, pon uno en tu mano y dos en tu Cementerio", kurai ketsugo).
+	["search", "busca(?:r)? (?:(?:en tu (?<z1>castillo|cementerio)(?: (?:o|y/o) (?:tu )?(?<z2>castillo|cementerio))?|en (?<zx1>un castillo|el castillo oponente)),? )?" \
 		+ "(?:(?<copy>una copia de (?:esta carta|este oro|este aliado|esta arma|este totem|este talisman))" \
 		+ "|(?<objs>" + OBJS + ")(?: (?!(?:de|del|que|y|o|u|en|con|sin|al|a)\\b)(?<nm>[a-z]+))?)" \
 		+ "(?: que no sean? (?:un |una )?(?<n1>" + T1 + ")(?: ni (?:un |una )?(?<n2>" + T1 + "))?)?" \
@@ -349,12 +355,16 @@ const ATOMS := [
 		+ "(?:,? de coste (?<cval>" + NUM + ")(?: o (?<ccmp>menos|mas))?)?" \
 		+ "(?:,? de fuerza (?<sval>\\d+) o (?<scmp>menos|mas))?" \
 		+ "(?<nohab> sin habilidad)?" \
-		+ "(?: en tu (?<z3>castillo|cementerio)(?: (?:o|y/o) (?:tu )?(?<z4>castillo|cementerio))?)?" \
-		+ "(?:,? y |, )(?:(?:ponla|ponlo|ponerla|ponerlo|ponlas|ponlos|ponerlas|ponerlos) en tu (?<dest>mano|oro pagado|cementerio)" \
-		+ "|(?<exile>destierralo|destierrala|destierralos|destierralas)" \
+		+ "(?<distinct>,? (?:con|de) (?:distinto|diferente) nombre,?)?" \
+		+ "(?: en tu (?<z3>castillo|cementerio)(?: (?:o|y/o) (?:tu )?(?<z4>castillo|cementerio))?| en (?<zx2>un castillo|el castillo oponente))?" \
+		+ "(?:,? y |, )(?:(?:ponla|ponlo|ponerla|ponerlo|ponlas|ponlos|ponerlas|ponerlos) en (?:tu (?<dest>mano|oro pagado|cementerio)" \
+		+ "(?: o (?:tu )?(?<alt>cementerio|destierro))?|(?<owncem>el cementerio de su dueno))" \
+		+ "|(?<exile>destierralos|destierralas|destierralo|destierrala)" \
+		+ "|(?<putplay>ponlo|ponla|ponerlo|ponerla) en juego" \
+		+ "|(?<sdist>pon (?:" + NUM + ") en tu (?:mano|cementerio|destierro)(?:(?:, | y )(?:" + NUM + ") en tu (?:mano|cementerio|destierro))+)" \
 		+ "|(?<play>jugarlo|jugarla|juegalo|juegala|jugarlos|jugarlas|juegalos|juegalas)(?: (?<free>sin pagar su coste)" \
 		+ "| reduciendo su coste en (?<red>" + NUM + ") oros?(?:, hasta un minimo de (?<floor>\\d+))?" \
-		+ "| por (?<red2>" + NUM + ") oros? menos))"],
+		+ "| por (?<red2>" + NUM + ") oros? menos)(?<orhand> o (?:ponlos|ponlas|ponlo|ponla|ponerlos|ponerlas|ponerlo|ponerla) en tu mano)?)"],
 	# "Busca un Leyaden/una Empanada en tu Castillo y ponlo en tu mano": una carta por su nombre (leyaden,
 	# empanada, yekamus).
 	["search_named", "busca(?:r)? (?:un|una) (?<name>[a-z' -]+?) en tu castillo y (?:ponlo|ponla|ponerlo|ponerla) en tu mano"],
@@ -892,6 +902,15 @@ static func _compile_sentence(s: String) -> Dictionary:
 			return cond_inner
 		return {"ok": true, "optional": optional,
 			"steps": [{"op": "if", "cond": ctl.cond, "steps": cond_inner.steps}], "unparsed": ""}
+	# "Si buscaste un Dinosaurio, adicionalmente busca..." (monstruo de la laguna, ignacio de la carrera):
+	# mira la raza/nombre de lo que encontró la búsqueda anterior del mismo efecto.
+	var searched_m := RegEx.create_from_string("^si buscaste (?:un |una )?(?<w>[a-z]+), (?:adicionalmente,? )?(?<rest>.+)$").search(s)
+	if searched_m:
+		var s_inner := _compile_sentence(searched_m.get_string("rest"))
+		if not s_inner.ok:
+			return s_inner
+		return {"ok": true, "optional": s_inner.get("optional", false),
+			"steps": [{"op": "if", "cond": {"kind": "searched", "word": searched_m.get_string("w")}, "steps": s_inner.steps}], "unparsed": ""}
 	for c in CONDITIONS:
 		if s.begins_with(c[1]):
 			var inner := _compile_sentence(s.substr(c[1].length()))
@@ -1187,6 +1206,11 @@ static func _build(atom_name: String, m: RegExMatch) -> Dictionary:
 				var z: String = m.get_string(g)
 				if not z.is_empty() and z not in zones:
 					zones.append(z)
+			var foreign: String = m.get_string("zx1") if not m.get_string("zx1").is_empty() else m.get_string("zx2")
+			if not foreign.is_empty():
+				if not zones.is_empty():
+					return {}
+				zones.append("castillo")
 			if zones.is_empty():
 				return {}  # sin zona explícita: ambiguo
 			var play := {}
@@ -1196,10 +1220,29 @@ static func _build(atom_name: String, m: RegExMatch) -> Dictionary:
 				else:
 					var red: String = m.get_string("red") if not m.get_string("red").is_empty() else m.get_string("red2")
 					play = {"reduce": parse_amount(red), "floor": int(m.get_string("floor")) if not m.get_string("floor").is_empty() else 1}
+			if not m.get_string("putplay").is_empty():
+				play = {"free": true}  # "ponlo en juego" (ninjato): entra sin pagar su coste
 			var dest_word: String = m.get_string("dest")
 			var dest_key: String = {"oro pagado": "pagado", "cementerio": "cementerio"}.get(dest_word, "mano")
 			if not m.get_string("exile").is_empty():
 				dest_key = "destierro"
+			if not m.get_string("owncem").is_empty():
+				dest_key = "cementerio"  # el Cementerio de su dueño: es el destino normal de search_zones()
+			# Desde un Castillo ajeno solo a su Destierro o Cementerio (pasar a tu mano o a tu Oro pagado
+			# es cambiar de dueño: lo resuelve la cadena vieja).
+			if not foreign.is_empty() and (dest_key not in ["destierro", "cementerio"] or not play.is_empty()):
+				return {}
+			var dest_alts: Array = []
+			if not m.get_string("alt").is_empty():
+				dest_alts = [dest_key, m.get_string("alt")]
+			elif not m.get_string("orhand").is_empty() and play.get("free", false):
+				dest_alts = ["jugar", "mano"]
+			var sdist: Array = []
+			if not m.get_string("sdist").is_empty():
+				var sd_rx := RegEx.create_from_string("(?<n>" + NUM + ") en tu (?<z>mano|cementerio|destierro)")
+				for sd in sd_rx.search_all(m.get_string("sdist")):
+					sdist.append({"count": parse_amount(sd.get_string("n")),
+						"dest": {"mano": "hand", "cementerio": "cemetery", "destierro": "exile"}[sd.get_string("z")]})
 			var found: Dictionary = _search_steps(m, zones, dest_key, play)
 			# "una copia de esta carta": su propio nombre (lo resuelve el intérprete). Nombre suelto tras el
 			# tipo ("una carta Drácula", "un Aliado Azi"), "que no sea Ahab", "de Fuerza 2 o menos".
@@ -1219,6 +1262,16 @@ static func _build(atom_name: String, m: RegExMatch) -> Dictionary:
 				if not m.get_string("sval").is_empty():
 					fs["str_val"] = int(m.get_string("sval"))
 					fs["str_cmp"] = m.get_string("scmp")
+				if not foreign.is_empty():
+					fs["owner"] = "any" if foreign == "un castillo" else "opponent"
+				if not m.get_string("distinct").is_empty():
+					fs["distinct"] = true
+				if not dest_alts.is_empty():
+					fs["dest_alts"] = dest_alts
+				if not sdist.is_empty():
+					fs["dist"] = sdist
+			if found.get("op", "") == "multi" and (not sdist.is_empty() or not dest_alts.is_empty()):
+				return {}  # el reparto/elección vale para una sola búsqueda
 			return found
 		"raise":
 			var raised: Dictionary = _search_steps(m, ["cementerio"], "mano", {})
