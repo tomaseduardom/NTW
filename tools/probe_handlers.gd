@@ -21,6 +21,8 @@ const WAIT_MS := 4000
 const EffectContextScript = preload("res://scripts/core/effects/EffectContext.gd")
 
 var main: Node
+## nombre de la carta -> ramas que resolvieron algo suyo (TriggerResolution.trace).
+var _trace_by_card: Dictionary = {}
 var _created: Array = []
 
 
@@ -40,6 +42,9 @@ func _ready() -> void:
 	var to_i: int = int(args[2]) if args.size() > 2 else 1 << 30
 	var name_filter: String = args[3].to_lower() if args.size() > 3 else ""
 	GameManager.is_game_active = true
+	# Qué rama de TriggerResolution._resolve_look_and_play_patterns() resolvió cada texto (handlers sin uso).
+	var resolution = TriggerSystem._resolution
+	resolution.trace_enabled = true
 	# El humano (jugador 0) no está: pasa solo en cada ventana de prioridad, como haría en partida. Si no, la
 	# Pila acumulaba objetos y cada efecto esperaba.
 	PriorityManager.priority_changed.connect(func(pid: int) -> void:
@@ -60,8 +65,20 @@ func _ready() -> void:
 		if not name_filter.is_empty() and not ((nombre_l in name_filter.split("|")) if "|" in name_filter else (name_filter in nombre_l)):
 			continue
 		seen[text] = true
+		var before: Dictionary = resolution.trace.duplicate()
 		rows.append_array(await _probe_card(d))
+		var used: Array = []
+		for k in resolution.trace:
+			if int(resolution.trace[k]) > int(before.get(k, 0)):
+				used.append(k)
+		if not used.is_empty():
+			_trace_by_card[str(d.get("nombre", ""))] = used
 	_write(out_path, rows)
+	var tf := FileAccess.open(out_path + ".trace.json", FileAccess.WRITE)
+	if tf:
+		tf.store_string(JSON.stringify({"labels": resolution.trace_labels(), "hits": resolution.trace,
+			"by_card": _trace_by_card}, "	"))
+		tf.close()
 	get_tree().quit(0)
 
 

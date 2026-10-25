@@ -29,6 +29,27 @@ const CastleLookScript = preload("res://scripts/core/effects/CastleLook.gd")  # 
 var _main: Node
 
 
+const LOOK_AND_PLAY_LABELS := ["Deck170Script.try_annul_on_stack", "TalismanScript.try_execute", "ActivatedScript.try_execute", "AziScript.try_execute", "DagonScript.try_execute", "RatPlagueScript.try_execute", "CemeteryReviveScript.try_execute", "VampireScript.try_execute", "NoeScript.try_execute", "MechanicPatterns.try_execute", "draw_shuffle_resolver.try_execute_golpe_solar_pattern", "draw_shuffle_resolver.try_execute_shuffle_ally_or_search_castle_pattern", "effect_interpreter.try_execute", "CastleLookScript.try_execute_text", "TalismanSearchScript.try_execute", "Deck170Script.try_execute", "totem_patterns.try_execute_kotoku_in_vigilia_pattern", "totem_patterns.try_execute_metropolitan_vigilia_convert_pattern", "totem_patterns.try_execute_iga_ryu_convert_totems_pattern", "totem_patterns.try_execute_rueda_fortuna_reveal_pattern", "totem_patterns.try_execute_rueda_fortuna_sacrifice_pattern", "totem_patterns.try_execute_estacion_fantasma_name_pattern", "weapon_patterns.try_execute_canon_naval_shared_pattern", "weapon_patterns.try_execute_sable_corto_vigilia_pattern", "oro_patterns.try_execute_udjat_vigilia_pattern", "oro_patterns.try_execute_libro_de_thoth_pay_pattern", "look_and_play.try_execute_look_pick_pattern", "look_and_play.try_execute_look_play_free_pattern", "look_and_play.try_execute_look_play_or_hand_pattern", "look_and_play.try_execute_look_play_or_gold_pattern", "look_and_play.try_execute_look_dynamic_gold_count_pattern", "look_and_play.try_execute_look_two_hand_convert_gold_pattern", "look_and_play.try_execute_shuffle_or_draw_choice_pattern", "look_and_play.try_execute_convert_then_reveal_until_same_type_pattern", "look_and_play.try_execute_search_oro_castillo_or_cementerio_pattern", "look_and_play.try_execute_search_up_to_n_castillo_and_or_cementerio_play_discount_pattern", "look_and_play.try_execute_reveal_until_ally_and_gold_pattern", "look_and_play.try_execute_reveal_until_weapon_or_totem_and_ally_pattern", "look_and_play.try_execute_reveal_until_three_cost1_allies_play_one_pattern", "look_and_play.try_execute_banish_opponent_ally_search_ignis_titan_discount_pattern", "look_and_play.try_execute_play_cemetery_ally_free_or_draw_three_pattern", "look_and_play.try_execute_gain_control_ally_rename_titan_pattern", "look_and_play.try_execute_shuffle_non_gold_or_draw_two_pattern", "look_and_play.try_execute_reveal_gold_weapon_totem_split_pattern", "look_and_play.try_execute_play_cemetery_ally_discounted_min1_pattern", "look_and_play.try_execute_gold_for_allies_until_next_turn_pattern", "look_and_play.try_execute_gold_for_allies_or_weapons_pattern", "look_and_play.try_execute_search_each_castillo_two_to_cemetery_pattern", "look_and_play.try_execute_draw_then_discard_pattern", "look_and_play.try_execute_shuffle_up_to_one_ally_pattern", "look_and_play.try_execute_reveal_until_ally_and_weapon_pattern", "look_and_play.try_execute_reveal_until_ally_and_talisman_pattern", "look_and_play.try_execute_search_two_distinct_names_banish_or_cemetery_pattern", "look_and_play.try_execute_convert_gold_or_opponent_cost_max_draw_pattern", "look_and_play.try_execute_draw_or_raise_cemetery_ally_pattern", "look_and_play.try_execute_shuffle_or_banish_opponent_cost_max_pattern", "look_and_play.try_execute_shuffle_banish_cemeteries_then_destroy_or_draw_pattern", "look_and_play.try_execute_draw_discard_opponent_mill_exile_pattern", "look_and_play.try_execute_opponent_mill_four_pattern", "look_and_play.try_execute_annul_cost_max_pattern", "look_and_play.try_execute_reveal_gold_to_pagado_weapon_or_totem_to_hand_pattern", "look_and_play.try_execute_name_reveal_until_match_then_gold_to_pagado_pattern", "look_and_play.try_execute_convert_two_top_castillo_to_allies_pattern", "look_and_play.try_execute_shuffle_banish_four_cemeteries_pattern", "look_and_play.try_execute_search_castillo_or_cemetery_to_pagado_pattern", "look_and_play.try_execute_annul_non_ally_banish_or_cancel_ability_pattern", "look_and_play.try_execute_raise_opponent_cemetery_or_destroy_cost1_draw_pattern", "look_and_play.try_execute_shuffle_any_cemetery_or_exile_into_castillo_then_draw_pattern", "look_and_play.try_execute_search_three_opponent_castillo_banish_draw_pattern", "look_and_play.try_execute_peek_hand_banish_search_castillo_cemetery_draw_pattern", "look_and_play.try_execute_raise_same_type_gold_and_search_banish_pattern", "look_and_play.try_execute_raise_up_to_one_ally_or_gold_from_cemetery_pattern", "look_and_play.try_execute_shuffle_cost_max_two_draw_two_pattern", "look_and_play.try_execute_shuffle_cost_max_three_pattern", "look_and_play.try_execute_bubble_protection_and_schedule_final_phase_pattern", "look_and_play.try_execute_opponent_mill_six_exile_pattern", "look_and_play.try_execute_banish_opponent_castillo_by_titan_ignis_cost_draw_pattern", "look_and_play.try_execute_pay_x_banish_opponent_castillo_draw_per_talisman_totem_pattern", "look_and_play.try_execute_shuffle_one_in_play_and_four_cemetery_pattern", "look_and_play.try_execute_banish_opponent_cost_sum_six_pattern", "look_and_play.try_execute_transformacion_pattern", "look_and_play.try_execute_search_azi_ally_to_hand_pattern", "look_and_play.try_execute_opponent_hand_cost_max_to_bottom_pattern", "look_and_play.try_execute_titan_abismal_conditional_play_or_draw_pattern", "look_and_play.try_execute_annul_then_shuffle_hand_by_cost_pattern", "look_and_play.try_execute_banish_two_from_one_cemetery_then_draw_pattern", "look_and_play.try_execute_draw_or_search_ally_or_gold_pattern", "look_and_play.try_execute_optional_search_totem_castillo_pattern", "look_and_play.try_execute_malleus_name_lock_pattern", "look_and_play.try_execute_espiritu_maquina_conditional_gold_pattern", "look_and_play.try_execute_banish_cost_or_search_two_banish_pattern", "look_and_play.try_execute_look_opponent_hand_discard_then_search_ally_pattern", "look_and_play.try_execute_banish_opponent_non_gold_and_talisman_surcharge_pattern", "draw_shuffle_resolver.try_execute_each_player_discard_then_draw_pattern", "draw_shuffle_resolver.try_execute_draw_gold_search_pattern", "draw_shuffle_resolver.try_execute_draw_reveal_talisman_gold_pattern", "draw_shuffle_resolver.try_execute_deck_top_or_bottom_to_hand_pattern", "draw_shuffle_resolver.try_execute_shuffle_exile_and_draw_pattern", "draw_shuffle_resolver.try_execute_shuffle_hand_and_draw_plus_two_pattern", "convert_misc_resolver.try_execute_mill_convert_to_ally_pattern", "draw_shuffle_resolver.try_execute_tempilcahue_choice_pattern", "draw_shuffle_resolver.try_execute_golpe_solar_pattern#2", "draw_shuffle_resolver.try_execute_shuffle_hand_then_draw_pattern", "draw_shuffle_resolver.try_execute_free_play_weapon_or_totem_cost1_hand_cemetery_pattern", "look_and_play.try_execute_reveal_until_distinct_cost_allies_pattern", "look_and_play.try_execute_search_ally_castillo_or_cementerio_then_buff_pattern", "look_and_play.try_execute_search_ally_cost_max_free_play_pattern", "look_and_play.try_execute_cain_damage_shuffle_search_pattern", "look_and_play.try_execute_search_two_oros_split_destination_pattern", "look_and_play.try_execute_primer_sello_pattern", "look_and_play.try_execute_segundo_sello_pattern", "look_and_play.try_execute_tercer_sello_pattern", "look_and_play.try_execute_cuarto_sello_pattern", "look_and_play.try_execute_quinto_sello_pattern", "look_and_play.try_execute_sexto_sello_pattern", "look_and_play.try_execute_septimo_sello_pattern", "convert_misc_resolver.try_execute_name_a_card_pattern", "convert_misc_resolver.try_execute_no_allies_convert_castillo_top_pattern", "convert_misc_resolver.try_execute_jabberwocky_convert_opponent_top_pattern", "convert_misc_resolver.try_execute_opponent_discard_and_draw_pattern", "draw_shuffle_resolver.try_execute_banish_from_cemeteries_and_draw_pattern", "draw_shuffle_resolver.try_execute_weapon_count_banish_cemetery_pattern", "draw_shuffle_resolver.try_execute_vigilia_or_final_banish_opponent_cemetery_pattern", "draw_shuffle_resolver.try_execute_shuffle_up_to_n_cemeteries_pattern", "draw_shuffle_resolver.try_execute_shuffle_cemeteries_or_raise_ally_totem_pattern", "draw_shuffle_resolver.try_execute_banish_up_to_n_cemeteries_pattern", "draw_shuffle_resolver.try_execute_shuffle_or_banish_cemeteries_equal_to_strength_pattern", "draw_shuffle_resolver.try_execute_banish_cemeteries_equal_to_own_strength_pattern", "draw_shuffle_resolver.try_execute_draw_and_shuffle_hand_pattern", "draw_shuffle_resolver.try_execute_draw_and_shuffle_opponent_card_pattern", "convert_misc_resolver.try_execute_banish_top_by_ally_count_and_draw_pattern", "analizador_viejo.extract_action"]
+
+
+## Registro de qué rama resolvió cada texto (tools/probe_handlers.gd lo enciende para encontrar handlers que
+## ninguna carta usa). Apagado en el juego.
+var trace_enabled: bool = false
+var trace: Dictionary = {}
+var last_hit: String = ""
+
+
+func _hit(label: String) -> bool:
+	if trace_enabled:
+		trace[label] = int(trace.get(label, 0)) + 1
+		last_hit = label
+	return true
+
+
+func trace_labels() -> Array:
+	"""Todas las ramas de _resolve_look_and_play_patterns(), en orden."""
+	return LOOK_AND_PLAY_LABELS
+
 func setup(main: Node) -> void:
 	_main = main
 
@@ -196,301 +217,301 @@ func _resolve_look_and_play_patterns(card: Node, full_ability_text: String, isol
 	# patrones que destruían una carta en juego (Sacrificio Solar barajaba el mazo).
 	if card and card.get("card_type") == Constants.CardType.TALISMAN \
 			and await Deck170Script.try_annul_on_stack(card, full_ability_text, controller_id):
-		return true
+		return _hit("Deck170Script.try_annul_on_stack")
 	# Talismanes sueltos armados con piezas existentes (caminar el tablón, el juicio, momificar...).
 	if card and card.get("card_type") == Constants.CardType.TALISMAN \
 			and await TalismanScript.try_execute(card, full_ability_text, controller_id):
-		return true
+		return _hit("TalismanScript.try_execute")
 	# Habilidades activadas sueltas armadas con piezas existentes (el emperador, kultrung, animita...).
 	if card and card.get("card_type") != Constants.CardType.TALISMAN 			and await ActivatedScript.try_execute(card, isolated_ability_text, controller_id):
-		return true
+		return _hit("ActivatedScript.try_execute")
 	# Azi del Abismo: Descartar para convertirse en Oro hasta tu próximo turno. Antes del intérprete,
 	# que solo veía "Descarta una".
 	if await AziScript.try_execute(card, isolated_ability_text, controller_id):
-		return true
+		return _hit("AziScript.try_execute")
 	# Padre Dagón: la mitad activada, global.
 	if await DagonScript.try_execute(card, isolated_ability_text, controller_id):
-		return true
+		return _hit("DagonScript.try_execute")
 	# Plaga de Ratas.
 	if await RatPlagueScript.try_execute(card, isolated_ability_text, controller_id):
-		return true
+		return _hit("RatPlagueScript.try_execute")
 	# Kaitai: su habilidad de Fase Final.
 	if await CemeteryReviveScript.try_execute(card, isolated_ability_text, controller_id):
-		return true
+		return _hit("CemeteryReviveScript.try_execute")
 	# Vlad el Empalador, Dhampir.
 	if await VampireScript.try_execute(card, isolated_ability_text, controller_id):
-		return true
+		return _hit("VampireScript.try_execute")
 	# Noé.
 	if await NoeScript.try_execute(card, isolated_ability_text, controller_id):
-		return true
+		return _hit("NoeScript.try_execute")
 	# Mazos guardados: Aegishjalmur...
 	if await load("res://scripts/core/effects/mechanics/MechanicPatterns.gd").try_execute(card, isolated_ability_text, controller_id):
-		return true
+		return _hit("MechanicPatterns.try_execute")
 	# Golpe Solar: antes del intérprete (que lo resolvía en el orden impreso). Primero elige el
 	# objetivo a Barajar, luego el descarte y el Aliado.
 	if await _main._draw_shuffle_resolver.try_execute_golpe_solar_pattern(full_ability_text, card, controller_id):
-		return true
+		return _hit("draw_shuffle_resolver.try_execute_golpe_solar_pattern")
 	# Sombrerero Loco: elección en el tablero, sin popup. Antes del intérprete, que la compila como
 	# "A o B" con popup.
 	if await _main._draw_shuffle_resolver.try_execute_shuffle_ally_or_search_castle_pattern(isolated_ability_text, card, controller_id):
-		return true
+		return _hit("draw_shuffle_resolver.try_execute_shuffle_ally_or_search_castle_pattern")
 	if await _main._effect_interpreter.try_execute(card, isolated_ability_text, controller_id):
-		return true
+		return _hit("effect_interpreter.try_execute")
 	# "Mira N cartas del tope/fondo de un Castillo" (§69): una sola ventana para repartir y ordenar
 	# (CastleLook.gd). Solo si entiende todo el bloque.
 	if await CastleLookScript.try_execute_text(card, isolated_ability_text, controller_id):
-		return true
+		return _hit("CastleLookScript.try_execute_text")
 	# "Busca un Talismán en un Castillo y juégalo" (Reina Nyssara, Nyssara Cautiva).
 	if await TalismanSearchScript.try_execute(card, isolated_ability_text, controller_id):
-		return true
+		return _hit("TalismanSearchScript.try_execute")
 	# Mazo 170: Rey de los Loñolicos, Ursitoare, Nyssara Cautiva...
 	if await Deck170Script.try_execute(card, isolated_ability_text, controller_id):
-		return true
+		return _hit("Deck170Script.try_execute")
 	# Habilidades activadas de Tótems: llegan aquí también vía TriggerSystem.resolve_ability_effect()
 	# (camino compartido con los triggers), así que se chequean primero.
 	if await _main._totem_patterns.try_execute_kotoku_in_vigilia_pattern(full_ability_text, card, controller_id):
-		return true
+		return _hit("totem_patterns.try_execute_kotoku_in_vigilia_pattern")
 	if await _main._totem_patterns.try_execute_metropolitan_vigilia_convert_pattern(full_ability_text, card, controller_id):
-		return true
+		return _hit("totem_patterns.try_execute_metropolitan_vigilia_convert_pattern")
 	# Solo con el texto aislado de la activada: el texto completo también lo trae el "cuando entra".
 	if await _main._totem_patterns.try_execute_iga_ryu_convert_totems_pattern(isolated_ability_text, card, controller_id):
-		return true
+		return _hit("totem_patterns.try_execute_iga_ryu_convert_totems_pattern")
 	if await _main._totem_patterns.try_execute_rueda_fortuna_reveal_pattern(full_ability_text, card, controller_id):
-		return true
+		return _hit("totem_patterns.try_execute_rueda_fortuna_reveal_pattern")
 	if await _main._totem_patterns.try_execute_rueda_fortuna_sacrifice_pattern(full_ability_text, card, controller_id):
-		return true
+		return _hit("totem_patterns.try_execute_rueda_fortuna_sacrifice_pattern")
 	if await _main._totem_patterns.try_execute_estacion_fantasma_name_pattern(full_ability_text, card, controller_id):
-		return true
+		return _hit("totem_patterns.try_execute_estacion_fantasma_name_pattern")
 	# Habilidades activadas de Armas: mismo camino que las de Tótems; cada una con su guardia "el
 	# portador gana" contra el falso positivo de on_enter_play (WeaponAbilityPatterns.gd).
 	if await _main._weapon_patterns.try_execute_canon_naval_shared_pattern(full_ability_text, card, controller_id):
-		return true
+		return _hit("weapon_patterns.try_execute_canon_naval_shared_pattern")
 	if await _main._weapon_patterns.try_execute_sable_corto_vigilia_pattern(full_ability_text, card, controller_id):
-		return true
+		return _hit("weapon_patterns.try_execute_sable_corto_vigilia_pattern")
 	# Habilidades activadas de Oros: mismo camino; cada una con su guardia de texto contra el falso
 	# positivo de on_enter_play/on_turn_end (OroAbilityPatterns.gd).
 	if await _main._oro_patterns.try_execute_udjat_vigilia_pattern(full_ability_text, card, controller_id):
-		return true
+		return _hit("oro_patterns.try_execute_udjat_vigilia_pattern")
 	if await _main._oro_patterns.try_execute_libro_de_thoth_pay_pattern(full_ability_text, card, controller_id):
-		return true
+		return _hit("oro_patterns.try_execute_libro_de_thoth_pay_pattern")
 	if await _main._look_and_play.try_execute_look_pick_pattern(full_ability_text, controller_id, card):
-		return true
+		return _hit("look_and_play.try_execute_look_pick_pattern")
 	if await _main._look_and_play.try_execute_look_play_free_pattern(full_ability_text, card, controller_id):
-		return true
+		return _hit("look_and_play.try_execute_look_play_free_pattern")
 	if await _main._look_and_play.try_execute_look_play_or_hand_pattern(full_ability_text, card, controller_id):
-		return true
+		return _hit("look_and_play.try_execute_look_play_or_hand_pattern")
 	if await _main._look_and_play.try_execute_look_play_or_gold_pattern(full_ability_text, card, controller_id):
-		return true
+		return _hit("look_and_play.try_execute_look_play_or_gold_pattern")
 	if await _main._look_and_play.try_execute_look_dynamic_gold_count_pattern(full_ability_text, controller_id, card):
-		return true
+		return _hit("look_and_play.try_execute_look_dynamic_gold_count_pattern")
 	if await _main._look_and_play.try_execute_look_two_hand_convert_gold_pattern(full_ability_text, card, controller_id):
-		return true
+		return _hit("look_and_play.try_execute_look_two_hand_convert_gold_pattern")
 	if await _main._look_and_play.try_execute_shuffle_or_draw_choice_pattern(full_ability_text, controller_id, card):
-		return true
+		return _hit("look_and_play.try_execute_shuffle_or_draw_choice_pattern")
 	if await _main._look_and_play.try_execute_convert_then_reveal_until_same_type_pattern(full_ability_text, card, controller_id):
-		return true
+		return _hit("look_and_play.try_execute_convert_then_reveal_until_same_type_pattern")
 	if await _main._look_and_play.try_execute_search_oro_castillo_or_cementerio_pattern(full_ability_text, card, controller_id):
-		return true
+		return _hit("look_and_play.try_execute_search_oro_castillo_or_cementerio_pattern")
 	if await _main._look_and_play.try_execute_search_up_to_n_castillo_and_or_cementerio_play_discount_pattern(
 			full_ability_text, card, controller_id):
-		return true
+		return _hit("look_and_play.try_execute_search_up_to_n_castillo_and_or_cementerio_play_discount_pattern")
 	if await _main._look_and_play.try_execute_reveal_until_ally_and_gold_pattern(full_ability_text, controller_id, card):
-		return true
+		return _hit("look_and_play.try_execute_reveal_until_ally_and_gold_pattern")
 	if await _main._look_and_play.try_execute_reveal_until_weapon_or_totem_and_ally_pattern(full_ability_text, controller_id, card):
-		return true
+		return _hit("look_and_play.try_execute_reveal_until_weapon_or_totem_and_ally_pattern")
 	if await _main._look_and_play.try_execute_reveal_until_three_cost1_allies_play_one_pattern(full_ability_text, controller_id, card):
-		return true
+		return _hit("look_and_play.try_execute_reveal_until_three_cost1_allies_play_one_pattern")
 	if await _main._look_and_play.try_execute_banish_opponent_ally_search_ignis_titan_discount_pattern(full_ability_text, card, controller_id):
-		return true
+		return _hit("look_and_play.try_execute_banish_opponent_ally_search_ignis_titan_discount_pattern")
 	if await _main._look_and_play.try_execute_play_cemetery_ally_free_or_draw_three_pattern(full_ability_text, controller_id, card):
-		return true
+		return _hit("look_and_play.try_execute_play_cemetery_ally_free_or_draw_three_pattern")
 	if await _main._look_and_play.try_execute_gain_control_ally_rename_titan_pattern(full_ability_text, card, controller_id):
-		return true
+		return _hit("look_and_play.try_execute_gain_control_ally_rename_titan_pattern")
 	if await _main._look_and_play.try_execute_shuffle_non_gold_or_draw_two_pattern(full_ability_text, card, controller_id):
-		return true
+		return _hit("look_and_play.try_execute_shuffle_non_gold_or_draw_two_pattern")
 	if await _main._look_and_play.try_execute_reveal_gold_weapon_totem_split_pattern(full_ability_text, controller_id, card):
-		return true
+		return _hit("look_and_play.try_execute_reveal_gold_weapon_totem_split_pattern")
 	if await _main._look_and_play.try_execute_play_cemetery_ally_discounted_min1_pattern(full_ability_text, card, controller_id):
-		return true
+		return _hit("look_and_play.try_execute_play_cemetery_ally_discounted_min1_pattern")
 	if await _main._look_and_play.try_execute_gold_for_allies_until_next_turn_pattern(full_ability_text, controller_id, card):
-		return true
+		return _hit("look_and_play.try_execute_gold_for_allies_until_next_turn_pattern")
 	if await _main._look_and_play.try_execute_gold_for_allies_or_weapons_pattern(full_ability_text, controller_id, card):
-		return true
+		return _hit("look_and_play.try_execute_gold_for_allies_or_weapons_pattern")
 	if await _main._look_and_play.try_execute_search_each_castillo_two_to_cemetery_pattern(full_ability_text, card, controller_id):
-		return true
+		return _hit("look_and_play.try_execute_search_each_castillo_two_to_cemetery_pattern")
 	if await _main._look_and_play.try_execute_draw_then_discard_pattern(full_ability_text, controller_id, card):
-		return true
+		return _hit("look_and_play.try_execute_draw_then_discard_pattern")
 	if await _main._look_and_play.try_execute_shuffle_up_to_one_ally_pattern(full_ability_text, card, controller_id):
-		return true
+		return _hit("look_and_play.try_execute_shuffle_up_to_one_ally_pattern")
 	if await _main._look_and_play.try_execute_reveal_until_ally_and_weapon_pattern(full_ability_text, controller_id, card):
-		return true
+		return _hit("look_and_play.try_execute_reveal_until_ally_and_weapon_pattern")
 	if await _main._look_and_play.try_execute_reveal_until_ally_and_talisman_pattern(full_ability_text, controller_id, card):
-		return true
+		return _hit("look_and_play.try_execute_reveal_until_ally_and_talisman_pattern")
 	if await _main._look_and_play.try_execute_search_two_distinct_names_banish_or_cemetery_pattern(full_ability_text, card, controller_id):
-		return true
+		return _hit("look_and_play.try_execute_search_two_distinct_names_banish_or_cemetery_pattern")
 	if await _main._look_and_play.try_execute_convert_gold_or_opponent_cost_max_draw_pattern(full_ability_text, card, controller_id):
-		return true
+		return _hit("look_and_play.try_execute_convert_gold_or_opponent_cost_max_draw_pattern")
 	if await _main._look_and_play.try_execute_draw_or_raise_cemetery_ally_pattern(full_ability_text, controller_id, card):
-		return true
+		return _hit("look_and_play.try_execute_draw_or_raise_cemetery_ally_pattern")
 	if await _main._look_and_play.try_execute_shuffle_or_banish_opponent_cost_max_pattern(full_ability_text, card, controller_id):
-		return true
+		return _hit("look_and_play.try_execute_shuffle_or_banish_opponent_cost_max_pattern")
 	if await _main._look_and_play.try_execute_shuffle_banish_cemeteries_then_destroy_or_draw_pattern(full_ability_text, card, controller_id):
-		return true
+		return _hit("look_and_play.try_execute_shuffle_banish_cemeteries_then_destroy_or_draw_pattern")
 	if await _main._look_and_play.try_execute_draw_discard_opponent_mill_exile_pattern(full_ability_text, controller_id, card):
-		return true
+		return _hit("look_and_play.try_execute_draw_discard_opponent_mill_exile_pattern")
 	if await _main._look_and_play.try_execute_opponent_mill_four_pattern(full_ability_text, controller_id, card):
-		return true
+		return _hit("look_and_play.try_execute_opponent_mill_four_pattern")
 	if await _main._look_and_play.try_execute_annul_cost_max_pattern(full_ability_text, card, controller_id):
-		return true
+		return _hit("look_and_play.try_execute_annul_cost_max_pattern")
 	if await _main._look_and_play.try_execute_reveal_gold_to_pagado_weapon_or_totem_to_hand_pattern(full_ability_text, controller_id, card):
-		return true
+		return _hit("look_and_play.try_execute_reveal_gold_to_pagado_weapon_or_totem_to_hand_pattern")
 	if await _main._look_and_play.try_execute_name_reveal_until_match_then_gold_to_pagado_pattern(full_ability_text, controller_id, card):
-		return true
+		return _hit("look_and_play.try_execute_name_reveal_until_match_then_gold_to_pagado_pattern")
 	if await _main._look_and_play.try_execute_convert_two_top_castillo_to_allies_pattern(full_ability_text, card, controller_id):
-		return true
+		return _hit("look_and_play.try_execute_convert_two_top_castillo_to_allies_pattern")
 	if await _main._look_and_play.try_execute_shuffle_banish_four_cemeteries_pattern(full_ability_text, controller_id):
-		return true
+		return _hit("look_and_play.try_execute_shuffle_banish_four_cemeteries_pattern")
 	if await _main._look_and_play.try_execute_search_castillo_or_cemetery_to_pagado_pattern(full_ability_text, card, controller_id):
-		return true
+		return _hit("look_and_play.try_execute_search_castillo_or_cemetery_to_pagado_pattern")
 	if await _main._look_and_play.try_execute_annul_non_ally_banish_or_cancel_ability_pattern(full_ability_text, card, controller_id):
-		return true
+		return _hit("look_and_play.try_execute_annul_non_ally_banish_or_cancel_ability_pattern")
 	if await _main._look_and_play.try_execute_raise_opponent_cemetery_or_destroy_cost1_draw_pattern(full_ability_text, card, controller_id):
-		return true
+		return _hit("look_and_play.try_execute_raise_opponent_cemetery_or_destroy_cost1_draw_pattern")
 	if await _main._look_and_play.try_execute_shuffle_any_cemetery_or_exile_into_castillo_then_draw_pattern(full_ability_text, controller_id, card):
-		return true
+		return _hit("look_and_play.try_execute_shuffle_any_cemetery_or_exile_into_castillo_then_draw_pattern")
 	if await _main._look_and_play.try_execute_search_three_opponent_castillo_banish_draw_pattern(full_ability_text, card, controller_id):
-		return true
+		return _hit("look_and_play.try_execute_search_three_opponent_castillo_banish_draw_pattern")
 	if await _main._look_and_play.try_execute_peek_hand_banish_search_castillo_cemetery_draw_pattern(full_ability_text, card, controller_id):
-		return true
+		return _hit("look_and_play.try_execute_peek_hand_banish_search_castillo_cemetery_draw_pattern")
 	if await _main._look_and_play.try_execute_raise_same_type_gold_and_search_banish_pattern(full_ability_text, card, controller_id):
-		return true
+		return _hit("look_and_play.try_execute_raise_same_type_gold_and_search_banish_pattern")
 	if await _main._look_and_play.try_execute_raise_up_to_one_ally_or_gold_from_cemetery_pattern(full_ability_text, controller_id, card):
-		return true
+		return _hit("look_and_play.try_execute_raise_up_to_one_ally_or_gold_from_cemetery_pattern")
 	if await _main._look_and_play.try_execute_shuffle_cost_max_two_draw_two_pattern(full_ability_text, controller_id, card):
-		return true
+		return _hit("look_and_play.try_execute_shuffle_cost_max_two_draw_two_pattern")
 	if await _main._look_and_play.try_execute_shuffle_cost_max_three_pattern(full_ability_text, controller_id):
-		return true
+		return _hit("look_and_play.try_execute_shuffle_cost_max_three_pattern")
 	if await _main._look_and_play.try_execute_bubble_protection_and_schedule_final_phase_pattern(full_ability_text, controller_id, card):
-		return true
+		return _hit("look_and_play.try_execute_bubble_protection_and_schedule_final_phase_pattern")
 	if await _main._look_and_play.try_execute_opponent_mill_six_exile_pattern(full_ability_text, controller_id, card):
-		return true
+		return _hit("look_and_play.try_execute_opponent_mill_six_exile_pattern")
 	if await _main._look_and_play.try_execute_banish_opponent_castillo_by_titan_ignis_cost_draw_pattern(full_ability_text, card, controller_id):
-		return true
+		return _hit("look_and_play.try_execute_banish_opponent_castillo_by_titan_ignis_cost_draw_pattern")
 	if await _main._look_and_play.try_execute_pay_x_banish_opponent_castillo_draw_per_talisman_totem_pattern(full_ability_text, controller_id):
-		return true
+		return _hit("look_and_play.try_execute_pay_x_banish_opponent_castillo_draw_per_talisman_totem_pattern")
 	if await _main._look_and_play.try_execute_shuffle_one_in_play_and_four_cemetery_pattern(full_ability_text, controller_id, card):
-		return true
+		return _hit("look_and_play.try_execute_shuffle_one_in_play_and_four_cemetery_pattern")
 	if await _main._look_and_play.try_execute_banish_opponent_cost_sum_six_pattern(full_ability_text, card, controller_id):
-		return true
+		return _hit("look_and_play.try_execute_banish_opponent_cost_sum_six_pattern")
 	if await _main._look_and_play.try_execute_transformacion_pattern(full_ability_text, controller_id):
-		return true
+		return _hit("look_and_play.try_execute_transformacion_pattern")
 	if await _main._look_and_play.try_execute_search_azi_ally_to_hand_pattern(full_ability_text, controller_id, card):
-		return true
+		return _hit("look_and_play.try_execute_search_azi_ally_to_hand_pattern")
 	if await _main._look_and_play.try_execute_opponent_hand_cost_max_to_bottom_pattern(full_ability_text, controller_id, card):
-		return true
+		return _hit("look_and_play.try_execute_opponent_hand_cost_max_to_bottom_pattern")
 	if await _main._look_and_play.try_execute_titan_abismal_conditional_play_or_draw_pattern(full_ability_text, controller_id, card):
-		return true
+		return _hit("look_and_play.try_execute_titan_abismal_conditional_play_or_draw_pattern")
 	if await _main._look_and_play.try_execute_annul_then_shuffle_hand_by_cost_pattern(full_ability_text, card, controller_id):
-		return true
+		return _hit("look_and_play.try_execute_annul_then_shuffle_hand_by_cost_pattern")
 	if await _main._look_and_play.try_execute_banish_two_from_one_cemetery_then_draw_pattern(full_ability_text, card, controller_id):
-		return true
+		return _hit("look_and_play.try_execute_banish_two_from_one_cemetery_then_draw_pattern")
 	if await _main._look_and_play.try_execute_draw_or_search_ally_or_gold_pattern(full_ability_text, card, controller_id):
-		return true
+		return _hit("look_and_play.try_execute_draw_or_search_ally_or_gold_pattern")
 	if await _main._look_and_play.try_execute_optional_search_totem_castillo_pattern(full_ability_text, card, controller_id):
-		return true
+		return _hit("look_and_play.try_execute_optional_search_totem_castillo_pattern")
 	if await _main._look_and_play.try_execute_malleus_name_lock_pattern(full_ability_text, card, controller_id):
-		return true
+		return _hit("look_and_play.try_execute_malleus_name_lock_pattern")
 	if await _main._look_and_play.try_execute_espiritu_maquina_conditional_gold_pattern(full_ability_text, controller_id, card):
-		return true
+		return _hit("look_and_play.try_execute_espiritu_maquina_conditional_gold_pattern")
 	if await _main._look_and_play.try_execute_banish_cost_or_search_two_banish_pattern(full_ability_text, card, controller_id):
-		return true
+		return _hit("look_and_play.try_execute_banish_cost_or_search_two_banish_pattern")
 	if await _main._look_and_play.try_execute_look_opponent_hand_discard_then_search_ally_pattern(full_ability_text, card, controller_id):
-		return true
+		return _hit("look_and_play.try_execute_look_opponent_hand_discard_then_search_ally_pattern")
 	if await _main._look_and_play.try_execute_banish_opponent_non_gold_and_talisman_surcharge_pattern(full_ability_text, card, controller_id):
-		return true
+		return _hit("look_and_play.try_execute_banish_opponent_non_gold_and_talisman_surcharge_pattern")
 	if await _main._draw_shuffle_resolver.try_execute_each_player_discard_then_draw_pattern(full_ability_text, controller_id, card):
-		return true
+		return _hit("draw_shuffle_resolver.try_execute_each_player_discard_then_draw_pattern")
 	if await _main._draw_shuffle_resolver.try_execute_draw_gold_search_pattern(full_ability_text, controller_id, card):
-		return true
+		return _hit("draw_shuffle_resolver.try_execute_draw_gold_search_pattern")
 	if await _main._draw_shuffle_resolver.try_execute_draw_reveal_talisman_gold_pattern(full_ability_text, controller_id, card):
-		return true
+		return _hit("draw_shuffle_resolver.try_execute_draw_reveal_talisman_gold_pattern")
 	if await _main._draw_shuffle_resolver.try_execute_deck_top_or_bottom_to_hand_pattern(full_ability_text, controller_id, card):
-		return true
+		return _hit("draw_shuffle_resolver.try_execute_deck_top_or_bottom_to_hand_pattern")
 	if await _main._draw_shuffle_resolver.try_execute_shuffle_exile_and_draw_pattern(full_ability_text, controller_id, card):
-		return true
+		return _hit("draw_shuffle_resolver.try_execute_shuffle_exile_and_draw_pattern")
 	if await _main._draw_shuffle_resolver.try_execute_shuffle_hand_and_draw_plus_two_pattern(full_ability_text, controller_id):
-		return true
+		return _hit("draw_shuffle_resolver.try_execute_shuffle_hand_and_draw_plus_two_pattern")
 	if await _main._convert_misc_resolver.try_execute_mill_convert_to_ally_pattern(full_ability_text, card, controller_id):
-		return true
+		return _hit("convert_misc_resolver.try_execute_mill_convert_to_ally_pattern")
 	if await _main._draw_shuffle_resolver.try_execute_tempilcahue_choice_pattern(full_ability_text, card, controller_id):
-		return true
+		return _hit("draw_shuffle_resolver.try_execute_tempilcahue_choice_pattern")
 	if await _main._draw_shuffle_resolver.try_execute_golpe_solar_pattern(full_ability_text, card, controller_id):
-		return true
+		return _hit("draw_shuffle_resolver.try_execute_golpe_solar_pattern#2")
 	if await _main._draw_shuffle_resolver.try_execute_shuffle_hand_then_draw_pattern(full_ability_text, controller_id, card):
-		return true
+		return _hit("draw_shuffle_resolver.try_execute_shuffle_hand_then_draw_pattern")
 	if await _main._draw_shuffle_resolver.try_execute_free_play_weapon_or_totem_cost1_hand_cemetery_pattern(full_ability_text, controller_id, card):
-		return true
+		return _hit("draw_shuffle_resolver.try_execute_free_play_weapon_or_totem_cost1_hand_cemetery_pattern")
 	# Estos dos chequean sobre el texto ya aislado al bloque de este trigger: una carta puede repetir
 	# el mismo trigger (Alicia en Wonderland) y este resolutor se llama una vez por bloque; con el
 	# texto completo se dispararían dos veces.
 	if await _main._look_and_play.try_execute_reveal_until_distinct_cost_allies_pattern(isolated_ability_text, controller_id, card):
-		return true
+		return _hit("look_and_play.try_execute_reveal_until_distinct_cost_allies_pattern")
 	if await _main._look_and_play.try_execute_search_ally_castillo_or_cementerio_then_buff_pattern(isolated_ability_text, card, controller_id):
-		return true
+		return _hit("look_and_play.try_execute_search_ally_castillo_or_cementerio_then_buff_pattern")
 	if await _main._look_and_play.try_execute_search_ally_cost_max_free_play_pattern(isolated_ability_text, card, controller_id):
-		return true
+		return _hit("look_and_play.try_execute_search_ally_cost_max_free_play_pattern")
 	if await _main._look_and_play.try_execute_cain_damage_shuffle_search_pattern(isolated_ability_text, card, controller_id):
-		return true
+		return _hit("look_and_play.try_execute_cain_damage_shuffle_search_pattern")
 	if await _main._look_and_play.try_execute_search_two_oros_split_destination_pattern(isolated_ability_text, card, controller_id):
-		return true
+		return _hit("look_and_play.try_execute_search_two_oros_split_destination_pattern")
 	if await _main._look_and_play.try_execute_primer_sello_pattern(isolated_ability_text, card, controller_id):
-		return true
+		return _hit("look_and_play.try_execute_primer_sello_pattern")
 	if await _main._look_and_play.try_execute_segundo_sello_pattern(isolated_ability_text, card, controller_id):
-		return true
+		return _hit("look_and_play.try_execute_segundo_sello_pattern")
 	if await _main._look_and_play.try_execute_tercer_sello_pattern(isolated_ability_text, card, controller_id):
-		return true
+		return _hit("look_and_play.try_execute_tercer_sello_pattern")
 	if await _main._look_and_play.try_execute_cuarto_sello_pattern(isolated_ability_text, card, controller_id):
-		return true
+		return _hit("look_and_play.try_execute_cuarto_sello_pattern")
 	if await _main._look_and_play.try_execute_quinto_sello_pattern(isolated_ability_text, card, controller_id):
-		return true
+		return _hit("look_and_play.try_execute_quinto_sello_pattern")
 	if await _main._look_and_play.try_execute_sexto_sello_pattern(isolated_ability_text, card, controller_id):
-		return true
+		return _hit("look_and_play.try_execute_sexto_sello_pattern")
 	if await _main._look_and_play.try_execute_septimo_sello_pattern(isolated_ability_text, card, controller_id):
-		return true
+		return _hit("look_and_play.try_execute_septimo_sello_pattern")
 	if await _main._convert_misc_resolver.try_execute_name_a_card_pattern(isolated_ability_text, card, controller_id):
-		return true
+		return _hit("convert_misc_resolver.try_execute_name_a_card_pattern")
 	if await _main._convert_misc_resolver.try_execute_no_allies_convert_castillo_top_pattern(isolated_ability_text, card, controller_id):
-		return true
+		return _hit("convert_misc_resolver.try_execute_no_allies_convert_castillo_top_pattern")
 	if await _main._convert_misc_resolver.try_execute_jabberwocky_convert_opponent_top_pattern(full_ability_text, card, controller_id):
-		return true
+		return _hit("convert_misc_resolver.try_execute_jabberwocky_convert_opponent_top_pattern")
 	if await _main._convert_misc_resolver.try_execute_opponent_discard_and_draw_pattern(isolated_ability_text, card, controller_id):
-		return true
+		return _hit("convert_misc_resolver.try_execute_opponent_discard_and_draw_pattern")
 	if await _main._draw_shuffle_resolver.try_execute_banish_from_cemeteries_and_draw_pattern(isolated_ability_text, controller_id, card):
-		return true
+		return _hit("draw_shuffle_resolver.try_execute_banish_from_cemeteries_and_draw_pattern")
 	if await _main._draw_shuffle_resolver.try_execute_weapon_count_banish_cemetery_pattern(isolated_ability_text, controller_id, card):
-		return true
+		return _hit("draw_shuffle_resolver.try_execute_weapon_count_banish_cemetery_pattern")
 	if await _main._draw_shuffle_resolver.try_execute_vigilia_or_final_banish_opponent_cemetery_pattern(isolated_ability_text, controller_id, card):
-		return true
+		return _hit("draw_shuffle_resolver.try_execute_vigilia_or_final_banish_opponent_cemetery_pattern")
 	if await _main._draw_shuffle_resolver.try_execute_shuffle_up_to_n_cemeteries_pattern(isolated_ability_text, controller_id, card):
-		return true
+		return _hit("draw_shuffle_resolver.try_execute_shuffle_up_to_n_cemeteries_pattern")
 	if await _main._draw_shuffle_resolver.try_execute_shuffle_cemeteries_or_raise_ally_totem_pattern(isolated_ability_text, controller_id, card):
-		return true
+		return _hit("draw_shuffle_resolver.try_execute_shuffle_cemeteries_or_raise_ally_totem_pattern")
 	if await _main._draw_shuffle_resolver.try_execute_banish_up_to_n_cemeteries_pattern(isolated_ability_text, controller_id, card):
-		return true
+		return _hit("draw_shuffle_resolver.try_execute_banish_up_to_n_cemeteries_pattern")
 	if await _main._draw_shuffle_resolver.try_execute_shuffle_or_banish_cemeteries_equal_to_strength_pattern(isolated_ability_text, controller_id, card):
-		return true
+		return _hit("draw_shuffle_resolver.try_execute_shuffle_or_banish_cemeteries_equal_to_strength_pattern")
 	if await _main._draw_shuffle_resolver.try_execute_banish_cemeteries_equal_to_own_strength_pattern(isolated_ability_text, card, controller_id):
-		return true
+		return _hit("draw_shuffle_resolver.try_execute_banish_cemeteries_equal_to_own_strength_pattern")
 	if await _main._draw_shuffle_resolver.try_execute_draw_and_shuffle_hand_pattern(isolated_ability_text, controller_id, card):
-		return true
+		return _hit("draw_shuffle_resolver.try_execute_draw_and_shuffle_hand_pattern")
 	if await _main._draw_shuffle_resolver.try_execute_draw_and_shuffle_opponent_card_pattern(isolated_ability_text, controller_id, card):
-		return true
+		return _hit("draw_shuffle_resolver.try_execute_draw_and_shuffle_opponent_card_pattern")
 	if await _main._convert_misc_resolver.try_execute_banish_top_by_ally_count_and_draw_pattern(isolated_ability_text, controller_id, card):
-		return true
+		return _hit("convert_misc_resolver.try_execute_banish_top_by_ally_count_and_draw_pattern")
 	var action := UniversalCardParser.extract_action(isolated_ability_text)
 	if action.get("matched", false):
 		await _main._targeted_executor.execute_parsed_action(action, card, event_data)
-		return true
+		return _hit("analizador_viejo.extract_action")
 	return false
 
 
