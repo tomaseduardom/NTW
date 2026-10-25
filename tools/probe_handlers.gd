@@ -77,7 +77,7 @@ func _ready() -> void:
 	var tf := FileAccess.open(out_path + ".trace.json", FileAccess.WRITE)
 	if tf:
 		tf.store_string(JSON.stringify({"labels": resolution.trace_labels(), "hits": resolution.trace,
-			"by_card": _trace_by_card}, "	"))
+			"by_card": _trace_by_card, "old_parser_texts": resolution.old_parser_texts}, "	"))
 		tf.close()
 	get_tree().quit(0)
 

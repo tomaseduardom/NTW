@@ -37,6 +37,8 @@ const LOOK_AND_PLAY_LABELS := ["Deck170Script.try_annul_on_stack", "TalismanScri
 var trace_enabled: bool = false
 var trace: Dictionary = {}
 var last_hit: String = ""
+## Textos exactos que llegaron al analizador viejo (tools/old_parser_report.tscn los clasifica).
+var old_parser_texts: Array = []
 
 
 func _hit(label: String) -> bool:
@@ -510,6 +512,9 @@ func _resolve_look_and_play_patterns(card: Node, full_ability_text: String, isol
 		return _hit("convert_misc_resolver.try_execute_banish_top_by_ally_count_and_draw_pattern")
 	var action := UniversalCardParser.extract_action(isolated_ability_text)
 	if action.get("matched", false):
+		if trace_enabled:
+			old_parser_texts.append({"carta": str(card.get("card_name")) if is_instance_valid(card) else "",
+				"texto": isolated_ability_text})
 		await _main._targeted_executor.execute_parsed_action(action, card, event_data)
 		return _hit("analizador_viejo.extract_action")
 	return false
