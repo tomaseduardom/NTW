@@ -162,7 +162,14 @@ func _build() -> void:
 	_hint.add_theme_color_override("font_color", Color(1.0, 0.92, 0.70))
 	_hint.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.9))
 	_hint.add_theme_constant_override("shadow_offset_y", 2)
-	vbox.add_child(_hint)
+	_hint.add_theme_constant_override("letter_spacing", 2)
+	_hint.add_theme_constant_override("line_spacing", 6)
+
+	var hint_margin := MarginContainer.new()
+	hint_margin.add_theme_constant_override("margin_top", 12)
+	hint_margin.add_theme_constant_override("margin_bottom", 28)
+	hint_margin.add_child(_hint)
+	vbox.add_child(hint_margin)
 
 	_row = HBoxContainer.new()
 	_row.add_theme_constant_override("separation", int(GAP))
@@ -270,11 +277,14 @@ func _card_holder(i: int, mode: String) -> Control:
 	if mode == "order" and pos >= 0:
 		holder.add_child(_badge(str(pos + 1)))
 		holder.modulate = Color(1, 1, 1, 0.75)
-	if mode != "show":
-		holder.mouse_filter = Control.MOUSE_FILTER_STOP
-		holder.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
-		holder.gui_input.connect(func(ev: InputEvent) -> void:
-			if ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_LEFT:
+	holder.mouse_filter = Control.MOUSE_FILTER_STOP
+	holder.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	holder.gui_input.connect(func(ev: InputEvent) -> void:
+		if ev is InputEventMouseButton and ev.pressed:
+			if ev.button_index == MOUSE_BUTTON_RIGHT:
+				if _main and _main.get("_card_inspector") and is_instance_valid(card):
+					_main._card_inspector.on_card_right_clicked(card)
+			elif ev.button_index == MOUSE_BUTTON_LEFT and mode != "show":
 				_on_tap(i))
 	return holder
 

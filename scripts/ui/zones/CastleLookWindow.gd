@@ -230,7 +230,14 @@ func _build() -> void:
 	_hint.add_theme_color_override("font_color", Color(1.0, 0.92, 0.70))
 	_hint.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.9))
 	_hint.add_theme_constant_override("shadow_offset_y", 2)
-	vbox.add_child(_hint)
+	_hint.add_theme_constant_override("letter_spacing", 2)
+	_hint.add_theme_constant_override("line_spacing", 6)
+
+	var hint_margin := MarginContainer.new()
+	hint_margin.add_theme_constant_override("margin_top", 12)
+	hint_margin.add_theme_constant_override("margin_bottom", 28)
+	hint_margin.add_child(_hint)
+	vbox.add_child(hint_margin)
 
 	_rows_box = VBoxContainer.new()
 	_rows_box.add_theme_constant_override("separation", 10)
@@ -357,6 +364,7 @@ func _card_node(i: int, scale: float) -> Control:
 	card.drag_enabled = false
 	_ignore_mouse(card)
 	holder.add_child(card)
+	holder.set_meta("card", card)
 	return holder
 
 
@@ -372,8 +380,13 @@ func _picking_row(box: Dictionary) -> Control:
 		holder.mouse_filter = Control.MOUSE_FILTER_STOP
 		holder.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND if ok else Control.CURSOR_ARROW
 		holder.gui_input.connect(func(ev: InputEvent) -> void:
-			if ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_LEFT and ok:
-				_assign(i, box.key))
+			if ev is InputEventMouseButton and ev.pressed:
+				if ev.button_index == MOUSE_BUTTON_RIGHT:
+					var c = holder.get_meta("card", null)
+					if _main and _main.get("_card_inspector") and is_instance_valid(c):
+						_main._card_inspector.on_card_right_clicked(c)
+				elif ev.button_index == MOUSE_BUTTON_LEFT and ok:
+					_assign(i, box.key))
 		row.add_child(holder)
 	return row
 
@@ -395,10 +408,15 @@ func _assigned_group(box: Dictionary) -> Control:
 		var holder := _card_node(i, _small)
 		holder.mouse_filter = Control.MOUSE_FILTER_STOP
 		holder.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
-		holder.tooltip_text = "Toca para devolverla"
+		holder.tooltip_text = "Toca para devolverla (Click derecho para ampliar)"
 		holder.gui_input.connect(func(ev: InputEvent) -> void:
-			if ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_LEFT:
-				_unassign(i))
+			if ev is InputEventMouseButton and ev.pressed:
+				if ev.button_index == MOUSE_BUTTON_RIGHT:
+					var c = holder.get_meta("card", null)
+					if _main and _main.get("_card_inspector") and is_instance_valid(c):
+						_main._card_inspector.on_card_right_clicked(c)
+				elif ev.button_index == MOUSE_BUTTON_LEFT:
+					_unassign(i))
 		row.add_child(holder)
 	col.add_child(row)
 	return col
@@ -429,7 +447,13 @@ func _ordering_row(box: Dictionary) -> Control:
 		holder.position = Vector2(pos * step_w, 0)
 		holder.mouse_filter = Control.MOUSE_FILTER_STOP
 		holder.mouse_default_cursor_shape = Control.CURSOR_DRAG if list.size() > 1 else Control.CURSOR_ARROW
-		holder.gui_input.connect(_on_drag_input.bind(box.key, i, holder, row))
+		holder.gui_input.connect(func(ev: InputEvent) -> void:
+			if ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_RIGHT:
+				var c = holder.get_meta("card", null)
+				if _main and _main.get("_card_inspector") and is_instance_valid(c):
+					_main._card_inspector.on_card_right_clicked(c)
+			else:
+				_on_drag_input(ev, box.key, i, holder, row))
 		row.add_child(holder)
 	return col
 

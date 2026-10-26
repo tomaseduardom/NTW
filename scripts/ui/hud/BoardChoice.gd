@@ -75,42 +75,31 @@ static func choose(main: Node, title: String, options: Array, source_card = null
 	if source_card is Control and is_instance_valid(source_card) and source_card.is_inside_tree() and source_card.is_visible_in_tree():
 		layer.add_child(_outline(source_card.get_global_rect()))
 
-	# Contenedor central unificado para los popouts de habilidades en el centro del juego
-	var center_panel := PanelContainer.new()
-	var cp_style := StyleBoxFlat.new()
-	cp_style.bg_color = Color(0.07, 0.09, 0.13, 0.95)
-	cp_style.border_color = Color(0.78, 0.65, 0.32, 0.90)
-	cp_style.set_border_width_all(2)
-	cp_style.set_corner_radius_all(14)
-	cp_style.shadow_color = Color(0, 0, 0, 0.85)
-	cp_style.shadow_size = 24
-	cp_style.shadow_offset = Vector2(0, 8)
-	cp_style.content_margin_left = 24
-	cp_style.content_margin_right = 24
-	cp_style.content_margin_top = 16
-	cp_style.content_margin_bottom = 16
-	center_panel.add_theme_stylebox_override("panel", cp_style)
+	# Centrado exacto de los botones en el centro del juego sin contenedor de fondo
+	var center_root := CenterContainer.new()
+	center_root.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	center_root.size = vp
+	layer.add_child(center_root)
+
+	var vp_resize := func() -> void:
+		if is_instance_valid(center_root) and is_instance_valid(main) and main.is_inside_tree():
+			center_root.size = main.get_viewport().get_visible_rect().size
+	if main.get_viewport():
+		main.get_viewport().size_changed.connect(vp_resize)
 
 	var chips_container: BoxContainer
 	if options.size() <= 3:
 		chips_container = HBoxContainer.new()
-		chips_container.add_theme_constant_override("separation", 16)
+		chips_container.add_theme_constant_override("separation", 24)
 	else:
 		chips_container = VBoxContainer.new()
-		chips_container.add_theme_constant_override("separation", 10)
+		chips_container.add_theme_constant_override("separation", 14)
 	chips_container.alignment = BoxContainer.ALIGNMENT_CENTER
-	center_panel.add_child(chips_container)
+	chips_container.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	center_root.add_child(chips_container)
 
 	for i in range(options.size()):
 		chips_container.add_child(_chip(str(options[i]), func() -> void: state.picked = i))
-
-	layer.add_child(center_panel)
-
-	# Centrado exacto en pantalla (en el centro del juego)
-	center_panel.resized.connect(func() -> void:
-		center_panel.position = (vp - center_panel.size) / 2.0
-	)
-	center_panel.position = (vp - Vector2(320, 80)) / 2.0
 
 	# Tiempo agotado (TurnClock): la primera opción.
 	var force_gen: int = NetworkClient.force_gen
@@ -162,26 +151,28 @@ static func _place(rect: Rect2, size: Vector2, vp: Vector2) -> Vector2:
 static func _chip(text: String, on_press: Callable) -> Button:
 	var b := Button.new()
 	b.text = text
-	b.custom_minimum_size = Vector2(170, 48)
+	b.custom_minimum_size = Vector2(180, 52)
 	b.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 	b.add_theme_font_override("font", FONT_TITLE)
 	b.add_theme_font_size_override("font_size", 15)
 
 	var sb := StyleBoxFlat.new()
-	sb.bg_color = Color(0.16, 0.14, 0.10, 0.96)
+	sb.bg_color = Color(0.12, 0.15, 0.22, 0.96)
 	sb.border_color = Color(0.88, 0.74, 0.28, 0.95)
 	sb.set_border_width_all(2)
 	sb.set_corner_radius_all(8)
-	sb.content_margin_left = 20
-	sb.content_margin_right = 20
-	sb.shadow_color = Color(0, 0, 0, 0.7)
-	sb.shadow_size = 8
+	sb.content_margin_left = 24
+	sb.content_margin_right = 24
+	sb.content_margin_top = 12
+	sb.content_margin_bottom = 12
+	sb.shadow_color = Color(0, 0, 0, 0.85)
+	sb.shadow_size = 16
 
 	var hover := sb.duplicate()
-	hover.bg_color = Color(0.22, 0.20, 0.12, 1.0)
+	hover.bg_color = Color(0.18, 0.24, 0.34, 1.0)
 	hover.border_color = Color(1.0, 0.88, 0.48, 1.0)
-	hover.shadow_color = Color(0.88, 0.74, 0.28, 0.40)
-	hover.shadow_size = 12
+	hover.shadow_color = Color(0.88, 0.74, 0.28, 0.45)
+	hover.shadow_size = 18
 
 	var pressed := sb.duplicate()
 	pressed.bg_color = Color(0.28, 0.24, 0.12, 1.0)
