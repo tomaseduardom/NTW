@@ -62,40 +62,55 @@ static func choose(main: Node, title: String, options: Array, source_card = null
 	banner.custom_minimum_size = Vector2(vp.x, 0)
 	layer.add_child(banner)
 
-	# Agrupa las opciones por ancla.
-	var groups: Dictionary = {}  # key -> {rect, idx: []}
-	var fallback := _fallback_rect(main, source_card, vp)
+	# Objetivos específicos en mesa: si una opción los tiene, brillan y se pueden tocar directo
 	for i in range(options.size()):
-		var anchor: Dictionary = _anchor_for(str(options[i]), main)
 		var targets: Array = target_sets.get(i, []).filter(func(n): return n is Control and is_instance_valid(n) and n.is_visible_in_tree())
 		if not targets.is_empty():
-			# Sobre sus objetivos: cada uno brilla y se puede tocar directo.
-			var union: Rect2 = targets[0].get_global_rect()
 			for n in targets:
-				union = union.merge(n.get_global_rect())
 				layer.add_child(_target_button(n, func() -> void:
 					state.target = n
 					state.picked = i))
-			anchor = {"key": "targets_%d" % i, "rect": union}
-		var key: String = str(anchor.get("key", "source"))
-		var rect: Rect2 = anchor.get("rect", fallback)
-		if not groups.has(key):
-			groups[key] = {"rect": rect, "idx": []}
-		groups[key].idx.append(i)
 
-	for key in groups:
-		var g: Dictionary = groups[key]
-		var rect: Rect2 = g.rect
-		if key != "source" or (source_card is Node and is_instance_valid(source_card)):
-			layer.add_child(_outline(rect))
-		var col := VBoxContainer.new()
-		col.add_theme_constant_override("separation", 8)
-		for i in g.idx:
-			col.add_child(_chip(str(options[i]), func() -> void: state.picked = i))
-		layer.add_child(col)
-		# Arriba del ancla si hay lugar; si no, abajo. Centrado en X y dentro de la pantalla.
-		col.resized.connect(func() -> void: col.position = _place(rect, col.size, vp))
-		col.position = _place(rect, Vector2(200, 50 * g.idx.size()), vp)
+	# Si hay una carta fuente activa, dibujar sutil resalte
+	if source_card is Control and is_instance_valid(source_card) and source_card.is_inside_tree() and source_card.is_visible_in_tree():
+		layer.add_child(_outline(source_card.get_global_rect()))
+
+	# Contenedor central unificado para los popouts de habilidades en el centro del juego
+	var center_panel := PanelContainer.new()
+	var cp_style := StyleBoxFlat.new()
+	cp_style.bg_color = Color(0.07, 0.09, 0.13, 0.95)
+	cp_style.border_color = Color(0.78, 0.65, 0.32, 0.90)
+	cp_style.set_border_width_all(2)
+	cp_style.set_corner_radius_all(14)
+	cp_style.shadow_color = Color(0, 0, 0, 0.85)
+	cp_style.shadow_size = 24
+	cp_style.shadow_offset = Vector2(0, 8)
+	cp_style.content_margin_left = 24
+	cp_style.content_margin_right = 24
+	cp_style.content_margin_top = 16
+	cp_style.content_margin_bottom = 16
+	center_panel.add_theme_stylebox_override("panel", cp_style)
+
+	var chips_container: BoxContainer
+	if options.size() <= 3:
+		chips_container = HBoxContainer.new()
+		chips_container.add_theme_constant_override("separation", 16)
+	else:
+		chips_container = VBoxContainer.new()
+		chips_container.add_theme_constant_override("separation", 10)
+	chips_container.alignment = BoxContainer.ALIGNMENT_CENTER
+	center_panel.add_child(chips_container)
+
+	for i in range(options.size()):
+		chips_container.add_child(_chip(str(options[i]), func() -> void: state.picked = i))
+
+	layer.add_child(center_panel)
+
+	# Centrado exacto en pantalla (en el centro del juego)
+	center_panel.resized.connect(func() -> void:
+		center_panel.position = (vp - center_panel.size) / 2.0
+	)
+	center_panel.position = (vp - Vector2(320, 80)) / 2.0
 
 	# Tiempo agotado (TurnClock): la primera opción.
 	var force_gen: int = NetworkClient.force_gen
@@ -147,24 +162,39 @@ static func _place(rect: Rect2, size: Vector2, vp: Vector2) -> Vector2:
 static func _chip(text: String, on_press: Callable) -> Button:
 	var b := Button.new()
 	b.text = text
-	b.custom_minimum_size = Vector2(0, 44)
+	b.custom_minimum_size = Vector2(170, 48)
+	b.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 	b.add_theme_font_override("font", FONT_TITLE)
 	b.add_theme_font_size_override("font_size", 15)
-	b.add_theme_color_override("font_color", INK)
-	b.add_theme_color_override("font_hover_color", INK)
-	b.add_theme_color_override("font_pressed_color", INK)
+
 	var sb := StyleBoxFlat.new()
-	sb.bg_color = GOLD
-	sb.set_corner_radius_all(22)
-	sb.content_margin_left = 22
-	sb.content_margin_right = 22
-	sb.shadow_color = Color(0, 0, 0, 0.5)
-	sb.shadow_size = 6
+	sb.bg_color = Color(0.16, 0.14, 0.10, 0.96)
+	sb.border_color = Color(0.88, 0.74, 0.28, 0.95)
+	sb.set_border_width_all(2)
+	sb.set_corner_radius_all(8)
+	sb.content_margin_left = 20
+	sb.content_margin_right = 20
+	sb.shadow_color = Color(0, 0, 0, 0.7)
+	sb.shadow_size = 8
+
 	var hover := sb.duplicate()
-	hover.bg_color = GOLD.lightened(0.18)
+	hover.bg_color = Color(0.22, 0.20, 0.12, 1.0)
+	hover.border_color = Color(1.0, 0.88, 0.48, 1.0)
+	hover.shadow_color = Color(0.88, 0.74, 0.28, 0.40)
+	hover.shadow_size = 12
+
+	var pressed := sb.duplicate()
+	pressed.bg_color = Color(0.28, 0.24, 0.12, 1.0)
+	pressed.border_color = Color(0.88, 0.74, 0.28, 1.0)
+
 	b.add_theme_stylebox_override("normal", sb)
 	b.add_theme_stylebox_override("hover", hover)
-	b.add_theme_stylebox_override("pressed", hover)
+	b.add_theme_stylebox_override("pressed", pressed)
+	b.add_theme_stylebox_override("focus", hover)
+	b.add_theme_color_override("font_color", Color(0.96, 0.90, 0.75, 1.0))
+	b.add_theme_color_override("font_hover_color", Color(1.0, 1.0, 1.0, 1.0))
+	b.add_theme_color_override("font_pressed_color", Color(0.96, 0.90, 0.75, 1.0))
+
 	b.pressed.connect(on_press)
 	return b
 

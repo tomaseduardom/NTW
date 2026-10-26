@@ -13,8 +13,8 @@ const CardScene = preload("res://scenes/cards/Card.tscn")
 ## Escala de las cartas del visor: se calcula con el alto de la pantalla: "te muestra casi todo el
 ## mazo con las cartas muy pequeñas"), entre estos dos topes.
 # Mismo estilo y tamaño que el visor de mirar (CastleLookWindow): cartas grandes, instrucción arriba.
-const VIEWER_SCALE_MIN := 0.9
-const VIEWER_SCALE_MAX := 1.6
+const VIEWER_SCALE_MIN := 0.80
+const VIEWER_SCALE_MAX := 1.15
 const VIEWER_GOLD := Color(0.85, 0.72, 0.28)
 const TYPE_FILTERS := [
 	["Todas", -1],
@@ -336,13 +336,13 @@ func _open_viewer(pool_idx: int) -> void:
 	hint.text = "%s · toca las cartas que eliges" % zone_label(pool.is_own, pool.zone)
 	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	hint.add_theme_font_override("font", preload("res://assets/fonts/Cinzel-Bold.ttf"))
-	hint.add_theme_font_size_override("font_size", 32)
+	hint.add_theme_font_size_override("font_size", 22)
 	hint.add_theme_color_override("font_color", Color(1.0, 0.92, 0.70))
 	vbox.add_child(hint)
 
 	# Tamaño de carta según la pantalla, y tantas columnas como entren.
 	var vp: Vector2 = _viewer.get_viewport().get_visible_rect().size
-	var card_scale: float = clampf(vp.y * 0.0014, VIEWER_SCALE_MIN, VIEWER_SCALE_MAX)
+	var card_scale: float = clampf(vp.y * 0.0010, VIEWER_SCALE_MIN, VIEWER_SCALE_MAX)
 	var cell_w: float = 150.0 * card_scale
 	var avail_w: float = vp.x * 0.94 - 36.0 - 16.0
 	var scroll := ScrollContainer.new()

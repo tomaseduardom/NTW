@@ -13,7 +13,7 @@ extends RefCounted
 ## Se usa con preload (ver §54).
 
 const CardScene := preload("res://scenes/cards/Card.tscn")
-const MAX_SCALE := 1.7
+const MAX_SCALE := 1.15
 const GAP := 20.0
 const FONT_TITLE := preload("res://assets/fonts/Cinzel-Bold.ttf")
 const FONT_BODY := preload("res://assets/fonts/Marcellus-Regular.ttf")
@@ -123,9 +123,9 @@ func open(main: Node, config: Dictionary) -> Dictionary:
 func _fit_scale() -> void:
 	var vp: Vector2 = _main.get_viewport().get_visible_rect().size
 	var n: int = maxi(_cfg.cards.size(), 1)
-	var by_w: float = (vp.x * 0.94 - GAP * (n - 1)) / (150.0 * n)
+	var by_w: float = (vp.x * 0.90 - GAP * (n - 1)) / (150.0 * n)
 	var by_h: float = (vp.y - 280.0) / 210.0
-	_scale = clampf(minf(MAX_SCALE, minf(by_w, by_h)), 0.6, MAX_SCALE)
+	_scale = clampf(minf(MAX_SCALE, minf(by_w, by_h)), 0.65, MAX_SCALE)
 
 
 func _build() -> void:
@@ -149,15 +149,19 @@ func _build() -> void:
 	title.text = str(_cfg.get("title", ""))
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	title.add_theme_font_override("font", FONT_BODY)
-	title.add_theme_font_size_override("font_size", 22)
+	title.add_theme_font_size_override("font_size", 18)
 	title.add_theme_color_override("font_color", Color(0.75, 0.72, 0.80))
 	vbox.add_child(title)
 
 	_hint = Label.new()
 	_hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_hint.custom_minimum_size = Vector2(minf(vp.x * 0.85, 1400.0), 0)
 	_hint.add_theme_font_override("font", FONT_TITLE)
-	_hint.add_theme_font_size_override("font_size", 36)
+	_hint.add_theme_font_size_override("font_size", 22)
 	_hint.add_theme_color_override("font_color", Color(1.0, 0.92, 0.70))
+	_hint.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.9))
+	_hint.add_theme_constant_override("shadow_offset_y", 2)
 	vbox.add_child(_hint)
 
 	_row = HBoxContainer.new()
@@ -184,21 +188,58 @@ func _build() -> void:
 func _button(text: String, primary: bool) -> Button:
 	var b := Button.new()
 	b.text = text
-	b.custom_minimum_size = Vector2(240, 60)
+	b.custom_minimum_size = Vector2(190, 48)
+	b.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 	b.add_theme_font_override("font", FONT_TITLE)
-	b.add_theme_font_size_override("font_size", 22)
-	var sb := StyleBoxFlat.new()
-	sb.set_corner_radius_all(10)
+	b.add_theme_font_size_override("font_size", 16)
+
 	if primary:
-		sb.bg_color = GOLD
-		for c in ["font_color", "font_hover_color", "font_pressed_color"]:
-			b.add_theme_color_override(c, INK)
+		var sb_norm := StyleBoxFlat.new()
+		sb_norm.bg_color = Color(0.16, 0.14, 0.10, 0.96)
+		sb_norm.border_color = Color(0.88, 0.74, 0.28, 0.95)
+		sb_norm.set_border_width_all(2)
+		sb_norm.set_corner_radius_all(8)
+		sb_norm.shadow_color = Color(0, 0, 0, 0.7)
+		sb_norm.shadow_size = 8
+
+		var sb_hov := sb_norm.duplicate()
+		sb_hov.bg_color = Color(0.22, 0.20, 0.12, 1.0)
+		sb_hov.border_color = Color(1.0, 0.88, 0.48, 1.0)
+		sb_hov.shadow_color = Color(0.88, 0.74, 0.28, 0.40)
+		sb_hov.shadow_size = 12
+
+		var sb_press := sb_norm.duplicate()
+		sb_press.bg_color = Color(0.28, 0.24, 0.12, 1.0)
+		sb_press.border_color = Color(0.88, 0.74, 0.28, 1.0)
+
+		b.add_theme_stylebox_override("normal", sb_norm)
+		b.add_theme_stylebox_override("hover", sb_hov)
+		b.add_theme_stylebox_override("pressed", sb_press)
+		b.add_theme_stylebox_override("focus", sb_hov)
+		b.add_theme_color_override("font_color", Color(0.96, 0.90, 0.75, 1.0))
+		b.add_theme_color_override("font_hover_color", Color(1.0, 1.0, 1.0, 1.0))
+		b.add_theme_color_override("font_pressed_color", Color(0.96, 0.90, 0.75, 1.0))
 	else:
-		sb.bg_color = Color(0, 0, 0, 0)
-		sb.set_border_width_all(1)
-		sb.border_color = Color(0.45, 0.42, 0.52)
-	for st in ["normal", "hover", "pressed"]:
-		b.add_theme_stylebox_override(st, sb)
+		var sb_norm := StyleBoxFlat.new()
+		sb_norm.bg_color = Color(0.10, 0.12, 0.16, 0.90)
+		sb_norm.border_color = Color(0.50, 0.45, 0.35, 0.80)
+		sb_norm.set_border_width_all(1)
+		sb_norm.set_corner_radius_all(8)
+		sb_norm.shadow_color = Color(0, 0, 0, 0.5)
+		sb_norm.shadow_size = 6
+
+		var sb_hov := sb_norm.duplicate()
+		sb_hov.bg_color = Color(0.16, 0.20, 0.28, 1.0)
+		sb_hov.border_color = Color(0.88, 0.75, 0.40, 1.0)
+		sb_hov.shadow_color = Color(0.88, 0.75, 0.40, 0.25)
+		sb_hov.shadow_size = 10
+
+		b.add_theme_stylebox_override("normal", sb_norm)
+		b.add_theme_stylebox_override("hover", sb_hov)
+		b.add_theme_stylebox_override("pressed", sb_hov)
+		b.add_theme_stylebox_override("focus", sb_hov)
+		b.add_theme_color_override("font_color", Color(0.80, 0.78, 0.72, 1.0))
+		b.add_theme_color_override("font_hover_color", Color(1.0, 1.0, 1.0, 1.0))
 	return b
 
 
