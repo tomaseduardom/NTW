@@ -378,9 +378,25 @@ func _has_point(point: Vector2) -> bool:
 			return false
 		return Rect2(Vector2.ZERO, size).has_point(point)
 
-	# En el campo de juego o zonas de mesa, las cartas NUNCA deben recortarse:
+	# En el campo de juego o zonas de mesa (Línea de Apoyo / Tótems / Defensa / Ataque):
+	# Si el punto cae sobre una carta de la mano del jugador, la carta en mesa CEDE
+	# el hit-test (_has_point = false) para que la mano tenga prioridad absoluta de hover, click y arrastre.
 	if current_zone in [Constants.Zone.LINEA_DEFENSA, Constants.Zone.LINEA_ATAQUE, Constants.Zone.LINEA_APOYO]:
-		return Rect2(Vector2.ZERO, size).has_point(point)
+		if not Rect2(Vector2.ZERO, size).has_point(point):
+			return false
+		var tree := get_tree()
+		if tree:
+			var main_node = tree.get_root().get_node_or_null("Main")
+			if main_node and main_node.get("player_hand"):
+				var hand = main_node.player_hand
+				if hand and is_instance_valid(hand) and hand.visible and not hand.get("_is_hidden"):
+					var global_pt: Vector2 = get_global_transform() * point
+					for hand_card in hand.cards:
+						if is_instance_valid(hand_card) and hand_card.is_visible_in_tree() and not hand_card.is_dragging:
+							var hand_card_local: Vector2 = hand_card.get_global_transform().affine_inverse() * global_pt
+							if hand_card._has_point(hand_card_local):
+								return false
+		return true
 	if _click_clip_right >= 0.0 and point.x > _click_clip_right:
 		# En disposición en escalera de Oros, la franja superior queda libre y clickable:
 		if _click_clip_top_free > 0.0 and point.y < _click_clip_top_free:

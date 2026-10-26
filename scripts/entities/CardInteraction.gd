@@ -48,9 +48,37 @@ func process(_delta: float) -> void:
 		_on_mouse_exited()
 
 
+func _get_hand_card_under_mouse() -> Node:
+	if not _card or not is_instance_valid(_card):
+		return null
+	var tree := _card.get_tree()
+	if not tree:
+		return null
+	var main = tree.get_root().get_node_or_null("Main")
+	if not main or not main.get("player_hand"):
+		return null
+	var hand = main.player_hand
+	if not hand or not is_instance_valid(hand) or not hand.visible or hand.get("_is_hidden") == true:
+		return null
+	var m_pos: Vector2 = _card.get_global_mouse_position()
+	for i in range(hand.cards.size() - 1, -1, -1):
+		var c = hand.cards[i]
+		if is_instance_valid(c) and c.is_visible_in_tree() and not c.is_dragging:
+			var c_local: Vector2 = c.get_global_transform().affine_inverse() * m_pos
+			if c._has_point(c_local):
+				return c
+	return null
+
+
 func _on_mouse_entered() -> void:
 	if not _card.can_interact or _card.is_dragging or _card.get("hover_enabled") == false:
 		return
+
+	# Si la carta está en la mesa y el cursor está sobre una carta de la mano, ceder prioridad a la mano
+	if _card.current_zone in [Constants.Zone.LINEA_DEFENSA, Constants.Zone.LINEA_ATAQUE, Constants.Zone.LINEA_APOYO]:
+		var hand_c = _get_hand_card_under_mouse()
+		if hand_c != null and hand_c != _card:
+			return
 
 	_card.is_hovered = true
 	if _card.hover_effect:
@@ -120,6 +148,14 @@ func _on_mouse_exited() -> void:
 
 
 func on_gui_input(event: InputEvent) -> void:
+	# Si la carta está en mesa pero el cursor está sobre una carta de la mano, ceder el input a la mano
+	if _card.current_zone in [Constants.Zone.LINEA_DEFENSA, Constants.Zone.LINEA_ATAQUE, Constants.Zone.LINEA_APOYO]:
+		var hand_c = _get_hand_card_under_mouse()
+		if hand_c != null and hand_c != _card:
+			if hand_c.get("_interaction") != null:
+				hand_c._interaction.on_gui_input(event)
+			return
+
 	# Si es un arma equipada y el mouse está dentro del área del Aliado, ceder el input al Aliado
 	if _card.wielder != null and is_instance_valid(_card.wielder):
 		var mouse_over_wielder := Rect2(Vector2.ZERO, _card.wielder.size).has_point(_card.wielder.get_local_mouse_position())
