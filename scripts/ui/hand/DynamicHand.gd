@@ -18,8 +18,8 @@ signal card_double_clicked(card: Node)
 var cards: Array[Node] = []
 var _tweens: Dictionary = {}
 var _is_hidden: bool = false
-var _is_docked: bool = true          ## Por defecto en reposo para despejar tótems
-var _is_locked_open: bool = false   ## Fijada arriba mediante la tecla Espacio
+var _is_docked: bool = false          ## Por defecto desplegada y visible para el jugador
+var _is_temporarily_expanded: bool = false
 var _undock_grace_timer: float = 0.0
 const UNDOCK_GRACE_DELAY: float = 0.22  ## Retardo suave para evitar sacudidas al salir el cursor
 
@@ -58,8 +58,8 @@ func _process(delta: float) -> void:
 	if _is_hidden or cards.is_empty():
 		return
 
-	# Si la mano está fijada con la tecla Espacio, no alternar automáticamente por hover
-	if _is_locked_open:
+	# Si la mano está en su posición normal desplegada, se mantiene visible sin esconderse sola
+	if not _is_docked and not _is_temporarily_expanded:
 		return
 
 	# No replegar mientras se esté arrastrando una carta
@@ -71,24 +71,27 @@ func _process(delta: float) -> void:
 	var hand_rect: Rect2 = get_global_rect()
 
 	var in_h_bounds: bool = mouse_pos.x >= (hand_rect.position.x - 20.0) and mouse_pos.x <= (hand_rect.end.x + 20.0)
+	var in_expanded_v_bounds: bool = mouse_pos.y >= (hand_rect.position.y - 40.0) and mouse_pos.y <= (hand_rect.end.y + 20.0)
+	var is_mouse_over_hand: bool = in_h_bounds and in_expanded_v_bounds
 
 	if _is_docked:
-		# En reposo: se eleva si el ratón entra en la franja inferior donde asoman los cabezales
-		var in_dock_v_bounds: bool = mouse_pos.y >= (hand_rect.end.y - 85.0) and mouse_pos.y <= (hand_rect.end.y + 10.0)
-		if in_h_bounds and in_dock_v_bounds:
-			expand_hand()
-	else:
-		# Desplegada: se mantiene abierta mientras el cursor esté sobre el área de la mano
-		var in_expanded_v_bounds: bool = mouse_pos.y >= (hand_rect.position.y - 20.0) and mouse_pos.y <= (hand_rect.end.y + 20.0)
-		var is_mouse_over_hand: bool = in_h_bounds and in_expanded_v_bounds
-
+		# En modo reposo: si el cursor entra a la franja de la mano, se eleva temporalmente
+		if is_mouse_over_hand or _has_any_card_hovered():
+			_is_docked = false
+			_is_temporarily_expanded = true
+			_undock_grace_timer = UNDOCK_GRACE_DELAY
+			_arrange_cards(true)
+	elif _is_temporarily_expanded:
+		# Si se expandió temporalmente por hover en reposo, regresa a reposo al salir el cursor
 		if is_mouse_over_hand or _has_any_card_hovered():
 			_undock_grace_timer = UNDOCK_GRACE_DELAY
 		else:
 			if _undock_grace_timer > 0.0:
 				_undock_grace_timer -= delta
 			else:
-				dock_hand()
+				_is_docked = true
+				_is_temporarily_expanded = false
+				_arrange_cards(true)
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -104,37 +107,38 @@ func _unhandled_input(event: InputEvent) -> void:
 
 
 func toggle_space_lock() -> void:
-	"""Alterna y fija la mano entre reposo (abajo) y desplegada (arriba) con la tecla Espacio."""
+	"""Alterna la mano entre reposo (abajo) y desplegada (arriba) con la tecla Espacio."""
 	if _is_hidden:
 		_is_hidden = false
-	if _is_locked_open:
-		_is_locked_open = false
-		dock_hand()
-	else:
-		_is_locked_open = true
+	_is_temporarily_expanded = false
+	if _is_docked:
 		expand_hand()
+	else:
+		dock_hand()
 
 
 func toggle_hidden() -> void:
 	"""Alterna entre ocultar la mano completamente fuera de pantalla y restaurarla."""
 	_is_hidden = not _is_hidden
-	_is_locked_open = false
+	_is_temporarily_expanded = false
 	_arrange_cards(true)
 
 
 func expand_hand() -> void:
 	"""Despliega la mano hacia arriba en abanico completo."""
-	if _is_hidden or not _is_docked:
+	if _is_hidden:
 		return
 	_is_docked = false
+	_is_temporarily_expanded = false
 	_arrange_cards(true)
 
 
 func dock_hand() -> void:
-	"""Baja la mano a reposo inferior para despejar el campo y los tótems."""
-	if _is_hidden or _is_docked:
+	"""Baja la mano a reposo inferior para despejar el campo si el jugador lo desea."""
+	if _is_hidden:
 		return
 	_is_docked = true
+	_is_temporarily_expanded = false
 	_arrange_cards(true)
 
 
@@ -295,9 +299,9 @@ func _get_vertical_target_y(center_y: float) -> float:
 	if _is_hidden:
 		return center_y + 160.0  # Oculta completamente bajo la pantalla
 	elif _is_docked:
-		return center_y + 60.0   # En reposo: asoma ~50 px superiores de las cartas
+		return center_y - 25.0   # En reposo: cartas asoman ampliamente (~130px visibles, nunca escondidas)
 	else:
-		return center_y - 75.0   # Desplegada completa (abanico interactivo)
+		return center_y - 100.0  # Desplegada completa (abanico interactivo elevado, cartas 100% legibles)
 
 
 func _arrange_cards(animated: bool = true) -> void:
@@ -389,8 +393,10 @@ func _on_card_hovered(card: Node) -> void:
 	if _is_hidden or card.get("is_dragging") == true:
 		return
 
-	if _is_docked and not _is_locked_open:
-		expand_hand()
+	if _is_docked:
+		_is_docked = false
+		_is_temporarily_expanded = true
+		_arrange_cards(true)
 
 	_undock_grace_timer = UNDOCK_GRACE_DELAY
 	card.z_index = 80

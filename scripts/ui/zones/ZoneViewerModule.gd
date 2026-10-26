@@ -21,6 +21,7 @@ var _main: Node = null
 func setup(main: Node) -> void:
 	_main = main
 	setup_public_zone_viewers()
+	setup_castillo_3d_viewers()
 
 
 func setup_public_zone_viewers() -> void:
@@ -41,11 +42,12 @@ func setup_public_zone_viewers() -> void:
 		panel.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 		panel.pivot_offset = panel.size / 2.0
 
-		# 1. Marco y relieve ornamental
+		# 1. Marco y relieve ornamental con sombra 3D profunda
 		var pstyle := StyleBoxFlat.new()
 		pstyle.set_corner_radius_all(10)
-		pstyle.shadow_size = 12
-		pstyle.shadow_color = Color(0, 0, 0, 0.85)
+		pstyle.shadow_size = 18
+		pstyle.shadow_color = Color(0, 0, 0, 0.88)
+		pstyle.shadow_offset = Vector2(3, 7)
 		if is_cem:
 			pstyle.bg_color = Color(0.04, 0.05, 0.04, 0.20)
 			pstyle.border_color = Color(0.72, 0.60, 0.35, 0.88)
@@ -177,7 +179,7 @@ func setup_public_zone_viewers() -> void:
 
 			panel.add_child(badge)
 
-		# 8. Feedback interactivo de hover
+		# 8. Feedback interactivo de hover con sombra 3D dinámica
 		panel.mouse_entered.connect(func():
 			var tw := panel.create_tween()
 			tw.set_parallel(true)
@@ -186,6 +188,8 @@ func setup_public_zone_viewers() -> void:
 			)
 			var h_col = Color(1.0, 0.88, 0.45, 1.0) if is_cem else Color(0.90, 0.72, 1.0, 1.0)
 			tw.tween_property(pstyle, "border_color", h_col, 0.12)
+			tw.tween_property(pstyle, "shadow_size", 22, 0.12)
+			tw.tween_property(pstyle, "shadow_offset", Vector2(4, 9), 0.12)
 		)
 		panel.mouse_exited.connect(func():
 			var tw := panel.create_tween()
@@ -195,6 +199,8 @@ func setup_public_zone_viewers() -> void:
 			)
 			var b_col = Color(0.72, 0.60, 0.35, 0.88) if is_cem else Color(0.65, 0.45, 0.88, 0.88)
 			tw.tween_property(pstyle, "border_color", b_col, 0.12)
+			tw.tween_property(pstyle, "shadow_size", 18, 0.12)
+			tw.tween_property(pstyle, "shadow_offset", Vector2(3, 7), 0.12)
 		)
 
 		panel.gui_input.connect(func(ev):
@@ -247,6 +253,85 @@ func setup_public_zone_viewers() -> void:
 	# el mazo sin esa señal y llaman _update_castillo_counts() directo.
 	if not CardManager.deck_count_changed.is_connected(_on_deck_count_changed_refresh_castillo_top):
 		CardManager.deck_count_changed.connect(_on_deck_count_changed_refresh_castillo_top)
+
+
+func setup_castillo_3d_viewers() -> void:
+	"""Configura los Castillos (mazos de 50 cartas) con sombra 3D profunda y capas de relieve."""
+	var castillos = [
+		[_main._panel_player_castillo, 0],
+		[_main._panel_opp_castillo, 1],
+	]
+	for item in castillos:
+		var panel: Panel = item[0]
+		var pid: int = item[1]
+		if not panel:
+			continue
+
+		panel.clip_contents = false
+		panel.pivot_offset = panel.size / 2.0
+
+		# 1. Estilo con sombra 3D profunda y bisel
+		var cstyle := StyleBoxFlat.new()
+		cstyle.set_corner_radius_all(8)
+		cstyle.bg_color = Color(0.04, 0.03, 0.06, 0.75)
+		cstyle.set_border_width_all(1)
+		cstyle.border_color = Color(0.68, 0.55, 0.28, 0.75)
+		cstyle.shadow_size = 18
+		cstyle.shadow_color = Color(0, 0, 0, 0.88)
+		cstyle.shadow_offset = Vector2(3, 8)
+		panel.add_theme_stylebox_override("panel", cstyle)
+
+		# 2. Capas físicas de grosor 3D del mazo de 50 cartas (Stack Underlays 3D)
+		var dorso_node: TextureRect = panel.get_node_or_null("DorsoImage")
+		var dorso_tex: Texture2D = dorso_node.texture if dorso_node else GameSettings.get_card_back_texture(pid)
+
+		var underlay2 := TextureRect.new()
+		underlay2.name = "CastilloUnderlay2"
+		underlay2.texture = dorso_tex
+		underlay2.modulate = Color(0.35, 0.32, 0.28, 0.92)
+		underlay2.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		underlay2.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+		underlay2.size = Vector2(96, 136)
+		underlay2.position = Vector2(4, 6)
+		underlay2.pivot_offset = Vector2(48, 68)
+		if pid == 1:
+			underlay2.rotation_degrees = 180.0
+		underlay2.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		panel.add_child(underlay2)
+		panel.move_child(underlay2, 0)
+
+		var underlay1 := TextureRect.new()
+		underlay1.name = "CastilloUnderlay1"
+		underlay1.texture = dorso_tex
+		underlay1.modulate = Color(0.55, 0.52, 0.46, 0.96)
+		underlay1.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		underlay1.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+		underlay1.size = Vector2(98, 138)
+		underlay1.position = Vector2(2, 3)
+		underlay1.pivot_offset = Vector2(49, 69)
+		if pid == 1:
+			underlay1.rotation_degrees = 180.0
+		underlay1.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		panel.add_child(underlay1)
+		panel.move_child(underlay1, 1)
+
+		# Feedback interactivo de hover sobre el mazo
+		panel.mouse_entered.connect(func():
+			var tw := panel.create_tween()
+			tw.set_parallel(true)
+			tw.tween_property(panel, "scale", Vector2(1.03, 1.03), 0.12).set_ease(Tween.EASE_OUT)
+			tw.tween_property(cstyle, "border_color", Color(1.0, 0.88, 0.45, 1.0), 0.12)
+			tw.tween_property(cstyle, "shadow_size", 22, 0.12)
+			tw.tween_property(cstyle, "shadow_offset", Vector2(4, 10), 0.12)
+		)
+		panel.mouse_exited.connect(func():
+			var tw := panel.create_tween()
+			tw.set_parallel(true)
+			tw.tween_property(panel, "scale", Vector2.ONE, 0.12).set_ease(Tween.EASE_OUT)
+			tw.tween_property(cstyle, "border_color", Color(0.68, 0.55, 0.28, 0.75), 0.12)
+			tw.tween_property(cstyle, "shadow_size", 18, 0.12)
+			tw.tween_property(cstyle, "shadow_offset", Vector2(3, 8), 0.12)
+		)
 
 
 func _show_zone_popup(title: String, player_id: int, zone_type: String) -> void:
@@ -1119,6 +1204,31 @@ func _on_priority_changed_refresh_castillo_top(_player_id: int) -> void:
 
 func _on_deck_count_changed_refresh_castillo_top(_player_id: int, _new_count: int) -> void:
 	refresh_castillo_top_reveal()
+	_update_castillo_stack_visuals()
+
+
+func _update_castillo_stack_visuals() -> void:
+	"""Ajusta las capas de grosor 3D del mazo según las cartas restantes."""
+	if not _main:
+		return
+	var castillos = [
+		[_main._panel_player_castillo, _main.player_deck.size() if _main.get("player_deck") != null else 0],
+		[_main._panel_opp_castillo, _main.opponent_deck.size() if _main.get("opponent_deck") != null else 0]
+	]
+	for item in castillos:
+		var panel: Panel = item[0]
+		var count: int = item[1]
+		if not panel:
+			continue
+		var u2 = panel.get_node_or_null("CastilloUnderlay2")
+		var u1 = panel.get_node_or_null("CastilloUnderlay1")
+		var dorso = panel.get_node_or_null("DorsoImage")
+		if u2:
+			u2.visible = (count >= 5)
+		if u1:
+			u1.visible = (count >= 2)
+		if dorso and panel.get_node_or_null("TopCardPreview") and not panel.get_node_or_null("TopCardPreview").visible:
+			dorso.visible = (count >= 1)
 
 
 func _refresh_castillo_clickable() -> void:

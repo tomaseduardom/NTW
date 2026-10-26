@@ -139,11 +139,62 @@ func _setup_paso_button() -> void:
 	_paso_button.offset_left = -310
 	_paso_button.offset_top = -23
 	_paso_button.offset_bottom = 23
+	_paso_button.pivot_offset = Vector2(145, 23)
 	_paso_button.mouse_filter = Control.MOUSE_FILTER_STOP
 	_paso_button.visible = false
 
+	# Sombra 3D proyectada bajo el botón de paso para despegarlo físicamente del tablero
+	var shadow := Panel.new()
+	shadow.name = "PasoButtonShadow"
+	shadow.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	shadow.show_behind_parent = true
+	shadow.set_anchors_preset(Control.PRESET_FULL_RECT)
+	shadow.offset_left = 6.0
+	shadow.offset_top = 6.0
+	shadow.offset_right = -6.0
+	shadow.offset_bottom = -2.0
+
+	var sb_shadow := StyleBoxFlat.new()
+	sb_shadow.bg_color = Color(0, 0, 0, 0)
+	sb_shadow.set_corner_radius_all(12)
+	sb_shadow.shadow_color = Color(0, 0, 0, 0.88)
+	sb_shadow.shadow_size = 18
+	sb_shadow.shadow_offset = Vector2(0, 8)
+	shadow.add_theme_stylebox_override("panel", sb_shadow)
+	_paso_button.add_child(shadow)
+
 	_main.add_child(_paso_button)
 	_paso_button.pressed.connect(func(): _main._phase_flow._on_paso_pressed())
+
+	# Respuesta táctil y elevación 3D al interactuar con el cursor
+	_paso_button.mouse_entered.connect(func():
+		var tw = _paso_button.create_tween().set_parallel(true)
+		tw.tween_property(_paso_button, "scale", Vector2(1.025, 1.025), 0.12).set_ease(Tween.EASE_OUT)
+		tw.tween_property(sb_shadow, "shadow_size", 22, 0.12)
+		tw.tween_property(sb_shadow, "shadow_offset", Vector2(0, 10), 0.12)
+	)
+	_paso_button.mouse_exited.connect(func():
+		var tw = _paso_button.create_tween().set_parallel(true)
+		tw.tween_property(_paso_button, "scale", Vector2.ONE, 0.12).set_ease(Tween.EASE_OUT)
+		tw.tween_property(sb_shadow, "shadow_size", 18, 0.12)
+		tw.tween_property(sb_shadow, "shadow_offset", Vector2(0, 8), 0.12)
+	)
+	_paso_button.button_down.connect(func():
+		var tw = _paso_button.create_tween().set_parallel(true)
+		tw.tween_property(_paso_button, "scale", Vector2(0.985, 0.985), 0.06).set_ease(Tween.EASE_OUT)
+		tw.tween_property(sb_shadow, "shadow_size", 8, 0.06)
+		tw.tween_property(sb_shadow, "shadow_offset", Vector2(0, 3), 0.06)
+	)
+	_paso_button.button_up.connect(func():
+		var tw = _paso_button.create_tween().set_parallel(true)
+		var is_hov = _paso_button.is_hovered()
+		var target_scale = Vector2(1.025, 1.025) if is_hov else Vector2.ONE
+		var target_size = 22 if is_hov else 18
+		var target_offset = Vector2(0, 10) if is_hov else Vector2(0, 8)
+		tw.tween_property(_paso_button, "scale", target_scale, 0.10).set_ease(Tween.EASE_OUT)
+		tw.tween_property(sb_shadow, "shadow_size", target_size, 0.10)
+		tw.tween_property(sb_shadow, "shadow_offset", target_offset, 0.10)
+	)
 
 	if not GameSettings.keybindings_changed.is_connected(_on_keybindings_changed):
 		GameSettings.keybindings_changed.connect(_on_keybindings_changed)
