@@ -286,28 +286,30 @@ func _pay_cost(main: Node, c: Dictionary, card: Node, controller_id: int) -> boo
 func _shuffle_from_hand(main: Node, st: Dictionary, controller_id: int) -> bool:
 	"""'Baraja (hasta) N cartas de tu mano (en tu Castillo)' — mismo
 	mecanismo que DSR_ShuffleDrawCombos (Manuel Bulnes)."""
-	var hand_container = PlayerSideScript.hand(main, controller_id)
-	var hand := _hand_cards(main, controller_id)
+	# "Tu oponente baraja una carta de su mano" (kukri): la elige el dueño de la mano.
+	var pid: int = 1 - controller_id if st.get("who", "self") == "opponent" else controller_id
+	var hand_container = PlayerSideScript.hand(main, pid)
+	var hand := _hand_cards(main, pid)
 	if not hand_container or hand.is_empty():
 		return st.up_to  # "hasta N" con la mano vacía igual se resolvió
 	var pick_amount: int = mini(st.amount, hand.size())
 	var chosen: Array = []
-	if _is_bot(controller_id):
+	if _is_bot(pid):
 		if not st.up_to:
 			hand.sort_custom(func(a: Node, b: Node) -> bool: return int(a.card_cost) < int(b.card_cost))
 			chosen = hand.slice(0, pick_amount)
 	else:
 		var prompt := "Baraja %s%d carta(s) de tu mano en tu Castillo" % ["hasta " if st.up_to else "", st.amount]
 		chosen = await main._card_interaction.await_multi_target(prompt, hand, pick_amount, Callable(), Callable(),
-			st.up_to, null, controller_id)
+			st.up_to, null, pid)
 	var shuffled := 0
 	for c in chosen:
 		if is_instance_valid(c):
 			var data: Dictionary = c.card_data
 			hand_container.remove_card(c, true)
-			CardManager.get_deck(controller_id).append(data)
+			CardManager.get_deck(pid).append(data)
 			shuffled += 1
 	if shuffled > 0:
-		CardManager.shuffle_deck(controller_id)
-		AnimationQueue.queue_shuffle(controller_id, "Barajar mazo (efecto compilado)")
+		CardManager.shuffle_deck(pid)
+		AnimationQueue.queue_shuffle(pid, "Barajar mazo (efecto compilado)")
 	return st.up_to or shuffled >= st.amount

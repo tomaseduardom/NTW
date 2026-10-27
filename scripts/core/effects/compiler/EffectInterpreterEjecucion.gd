@@ -163,7 +163,7 @@ func _execute_step(main: Node, st: Dictionary, targets: Array, card: Node, contr
 				return false
 			return await _apply_verb({"verb": st.verb, "count": 1, "up_to": false}, [card], card)
 		"if":
-			if not _condition_holds(st.cond, card):
+			if not _condition_holds(st.cond, card, controller_id):
 				print("[EffectInterpreter] %s: condición '%s' no se cumple" % [_card_name(card), st.cond])
 				return true
 			return await _execute_steps(main, st.steps, {}, card, controller_id)
@@ -171,6 +171,8 @@ func _execute_step(main: Node, st: Dictionary, targets: Array, card: Node, contr
 			return await _discard(main, st, controller_id)
 		"shuffle_from_hand":
 			return await _shuffle_from_hand(main, st, controller_id)
+		"keep_shuffle":
+			return await _keep_shuffle(main, st, card, controller_id)
 		"search":
 			var zones: Array = []
 			for z in st.zones:
@@ -409,6 +411,8 @@ func _apply_verb(st: Dictionary, targets: Array, card: Node) -> bool:
 						await KeywordManager.silence_card(t, card, str(st.get("duration", "permanent")))
 			"shuffle":
 				for t in group:
+					if not is_instance_valid(t):
+						continue  # se fue con otra del grupo (un Arma con su portador)
 					var owner: int = int(t.owner_id) if t.get("owner_id") != null else _controller_of(t)
 					if await ActionModule.return_to_deck(t, owner, true, card):
 						CardManager.shuffle_deck(owner)
@@ -644,6 +648,15 @@ func _buff(st: Dictionary, targets: Array, card: Node) -> bool:
 			t.set_meta("double_combat_damage_turn", GameManager.turn_serial)  # BattleManager
 		if st.get("no_damage", false):
 			t.set_meta("no_damage_turn", GameManager.turn_serial)  # BattleManager: ni al Castillo ni al bloqueador
+		if st.get("no_block", false):
+			ContinuousEffectManager.register_modifier({  # KeywordQuery.can_block()
+				"source": t,
+				"target": t,
+				"type": ContinuousEffectManager.ModifierType.RESTRICTION,
+				"restriction_type": "CANT_BLOCK",
+				"duration": ContinuousEffectManager.ModifierDuration.UNTIL_END_TURN,
+				"description": "No puede bloquear este turno (%s)" % _card_name(card),
+			})
 		if st.has("set_strength") or st.get("double", false):
 			_set_or_double_strength(st, t, card)
 			continue
@@ -1144,7 +1157,7 @@ func _spec_matches(spec: Dictionary, data: Dictionary) -> bool:
 	return true
 
 
-func _condition_holds(cond, card: Node) -> bool:
+func _condition_holds(cond, card: Node, controller_id: int = -1) -> bool:
 	if cond is Dictionary and cond.get("kind", "") == "controls":
 		return _controls_holds(cond, card)
 	if cond is Dictionary and cond.get("kind", "") == "searched":
@@ -1154,6 +1167,9 @@ func _condition_holds(cond, card: Node) -> bool:
 	match str(cond):
 		"not_attacked_this_turn":
 			return int(card.get_meta("declared_attacker_turn", -1)) != GameManager.turn_serial
+		"opponent_turn", "own_turn":
+			var mine: bool = GameManager.active_player_id == controller_id
+			return mine == (str(cond) == "own_turn")
 	push_warning("[EffectInterpreter] Condición desconocida: %s" % str(cond))
 	return false
 
@@ -1283,6 +1299,36 @@ func _hand_exile(main: Node, st: Dictionary, card: Node, controller_id: int) -> 
 		if picked.size() < amount:
 			all_ok = false
 	return all_ok
+
+
+func _keep_shuffle(main: Node, st: Dictionary, card: Node, controller_id: int) -> bool:
+	"""'Cada jugador elige (hasta) N Aliados que controle y baraja el resto': cada uno elige los que se
+	quedan (el bot, los de mayor coste); el resto de ese tipo se baraja con el verbo normal."""
+	var want: int = _type_enum(st.card_type) if not str(st.card_type).is_empty() else -1
+	var title := _card_name(card)
+	var to_shuffle: Array = []
+	for pid in [controller_id, 1 - controller_id]:
+		var mine: Array = _controlled_in_play(main, pid).filter(func(c): return want < 0 or c.get("card_type") == want)
+		if mine.is_empty() or (mine.size() <= int(st.amount) and not st.up_to):
+			continue
+		var kept: Array = []
+		if _is_bot(pid):
+			mine.sort_custom(func(a: Node, b: Node) -> bool: return int(a.card_cost) > int(b.card_cost))
+			kept = mine.slice(0, mini(int(st.amount), mine.size()))
+		elif main.get("_card_interaction"):
+			# Elegir cuáles se quedan no es afectarlas: sin el filtro de Oro adicional.
+			kept = await main._card_interaction._await_multi_target_raw("%s: elige %s%d que se quedan; el resto se baraja"
+				% [title, "hasta " if st.up_to else "", int(st.amount)], mine, int(st.amount), Callable(), Callable(),
+				st.up_to, null, pid)
+		for c in mine:
+			if not (c in kept):
+				to_shuffle.append(c)
+	to_shuffle = to_shuffle.filter(func(c): return is_instance_valid(c))
+	if to_shuffle.is_empty():
+		return true
+	# La carta del efecto pudo salir del juego mientras se elegía (si era uno de los barajados).
+	return await _apply_verb({"verb": "shuffle", "count": to_shuffle.size(), "up_to": true}, to_shuffle,
+		card if is_instance_valid(card) else null)
 
 
 func _discard(main: Node, st: Dictionary, controller_id: int) -> bool:

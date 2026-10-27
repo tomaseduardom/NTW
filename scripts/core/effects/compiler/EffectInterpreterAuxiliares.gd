@@ -129,7 +129,11 @@ static func describe_steps(steps: Array) -> String:
 			"discard":
 				parts.append("Descartar %d" % st.amount)
 			"shuffle_from_hand":
-				parts.append("Barajar %d de tu mano" % st.amount)
+				parts.append(("Tu oponente baraja %d de su mano" if st.get("who", "self") == "opponent" else "Barajar %d de tu mano") % st.amount)
+			"keep_shuffle":
+				var kt: Array = TYPE_LABELS.get(st.card_type, TYPE_LABELS[""])
+				parts.append("Cada jugador elige %s%d %s y baraja el resto" % ["hasta " if st.up_to else "", st.amount,
+					kt[0] if st.amount == 1 else kt[1]])
 			"search":
 				var t: Array = TYPE_LABELS.get(st.card_type, TYPE_LABELS[""])
 				var zones: Array = []
@@ -181,6 +185,8 @@ static func describe_steps(steps: Array) -> String:
 					gains.append("\"No puede ser Barajado\"")
 				if st.get("double_damage", false):
 					gains.append("doble de daño")
+				if st.get("no_block", false):
+					gains.append("no poder bloquear")
 				if st.get("no_damage", false):
 					gains.append("no hacer daño de combate")
 				parts.append("%s %s %s" % [_object_label(st.target, st.count),

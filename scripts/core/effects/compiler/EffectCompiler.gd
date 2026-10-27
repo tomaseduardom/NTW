@@ -89,6 +89,10 @@ const TRIGGER_PREFIXES := [
 	"cuando ataques con un solo aliado", "cuando ataque solo", "cuando ataques", "cuando ataque, entre o salga del juego",
 	"si porta armas, cuando ataque por primera vez en el juego", "cuando ataque por primera vez en el juego",
 	"cuando ataca", "cuando ataque", "al atacar", "cuando bloquea", "cuando bloquee", "cuando lo juegues",
+	# "Cuando juegues un Arma, tu oponente descarta una carta" (camael, fonda, keshalyi): el tipo lo filtra
+	# quien dispara.
+	"cuando juegues un totem de coste 2 o mas", "cuando juegues un arma", "cuando juegues un talisman",
+	"cuando juegues un aliado", "cuando juegues un totem",
 	# Hospital San José; moraleda (la otra mitad del disparador la decide quien llama).
 	"en la fase final oponente o cuando salga del juego",
 	"cuando salga del juego o sea puesto en tu destierro por la habilidad de un aliado sacerdote",
@@ -213,6 +217,11 @@ const CONTROL_COND_RX := "^si controlas (?<other>otro |otra )?(?:(?<n>" + NUM + 
 ## Condiciones al comienzo de una oración ("si X, efecto").
 const CONDITIONS := [
 	["not_attacked_this_turn", "si no fue declarado atacante este turno, "],
+	# "Si es el turno oponente, además tú Robas dos cartas" (kukri) / "si es tu turno, genera un Oro".
+	["opponent_turn", "si es el turno oponente, ademas "],
+	["opponent_turn", "si es el turno oponente, "],
+	["own_turn", "si es tu turno, ademas "],
+	["own_turn", "si es tu turno, "],
 ]
 
 ## Reemplazo sobre el paso anterior: "Si tiene Exhumar, en vez de eso, Destiérralo".
@@ -347,6 +356,8 @@ const ATOMS := [
 	["shuffle_from_hand", "baraja(?:r)? (?<upto>hasta )?(?<n>" + NUM + ") cartas? de tu mano(?: en tu castillo)?"],
 	# "Baraja (hasta) N cartas de tu Cementerio" ya es en tu Castillo (Barajar = al Castillo de su dueño).
 	["shuffle_from_cemetery", "baraja(?:r)? (?<upto>hasta )?(?<n>" + NUM + ") cartas? de tu cementerio(?: en tu castillo)?"],
+	# "Tu oponente baraja una carta de su mano" (kukri): la elige él.
+	["shuffle_from_hand_opp", "tu oponente baraja (?<n>" + NUM + ") cartas? de su mano(?: en su castillo)?"],
 	# Buscar: varios tipos, "que no sea X ni Y", "de coste N o más/menos". El destino va tras "y" o tras una
 	# coma ("busca un Aliado, ponlo en tu mano y roba una carta").
 	# "...y jugarlo sin pagar su coste / reduciendo su coste en un Oro / por dos Oros menos".
@@ -405,7 +416,7 @@ const ATOMS := [
 	# verbo).
 	["peek_hand", "mira(?:r)? la mano de tu oponente(?=$|,? y luego|, luego)"],
 	# "Tu oponente muestra su mano" (semyazza): la ve quien controla el efecto, como mirarla.
-	["peek_hand", "tu oponente (?:te )?muestra su mano(?=$|,? y luego|, luego)"],
+	["peek_hand", "tu oponente (?:te )?muestra su mano(?=$|,? y |, )(?!,? y tu (?:descartas|elige))"],
 	["show_hand", "muestra(?:r)? tu mano(?=$|,? y |, )"],
 	# "No recibes daño (de combate) hasta tu próximo turno".
 	["no_damage", "no (?:recibes|puedes recibir) dano(?<combat> de combate)? hasta tu proximo turno"],
@@ -438,7 +449,9 @@ const ATOMS := [
 		+ "|pon (?<upto>hasta )?(?<k>" + NUM + ") (?<kt>" + TALT + ") de ahi en tu mano" \
 		+ "|juega (?<pk>" + NUM + ") (?<pt>" + TALT + ") de ahi por (?<red>" + NUM + ") oros? menos)" \
 		+ "(?:,? y (?:pon )?el resto en tu (?<rd>mano|destierro|cementerio)|(?:,? y |, )baraja el resto)?"],
-	["mass", "(?<verb>destruye|destierra) todos los (?<kind>aliados|totems|armas)(?<opp> oponentes)?(?: en juego)?" \
+	# "Destruye todas las cartas en juego que no sean Oro" (enoc): los Oros nunca entran (exclude_gold).
+	["mass", "(?<verb>destruye|destierra) (?:todos los (?<kind>aliados|totems|armas)|todas las cartas)(?<opp> oponentes)?(?: en juego)?" \
+		+ "(?: que no sean? oros?)?" \
 		+ "(?: de (?<stat>fuerza|coste) (?<val>\\d+) o (?<cmp>menos|mas))?"],
 	["bounce", "sub(?:e|ir) " + TARGET_RX + " a la mano de su dueno"],
 	# "Un Aliado oponente pierde su habilidad y es Destruido" (Guardia Gozosa)
@@ -457,6 +470,10 @@ const ATOMS := [
 	# "Cada jugador roba una carta / descarta una carta / destierra una carta de su mano" (forma de
 	# leopardo, danel, okyo, geminis): cada uno elige la suya.
 	["each_draw", "cada jugador roba (?<n>" + NUM + ") cartas?"],
+	# "Cada jugador elige (hasta) N Aliados/Oros que controle y baraja el resto / sus demás Aliados en
+	# juego" (bomba eléctrica, biwa, herido peleó mejor).
+	["keep_shuffle", "cada jugador elige (?<upto>hasta )?(?<n>" + NUM + ") (?<kind>aliados?|oros?|cartas?) que controle" \
+		+ " y baraja (?:el resto|sus demas (?:aliados|oros|cartas)(?: en juego)?)"],
 	["each_discard", "cada jugador descarta (?<n>" + NUM + ") cartas?(?: de su mano)?"],
 	["each_hand_exile", "cada jugador destierra (?<n>" + NUM + ") cartas? de su mano"],
 	# Cementerios: "Baraja y/o Destierra hasta N cartas de los Cementerios" y sus formas de un solo
@@ -510,7 +527,8 @@ const ATOMS := [
 	# "Un Aliado hace el doble de daño este turno" / "Un Aliado no hace daño de combate este turno",
 	# sin "gana": mismo paso buff (las metas de BattleManager).
 	["combat_flag", "(?<det>(?:hasta )?" + NUM + ") (?<kind>aliados?)(?: (?<race>" + RACE + "))?(?<opp> oponentes?)?(?: en juego)?" + STAT_FILTER \
-		+ " (?<what>ha(?:ce|ga) (?:el )?doble de dano|no ha(?:ce|ga) dano de combate)(?: este turno| por el turno)?"],
+		+ " (?<what>ha(?:ce|ga) (?:el )?doble (?:de )?dano(?: de combate)?|no ha(?:ce|ga) dano de combate" \
+		+ "|no (?:puede|pueda) bloquear(?: ni hacer dano(?: de combate)?)?)(?: este turno| por el turno)?"],
 	# "Un Aliado de coste 2 o menos gana..." / "Un Aliado gana o pierde 2 de Fuerza" (se elige).
 	["buff", "(?<det>(?:hasta )?" + NUM + ") (?<kind>aliados?)(?: (?<race>" + RACE + "))?(?<opp> oponentes?)?(?: en juego)?" + STAT_FILTER \
 		+ " (?<v>gana o pierde|ganan o pierden|gana|ganan|pierde|pierden) (?<list>" + GRANT_ITEM + "(?:(?:, y |, | y |,? e )" + GRANT_ITEM + ")*)" \
@@ -531,7 +549,7 @@ const ATOMS := [
 ## autoloads. El compilador puede entender más de lo que se ejecuta (p.ej.
 ## "bounce"): esos planes se dejan a la cadena de patrones vieja.
 const EXECUTABLE_OPS := ["castle_look", "draw", "draw_to_match", "mill", "discard", "shuffle_from_hand", "search", "target", "mass", "choice",
-	"shuffle_from_cemetery", "self", "hand_exile", "if", "cemetery_cleanup", "gold", "regroup_gold", "buff", "mass_buff", "reveal_until", "reveal_top", "pay", "hand_peek", "annul", "talisman_fizzle",
+	"shuffle_from_cemetery", "self", "hand_exile", "keep_shuffle", "if", "cemetery_cleanup", "gold", "regroup_gold", "buff", "mass_buff", "reveal_until", "reveal_top", "pay", "hand_peek", "annul", "talisman_fizzle",
 	"regroup_cards", "gold_to_paid", "deck_to_hand", "no_damage", "play_from", "peek_hand", "show_hand", "cost", "castle_exile", "cancel_attack", "self_raise", "mill_x", "opp_gold_to_paid", "revive_blank", "self_buff_per"]
 const EXECUTABLE_VERBS := ["destroy", "banish", "shuffle", "silence", "cost_shift"]
 
@@ -765,19 +783,23 @@ const NO_COMMA_EFFECT_STARTS := ["tus", "los", "baraja", "destierra", "destruye"
 
 static func _had_timing_prefix(s: String) -> bool:
 	"""¿El texto empieza (tras el disparador) con momento/frecuencia de
-	habilidad activada?"""
+	habilidad activada? Un disparador en la cadena ("Una vez por turno, cuando juegues un Arma, puedes...")
+	la hace disparada: su "puedes" se sigue preguntando."""
 	var rest := s
+	var timing := false
 	var changed := true
 	while changed:
 		changed = false
 		for p in TRIGGER_PREFIXES + TIMING_PREFIXES:
-			if rest.begins_with(p + ", "):
-				if p in TIMING_PREFIXES:
-					return true
-				rest = rest.substr(p.length() + 2)
-				changed = true
+			if rest.begins_with(p + ", ") or rest.begins_with(p + " "):
+				if p in TRIGGER_PREFIXES:
+					return false
+				if rest.begins_with(p + ", "):
+					timing = true
+					rest = rest.substr(p.length() + 2)
+					changed = true
 				break
-	return false
+	return timing
 
 
 static func _is_static(s: String) -> bool:
@@ -1222,7 +1244,9 @@ static func _build(atom_name: String, m: RegExMatch) -> Dictionary:
 			var fdet: String = m.get_string("det")
 			var flag_step := {"op": "buff", "verb": "buff", "count": parse_amount(fdet.trim_prefix("hasta ")),
 				"up_to": fdet.begins_with("hasta "), "amount": 0, "keywords": [], "to_exile": false,
-				"double_damage": "doble" in m.get_string("what"), "no_damage": not ("doble" in m.get_string("what")),
+				"double_damage": "doble" in m.get_string("what"),
+				"no_damage": not ("doble" in m.get_string("what")) and (not ("bloquear" in m.get_string("what")) or "dano" in m.get_string("what")),
+				"no_block": "bloquear" in m.get_string("what"),
 				"permanent": false, "turn_only": true, "target": _target_from(m)}
 			flag_step.target.card_types = ["aliado"]
 			return flag_step
@@ -1288,6 +1312,11 @@ static func _build(atom_name: String, m: RegExMatch) -> Dictionary:
 		"shuffle_from_hand":
 			return {"op": "shuffle_from_hand", "amount": parse_amount(m.get_string("n")),
 				"up_to": not m.get_string("upto").is_empty()}
+		"shuffle_from_hand_opp":
+			return {"op": "shuffle_from_hand", "amount": parse_amount(m.get_string("n")), "up_to": false, "who": "opponent"}
+		"keep_shuffle":
+			return {"op": "keep_shuffle", "amount": parse_amount(m.get_string("n")), "up_to": not m.get_string("upto").is_empty(),
+				"card_type": TYPE_WORDS.get(m.get_string("kind"), "")}
 		"shuffle_from_cemetery":
 			return {"op": "shuffle_from_cemetery", "amount": parse_amount(m.get_string("n")),
 				"up_to": not m.get_string("upto").is_empty()}
