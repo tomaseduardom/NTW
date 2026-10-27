@@ -115,11 +115,14 @@ func _execute_step(main: Node, st: Dictionary, targets: Array, card: Node, contr
 	var opponent_id := 1 - controller_id
 	match st.op:
 		"draw":
-			if st.get("up_to", false):
-				await ActionModule.draw_up_to(controller_id, st.amount, "efecto_compilado", true)
-			else:
-				await ActionModule.draw(controller_id, st.amount, "efecto_compilado", true)
+			for pid in ([controller_id, opponent_id] if st.get("who", "") == "both" else [controller_id]):
+				if st.get("up_to", false):
+					await ActionModule.draw_up_to(pid, st.amount, "efecto_compilado", true)
+				else:
+					await ActionModule.draw(pid, st.amount, "efecto_compilado", true)
 			return true
+		"hand_exile":
+			return await _hand_exile(main, st, card, controller_id)
 		"draw_to_match":
 			var missing: int = _hand_cards(main, opponent_id).size() - _hand_cards(main, controller_id).size()
 			if missing <= 0:
@@ -154,6 +157,8 @@ func _execute_step(main: Node, st: Dictionary, targets: Array, card: Node, contr
 				return false
 			return await _buff({"amount": int(st.amount) * per_n, "count": 1}, [card], card)
 		"self":
+			if st.verb == "shuffle" and is_instance_valid(card) and not (card.has_method("is_in_play") and card.is_in_play()):
+				return await _shuffle_self(main, card, controller_id)  # "si está en tu Destierro, puedes Barajarlo"
 			if not card.has_method("is_in_play") or not card.is_in_play():
 				return false
 			return await _apply_verb({"verb": st.verb, "count": 1, "up_to": false}, [card], card)
@@ -1250,7 +1255,41 @@ func _count_per(main: Node, per: String, controller_id: int) -> int:
 	return n
 
 
+func _hand_exile(main: Node, st: Dictionary, card: Node, controller_id: int) -> bool:
+	"""'Cada jugador destierra N cartas de su mano': cada uno elige las suyas (el bot, las de menor coste)."""
+	var all_ok := true
+	var title := _card_name(card)
+	for pid in [controller_id, 1 - controller_id]:
+		var hand := _hand_cards(main, pid).filter(func(h): return h != card)
+		var amount: int = mini(int(st.amount), hand.size())
+		if amount < int(st.amount):
+			all_ok = false
+		if amount <= 0:
+			continue
+		var picked: Array = []
+		if _is_bot(pid):
+			hand.sort_custom(func(a: Node, b: Node) -> bool: return int(a.card_cost) < int(b.card_cost))
+			picked = hand.slice(0, amount)
+		elif main.get("_card_interaction"):
+			# Elige el dueño de la mano (también el rival de quien controla el efecto), en el tablero.
+			picked = await main._card_interaction.await_multi_target("%s: destierra %d carta(s) de tu mano" % [title, amount],
+				hand, amount, Callable(), Callable(), false, null, pid)
+		for node in picked:
+			if not is_instance_valid(node):
+				continue
+			var data: Dictionary = PlayerSideScript.take_from_hand(main, pid, node)
+			if not data.is_empty():
+				CardManager.add_to_exile(pid, data)
+		if picked.size() < amount:
+			all_ok = false
+	return all_ok
+
+
 func _discard(main: Node, st: Dictionary, controller_id: int) -> bool:
+	if st.who == "both":
+		var mine: bool = await _discard(main, st.merged({"who": "self"}, true), controller_id)
+		var theirs: bool = await _discard(main, st.merged({"who": "opponent"}, true), controller_id)
+		return mine and theirs
 	var pid: int = controller_id if st.who == "self" else 1 - controller_id
 	var hand := _hand_cards(main, pid)
 	if hand.is_empty():

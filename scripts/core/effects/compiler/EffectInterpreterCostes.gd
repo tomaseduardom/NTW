@@ -52,6 +52,40 @@ func _own_cemetery_cost_pool(card: Node, controller_id: int) -> Array:
 	return CardManager.get_cemetery(controller_id).filter(func(d): return not is_same(d, self_data))
 
 
+func _shuffle_self(main: Node, card: Node, controller_id: int) -> bool:
+	"""Baraja la carta misma en el Castillo de su dueño desde donde esté: en juego (con sus Armas), en la
+	Reserva, en la mano, en el Cementerio o en el Destierro."""
+	var owner_id: int = card.owner_id if card.get("owner_id") != null else controller_id
+	var zone = card.get("current_zone")
+	var data: Dictionary = {}
+	match zone:
+		Constants.Zone.CEMENTERIO:
+			var idx: int = CardManager.get_cemetery(owner_id).find(card.card_data)
+			if idx < 0:
+				return false
+			data = CardManager.remove_from_cemetery(owner_id, idx)
+		Constants.Zone.DESTIERRO:
+			var exile: Array = CardManager.get_exile(owner_id)
+			var eidx: int = exile.find(card.card_data)
+			if eidx < 0:
+				return false
+			data = exile[eidx]
+			exile.remove_at(eidx)
+		Constants.Zone.MANO:
+			data = PlayerSideScript.take_from_hand(main, owner_id, card)
+		_:
+			if not await ActionModule.return_to_deck(card, owner_id, true, card):
+				return false
+	if not data.is_empty():
+		data["esta_oculta"] = true
+		CardManager.add_to_deck_top(owner_id, data)
+	CardManager.shuffle_deck(owner_id)
+	AnimationQueue.queue_shuffle(owner_id, "Barajar mazo (%s)" % _card_name(card))
+	if main.get("_zone_manager"):
+		main._zone_manager._update_castillo_counts()
+	return true
+
+
 func _controlled_in_play(main: Node, pid: int) -> Array:
 	"""Cartas en juego que controla 'pid': Líneas, Armas portadas, Reserva y Oro Pagado."""
 	var out: Array = []
@@ -92,6 +126,9 @@ func _cost_unpayable(main: Node, c: Dictionary, card: Node, controller_id: int) 
 				return "no está en juego"
 			if not KeywordManager.can_be_destroyed(card):
 				return "no puede ser Destruido"
+		"self_shuffle":
+			if zone in Constants.ZONES_IN_PLAY and load("res://scripts/core/effects/mechanics/ProtectionRules.gd").cannot_be_shuffled(card):
+				return "no puede ser Barajado"
 		"shuffle_hand":
 			if _hand_cards(main, controller_id).filter(func(h): return h != card).size() < int(c.amount):
 				return "no tienes %d cartas en tu mano" % int(c.amount)
@@ -139,6 +176,8 @@ func _pay_cost(main: Node, c: Dictionary, card: Node, controller_id: int) -> boo
 		"self_discard":
 			await ActionModule.discard(controller_id, [card], "coste", true)
 			return true
+		"self_shuffle":
+			return await _shuffle_self(main, card, controller_id)
 		"self_destroy":
 			# Cementerio de Kingstead. Con Exhumar va al Destierro (CardManager.destroy_card()).
 			var d_owner: int = card.owner_id if card.get("owner_id") != null else controller_id

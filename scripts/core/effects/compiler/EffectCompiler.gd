@@ -107,6 +107,9 @@ const TRIGGER_PREFIXES := [
 const TIMING_PREFIXES := [
 	"en tu vigilia", "en guerra de talismanes", "una vez por turno", "una vez al turno", "una vez en tu turno",
 	"hasta dos veces por turno", "hasta tres veces por turno",
+	# Habilidades desde otra zona: "Si está en tu Reserva, puedes Barajarlo para..." (huitzilin, carro de
+	# sol, miroku, dr frankenstein). Dónde puede usarse lo decide quien ofrece el botón.
+	"si esta en tu reserva", "si esta en tu cementerio", "si esta en tu destierro",
 ]
 
 ## Oraciones al INICIO del texto que no son parte del efecto: keywords y
@@ -167,6 +170,8 @@ const COST_PIECES := [
 	["self_convert", "convertirl[oa] en un oro sin habilidad"],
 	# "puedes Destruirlo para que tu oponente Bote tres cartas" (Cementerio de Kingstead).
 	["self_destroy", "destruirl[oa]"],
+	# "puedes Barajarlo (en tu Castillo) para..." (rafael, miguel grau, amaterasu, illapa).
+	["self_shuffle", "barajarl[oa](?: (?:de|desde) tu (?:mano|cementerio|destierro|reserva))?(?: en tu castillo)?"],
 	["gold", "(?:pagar|paga) (?<n>" + NUM + ") oros?"],
 	["discard", "descartar (?:(?<dn>" + NUM + ") cartas?(?: de tu mano)?|(?:un|una) (?<types>" + TALT + ")(?: de tu mano)?)"],
 	# "Desterrar (otra) una/dos cartas de tu Cementerio para..." (udjat, grendel, argos, rosa pincheira,
@@ -234,6 +239,8 @@ const STATIC_STARTS := [
 	"si esta en tu cementerio", "si esta en juego", "los jugadores solo pueden", "cada jugador solo puede",
 	# Reglas que siguen a un "mostrar" (anillo de vacío, shurijo, castillo matsumoto).
 	"no se pueden", "los jugadores deben", "a los jugadores les cuesta",
+	# Otra habilidad de la misma carta (miguel grau: "Si botas esta carta desde tu Castillo por daño...").
+	"si botas esta carta",
 	"solo puedes utilizar", "mientras este totem", "a tu oponente le cuesta",
 ]
 
@@ -446,7 +453,12 @@ const ATOMS := [
 	# "Gana 1 de Fuerza por cada carta en el Destierro oponente" (udug) / "...por cada Aliado en tu Destierro"
 	# (brujo mendigo): la propia carta, por el turno.
 	["self_buff_per", "gana (?<n>" + NUM + ") de fuerza por cada (?<per>carta en el destierro oponente|aliado en tu destierro)"],
-	["self", "(?<v>destruyelo|destruyela|destierralo|destierrala)"],
+	["self", "(?<v>destruyelo|destruyela|destierralo|destierrala|barajalo|barajala|barajarlo|barajarla)(?: en tu castillo)?"],
+	# "Cada jugador roba una carta / descarta una carta / destierra una carta de su mano" (forma de
+	# leopardo, danel, okyo, geminis): cada uno elige la suya.
+	["each_draw", "cada jugador roba (?<n>" + NUM + ") cartas?"],
+	["each_discard", "cada jugador descarta (?<n>" + NUM + ") cartas?(?: de su mano)?"],
+	["each_hand_exile", "cada jugador destierra (?<n>" + NUM + ") cartas? de su mano"],
 	# Cementerios: "Baraja y/o Destierra hasta N cartas de los Cementerios" y sus formas de un solo
 	# verbo.
 	["cemetery_both", "(?:baraja|barajar) y/o (?:destierra|desterrar) (?:hasta )?(?<n>" + NUM + ") cartas? de los cementerios"],
@@ -469,6 +481,9 @@ const ATOMS := [
 	# "Tus (demás) Aliados ganan 1 de Fuerza permanentemente" / "Los Aliados oponentes pierden 1 de
 	# Fuerza": todos los de un lado, sin elegir.
 	# "Anula un Talisman oponente" / "Cancela la habilidad de una carta" — sobre la Pila real.
+	# "Cancelar una habilidad" / "Anular una carta o cancelar una habilidad" (huitzilin, rafael, espíritu
+	# desafiante): cualquier habilidad en la Pila.
+	["annul_any", "(?<both>anula(?:r)? una carta o )?cancela(?:r)? una habilidad"],
 	["annul", "(?<v>anula(?:r)? o cancela(?:r)? la habilidad de|anula(?:r)?|cancela(?:r)? la habilidad de) (?:(?<any>una carta)|(?:un|una) " \
 		+ "(?<kind>aliado|talisman|totem|arma)(?: o (?:un )?(?<kind2>aliado|talisman|totem|arma))?)(?<opp> oponente)?" \
 		+ ",?(?: de coste (?<val>" + NUM + ") o menos)?"],
@@ -516,7 +531,7 @@ const ATOMS := [
 ## autoloads. El compilador puede entender más de lo que se ejecuta (p.ej.
 ## "bounce"): esos planes se dejan a la cadena de patrones vieja.
 const EXECUTABLE_OPS := ["castle_look", "draw", "draw_to_match", "mill", "discard", "shuffle_from_hand", "search", "target", "mass", "choice",
-	"shuffle_from_cemetery", "self", "if", "cemetery_cleanup", "gold", "regroup_gold", "buff", "mass_buff", "reveal_until", "reveal_top", "pay", "hand_peek", "annul", "talisman_fizzle",
+	"shuffle_from_cemetery", "self", "hand_exile", "if", "cemetery_cleanup", "gold", "regroup_gold", "buff", "mass_buff", "reveal_until", "reveal_top", "pay", "hand_peek", "annul", "talisman_fizzle",
 	"regroup_cards", "gold_to_paid", "deck_to_hand", "no_damage", "play_from", "peek_hand", "show_hand", "cost", "castle_exile", "cancel_attack", "self_raise", "mill_x", "opp_gold_to_paid", "revive_blank", "self_buff_per"]
 const EXECUTABLE_VERBS := ["destroy", "banish", "shuffle", "silence", "cost_shift"]
 
@@ -1296,7 +1311,14 @@ static func _build(atom_name: String, m: RegExMatch) -> Dictionary:
 			return {"op": "self_buff_per", "amount": parse_amount(m.get_string("n")),
 				"per": "opp_exile" if m.get_string("per").begins_with("carta") else "own_exile_allies"}
 		"self":
-			return {"op": "self", "verb": "banish" if m.get_string("v").begins_with("destierr") else "destroy"}
+			var sv: String = m.get_string("v")
+			return {"op": "self", "verb": "banish" if sv.begins_with("destierr") else ("shuffle" if sv.begins_with("baraj") else "destroy")}
+		"each_draw":
+			return {"op": "draw", "amount": parse_amount(m.get_string("n")), "up_to": false, "who": "both"}
+		"each_discard":
+			return {"op": "discard", "who": "both", "amount": parse_amount(m.get_string("n")), "random": false}
+		"each_hand_exile":
+			return {"op": "hand_exile", "who": "both", "amount": parse_amount(m.get_string("n"))}
 		"search":
 			var zones: Array = []
 			for g in ["z1", "z2", "z3", "z4"]:
@@ -1587,6 +1609,9 @@ static func _build(atom_name: String, m: RegExMatch) -> Dictionary:
 			return rt
 		"bounce":
 			return _target_step("bounce", m)
+		"annul_any":
+			return {"op": "annul", "text": "anula o cancela la habilidad de una carta" if not m.get_string("both").is_empty()
+				else "cancela la habilidad de una carta"}
 		"annul":
 			# Texto con tildes para StackAnnul.try_from_text() (el normalizado no las tiene).
 			var accents := {"talisman": "talismán", "totem": "tótem"}

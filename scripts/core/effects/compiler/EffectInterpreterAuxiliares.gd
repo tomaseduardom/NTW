@@ -27,8 +27,9 @@ static func _controller_of(c: Node) -> int:
 	return int(c.owner_id) if c.get("owner_id") != null else 0
 
 
-static func _card_name(card: Node) -> String:
-	return str(card.card_name) if card and card.get("card_name") != null else "Habilidad"
+static func _card_name(card) -> String:
+	# Sin tipo: la carta pudo salir del juego por el propio efecto (Barajarla, Desterrarla) y estar liberada.
+	return str(card.card_name) if is_instance_valid(card) and card.get("card_name") != null else "Habilidad"
 
 
 static func _keyword_enum(word: String) -> int:
@@ -156,6 +157,7 @@ static func describe_steps(steps: Array) -> String:
 					"discard": "Descartar %d" % st.amount, "mill": "Botar %d" % st.amount,
 					"reveal": "Mostrar una carta de tu mano", "sacrifice": "Destruir otro Aliado",
 					"self_bounce": "Subir esta carta a tu mano", "self_destroy": "Destruir esta carta",
+					"self_shuffle": "Barajar esta carta",
 					"shuffle_hand": "Barajar %d de tu mano" % st.amount,
 					"banish_hand": "Desterrar %d de tu mano" % st.amount,
 					"banish_cemetery": "Desterrar %d de tu Cementerio" % st.amount,

@@ -302,10 +302,15 @@ class TurnRegistry:
 	func is_exhausted(card_id: String, ability_index: int, turn: int, limit: int = 1) -> bool:
 		return use_count(card_id, ability_index, turn) >= maxi(1, limit)
 
-	func register_ability_use(source_card: Node, ability: Dictionary) -> void:
+	func register_ability_use(source_card, ability: Dictionary) -> void:
 		"""Envoltorio de register() que saca ability_index/turno y usa el instance_id de source_card como
 		clave. instance_id y no card_data.id (compartido por todas las copias): cada copia física
-		tiene su propio cupo de "una vez por turno"."""
+		tiene su propio cupo de "una vez por turno".
+		Sin tipo (no Node): si el coste de la habilidad sacó la carta del juego (Desterrarla, Barajarla),
+		el Nodo ya fue liberado al registrar y un parámetro Node fallaría ("previously freed"). Esa copia
+		no puede volver a usarse, así que no hay nada que registrar."""
+		if not is_instance_valid(source_card):
+			return
 		var card_id: String = str(source_card.get_instance_id())
 		var ability_index: int = ability.get("ability_index", 0)
 		register(card_id, ability_index, GameManager.turn_serial)
