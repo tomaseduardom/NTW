@@ -173,9 +173,9 @@ func _build_ui() -> void:
 		rows_container.add_child(row)
 
 	# 5. Botones interactivos inferiores (RESTAURAR DEFECTO y CERRAR)
-	# Realmente interactivos con textura dedicada, animación táctil y sin recuadros amarillos
+	# Coordenadas y dimensiones exactas al píxel de la tableta de piedra (sin costuras ni cortes)
 	_btn_reset = _create_bottom_interactive_button(
-		Rect2(222.0, 673.0, 388.0, 82.0),
+		Rect2(221.0, 672.0, 396.0, 107.0),
 		TEX_BTN_RESET,
 		_on_reset_pressed
 	)
@@ -183,7 +183,7 @@ func _build_ui() -> void:
 	_modal_panel.add_child(_btn_reset)
 
 	_btn_close = _create_bottom_interactive_button(
-		Rect2(665.0, 670.0, 430.0, 85.0),
+		Rect2(655.0, 665.0, 450.0, 114.0),
 		TEX_BTN_CLOSE,
 		close_dialog
 	)
@@ -335,26 +335,27 @@ func _create_bottom_interactive_button(
 	btn.add_theme_stylebox_override("pressed", style_tex)
 	btn.add_theme_stylebox_override("focus", style_tex)
 
-	# Interacción táctil fluida y elegante
+	# Interacción táctil medieval fluida y elegante:
+	# Modulación de resplandor dorado cálido y pulsación física sin distorsión de escala
+	var base_pos: Vector2 = rect.position
 	btn.mouse_entered.connect(func():
 		var tw = btn.create_tween().set_parallel(true)
-		tw.tween_property(btn, "modulate", Color(1.20, 1.16, 1.06), 0.12).set_ease(Tween.EASE_OUT)
-		tw.tween_property(btn, "scale", Vector2(1.025, 1.025), 0.12).set_ease(Tween.EASE_OUT)
+		tw.tween_property(btn, "modulate", Color(1.22, 1.18, 1.08), 0.12).set_ease(Tween.EASE_OUT)
 	)
 	btn.mouse_exited.connect(func():
 		var tw = btn.create_tween().set_parallel(true)
 		tw.tween_property(btn, "modulate", Color.WHITE, 0.14).set_ease(Tween.EASE_OUT)
-		tw.tween_property(btn, "scale", Vector2.ONE, 0.14).set_ease(Tween.EASE_OUT)
+		tw.tween_property(btn, "position", base_pos, 0.14).set_ease(Tween.EASE_OUT)
 	)
 	btn.button_down.connect(func():
 		var tw = btn.create_tween().set_parallel(true)
-		tw.tween_property(btn, "modulate", Color(0.85, 0.85, 0.85), 0.05)
-		tw.tween_property(btn, "scale", Vector2(0.975, 0.975), 0.05)
+		tw.tween_property(btn, "modulate", Color(0.88, 0.85, 0.80), 0.05)
+		tw.tween_property(btn, "position", base_pos + Vector2(0, 1.5), 0.05)
 	)
 	btn.button_up.connect(func():
 		var tw = btn.create_tween().set_parallel(true)
-		tw.tween_property(btn, "modulate", Color(1.20, 1.16, 1.06), 0.08)
-		tw.tween_property(btn, "scale", Vector2(1.025, 1.025), 0.08)
+		tw.tween_property(btn, "modulate", Color(1.22, 1.18, 1.08), 0.08)
+		tw.tween_property(btn, "position", base_pos, 0.08)
 	)
 
 	btn.pressed.connect(callback)
