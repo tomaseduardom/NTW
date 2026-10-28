@@ -186,7 +186,7 @@ func _setup_drop_zones() -> void:
 	])
 	field_drop.set_anchors_preset(Control.PRESET_CENTER)
 	field_drop.offset_left = -620; field_drop.offset_top = -120
-	field_drop.offset_right = 620; field_drop.offset_bottom = 120
+	field_drop.offset_right = 700; field_drop.offset_bottom = 120
 	_main.game_board.add_child(field_drop)
 
 	var gold_drop = DropZoneScript.new()

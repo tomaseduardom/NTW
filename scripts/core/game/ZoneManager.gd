@@ -527,10 +527,18 @@ func move_card(from_zone: Constants.Zone, to_zone: Constants.Zone, amount: int =
 # SLOTS FIJOS DE LÍNEA DE DEFENSA/APOYO
 # =============================================================================
 # Con el HBoxContainer puro, sacar un hijo reordenaba a todos ("cuando uno ataca, el otro toma su
-# puesto"). El contenedor sigue siendo un HBoxContainer y get_children() sigue siendo la fuente de
-# verdad de quién está en la zona; solo se desacopla cada carta del layout (top_level = true, como
-# CardInteraction._start_drag()) y se la pone en una posición fija de una grilla de slots.
-const _FIELD_SLOT_WIDTH: float = 170.0  # 150 (ancho de carta) + 20 (separación limpia entre cartas)
+# =============================================================================
+# SLOTS DINÁMICOS DE LÍNEA DE DEFENSA / ATAQUE (ALIADOS) Y APOYO (TÓTEMS)
+# =============================================================================
+# - Aliados: Tienen prioridad en el terreno de juego (sector celeste). Maximizan el espacio
+#   completo del campo cuando no hay tótems.
+# - Tótems: Se ubican en el sector derecho del campo (sector rojo sobre las columnas),
+#   con un espaciado más compacto/pegado (_TOTEM_SLOT_WIDTH = 110px).
+# - Dinámica: Al entrar un tótem, los aliados se desplazan suavemente hacia la izquierda
+#   dejando libre el santuario de tótems en la derecha. Si los tótems salen, los aliados
+#   vuelven a centrarse en el terreno completo.
+const _FIELD_SLOT_WIDTH: float = 170.0  # Espaciado amplio entre Aliados
+const _TOTEM_SLOT_WIDTH: float = 110.0  # Espaciado más compacto/pegado entre Tótems
 var _field_slot_occupants: Dictionary = {}  # {container: Array[Node]}
 
 
@@ -557,23 +565,39 @@ func _get_associated_attack_container(container: Control) -> Control:
 func pin_card_to_field_slot(card: Node, container: Control) -> Vector2:
 	"""Asigna a 'card' su slot en 'container' (Línea de Defensa o de Apoyo),
 	desacoplándola del layout del HBoxContainer (top_level=true), compactando
-	y separando limpiamente a todas las cartas de la mesa con espacio positivo
-	para evitar cualquier superposición."""
+	y separando limpiamente a todas las cartas de la mesa con espacio positivo."""
 	if not is_instance_valid(card) or not container:
 		return card.global_position if is_instance_valid(card) else Vector2.ZERO
 
-	return compact_field_slots(container, true, card)
+	var target_pos: Vector2 = compact_field_slots(container, true, card)
+
+	# Si es un tótem, los aliados deben correrse a la izquierda de inmediato para darle espacio
+	if container == _main.player_linea_apoyo and _main.player_field:
+		compact_field_slots(_main.player_field, true)
+	elif container == _main.opponent_linea_apoyo and _main.opponent_field:
+		compact_field_slots(_main.opponent_field, true)
+	# Si es un aliado, asegurar sincronización con la zona de apoyo
+	elif (container == _main.player_field or container == _main.player_linea_ataque) and _main.player_linea_apoyo:
+		compact_field_slots(_main.player_linea_apoyo, true)
+	elif (container == _main.opponent_field or container == _main.opponent_linea_ataque) and _main.opponent_linea_apoyo:
+		compact_field_slots(_main.opponent_linea_apoyo, true)
+
+	return target_pos
 
 
 func compact_field_slots(container: Control, animate: bool = true, exclude_anim_card: Node = null) -> Vector2:
-	"""Reordena y compacta de izquierda a derecha (centrado continuo) todos los aliados/tótems
-	en juego, garantizando una separación fija y limpia (_FIELD_SLOT_WIDTH) sin solapamiento alguno.
-	Si exclude_anim_card se especifica, calcula su target_pos sin interrumpir la animación del llamador."""
+	"""Reordena y compacta dinámicamente aliados y tótems:
+	- Tótems: Sector derecho, más pegados entre sí (_TOTEM_SLOT_WIDTH).
+	- Aliados: Sector izquierdo/centro maximizando el terreno. Si hay tótems, se corren a la izquierda."""
 	if not container or not _main:
 		return Vector2.ZERO
 	var base_container: Control = _get_base_field_container(container)
 	var atk_container: Control = _get_associated_attack_container(base_container)
 
+	var is_player: bool = (base_container == _main.player_field or base_container == _main.player_linea_apoyo)
+	var is_totem_zone: bool = (base_container == _main.player_linea_apoyo or base_container == _main.opponent_linea_apoyo)
+
+	# 1. Obtener cartas activas en esta zona
 	var active_cards: Array = []
 	for child in base_container.get_children():
 		if is_instance_valid(child) and not child.is_queued_for_deletion():
@@ -588,96 +612,207 @@ func compact_field_slots(container: Control, animate: bool = true, exclude_anim_
 
 	if active_cards.is_empty():
 		_field_slot_occupants[base_container] = []
+		if is_totem_zone:
+			# Si salieron todos los tótems, re-centrar los aliados para maximizar el terreno
+			var allies_cont: Control = _main.player_field if is_player else _main.opponent_field
+			if allies_cont and allies_cont != base_container:
+				compact_field_slots(allies_cont, animate)
 		return Vector2.ZERO
 
-	# Ordenar de izquierda a derecha según su posición X asignada o actual
+	# 2. Ordenar de izquierda a derecha según su posición X asignada o actual
 	active_cards.sort_custom(func(a, b):
 		var pos_a: float = a.get_meta("field_slot_x", a.global_position.x if is_instance_valid(a) else 0.0)
 		var pos_b: float = b.get_meta("field_slot_x", b.global_position.x if is_instance_valid(b) else 0.0)
 		return pos_a < pos_b
 	)
 
-	var max_slots: int = maxi(1, int(base_container.size.x / _FIELD_SLOT_WIDTH))
-	var center_val: float = (max_slots - 1) / 2.0
-	var count: int = active_cards.size()
-	var start_slot: float = center_val - (float(count - 1) / 2.0)
+	# 3. Detectar presencia de tótems en el campo del mismo jugador/oponente
+	var apoyo_container: Control = _main.player_linea_apoyo if is_player else _main.opponent_linea_apoyo
+	var totem_cards: Array = []
+	if is_instance_valid(apoyo_container):
+		for ch in apoyo_container.get_children():
+			if is_instance_valid(ch) and not ch.is_queued_for_deletion():
+				totem_cards.append(ch)
+	if is_totem_zone and exclude_anim_card and is_instance_valid(exclude_anim_card) and exclude_anim_card not in totem_cards:
+		totem_cards.append(exclude_anim_card)
 
+	var totem_count: int = totem_cards.size()
+	var has_totems: bool = (totem_count > 0)
+
+	# 4. Determinar límites horizontales del terreno de juego
+	var gold_c: Control = _main.player_gold if is_player else _main.opponent_gold
+	var gold_right: float = 370.0
+	if is_instance_valid(gold_c) and gold_c.size.x > 0:
+		gold_right = gold_c.global_position.x + gold_c.size.x + 20.0
+
+	var cast_p: Control = _main._panel_player_castillo if is_player else _main._panel_opp_castillo
+	var cast_left: float = 1660.0
+	if is_instance_valid(cast_p) and cast_p.size.x > 0:
+		cast_left = cast_p.global_position.x - 24.0
+	elif base_container.is_inside_tree():
+		cast_left = base_container.get_viewport_rect().size.x - 260.0
+
+	# 5. Cálculo del ancho y posición del área de Tótems (Sector Rojo a la derecha)
+	var totems_visual_width: float = 132.0 if totem_count <= 1 else (float(totem_count - 1) * _TOTEM_SLOT_WIDTH + 132.0)
+	var totem_zone_margin: float = 24.0
+	var totem_zone_width: float = clampf(totems_visual_width + totem_zone_margin * 2.0, 260.0, 420.0)
+	var totem_zone_start_x: float = cast_left - totem_zone_width
+	var totem_center_x: float = cast_left - (totem_zone_width / 2.0)
+
+	# 6. Cálculo del área de Aliados (Sector Celeste)
+	# Si hay tótems, los aliados se corren a la izquierda dejando libre el área del tótem
+	# Si no hay tótems, los aliados maximizan el terreno completo de juego
+	var ally_zone_left: float = gold_right
+	var ally_zone_right: float = (totem_zone_start_x - 24.0) if has_totems else cast_left
+	var ally_span_width: float = maxf(ally_zone_right - ally_zone_left, 300.0)
+	var ally_center_x: float = ally_zone_left + (ally_span_width / 2.0)
+
+	var count: int = active_cards.size()
 	var new_occupants: Array = []
-	new_occupants.resize(max_slots)
+	new_occupants.resize(count)
 	var returned_target_pos: Vector2 = Vector2.ZERO
 
-	for i in range(count):
-		var card: Node = active_cards[i]
-		var slot_pos_idx: float = start_slot + float(i)
-		var target_scale: Vector2 = Constants.TOTEM_CARD_SCALE if card.get("card_type") == Constants.CardType.TOTEM else Vector2.ONE
-		var card_size: Vector2 = (card.custom_minimum_size if card.custom_minimum_size != Vector2.ZERO else Vector2(150.0, 210.0)) * target_scale
-		var local_center_x: float = base_container.size.x / 2.0 + (slot_pos_idx - center_val) * _FIELD_SLOT_WIDTH
-		var target_x: float = base_container.global_position.x + local_center_x - card_size.x / 2.0
-		var card_parent: Control = card.get_parent() as Control
-		var current_container: Control = card_parent if (card_parent == atk_container or card_parent == base_container) else base_container
-		var target_y: float = current_container.global_position.y + (current_container.size.y - card_size.y) / 2.0
-		var target_pos: Vector2 = Vector2(target_x, target_y)
+	if is_totem_zone:
+		# Posicionamiento de TÓTEMS (Zona Roja a la derecha, más pegados entre sí)
+		var start_totem_x: float = totem_center_x - (float(count - 1) * _TOTEM_SLOT_WIDTH / 2.0)
+		for i in range(count):
+			var card: Node = active_cards[i]
+			var target_scale: Vector2 = Constants.TOTEM_CARD_SCALE
+			var card_size: Vector2 = (card.custom_minimum_size if card.custom_minimum_size != Vector2.ZERO else Vector2(150.0, 210.0)) * target_scale
+			var target_x: float = start_totem_x + float(i) * _TOTEM_SLOT_WIDTH - (card_size.x / 2.0)
 
-		card.top_level = true
-		card.z_index = 0
-		card.set("original_z_index", 0)
-		card.set_meta("hand_base_z_index", 0)
-		card.scale = target_scale
-		card.base_scale = target_scale
-		var int_slot: int = int(round(slot_pos_idx))
-		if int_slot >= 0 and int_slot < max_slots:
-			new_occupants[int_slot] = card
-		card.set_meta("field_slot_index", int_slot)
-		card.set_meta("field_slot_x", target_x)
-		card.set_meta("field_slot_pos", target_pos)
+			var card_parent: Control = card.get_parent() as Control
+			var current_container: Control = card_parent if card_parent else base_container
+			var target_y: float = current_container.global_position.y + (current_container.size.y - card_size.y) / 2.0
+			var target_pos: Vector2 = Vector2(target_x, target_y)
 
-		if card.has_method("set_click_clip_right"):
-			card.set_click_clip_right(-1.0)
-		if card.has_method("_refresh_disabled_rotation"):
-			card._refresh_disabled_rotation()
+			_apply_card_field_placement(card, target_pos, target_scale, i, animate, exclude_anim_card)
+			new_occupants[i] = card
+			if card == exclude_anim_card:
+				returned_target_pos = target_pos
+	else:
+		# Posicionamiento de ALIADOS (Zona Celeste, espaciado amplio, corriendo a la izquierda si hay tótems)
+		var effective_slot_width: float = _FIELD_SLOT_WIDTH
+		if float(count) * _FIELD_SLOT_WIDTH > ally_span_width:
+			effective_slot_width = maxf(80.0, ally_span_width / float(count))
 
-		# Revalidar posición de armas equipadas en el Aliado
-		if "equipped_weapons" in card and card.equipped_weapons is Array:
-			# Sin tipar a propósito: un Arma que salió del juego por un camino que no la desequipó deja una
-			# referencia liberada, y asignarla a una variable 'Node' revienta. Se purga de paso.
-			for w_idx in range(card.equipped_weapons.size() - 1, -1, -1):
-				if not is_instance_valid(card.equipped_weapons[w_idx]):
-					card.equipped_weapons.remove_at(w_idx)
-			for w_idx in range(card.equipped_weapons.size()):
-				var w = card.equipped_weapons[w_idx]
-				if is_instance_valid(w):
-					w.top_level = false
-					w.position = Vector2(0.0, Constants.WEAPON_OFFSET_Y + w_idx * Constants.WEAPON_STACK_STEP_Y)
-					if "base_scale" in card and "base_scale" in w:
-						w.scale = card.base_scale
-						w.base_scale = card.base_scale
+		var start_ally_x: float = ally_center_x - (float(count - 1) * effective_slot_width / 2.0)
+		for i in range(count):
+			var card: Node = active_cards[i]
+			var target_scale: Vector2 = Vector2.ONE
+			var card_size: Vector2 = (card.custom_minimum_size if card.custom_minimum_size != Vector2.ZERO else Vector2(150.0, 210.0)) * target_scale
+			var target_x: float = start_ally_x + float(i) * effective_slot_width - (card_size.x / 2.0)
 
-		if card == exclude_anim_card:
-			card.global_position = target_pos
-			returned_target_pos = target_pos
-		else:
-			var current_pos: Vector2 = card.global_position
-			if animate and (absf(current_pos.x - target_x) > 1.0 or absf(current_pos.y - target_y) > 1.0):
-				var tw = card.create_tween()
-				tw.set_parallel(true)
-				tw.tween_property(card, "global_position:x", target_x, 0.28).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_CUBIC)
-				tw.tween_property(card, "global_position:y", target_y, 0.28).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_CUBIC)
-			elif not animate:
-				card.global_position = target_pos
+			var card_parent: Control = card.get_parent() as Control
+			var current_container: Control = card_parent if (card_parent == atk_container or card_parent == base_container) else base_container
+			var target_y: float = current_container.global_position.y + (current_container.size.y - card_size.y) / 2.0
+			var target_pos: Vector2 = Vector2(target_x, target_y)
+
+			_apply_card_field_placement(card, target_pos, target_scale, i, animate, exclude_anim_card)
+			new_occupants[i] = card
+			if card == exclude_anim_card:
+				returned_target_pos = target_pos
 
 	_field_slot_occupants[base_container] = new_occupants
+	_update_zone_labels(is_player, has_totems, ally_center_x, totem_center_x, animate)
 	return returned_target_pos
+
+
+func _apply_card_field_placement(
+	card: Node,
+	target_pos: Vector2,
+	target_scale: Vector2,
+	slot_index: int,
+	animate: bool,
+	exclude_anim_card: Node
+) -> void:
+	card.top_level = true
+	card.z_index = 0
+	card.set("original_z_index", 0)
+	card.set_meta("hand_base_z_index", 0)
+	card.scale = target_scale
+	card.base_scale = target_scale
+	card.set_meta("field_slot_index", slot_index)
+	card.set_meta("field_slot_x", target_pos.x)
+	card.set_meta("field_slot_pos", target_pos)
+
+	if card.has_method("set_click_clip_right"):
+		card.set_click_clip_right(-1.0)
+	if card.has_method("_refresh_disabled_rotation"):
+		card._refresh_disabled_rotation()
+
+	# Revalidar posición de armas equipadas en el Aliado
+	if "equipped_weapons" in card and card.equipped_weapons is Array:
+		for w_idx in range(card.equipped_weapons.size() - 1, -1, -1):
+			if not is_instance_valid(card.equipped_weapons[w_idx]):
+				card.equipped_weapons.remove_at(w_idx)
+		for w_idx in range(card.equipped_weapons.size()):
+			var w = card.equipped_weapons[w_idx]
+			if is_instance_valid(w):
+				w.top_level = false
+				w.position = Vector2(0.0, Constants.WEAPON_OFFSET_Y + w_idx * Constants.WEAPON_STACK_STEP_Y)
+				if "base_scale" in card and "base_scale" in w:
+					w.scale = card.base_scale
+					w.base_scale = card.base_scale
+
+	if card == exclude_anim_card:
+		card.global_position = target_pos
+	else:
+		var current_pos: Vector2 = card.global_position
+		if animate and (absf(current_pos.x - target_pos.x) > 1.0 or absf(current_pos.y - target_pos.y) > 1.0):
+			var tw = card.create_tween()
+			tw.set_parallel(true)
+			tw.tween_property(card, "global_position:x", target_pos.x, 0.28).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_CUBIC)
+			tw.tween_property(card, "global_position:y", target_pos.y, 0.28).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_CUBIC)
+		elif not animate:
+			card.global_position = target_pos
+
+
+func _update_zone_labels(is_player: bool, has_totems: bool, ally_center_x: float, totem_center_x: float, animate: bool = true) -> void:
+	if not _main:
+		return
+	var prefix: String = "Player" if is_player else "Opponent"
+	var area_name: String = "PlayerArea" if is_player else "OpponentArea"
+
+	var apoyo_lbl = _main.get_node_or_null("GameBoard/%s/%sLineaApoyoLabel" % [area_name, prefix])
+	if is_instance_valid(apoyo_lbl):
+		apoyo_lbl.visible = has_totems
+		if has_totems and apoyo_lbl.size.x > 0:
+			var target_apoyo_x = totem_center_x - (apoyo_lbl.size.x / 2.0)
+			if animate and absf(apoyo_lbl.global_position.x - target_apoyo_x) > 2.0:
+				var tw = apoyo_lbl.create_tween()
+				tw.tween_property(apoyo_lbl, "global_position:x", target_apoyo_x, 0.28).set_ease(Tween.EASE_OUT)
+			else:
+				apoyo_lbl.global_position.x = target_apoyo_x
+
+	var def_lbl = _main.get_node_or_null("GameBoard/%s/%sFieldLabel" % [area_name, prefix])
+	if is_instance_valid(def_lbl) and def_lbl.size.x > 0:
+		var target_def_x = ally_center_x - (def_lbl.size.x / 2.0)
+		if animate and absf(def_lbl.global_position.x - target_def_x) > 2.0:
+			var tw = def_lbl.create_tween()
+			tw.tween_property(def_lbl, "global_position:x", target_def_x, 0.28).set_ease(Tween.EASE_OUT)
+		else:
+			def_lbl.global_position.x = target_def_x
+
+	var atk_lbl = _main.get_node_or_null("GameBoard/%s/%sLineaAtaqueLabel" % [area_name, prefix])
+	if is_instance_valid(atk_lbl) and atk_lbl.size.x > 0:
+		var target_atk_x = ally_center_x - (atk_lbl.size.x / 2.0)
+		if animate and absf(atk_lbl.global_position.x - target_atk_x) > 2.0:
+			var tw = atk_lbl.create_tween()
+			tw.tween_property(atk_lbl, "global_position:x", target_atk_x, 0.28).set_ease(Tween.EASE_OUT)
+		else:
+			atk_lbl.global_position.x = target_atk_x
 
 
 func compact_all_fields(animate: bool = true) -> void:
 	"""Compacta y reordena todas las zonas del campo (Líneas de Defensa y Apoyo de ambos jugadores)"""
 	if not _main:
 		return
-	if _main.player_field:
-		compact_field_slots(_main.player_field, animate)
 	if _main.player_linea_apoyo:
 		compact_field_slots(_main.player_linea_apoyo, animate)
-	if _main.opponent_field:
-		compact_field_slots(_main.opponent_field, animate)
+	if _main.player_field:
+		compact_field_slots(_main.player_field, animate)
 	if _main.opponent_linea_apoyo:
 		compact_field_slots(_main.opponent_linea_apoyo, animate)
+	if _main.opponent_field:
+		compact_field_slots(_main.opponent_field, animate)
