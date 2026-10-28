@@ -262,6 +262,9 @@ const STATIC_STARTS := [
 	# Otra habilidad de la misma carta (miguel grau: "Si botas esta carta desde tu Castillo por daño...").
 	"si botas esta carta",
 	"solo puedes utilizar", "mientras este totem", "a tu oponente le cuesta",
+	# Reglas pegadas a una activada (abel: "Convertir cartas y Barajar Aliados Héroe... cuesta un Oro adicional"; mug ruith:
+	# "Si hay diez o más cartas en los Destierros, tus Aliados ganan...").
+	"convertir cartas y barajar", "si hay diez o mas cartas en los destierros",
 ]
 
 const TYPE_WORDS := {
@@ -320,6 +323,33 @@ const REVEAL_DIST_ITEM := "(?:(?:pon )?(?:" + NUM + "|otro|otra|el otro|la otra)
 const ATOMS := [
 	["draw", "(?:tu )?roba(?:s|r)? (?<upto>hasta )?(?<n>" + NUM + ") cartas?(?: de tu castillo)?"],
 	["draw_to_match", "roba(?:r)? cartas hasta tener la misma cantidad de cartas en (?:(?:la|tu) )?mano que tu oponente"],
+	# Piezas sueltas de una o pocas cartas (EffectInterpreterEspeciales).
+	# estirpe maldita (con "Por cada Aliado que controles, ..."): la carta del tope entra como Aliado sin habilidad.
+	["special:castle_top_ally", "pon una carta del tope de un castillo en juego como un aliado de fuerza (?<v>\\d+) sin habilidad"],
+	# chivateo del mandinga: lo que destruyó el paso anterior, por controlador.
+	["special:draw_per_destroyed_ctrl", "por cada aliado que haya sido destruido de esta manera, su controlador roba una carta"],
+	# forma de araña.
+	["special:next_ally_discount_furia", "el proximo aliado que juegues este turno reduce su coste en un oro y gana furia"],
+	# mug ruith.
+	["special:name_lock_attack", "un aliado y todas sus copias no pueden atacar ni tu oponente puede utilizar sus habilidades hasta tu proximo turno"],
+	# murciélago.
+	["special:drain_distribute", "un aliado oponente pierde tanta fuerza como aliados controles y distribuye esa misma cantidad de fuerza" \
+		+ " entre tus aliados permanentemente"],
+	# Habilidad entre comillas que gana un Aliado (hp lovecraft, soberbia, gran escape): el texto sale de la carta
+	# original, con mayúsculas y tildes.
+	["special:grant_quoted", "(?:un|una) aliado(?: de coste (?<cv>\\d+) o (?<cc>mas|menos))?(?<own> que controles)? gana la habilidad" \
+		+ " [\"“”¨][^\"“”¨]+[\"“”¨](?:,? (?:por el resto del juego|mientras este en juego))?"],
+	# efigie: la habilidad del Aliado Desterrado por el paso anterior.
+	["special:grant_affected", "un aliado de coste (?<cv>\\d+) o (?<cc>mas|menos)(?<own> que controles) gana su habilidad por el resto del juego"],
+	# soberbia (la habilidad que da): "Barajar todos los Aliados de menor Fuerza que este Aliado".
+	["special:shuffle_weaker", "barajar todos los aliados de menor fuerza que este aliado"],
+	# abel: "un Aliado gana Fuerza igual a la cantidad de Aliados que controles o que controle tu oponente".
+	["buff_eq_allies", "un aliado gana fuerza igual a la cantidad de aliados que controles o que controle tu oponente"],
+	# kuji-in.
+	["kuji_buff", "un aliado que controles gana furia, tanta fuerza como aliados de coste (?<cv>\\d+) o mas hayan en tu cementerio" \
+		+ " y no puede salir del juego este turno"],
+	# hp lovecraft (la habilidad que da): "tu oponente Destierra una carta de su mano".
+	["opp_hand_exile", "tu oponente destierra (?<n>" + NUM + ") cartas? de su mano"],
 	# Lo que hace (o elige) tu oponente sobre lo suyo, y reglas que le pones (EffectInterpreterOponente).
 	["opp:mill_half", "tu oponente bota la mitad de su castillo,? redondeado hacia arriba"],
 	["opp:discard_or_shuffle", "tu oponente (?:debe |deba )?descartar una carta o barajar una carta que controle que no (?:sea|es) oro"],
@@ -366,7 +396,7 @@ const ATOMS := [
 	["revive_blank", "(?:pon|poner) (?:en juego )?(?:bajo tu control )?(?<det>(?:hasta )?" + NUM + ") aliados?" \
 		+ "(?: de coste (?<cval>" + NUM + ") o (?<ccmp>menos|mas))? de tu cementerio(?: en juego)?,? (?:como (?:un )?aliados? )?sin habilidad"],
 	# "Mover un Oro oponente a su Oro Pagado" (Legión de Honor).
-	["opp_gold_to_paid", "mover un oro oponente a su oro pagado"],
+	["opp_gold_to_paid", "(?:mover un oro oponente a su oro pagado|paga(?:r)? un oro oponente)"],  # forma de araña: "paga un Oro oponente"
 	# "...para subirlo de tu Cementerio a tu mano" (Belial, sai): la carta misma vuelve a la mano.
 	["self_raise", SELF_RAISE_RX],
 	# "Cancela el ataque de un Aliado (oponente)" / "de hasta dos Aliados" (Drácula, zawbaa, perun).
@@ -632,7 +662,7 @@ const ATOMS := [
 ## intérprete) para que el auditor headless las consulte sin cargar
 ## autoloads. El compilador puede entender más de lo que se ejecuta (p.ej.
 ## "bounce"): esos planes se dejan a la cadena de patrones vieja.
-const EXECUTABLE_OPS := ["each", "opp", "castle_look", "draw", "draw_to_match", "mill", "discard", "shuffle_from_hand", "search", "target", "mass", "choice",
+const EXECUTABLE_OPS := ["each", "opp", "special", "repeat", "castle_look", "draw", "draw_to_match", "mill", "discard", "shuffle_from_hand", "search", "target", "mass", "choice",
 	"shuffle_from_cemetery", "self", "hand_exile", "keep_shuffle", "rule", "if", "cemetery_cleanup", "gold", "regroup_gold", "buff", "mass_buff", "reveal_until", "reveal_top", "pay", "hand_peek", "annul", "talisman_fizzle",
 	"regroup_cards", "gold_to_paid", "deck_to_hand", "no_damage", "play_from", "peek_hand", "show_hand", "cost", "castle_exile", "cancel_attack", "self_raise", "mill_x", "opp_gold_to_paid", "revive_blank", "self_buff_per"]
 const EXECUTABLE_VERBS := ["destroy", "banish", "shuffle", "silence", "cost_shift"]
@@ -786,7 +816,7 @@ static func is_executable(steps: Array) -> bool:
 			for option in st.options:
 				if not is_executable(option):
 					return false
-		if st.op == "if" and not is_executable(st.steps):
+		if st.op in ["if", "repeat"] and not is_executable(st.steps):
 			return false
 	return true
 
@@ -817,6 +847,11 @@ static func _split_sentences(t: String) -> Array:
 		var s: String = raw.strip_edges().trim_suffix(".").strip_edges()
 		if s.is_empty():
 			continue
+		# Una habilidad entre comillas con varias oraciones ("gana la habilidad ¨Imbloqueable. Una vez por turno, ...¨",
+		# gran escape) es una sola oración.
+		if not out.is_empty() and _open_quote(out.back()):
+			out[out.size() - 1] = out.back() + ". " + s
+			continue
 		# "...hasta mostrar un Aliado de coste 2. Ponlo en tu mano y Baraja el resto" (mochizuki
 		# chiyome): el destino de reveal_until en la oración siguiente va con la anterior.
 		# También el reparto ("...hasta mostrar cuatro Aliados. Pon uno en tu mano, tres en tu Cementerio",
@@ -841,6 +876,13 @@ static func _split_sentences(t: String) -> Array:
 			continue
 		out.append(s)
 	return out
+
+
+static func _open_quote(s: String) -> bool:
+	var n := 0
+	for ch in ["\"", "“", "”", "¨"]:
+		n += s.count(ch)
+	return n % 2 == 1
 
 
 static func _strip_trigger_prefix(s: String) -> String:
@@ -1081,6 +1123,26 @@ static func _compile_sentence(s: String) -> Dictionary:
 				return m_tail
 			m_steps.append_array(m_tail.steps)
 		return {"ok": true, "steps": m_steps, "unparsed": ""}
+	# "Por cada Aliado que controles, pon una carta..." (estirpe maldita) / "Por cada carta Destruida, Baraja hasta dos
+	# cartas de los Cementerios" (rey del camino) / "Por cada Talismán Botado de esta forma, busca... o paga..." (forma de
+	# araña): la cantidad multiplica los pasos que la admiten; si no, se repiten enteros (op "repeat").
+	var per_m := RegEx.create_from_string("^por cada (?<q>.+?), (?<rest>.+)$").search(s)
+	if per_m:
+		var per_q := _parse_quantity(per_m.get_string("q"))
+		if not per_q.is_empty() and per_q.len == per_m.get_string("q").length():
+			var per_inner := _compile_sentence(per_m.get_string("rest"))
+			if not per_inner.ok:
+				return per_inner
+			var simple: bool = per_inner.steps.all(func(st): return QTY_KEYS.has(st.op) and not st.has("qty") and not st.has("per"))
+			if simple:
+				for st in per_inner.steps:
+					st["qty"] = {"mode": "per", "q": per_q.q, "key": QTY_KEYS[st.op]}
+				return per_inner
+			return {"ok": true, "steps": [{"op": "repeat", "q": per_q.q, "steps": per_inner.steps}], "unparsed": ""}
+	# "Un Aliado es Indestructible por el turno" (luis carrera) = "gana Indestructible".
+	var is_kw := RegEx.create_from_string("^((?:un|una) aliado(?: que controles)?) es (furia|imbloqueable|indestructible|indesterrable)\\b").search(s)
+	if is_kw:
+		return _compile_sentence(is_kw.get_string(1) + " gana " + is_kw.get_string(2) + s.substr(is_kw.get_end()))
 	# "Anula o Destierra un Tótem de coste 3 o menos" (jurado descontento): una elección entre los dos verbos.
 	var ad_m := RegEx.create_from_string("^anula o destierra (?<obj>.+)$").search(s)
 	if ad_m:
@@ -1265,6 +1327,20 @@ static func _compile_sequence(s: String) -> Dictionary:
 				return {"ok": false, "steps": [], "unparsed": rest}
 			per_qty = pq.q
 			rest = rest.substr(9 + pq.len).strip_edges()
+			# "...por cada Aliado oponente de Fuerza 3 o menos y por cada Aliado Orco que controles" (orco alpino) /
+			# "...por cada Aliado que controles y una adicional por cada Carrera que controles" (luis carrera): se suman.
+			var more := RegEx.create_from_string("^y (?<extra>una adicional )?por cada ").search(rest)
+			if more:
+				var tail: String = rest.substr(more.get_end())
+				var pq2 := _parse_quantity(tail)
+				if pq2.is_empty() and not more.get_string("extra").is_empty():
+					# Un nombre de carta: "por cada Carrera que controles".
+					var nm2 := RegEx.create_from_string("^(?<nm>[a-z]+) que controles(?![a-z])").search(tail)
+					if nm2 and not TYPE_WORDS.has(nm2.get_string("nm")):
+						pq2 = {"q": {"kind": "named_count", "name": nm2.get_string("nm")}, "len": nm2.get_end()}
+				if not pq2.is_empty():
+					per_qty = {"kind": "sum", "parts": [per_qty, pq2.q]}
+					rest = tail.substr(pq2.len).strip_edges()
 		for q_pair in [[set_qty, "set"], [per_qty, "per"]]:
 			if q_pair[0].is_empty():
 				continue
@@ -1280,7 +1356,7 @@ static func _compile_sequence(s: String) -> Dictionary:
 
 ## Pasos que aceptan una cantidad variable y qué campo cambia (ver _parse_quantity()). Los objetivos en
 ## juego no: se eligen antes de resolver, con la cantidad impresa.
-const QTY_KEYS := {"draw": "amount", "mill": "amount", "discard": "amount", "cemetery_cleanup": "amount",
+const QTY_KEYS := {"special": "amount", "draw": "amount", "mill": "amount", "discard": "amount", "cemetery_cleanup": "amount",
 	"shuffle_from_cemetery": "amount", "shuffle_from_hand": "amount", "castle_exile": "amount", "buff": "amount"}
 static var _qty_rxs: Array = []
 
@@ -1292,8 +1368,14 @@ static func _parse_quantity(t: String) -> Dictionary:
 	if _qty_rxs.is_empty():
 		for pair in [
 			["moved", "cartas? barajadas? de esta forma"],
+			# Lo que hizo un paso anterior del mismo efecto (EffectInterpreterEspeciales._quantity_value).
+			["exiled", "(?<t>" + T1 + ") desterrad[oa]s? de esta forma"],
+			["milled", "(?<t>" + T1 + ") botad[oa]s? de esta forma"],
+			["destroyed", "cartas? destruidas?"],
+			["paid_self", "oros? que hayas pagado por este aliado"],
+			["totem_left", "totems? que haya salido de tu linea de apoyo este turno(?:, maximo (?<max>" + NUM + "))?"],
 			["types", "tipos? de cartas? en tu destierro"],
-			["zone", "(?<t>" + T1 + ")(?: (?<race>" + RACE + "))? (?:haya |hayan )?en tu (?<z>cementerio|destierro)" \
+			["zone", "(?<t>" + T1 + ")(?: (?<race>" + RACE + "))?(?: de coste (?<zcv>\\d+) o (?<zcc>menos|mas))? (?:haya |hayan )?en tu (?<z>cementerio|destierro)" \
 				+ "(?: y (?:en )?(?:tu )?(?<z2>cementerio|destierro))?"],
 			["stat", "(?<stat>fuerza impresa|fuerza|coste) tenga (?<of>este aliado|esta carta|un aliado que controles" \
 				+ "|un aliado en juego|un aliado|una carta que controles|una carta en juego)(?![a-z])"],
@@ -1301,7 +1383,7 @@ static func _parse_quantity(t: String) -> Dictionary:
 				+ "(?: (?<kw>exhumar|furia|imbloqueable|indestructible))?(?<dc> de distinto coste)?" \
 				+ "(?: de fuerza (?<sv>\\d+) o (?<sc>menos|mas))?(?: de coste (?<cv>\\d+) o (?<cc>menos|mas))?" \
 				+ "(?: (?<w>que controles|controles|que controle tu oponente|controle tu oponente|controle un jugador|en juego" \
-				+ "|en tu linea de defensa))?(?![a-z])"],
+				+ "|en tu linea de defensa|atacantes?))?(?![a-z])"],
 		]:
 			_qty_rxs.append({"kind": pair[0], "rx": RegEx.create_from_string("^" + pair[1])})
 	for pat in _qty_rxs:
@@ -1312,13 +1394,22 @@ static func _parse_quantity(t: String) -> Dictionary:
 		match pat.kind:
 			"moved":
 				q = {"kind": "moved"}  # nahualismo: lo que barajó el paso "cada jugador" anterior
+			"exiled", "milled":  # takiyasha hime / forma de araña: los datos que movió el paso anterior
+				q = {"kind": "each_list", "key": "exiled" if pat.kind == "exiled" else "milled_cards", "types": _type_list(m.get_string("t"))}
+			"destroyed":  # rey del camino
+				q = {"kind": "each_count", "key": "destroyed"}
+			"paid_self":  # nguruvilu (GoldManager: meta "gold_paid")
+				q = {"kind": "paid_self"}
+			"totem_left":  # vâlve albe (RuleState "totem_left_support")
+				q = {"kind": "totem_left", "max": parse_amount(m.get_string("max")) if not m.get_string("max").is_empty() else -1}
 			"types":
 				q = {"kind": "distinct_types", "zones": ["destierro"]}
 			"zone":
 				var zs: Array = [m.get_string("z")]
 				if not m.get_string("z2").is_empty():
 					zs.append(m.get_string("z2"))
-				q = {"kind": "zone_count", "zones": zs, "types": _type_list(m.get_string("t")), "race": m.get_string("race")}
+				q = {"kind": "zone_count", "zones": zs, "types": _type_list(m.get_string("t")), "race": m.get_string("race"),
+					"cost_val": int(m.get_string("zcv")) if not m.get_string("zcv").is_empty() else -1, "cost_cmp": m.get_string("zcc")}
 			"stat":
 				q = {"kind": "stat", "stat": "coste" if m.get_string("stat") == "coste" else "fuerza",
 					"printed": m.get_string("stat") == "fuerza impresa", "of": m.get_string("of")}
@@ -1334,7 +1425,7 @@ static func _parse_quantity(t: String) -> Dictionary:
 				elif w == "controle un jugador":
 					who = "choose"
 				var nt: String = TYPE_WORDS.get(m.get_string("nt"), "")
-				q = {"kind": "play_count", "who": who, "defense": w == "en tu linea de defensa",
+				q = {"kind": "play_count", "who": who, "defense": w == "en tu linea de defensa", "attacking": w.begins_with("atacante"),
 					"types": _type_list(m.get_string("t")), "race": m.get_string("race"), "types_not": [nt] if nt != "" else [],
 					"keyword": m.get_string("kw"), "distinct_cost": not m.get_string("dc").is_empty(),
 					"str_val": int(m.get_string("sv")) if not m.get_string("sv").is_empty() else -1, "str_cmp": m.get_string("sc"),
@@ -1361,11 +1452,16 @@ static func _build(atom_name: String, m: RegExMatch) -> Dictionary:
 	pero el caso es ambiguo (que lo resuelva la cadena vieja)."""
 	if atom_name.begins_with("rule:"):
 		return {"op": "rule", "kind": atom_name.trim_prefix("rule:")}
-	if atom_name.begins_with("each:") or atom_name.begins_with("opp:"):
+	if atom_name.begins_with("each:") or atom_name.begins_with("opp:") or atom_name.begins_with("special:"):
 		var prefix: String = atom_name.get_slice(":", 0)
 		var each := {"op": prefix, "kind": atom_name.trim_prefix(prefix + ":")}
 		if m.names.has("n") and not m.get_string("n").is_empty():
 			each["amount"] = parse_amount(m.get_string("n"))
+		if prefix == "special":
+			each["amount"] = int(each.get("amount", 1))
+			for g in ["v", "cv", "cc", "own"]:  # Fuerza, filtro de coste y "que controles" del objetivo
+				if m.names.has(g) and not m.get_string(g).is_empty():
+					each[g] = m.get_string(g)
 		return each
 	match atom_name:
 		"own_allies_protect":
@@ -1498,6 +1594,20 @@ static func _build(atom_name: String, m: RegExMatch) -> Dictionary:
 		"search_named":
 			return {"op": "search", "zones": ["castillo"], "card_type": "", "card_types": [], "types_not": [], "cost_val": -1,
 				"cost_cmp": "", "dest": "mano", "amount": 1, "up_to": false, "name": m.get_string("name").strip_edges()}
+		"buff_eq_allies":
+			var abel_q := {"kind": "play_count", "who": "choose", "defense": false, "types": ["aliado"], "race": "", "types_not": [],
+				"keyword": "", "distinct_cost": false, "str_val": -1, "str_cmp": "", "cost_val": -1, "cost_cmp": ""}
+			return {"op": "buff", "verb": "buff", "count": 1, "up_to": false, "amount": 1, "keywords": [], "to_exile": false,
+				"permanent": false, "turn_only": false, "target": {"card_types": ["aliado"], "controller": "any", "exclude_gold": false,
+				"stat": "", "cmp": ">=", "value": 0}, "qty": {"mode": "set", "q": abel_q, "key": "amount"}}
+		"kuji_buff":
+			var kuji_q := {"kind": "zone_count", "zones": ["cementerio"], "types": ["aliado"], "race": "",
+				"cost_val": int(m.get_string("cv")), "cost_cmp": "mas"}
+			return {"op": "buff", "verb": "buff", "count": 1, "up_to": false, "amount": 0, "keywords": ["furia"], "to_exile": false,
+				"permanent": false, "turn_only": true, "no_leave": true, "target": {"card_types": ["aliado"], "controller": "own",
+				"exclude_gold": false, "stat": "", "cmp": ">=", "value": 0}, "qty": {"mode": "set", "q": kuji_q, "key": "amount"}}
+		"opp_hand_exile":
+			return {"op": "hand_exile", "who": "opponent", "amount": parse_amount(m.get_string("n"))}
 		"search_named_two":
 			var named: Array = []
 			for g in ["a", "b"]:

@@ -673,6 +673,10 @@ func _trigger_enter_play(card: Node, zone: int = Constants.Zone.LINEA_DEFENSA) -
 		RuleState.add("played_any", _sello_controller_id)
 		if card.get("card_cost") != null and int(card.card_cost) <= 1:
 			RuleState.add("cheap_put", _sello_controller_id)
+	# forma de araña: "el próximo Aliado que juegues este turno ... gana Furia" (EffectInterpreterEspeciales).
+	if card.get("card_type") == Constants.CardType.ALIADO and RuleState.has_pending("next_ally_furia", _sello_controller_id):
+		if int(RuleState.take_pending("next_ally_furia", _sello_controller_id)) == GameManager.turn_serial:
+			KeywordManager.grant_keyword(card, Constants.Keyword.FURIA, null, "permanent")
 	if card.get("card_type") == Constants.CardType.ALIADO and _sello_controller_id == GameManager.active_player_id:
 		TurnManager.ally_played_serial[_sello_controller_id] = GameManager.turn_serial
 

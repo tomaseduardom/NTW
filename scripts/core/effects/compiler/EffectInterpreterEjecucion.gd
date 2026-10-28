@@ -44,7 +44,8 @@ func _quantity_value(main: Node, q: Dictionary, card: Node, controller_id: int) 
 			for z in q.zones:
 				var pool: Array = CardManager.get_cemetery(controller_id) if z == "cementerio" else CardManager.get_exile(controller_id)
 				for d in pool:
-					if _spec_matches({"types": q.get("types", []), "race": q.get("race", "")}, d):
+					if _spec_matches({"types": q.get("types", []), "race": q.get("race", ""), "cost_val": q.get("cost_val", -1),
+							"cost_cmp": q.get("cost_cmp", "")}, d):
 						n += 1
 			return n
 		"stat":
@@ -81,6 +82,8 @@ func _quantity_value(main: Node, q: Dictionary, card: Node, controller_id: int) 
 					pool = lines[0].get_children().filter(func(x): return is_instance_valid(x)) if not lines.is_empty() else []
 				else:
 					pool = _cards_in_play_of(main, pid)
+				if q.get("attacking", false):  # "por cada Aliado Bestia atacante" (kirin)
+					pool = pool.filter(func(x): return x in GameManager.attackers)
 				var matched: Array = pool.filter(func(x: Node) -> bool:
 					if not is_instance_valid(x) or x.get("card_data") == null:
 						return false
@@ -137,9 +140,11 @@ func _execute_step(main: Node, st: Dictionary, targets: Array, card: Node, contr
 			var mill_amount: int = st.amount
 			if st.get("per", "") != "":
 				mill_amount *= _count_per(main, st.per, controller_id)
+			_each["milled_cards"] = []  # "por cada Talismán Botado de esta forma" (forma de araña)
 			if mill_amount > 0:
 				for mill_pid in mill_pids:
-					await ActionModule.mill(mill_pid, mill_amount, false, "efecto_compilado", true)
+					var milled: Dictionary = await ActionModule.mill(mill_pid, mill_amount, false, "efecto_compilado", true)
+					_each.milled_cards.append_array(milled.get("cards", []))
 			return true
 		"reveal_until":
 			return await _reveal_until(main, st, card, controller_id)
@@ -302,7 +307,9 @@ func _execute_step(main: Node, st: Dictionary, targets: Array, card: Node, contr
 					return true
 			if await EffectContextScript.ensure_window():
 				return false
-			return not CardManager.banish_from_deck(opponent_id, exile_amount, st.get("bottom", false), controller_id).is_empty()
+			var exiled: Array = CardManager.banish_from_deck(opponent_id, exile_amount, st.get("bottom", false), controller_id)
+			_each["exiled"] = exiled  # "por cada Aliado Desterrado de esta forma" (takiyasha hime)
+			return not exiled.is_empty()
 		"no_damage":
 			if await EffectContextScript.ensure_window():
 				return false
@@ -312,7 +319,10 @@ func _execute_step(main: Node, st: Dictionary, targets: Array, card: Node, contr
 				RuleState.set_until("no_direct_damage", controller_id, until)
 			return true
 		"target":
-			return await _apply_verb(st, targets, card)
+			_note_affected(targets)
+			var hit: bool = await _apply_verb(st, targets, card)
+			_note_destroyed(st, targets)
+			return hit
 		"cemetery_cleanup":
 			return await _cemetery_cleanup(main, st, card, controller_id)
 		"gold":
@@ -360,9 +370,37 @@ func _execute_step(main: Node, st: Dictionary, targets: Array, card: Node, contr
 			var mass_st := st.duplicate()
 			mass_st["count"] = all.size()
 			mass_st["up_to"] = false
-			return await _apply_verb(mass_st, all, card)
+			_note_affected(all)
+			var mass_hit: bool = await _apply_verb(mass_st, all, card)
+			_note_destroyed(mass_st, all)
+			return mass_hit
 	push_warning("[EffectInterpreter] Paso no soportado: %s" % st.op)
 	return false
+
+
+func _note_affected(targets: Array) -> void:
+	"""Lo que el paso 'target'/'mass' va a afectar, antes de moverlo: habilidad y controlador (efigie: "gana su
+	habilidad"; chivateo: "su controlador roba")."""
+	_each["affected"] = targets.filter(func(c): return is_instance_valid(c)).map(func(c): return {
+		"node": c, "habilidad": str(c.card_data.get("habilidad", "")) if c.get("card_data") is Dictionary else "",
+		"controller": _controller_of(c), "type": int(c.get("card_type")) if c.get("card_type") != null else -1})
+
+
+func _note_destroyed(st: Dictionary, targets: Array) -> void:
+	"""Cuántas salieron del juego por el paso (rey del camino: "por cada carta Destruida"), en total y por
+	controlador."""
+	if str(st.get("verb", "")) != "destroy":
+		return
+	var by_ctrl := {0: 0, 1: 0}
+	var gone := 0
+	for a in _each.get("affected", []):
+		var c = a.node
+		if not is_instance_valid(c) or not (c.has_method("is_in_play") and c.is_in_play()):
+			gone += 1
+			if int(a.type) == Constants.CardType.ALIADO:
+				by_ctrl[int(a.controller)] = int(by_ctrl[int(a.controller)]) + 1
+	_each["destroyed"] = gone
+	_each["destroyed_allies_by_ctrl"] = by_ctrl
 
 
 func _apply_verb(st: Dictionary, targets: Array, card: Node) -> bool:
@@ -673,6 +711,8 @@ func _buff(st: Dictionary, targets: Array, card: Node) -> bool:
 				"duration": ContinuousEffectManager.ModifierDuration.UNTIL_END_TURN,
 				"description": "No puede bloquear este turno (%s)" % _card_name(card),
 			})
+		if st.get("no_leave", false):
+			t.set_meta("no_leave_turn", GameManager.turn_serial)  # kuji-in: EffectController._try_consume_leave_play_prevention
 		if st.has("set_strength") or st.get("double", false):
 			_set_or_double_strength(st, t, card)
 			continue
@@ -1338,7 +1378,8 @@ func _hand_exile(main: Node, st: Dictionary, card: Node, controller_id: int) -> 
 	"""'Cada jugador destierra N cartas de su mano': cada uno elige las suyas (el bot, las de menor coste)."""
 	var all_ok := true
 	var title := _card_name(card)
-	for pid in [controller_id, 1 - controller_id]:
+	var pids: Array = [1 - controller_id] if st.get("who", "both") == "opponent" else [controller_id, 1 - controller_id]
+	for pid in pids:
 		var hand := _hand_cards(main, pid).filter(func(h): return h != card)
 		var amount: int = mini(int(st.amount), hand.size())
 		if amount < int(st.amount):

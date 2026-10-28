@@ -1,5 +1,5 @@
 class_name EffectInterpreter
-extends "res://scripts/core/effects/compiler/EffectInterpreterOponente.gd"
+extends "res://scripts/core/effects/compiler/EffectInterpreterEspeciales.gd"
 ## EffectInterpreter — familia Entrada (ver EffectInterpreterBase.gd para la cabecera, constantes y ayudas).
 
 

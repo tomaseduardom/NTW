@@ -148,6 +148,15 @@ static func describe_steps(steps: Array) -> String:
 					"hand_discard_cost": "Cada jugador descarta las de coste %d o menos" % int(st.get("amount", 1)),
 					"draw_per_discarded": "Robar una por cada descartada", "hand_show_exile": "Cada jugador destierra un Aliado de su mano",
 					"foreign_shuffle": "Cada jugador baraja lo que no es suyo", "equalize_allies": "Cada jugador baraja Aliados hasta igualar"}.get(str(st.kind), str(st.kind)))
+			"special":
+				parts.append({"castle_top_ally": "Poner cartas del tope de un Castillo como Aliados", "draw_per_destroyed_ctrl": "Cada controlador roba por sus destruidos",
+					"next_ally_discount_furia": "El próximo Aliado cuesta un Oro menos y gana Furia", "name_lock_attack": "Un Aliado y sus copias no atacan",
+					"drain_distribute": "Quitar Fuerza y repartirla", "grant_quoted": "Un Aliado gana la habilidad", "grant_affected": "Un Aliado gana su habilidad",
+					"shuffle_weaker": "Barajar los Aliados de menor Fuerza"}.get(str(st.kind), str(st.kind)))
+			"repeat":
+				parts.append("Repetir: %s" % describe_steps(st.steps))
+			"hand_exile":
+				parts.append(("Tu oponente destierra %d de su mano" if st.get("who", "both") == "opponent" else "Cada jugador destierra %d de su mano") % int(st.amount))
 			"opp":
 				parts.append({"mill_half": "Tu oponente bota la mitad de su Castillo", "discard_or_shuffle": "Tu oponente descarta o baraja una carta",
 					"silence_golds": "Tu oponente deja %d Oro(s) sin habilidad" % int(st.get("amount", 1)),

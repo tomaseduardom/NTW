@@ -28,6 +28,19 @@ func _ready() -> void:
 	# Mano descubierta (Lady Mina Harker, invocar ángeles): se vuelve a mostrar al empezar cada turno.
 	GameManager.turn_started.connect(func(_p: int, _t: int) -> void:
 		load("res://scripts/core/effects/mechanics/HandReveal.gd").refresh())
+	# EffectController es un autoload posterior: se conecta cuando ya está en el árbol.
+	_connect_leave_play.call_deferred()
+
+
+## vâlve albe: "por cada Tótem que haya salido de tu Línea de Apoyo este turno" — contador del turno
+## "totem_left_support" (EffectInterpreterEspeciales._quantity_value).
+func _connect_leave_play() -> void:
+	var ec := get_node_or_null("/root/EffectController")
+	if ec == null or not ec.has_signal("on_card_left_play"):
+		return
+	ec.on_card_left_play.connect(func(pid: int, card: Node, from_zone: int) -> void:
+		if from_zone == Constants.Zone.LINEA_APOYO and is_instance_valid(card) and card.get("card_type") == Constants.CardType.TOTEM:
+			add("totem_left_support", pid))
 
 
 func reset() -> void:
