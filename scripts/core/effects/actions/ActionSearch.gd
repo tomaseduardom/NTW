@@ -115,7 +115,8 @@ func search_zones(player_id: int, zones: Array, filter: Dictionary, amount: int 
 
 	for info in zone_infos:
 		_main.emit_signal("action_search_started", player_id, info.zone, filter)
-		info.matching = _main._apply_card_filter(info.data, filter)
+		info.matching = _cemetery_exile_allowed(_main._apply_card_filter(info.data, filter), player_id, info.zone, destination,
+			chooser_id if chooser_id >= 0 else player_id)
 		if info.zone == Constants.Zone.CASTILLO and not blocked_names.is_empty():
 			info.matching = info.matching.filter(func(d): return not (str(d.get("nombre", "")).to_lower() in blocked_names))
 		result.matching.append_array(info.matching)
@@ -209,6 +210,15 @@ func _banish_locked(zone_owner: int, zone: int, destination: int, actor: int) ->
 		and rules.castle_banish_blocked(zone_owner, actor)
 
 
+func _cemetery_exile_allowed(matching: Array, zone_owner: int, zone: int, destination: int, actor: int) -> Array:
+	"""nahualismo: "por el resto del juego, tu oponente no puede Desterrar cartas de tu Cementerio que no sean
+	Talismán": de ese Cementerio, el rival solo puede elegir Talismanes para Desterrar."""
+	if zone != Constants.Zone.CEMENTERIO or destination != Constants.Zone.DESTIERRO or actor == zone_owner \
+			or not RuleState.active("cemetery_exile_lock", zone_owner):
+		return matching
+	return matching.filter(func(d): return int(d.get("tipo", -1)) == Constants.CardType.TALISMAN)
+
+
 func _deliver(main: Node, player_id: int, card_data: Dictionary, from_zone: int, destination: int,
 		may_play: bool, cost_reduction: int, result: Dictionary) -> void:
 	"""Lleva una carta encontrada a su destino (del dueño 'player_id'). destination < 0: no la lleva a
@@ -284,7 +294,7 @@ func search_either_owner(chooser: int, zones: Array, filter: Dictionary, amount:
 			if zone_data == null:
 				continue
 			var matching: Array = [] if _banish_locked(zone_owner, zone, destination, chooser) \
-				else _main._apply_card_filter(zone_data, filter)
+				else _cemetery_exile_allowed(_main._apply_card_filter(zone_data, filter), zone_owner, zone, destination, chooser)
 			if zone == Constants.Zone.CASTILLO and not blocked_names.is_empty():
 				matching = matching.filter(func(d): return not (str(d.get("nombre", "")).to_lower() in blocked_names))
 			var cards: Array = []

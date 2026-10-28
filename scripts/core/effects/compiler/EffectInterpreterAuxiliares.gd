@@ -138,11 +138,20 @@ static func describe_steps(steps: Array) -> String:
 					"no_hand_limit": "Sin límite de mano", "opp_immune_turn": "Inmune a efectos rivales este turno",
 					"zombie": "Daño recibido: Bota y revive", "allies_no_leave": "Tus Aliados no salen del juego",
 					"final_silence_allies": "En tu Fase Final, tus Aliados pierden su habilidad", "castle_lock": "Sin Botar, Desterrar del Castillo ni Descartar",
-					"cemetery_shuffle_cap": "Hasta tres de los Cementerios barajadas por turno"}.get(str(st.kind), str(st.kind)))
+					"cemetery_shuffle_cap": "Hasta tres de los Cementerios barajadas por turno",
+					"cemetery_exile_lock": "Tu oponente no puede Desterrar de tu Cementerio salvo Talismanes"}.get(str(st.kind), str(st.kind)))
+			"each":
+				parts.append({"shuffle_all": "Cada jugador baraja sus cartas que no sean Oro", "hand_to": "Cada jugador queda con %d cartas en la mano" % int(st.get("amount", 5)),
+					"duel_put": "Cada jugador pone un Aliado de su mano sin habilidad", "duel_destroy": "Destruir el Aliado oponente",
+					"duel_shuffle": "Barajar ambos Aliados", "reveal_top": "Cada jugador muestra %d del tope" % int(st.get("amount", 1)),
+					"fog_banish": "Desterrar cartas mostradas por tu oponente", "random_split": "Desterrar una suya al azar y una tuya a tu mano",
+					"hand_discard_cost": "Cada jugador descarta las de coste %d o menos" % int(st.get("amount", 1)),
+					"draw_per_discarded": "Robar una por cada descartada", "hand_show_exile": "Cada jugador destierra un Aliado de su mano",
+					"foreign_shuffle": "Cada jugador baraja lo que no es suyo", "equalize_allies": "Cada jugador baraja Aliados hasta igualar"}.get(str(st.kind), str(st.kind)))
 			"keep_shuffle":
 				var kt: Array = TYPE_LABELS.get(st.card_type, TYPE_LABELS[""])
-				parts.append("Cada jugador elige %s%d %s y baraja el resto" % ["hasta " if st.up_to else "", st.amount,
-					kt[0] if st.amount == 1 else kt[1]])
+				parts.append("Cada jugador elige %s%d %s%s y baraja el resto" % ["hasta " if st.up_to else "", st.amount,
+					kt[0] if st.amount == 1 else kt[1], " de cada coste" if st.get("per_cost", false) else ""])
 			"search":
 				var t: Array = TYPE_LABELS.get(st.card_type, TYPE_LABELS[""])
 				var zones: Array = []

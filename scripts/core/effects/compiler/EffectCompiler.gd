@@ -225,6 +225,10 @@ const CONDITIONS := [
 	["opponent_turn", "si es el turno oponente, "],
 	["own_turn", "si es tu turno, ademas "],
 	["own_turn", "si es tu turno, "],
+	# duelo nocturno / ensamble: leen lo que hizo el paso "cada jugador" anterior (EffectInterpreterCadaJugador).
+	["duel_win", "si tu aliado tiene mas fuerza, "],
+	["duel_lose", "si tiene igual o menor fuerza, "],
+	["drew_less_3", "si robas menos de tres cartas, "],
 ]
 
 ## Reemplazo sobre el paso anterior: "Si tiene Exhumar, en vez de eso, Destiérralo".
@@ -311,7 +315,7 @@ const REVEAL_DIST_ITEM := "(?:(?:pon )?(?:" + NUM + "|otro|otra|el otro|la otra)
 ## cartas'). Cada uno se ancla al inicio del texto restante.
 const ATOMS := [
 	["draw", "(?:tu )?roba(?:s|r)? (?<upto>hasta )?(?<n>" + NUM + ") cartas?(?: de tu castillo)?"],
-	["draw_to_match", "roba(?:r)? cartas hasta tener la misma cantidad de cartas en (?:la|tu) mano que tu oponente"],
+	["draw_to_match", "roba(?:r)? cartas hasta tener la misma cantidad de cartas en (?:(?:la|tu) )?mano que tu oponente"],
 	# "tu oponente Destierra cartas del tope de su Castillo como Oros tenga en su Reserva" (leng).
 	["castle_exile_reserve", "tu oponente destierra cartas del tope de su castillo como oros tenga en su reserva"],
 	["mill_per", "tu oponente bota (?<n>" + NUM + ") cartas? por cada (?<per>aliado en tu linea de defensa" \
@@ -354,7 +358,7 @@ const ATOMS := [
 	# Castillo oponente" (CardManager.banish_from_deck()).
 	["castle_exile", "(?:tu oponente destierra (?<n>" + NUM + ") cartas? del (?<pos>tope|fondo) de su castillo" \
 		+ "|(?:destierra|desterrar) (?<n2>" + NUM + ") cartas? (?:del (?<pos2>tope|fondo)|de la parte superior) del castillo oponente" \
-		+ "|tu oponente destierra las primeras (?<n3>" + NUM + ") cartas de su castillo)"],
+		+ "|(?:tu oponente )?destierra las primeras (?<n3>" + NUM + ") cartas de su castillo)"],
 	["discard_self", "descarta(?:s|r)? (?<n>" + NUM + ") cartas?(?: de tu mano)?(?! de la mano)"],
 	["shuffle_from_hand", "baraja(?:r)? (?<upto>hasta )?(?<n>" + NUM + ") cartas? de tu mano(?: en tu castillo)?"],
 	# "Baraja (hasta) N cartas de tu Cementerio" ya es en tu Castillo (Barajar = al Castillo de su dueño).
@@ -492,14 +496,34 @@ const ATOMS := [
 	["rule:final_silence_allies", "en tu fase final, tus aliados pierden su habilidad hasta tu proximo turno"],
 	["rule:castle_lock", "hasta tu proximo turno, no se puede botar, desterrar cartas de los castillos ni descartar cartas, por efectos"],
 	["rule:cemetery_shuffle_cap", "por el resto del juego, los jugadores solo pueden barajar hasta tres cartas de los cementerios cada turno"],
+	["rule:cemetery_exile_lock", "por el resto del juego, tu oponente no puede desterrar cartas de tu cementerio que no sean talisman(?:es)?"],
 	# "Hasta tu próximo turno, tus Aliados no pueden ser Destruidos ni Desterrados (y ganan 1 de Fuerza
 	# permanentemente)" (susurro de los bosques): Indestructible e Indesterrable hasta tu próximo turno.
 	["own_allies_protect", "hasta tu proximo turno, tus aliados no pueden ser destruidos ni desterrados" \
 		+ "(?: y ganan (?<n>" + NUM + ") de fuerza permanentemente)?"],
 	# "Cada jugador elige (hasta) N Aliados/Oros que controle y baraja el resto / sus demás Aliados en
 	# juego" (bomba eléctrica, biwa, herido peleó mejor).
-	["keep_shuffle", "cada jugador elige (?<upto>hasta )?(?<n>" + NUM + ") (?<kind>aliados?|oros?|cartas?) que controle" \
+	["keep_shuffle", "cada jugador elige (?<upto>hasta )?(?<n>" + NUM + ") (?<kind>aliados?|oros?|cartas?)(?<pc> de cada coste)? que controle" \
 		+ " y baraja (?:el resto|sus demas (?:aliados|oros|cartas)(?: en juego)?)"],
+	# armagedon: "Cada jugador elige una carta que controle y las demás cartas que no sean Oro pierden su
+	# habilidad y son Barajadas".
+	["keep_silence_shuffle", "cada jugador elige una carta que controle y las demas cartas que no sean oros? pierden su habilidad y son barajadas"],
+	# Lo que hace cada jugador sobre lo suyo (EffectInterpreterCadaJugador). Las oraciones "de esta forma" que
+	# siguen leen lo que movió.
+	["each:shuffle_all", "cada jugador baraja las cartas que controle que no sean oros?"],
+	["each:hand_to", "los jugadores barajan cartas de su mano o roban cartas,? hasta tener (?<n>" + NUM + ") cartas en su mano"],
+	["each:duel_put", "cada jugador pone desde su mano en juego un aliado de coste (?<n>\\d+) o menos y entran sin habilidad por el turno"],
+	["each:duel_destroy", "destruye el aliado oponente"],
+	["each:duel_shuffle", "baraja ambos aliados"],
+	["each:reveal_top", "cada jugador muestra (?<n>" + NUM + ") cartas del tope de su castillo"],
+	["each:fog_banish", "por cada aliado que hayas mostrado de esta forma,? elige una carta mostrada por tu oponente y destierrala"],
+	["each:random_split", "tu oponente destierra una al azar entre sus " + NUM + " cartas y tu pones en tu mano una al azar entre tus " + NUM + " cartas"],
+	["each:hand_discard_cost", "cada jugador muestra su mano y descarta todas las cartas de coste (?<n>\\d+) o menos de ahi"],
+	["each:draw_per_discarded", "por cada carta descartada de tu mano de esta forma,? roba una carta"],
+	["each:hand_show_exile", "cada jugador muestra su mano y destierra un aliado de ahi"],
+	["each:foreign_shuffle", "cada jugador baraja los aliados y totems? que controle de las que no sea dueno y destierra (?<n>" + NUM \
+		+ ") cartas del tope de su castillo por cada carta que barajo de esta forma"],
+	["each:equalize_allies", "cada jugador baraja aliados hasta controlar la misma cantidad"],
 	["each_discard", "cada jugador descarta (?<n>" + NUM + ") cartas?(?: de su mano)?"],
 	["each_hand_exile", "cada jugador destierra (?<n>" + NUM + ") cartas? de su mano"],
 	# Cementerios: "Baraja y/o Destierra hasta N cartas de los Cementerios" y sus formas de un solo
@@ -574,7 +598,7 @@ const ATOMS := [
 ## intérprete) para que el auditor headless las consulte sin cargar
 ## autoloads. El compilador puede entender más de lo que se ejecuta (p.ej.
 ## "bounce"): esos planes se dejan a la cadena de patrones vieja.
-const EXECUTABLE_OPS := ["castle_look", "draw", "draw_to_match", "mill", "discard", "shuffle_from_hand", "search", "target", "mass", "choice",
+const EXECUTABLE_OPS := ["each", "castle_look", "draw", "draw_to_match", "mill", "discard", "shuffle_from_hand", "search", "target", "mass", "choice",
 	"shuffle_from_cemetery", "self", "hand_exile", "keep_shuffle", "rule", "if", "cemetery_cleanup", "gold", "regroup_gold", "buff", "mass_buff", "reveal_until", "reveal_top", "pay", "hand_peek", "annul", "talisman_fizzle",
 	"regroup_cards", "gold_to_paid", "deck_to_hand", "no_damage", "play_from", "peek_hand", "show_hand", "cost", "castle_exile", "cancel_attack", "self_raise", "mill_x", "opp_gold_to_paid", "revive_blank", "self_buff_per"]
 const EXECUTABLE_VERBS := ["destroy", "banish", "shuffle", "silence", "cost_shift"]
@@ -858,6 +882,10 @@ static func _control_condition(s: String) -> Dictionary:
 	if m == null:
 		return {}
 	var words: PackedStringArray = m.get_string("what").split(" ")
+	# "Si controlas una Fonda, ..." (pie de cueca): una carta por su nombre.
+	if words[0] in ["un", "una"] and words.size() == 2 and not TYPE_WORDS.has(words[1]) and m.get_string("n").is_empty():
+		return {"rest": m.get_string("rest"), "cond": {"kind": "controls", "count": 1, "type": "", "race": "",
+			"name": words[1], "other": not m.get_string("other").is_empty(), "min_strength": -1, "attack_line": false}}
 	if words[0] in ["o", "menos", "mas", "un", "una"]:
 		return {}
 	var type_word: String = TYPE_WORDS.get(words[0], "?")
@@ -939,7 +967,10 @@ static func _compile_sentence(s: String) -> Dictionary:
 			var sub := _compile_sentence(opt)
 			if not sub.ok:
 				return sub
-			options.append(sub.steps)
+			if sub.steps.size() == 1 and sub.steps[0].op == "choice":
+				options.append_array(sub.steps[0].options)  # "- Anula o Destierra un Tótem": una opción más
+			else:
+				options.append(sub.steps)
 		if options.size() < 2:
 			return {"ok": false, "steps": [], "unparsed": s}
 		return {"ok": true, "steps": [{"op": "choice", "options": options}], "unparsed": ""}
@@ -976,6 +1007,31 @@ static func _compile_sentence(s: String) -> Dictionary:
 			return s_inner
 		return {"ok": true, "optional": s_inner.get("optional", false),
 			"steps": [{"op": "if", "cond": {"kind": "searched", "word": searched_m.get_string("w")}, "steps": s_inner.steps}], "unparsed": ""}
+	# "Si tu oponente Barajó dos o menos Aliados de esta forma, ... y si tú Barajaste dos o más Aliados de esta
+	# forma, ..." (visión de noé): cuenta lo que movió el paso "cada jugador" anterior.
+	var moved_m := RegEx.create_from_string("^si (?<who>tu oponente|tu) (?:barajo|barajaste) (?<n>" + NUM + ") o (?<cmp>menos|mas) (?:aliados|cartas) de esta forma, (?<rest>.+)$").search(s)
+	if moved_m:
+		var body: String = moved_m.get_string("rest")
+		var tail := ""
+		var cut_at := body.find(" y si ")
+		if cut_at > 0:
+			tail = body.substr(cut_at + 3)
+			body = body.substr(0, cut_at)
+		var m_inner := _compile_sentence(body)
+		if not m_inner.ok:
+			return m_inner
+		var m_steps: Array = [{"op": "if", "cond": {"kind": "moved", "who": "opponent" if moved_m.get_string("who") == "tu oponente" else "self",
+			"n": parse_amount(moved_m.get_string("n")), "cmp": moved_m.get_string("cmp")}, "steps": m_inner.steps}]
+		if not tail.is_empty():
+			var m_tail := _compile_sentence(tail)
+			if not m_tail.ok:
+				return m_tail
+			m_steps.append_array(m_tail.steps)
+		return {"ok": true, "steps": m_steps, "unparsed": ""}
+	# "Anula o Destierra un Tótem de coste 3 o menos" (jurado descontento): una elección entre los dos verbos.
+	var ad_m := RegEx.create_from_string("^anula o destierra (?<obj>.+)$").search(s)
+	if ad_m:
+		return _compile_sentence("anula %s, o destierra %s" % [ad_m.get_string("obj"), ad_m.get_string("obj")])
 	for c in CONDITIONS:
 		if s.begins_with(c[1]):
 			var inner := _compile_sentence(s.substr(c[1].length()))
@@ -1182,6 +1238,7 @@ static func _parse_quantity(t: String) -> Dictionary:
 	{} si no se entiende. La cuenta la hace EffectInterpreter._quantity_value() al resolver."""
 	if _qty_rxs.is_empty():
 		for pair in [
+			["moved", "cartas? barajadas? de esta forma"],
 			["types", "tipos? de cartas? en tu destierro"],
 			["zone", "(?<t>" + T1 + ")(?: (?<race>" + RACE + "))? (?:haya |hayan )?en tu (?<z>cementerio|destierro)" \
 				+ "(?: y (?:en )?(?:tu )?(?<z2>cementerio|destierro))?"],
@@ -1200,6 +1257,8 @@ static func _parse_quantity(t: String) -> Dictionary:
 			continue
 		var q := {}
 		match pat.kind:
+			"moved":
+				q = {"kind": "moved"}  # nahualismo: lo que barajó el paso "cada jugador" anterior
 			"types":
 				q = {"kind": "distinct_types", "zones": ["destierro"]}
 			"zone":
@@ -1249,6 +1308,11 @@ static func _build(atom_name: String, m: RegExMatch) -> Dictionary:
 	pero el caso es ambiguo (que lo resuelva la cadena vieja)."""
 	if atom_name.begins_with("rule:"):
 		return {"op": "rule", "kind": atom_name.trim_prefix("rule:")}
+	if atom_name.begins_with("each:"):
+		var each := {"op": "each", "kind": atom_name.trim_prefix("each:")}
+		if m.names.has("n") and not m.get_string("n").is_empty():
+			each["amount"] = parse_amount(m.get_string("n"))
+		return each
 	match atom_name:
 		"own_allies_protect":
 			var protect := {"op": "mass_buff", "verb": "buff", "side": "own", "others": false, "amount": 0,
@@ -1354,7 +1418,9 @@ static func _build(atom_name: String, m: RegExMatch) -> Dictionary:
 			return {"op": "shuffle_from_hand", "amount": parse_amount(m.get_string("n")), "up_to": false, "who": "opponent"}
 		"keep_shuffle":
 			return {"op": "keep_shuffle", "amount": parse_amount(m.get_string("n")), "up_to": not m.get_string("upto").is_empty(),
-				"card_type": TYPE_WORDS.get(m.get_string("kind"), "")}
+				"card_type": TYPE_WORDS.get(m.get_string("kind"), ""), "per_cost": not m.get_string("pc").is_empty()}
+		"keep_silence_shuffle":
+			return {"op": "keep_shuffle", "amount": 1, "up_to": false, "card_type": "", "exclude_gold": true, "silence_first": true}
 		"shuffle_from_cemetery":
 			return {"op": "shuffle_from_cemetery", "amount": parse_amount(m.get_string("n")),
 				"up_to": not m.get_string("upto").is_empty()}

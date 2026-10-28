@@ -5,6 +5,9 @@ const KeywordParserScript = preload("res://scripts/core/cards/KeywordParser.gd")
 
 ## Lo que encontró la última búsqueda ("si buscaste un Dinosaurio, ...").
 var _last_found: Array = []
+## Lo que hizo el último paso "cada jugador" del efecto, para las oraciones "de esta forma" que siguen
+## (EffectInterpreterCadaJugador): "moved" {jugador: cartas movidas}, "shown", "duel", "drawn".
+var _each: Dictionary = {}
 
 
 func _execute_steps(main: Node, steps: Array, chosen_targets: Dictionary, card: Node, controller_id: int) -> bool:
@@ -13,6 +16,8 @@ func _execute_steps(main: Node, steps: Array, chosen_targets: Dictionary, card: 
 	var last_ok := true
 	for i in range(steps.size()):
 		var st: Dictionary = steps[i]
+		if not is_instance_valid(card):
+			card = null  # el paso anterior la sacó del juego (nahualismo la Baraja con el resto)
 		if st.get("then", false) and not last_ok:
 			print("[EffectInterpreter] %s: 'Luego' cortado (el paso anterior no se resolvió)" % _card_name(card))
 			break
@@ -1220,6 +1225,10 @@ func _controls_holds(cond: Dictionary, card: Node) -> bool:
 				continue
 			if int(c.card_type) == Constants.CardType.TALISMAN:
 				continue
+			if not str(cond.get("name", "")).is_empty():
+				var c_name: String = EffectCompilerScript.normalize(str(c.card_data.get("nombre", ""))) if c.get("card_data") is Dictionary else ""
+				if not (str(cond.name) in c_name):
+					continue
 			if not race_forms.is_empty():
 				var card_race: String = EffectCompilerScript.normalize(str(c.get("card_raza")))
 				if not race_forms.any(func(f): return f in card_race):
@@ -1373,6 +1382,9 @@ func _apply_rule(main: Node, st: Dictionary, card: Node, controller_id: int) -> 
 			for p in [0, 1]:
 				RuleState.set_until("cemetery_shuffle_cap_3", p, 1 << 30)
 			note = "por el resto del juego, hasta tres cartas de los Cementerios barajadas por turno"
+		"cemetery_exile_lock":  # ActionSearch (Cementerio -> Destierro)
+			RuleState.set_until("cemetery_exile_lock", me, 1 << 30)
+			note = "por el resto del juego, tu oponente no puede Desterrar cartas de tu Cementerio que no sean Talismán"
 		_:
 			push_warning("[EffectInterpreter] Regla desconocida: %s" % st.kind)
 			return false
@@ -1382,12 +1394,21 @@ func _apply_rule(main: Node, st: Dictionary, card: Node, controller_id: int) -> 
 
 func _keep_shuffle(main: Node, st: Dictionary, card: Node, controller_id: int) -> bool:
 	"""'Cada jugador elige (hasta) N Aliados que controle y baraja el resto': cada uno elige los que se
-	quedan (el bot, los de mayor coste); el resto de ese tipo se baraja con el verbo normal."""
+	quedan (el bot, los de mayor coste); el resto de ese tipo se baraja con el verbo normal.
+	per_cost: "un Aliado de cada coste" (visión de noé). exclude_gold / silence_first: "las demás cartas que
+	no sean Oro pierden su habilidad y son Barajadas" (armagedon). Anota en _each.moved cuántas se fueron."""
 	var want: int = _type_enum(st.card_type) if not str(st.card_type).is_empty() else -1
 	var title := _card_name(card)
 	var to_shuffle: Array = []
+	var by_pid := {}
 	for pid in [controller_id, 1 - controller_id]:
-		var mine: Array = _controlled_in_play(main, pid).filter(func(c): return want < 0 or c.get("card_type") == want)
+		var mine: Array = _controlled_in_play(main, pid).filter(func(c): return ((want < 0 or c.get("card_type") == want)
+			and not (st.get("exclude_gold", false) and c.get("card_type") == Constants.CardType.ORO)))
+		by_pid[pid] = []
+		if st.get("per_cost", false):
+			by_pid[pid] = await _keep_one_per_cost(main, mine, title, pid)
+			to_shuffle.append_array(by_pid[pid])
+			continue
 		if mine.is_empty() or (mine.size() <= int(st.amount) and not st.up_to):
 			continue
 		var kept: Array = []
@@ -1402,12 +1423,44 @@ func _keep_shuffle(main: Node, st: Dictionary, card: Node, controller_id: int) -
 		for c in mine:
 			if not (c in kept):
 				to_shuffle.append(c)
+				by_pid[pid].append(c)
 	to_shuffle = to_shuffle.filter(func(c): return is_instance_valid(c))
+	_each = {"moved": {controller_id: 0, 1 - controller_id: 0}}
 	if to_shuffle.is_empty():
 		return true
 	# La carta del efecto pudo salir del juego mientras se elegía (si era uno de los barajados).
-	return await _apply_verb({"verb": "shuffle", "count": to_shuffle.size(), "up_to": true}, to_shuffle,
-		card if is_instance_valid(card) else null)
+	var ok: bool = await _apply_verb({"verb": "shuffle", "count": to_shuffle.size(), "up_to": true,
+		"silence_first": st.get("silence_first", false)}, to_shuffle, card if is_instance_valid(card) else null)
+	for pid in by_pid:
+		_each.moved[pid] = by_pid[pid].filter(func(c): return not is_instance_valid(c) or not c.is_in_play()).size()
+	return ok
+
+
+func _keep_one_per_cost(main: Node, mine: Array, title: String, pid: int) -> Array:
+	"""Visión de Noé: 'pid' se queda con una carta de cada coste (el bot, la de más Fuerza); devuelve las demás."""
+	var groups := {}
+	for c in mine:
+		var cost: int = int(c.card_cost) if c.get("card_cost") != null else 0
+		if not groups.has(cost):
+			groups[cost] = []
+		groups[cost].append(c)
+	var rest: Array = []
+	for cost in groups:
+		var group: Array = groups[cost]
+		if group.size() <= 1:
+			continue
+		group.sort_custom(func(a: Node, b: Node) -> bool:
+			return ContinuousEffectManager.get_modified_strength(a) > ContinuousEffectManager.get_modified_strength(b))
+		var kept: Node = group[0]
+		if not _is_bot(pid) and main.get("_card_interaction"):
+			var picked: Array = await main._card_interaction._await_multi_target_raw("%s: elige el de coste %d que se queda" % [title, cost],
+				group, 1, Callable(), Callable(), false, null, pid)
+			if not picked.is_empty() and is_instance_valid(picked[0]):
+				kept = picked[0]
+		for c in group:
+			if c != kept:
+				rest.append(c)
+	return rest
 
 
 func _discard(main: Node, st: Dictionary, controller_id: int) -> bool:

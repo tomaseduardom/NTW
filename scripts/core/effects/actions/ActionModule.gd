@@ -243,7 +243,7 @@ func mill(player_id: int, amount: int, to_exile: bool = false, source: String = 
 	var ctx_card = EffectContextScript.current().get("card")
 	var out: Dictionary = await _action_mill.mill(player_id, amount, to_exile, source, skip_validation)
 	# Caos: "Cuando haga daño" incluye el daño directo (DAR: Botar) de un efecto del propio Aliado al rival.
-	if int(out.get("actual", 0)) > 0 and ctx_card is Node and is_instance_valid(ctx_card) and ctx_card.get_meta("caos_ally", false) \
+	if int(out.get("actual", 0)) > 0 and is_instance_valid(ctx_card) and ctx_card is Node and ctx_card.get_meta("caos_ally", false) \
 			and int(ctx_card.get("controller_id")) == 1 - player_id and get_node_or_null("/root/Main"):
 		load("res://scripts/core/effects/mechanics/ActivatedPatterns.gd").caos_back_to_gold(get_node_or_null("/root/Main"), ctx_card)
 	return out

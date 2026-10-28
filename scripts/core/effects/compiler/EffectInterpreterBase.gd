@@ -1,6 +1,6 @@
 extends RefCounted
 ## EffectInterpreterBase — base de EffectInterpreter.gd: constantes, tablas y ayudas compartidas por todas las familias.
-## Cadena: EffectInterpreterBase <- EffectInterpreterAuxiliares <- EffectInterpreterCostes <- EffectInterpreterDeclaracion <- EffectInterpreterEjecucion <- EffectInterpreter. Lo de afuera usa solo EffectInterpreter.gd (hereda todo).
+## Cadena: EffectInterpreterBase <- EffectInterpreterAuxiliares <- EffectInterpreterCostes <- EffectInterpreterDeclaracion <- EffectInterpreterEjecucion <- EffectInterpreterCadaJugador <- EffectInterpreter. Lo de afuera usa solo EffectInterpreter.gd (hereda todo).
 
 ## EffectInterpreter — ejecuta los planes de EffectCompiler (arquitectura.md §54).
 ## Orden: se declara todo (el "puedes", la rama de una elección "A, o B", los objetivos en juego) y
