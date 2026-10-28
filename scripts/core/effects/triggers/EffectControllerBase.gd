@@ -163,7 +163,8 @@ func _try_consume_leave_play_prevention(player_id: int, card: Node, source: Node
 		return false
 	var ctrl: int = int(card.controller_id) if card.get("controller_id") != null else player_id
 	if _blanket_leave_play_immunity.get(player_id, false) \
-			or int(_leave_play_immunity_turn.get(ctrl, -1)) == GameManager.turn_serial:
+			or int(_leave_play_immunity_turn.get(ctrl, -1)) == GameManager.turn_serial \
+			or RuleState.active("allies_no_leave", ctrl):  # paso de la plaga (hasta tu próximo turno)
 		var card_name0: String = str(card.get("card_name")) if card.get("card_name") != null else "Aliado"
 		print("[EffectController] %s no sale del juego (inmunidad temporal activa para J%d)" % [card_name0, player_id + 1])
 		var main0 := get_node_or_null("/root/Main")

@@ -65,7 +65,7 @@ func _declare_targets(main: Node, st: Dictionary, card: Node, controller_id: int
 		var pre: Node = _preselected_target
 		_preselected_target = null
 		if count == 1 and pre in candidates:
-			if main._card_interaction.has_method("_pay_affect_tax") and not await main._card_interaction._pay_affect_tax([pre], controller_id):
+			if main._card_interaction.has_method("_pay_affect_tax") and not await main._card_interaction._pay_affect_tax([pre], controller_id, str(st.get("verb", ""))):
 				return []
 			return [pre]
 	if _is_bot(controller_id):

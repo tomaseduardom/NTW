@@ -60,7 +60,9 @@ static func blocker_strength_bonus(blocker: Node) -> int:
 static func on_milled_by_damage(pid: int, data: Dictionary, destination: int) -> bool:
 	"""Una carta Botada por daño. true = dejar de Botar (Diadema Celestial)."""
 	var text: String = str(data.get("habilidad", "")).to_lower()
-	if "si botas esta carta por daño, dejas de botar cartas y destierras este oro" in text:
+	# Diadema Celestial y las demás con la misma frase (bomba eléctrica, miguel grau, fantasma del puente,
+	# puño estelar, hangar de la ciudadela, visión de enoc, pistola de dos cañones...).
+	if RegEx.create_from_string("(?:si botas|cuando botes) esta carta (?:desde tu castillo )?por daño, dejas de botar cartas y destierra").search(text):
 		var zone: Array = CardManager.get_cemetery(pid) if destination == Constants.Zone.CEMENTERIO else []
 		var idx: int = zone.find(data)
 		if idx >= 0:
@@ -68,7 +70,7 @@ static func on_milled_by_damage(pid: int, data: Dictionary, destination: int) ->
 			CardManager.append_to_exile(pid, data)
 		var main := _main_node()
 		if main:
-			main._update_debug("Diadema Celestial: se deja de Botar y se Destierra")
+			main._update_debug("%s: se deja de Botar y se Destierra" % str(data.get("nombre", "Carta")))
 		return true
 	if "cuando botes esta carta por daño, puedes barajar hasta cinco cartas de los cementerios" in text \
 			and not PlayerSideScript.is_bot(pid):

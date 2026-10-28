@@ -142,6 +142,14 @@ func search_zones(player_id: int, zones: Array, filter: Dictionary, amount: int 
 				main_t._update_debug("Terminal P-12: ya buscaste dos cartas este turno")
 			await _main._end_trigger_collection_and_resolve()
 			return result
+	# susurro de los bosques: hasta tres cartas de los Cementerios barajadas por turno.
+	var cem_shuffle: bool = destination == Constants.Zone.CASTILLO and Constants.Zone.CEMENTERIO in zones
+	var cem_room: int = TurnLimits.cemetery_shuffle_room(effective_chooser) if cem_shuffle else -1
+	if cem_room >= 0:
+		to_select = mini(to_select, cem_room)
+		if to_select <= 0:
+			await _main._end_trigger_collection_and_resolve()
+			return result
 	if await EffectController.offer_colapso_global(effective_chooser):  # Colapso Global
 		await _main._end_trigger_collection_and_resolve()
 		return result
@@ -153,6 +161,8 @@ func search_zones(player_id: int, zones: Array, filter: Dictionary, amount: int 
 	for p in picks:
 		selected_data.append(p.data)
 	TurnLimits.note_searched(effective_chooser, picks.size())
+	if cem_shuffle:
+		TurnLimits.note_cemetery_shuffled(effective_chooser, picks.filter(func(p): return p.get("zone", -1) == Constants.Zone.CEMENTERIO).size())
 	result.selected = selected_data
 	_main.emit_signal("action_search_selected", player_id, selected_data)
 	_sidhes_reveal(effective_chooser, picks)
@@ -296,6 +306,13 @@ func search_either_owner(chooser: int, zones: Array, filter: Dictionary, amount:
 		amount = mini(amount, search_room)
 		if amount <= 0:
 			return result
+	# susurro de los bosques: hasta tres cartas de los Cementerios barajadas por turno.
+	var cem_shuffle: bool = destination == Constants.Zone.CASTILLO and Constants.Zone.CEMENTERIO in zones
+	var cem_room: int = TurnLimits.cemetery_shuffle_room(chooser) if cem_shuffle else -1
+	if cem_room >= 0:
+		amount = mini(amount, cem_room)
+		if amount <= 0:
+			return result
 	var title: String = "Buscar"
 	if source_card and source_card.get("card_name") != null:
 		var card_word := "carta" if amount == 1 else "cartas"
@@ -318,6 +335,8 @@ func search_either_owner(chooser: int, zones: Array, filter: Dictionary, amount:
 
 	var main := _main.get_node_or_null("/root/Main")
 	TurnLimits.note_searched(chooser, picks.size())
+	if cem_shuffle:
+		TurnLimits.note_cemetery_shuffled(chooser, picks.filter(func(p): return p.zone == Constants.Zone.CEMENTERIO).size())
 	_sidhes_reveal(chooser, picks)
 	_main._begin_trigger_collection()
 	var to_shuffle: Dictionary = {}

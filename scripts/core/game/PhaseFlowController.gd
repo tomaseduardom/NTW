@@ -551,6 +551,9 @@ func _enforce_hand_limit(player_id: int) -> void:
 	"""Verifica el límite de mano al final del turno y fuerza el descarte del
 	exceso. El jugador humano elige qué descartar (UI); el oponente descarta
 	automáticamente sus cartas más caras."""
+	# Lujuria: "hasta tu próximo turno no tienes límite de cartas en tu mano".
+	if RuleState.active("no_hand_limit", player_id):
+		return
 	var hand_count = _main.player_hand.get_card_count() if player_id == 0 else _main._opponent_fan.get_card_count()
 	var excess = hand_count - Constants.MAX_HAND_SIZE
 	if excess <= 0:

@@ -280,7 +280,8 @@ func attack_cap(pid: int) -> int:
 	if RuleState.active("attack_cap_1", pid):
 		return 1
 	var cap := -1
-	if not RuleState.turn_data("attack_cap_2:%d" % pid).is_empty():
+	# huida de marte: "hasta tu próximo turno, sólo se puede atacar con hasta dos Aliados por turno".
+	if not RuleState.turn_data("attack_cap_2:%d" % pid).is_empty() or RuleState.active("attack_cap_2", pid):
 		cap = 2
 	# Báculo de los Eternos (en juego de cualquiera): hasta tantos Aliados como Oros controle.
 	var main := get_node_or_null("/root/Main")

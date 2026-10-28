@@ -95,6 +95,16 @@ static func apply(obj: Dictionary, annuller_card: Node) -> bool:
 			if main:
 				main._update_debug("%s no puede ser Anulada" % name)
 			return false
+		# paso de la plaga: "hasta tu próximo turno, ... Anular tus Aliados cuesta un Oro adicional". Quien
+		# Anula lo paga; si no puede, no la Anula.
+		var target_ctrl := int(obj.get("context", {}).get("controller_id", -1))
+		if target_ctrl >= 0 and type_of(obj) == Constants.CardType.ALIADO and RuleState.active("ally_annul_tax", target_ctrl) and main:
+			var annuller := 1 - target_ctrl
+			if not main._gold_manager.puede_pagar(1, -1, "", -1, annuller):
+				main._update_debug("%s: Anularla cuesta un Oro adicional que no se puede pagar" % name)
+				return false
+			load("res://scripts/core/game/PlayerSide.gd").pay(main, annuller, 1)  # se cobra en segundo plano
+			main._update_debug("Oro adicional por Anular %s" % name)
 		obj["was_annulled"] = true
 		obj["annuller"] = annuller_data
 		if main:

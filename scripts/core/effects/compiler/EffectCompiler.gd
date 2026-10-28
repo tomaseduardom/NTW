@@ -106,6 +106,9 @@ const TRIGGER_PREFIXES := [
 	"al comienzo del turno",
 ]
 
+## Oraciones que empiezan como un disparador pero son un efecto diferido de la misma resolución.
+const DELAYED_SENTENCES := ["en tu fase final, tus aliados pierden su habilidad hasta tu proximo turno"]
+
 ## Momento/frecuencia de las habilidades ACTIVADAS — lo controla
 ## ActionPipeline (once_per_turn, ventana), no es parte del efecto.
 const TIMING_PREFIXES := [
@@ -470,6 +473,29 @@ const ATOMS := [
 	# "Cada jugador roba una carta / descarta una carta / destierra una carta de su mano" (forma de
 	# leopardo, danel, okyo, geminis): cada uno elige la suya.
 	["each_draw", "cada jugador roba (?<n>" + NUM + ") cartas?"],
+	# Reglas con duración ("hasta tu próximo turno, ..."): cada frase es una regla del motor que se anota en
+	# RuleState (o su equivalente) al resolver; quien la hace cumplir está en EffectInterpreter._apply_rule().
+	["rule:ally_affect_tax", "hasta tu proximo turno, (?:afectar a tus aliados cuesta un oro adicional" \
+		+ "|a tu oponente le cuesta un oro adicional afectar a tus aliados)"],
+	["rule:trigger_gold_toll", "hasta tu proximo turno,? tu oponente no puede utilizar habilidades disparadas a menos que pague un oro"],
+	["rule:open_hands", "hasta tu proximo turno, los jugadores juegan con su mano descubierta y no pueden descartar cartas por efectos"],
+	["rule:search_toll", "hasta tu proximo turno, cuando busques cartas en el castillo oponente, tu oponente destierra una carta del tope de su castillo"],
+	["rule:talisman_to_exile", "hasta tu proximo turno, los talismanes que fueran a ser puestos en el cementerio, en vez de eso son desterrados"],
+	["rule:attack_cap_2", "hasta tu proximo turno, solo se puede atacar con hasta dos aliados por turno"],
+	["rule:two_per_type", "hasta tu proximo turno, no se pueden poner en juego mas de dos cartas de cada tipo por turno"],
+	["rule:shuffle_banish_tax", "hasta tu proximo turno, tu oponente debe pagar un oro adicional para barajar y/o desterrar tus cartas en juego"],
+	["rule:no_hand_limit", "hasta tu proximo turno,? no tienes limite de cartas en tu mano"],
+	["rule:opp_immune_turn", "no puedes ser afectado por efectos oponentes este turno"],
+	["rule:zombie", "hasta tu proximo turno, cada vez que recibas dano oponente, tu oponente bota esa misma cantidad y tu pones en juego" \
+		+ " un aliado de un cementerio como un aliado sin habilidad"],
+	["rule:allies_no_leave", "hasta tu proximo turno, tus aliados no pueden salir del juego y anularlos cuesta un oro adicional"],
+	["rule:final_silence_allies", "en tu fase final, tus aliados pierden su habilidad hasta tu proximo turno"],
+	["rule:castle_lock", "hasta tu proximo turno, no se puede botar, desterrar cartas de los castillos ni descartar cartas, por efectos"],
+	["rule:cemetery_shuffle_cap", "por el resto del juego, los jugadores solo pueden barajar hasta tres cartas de los cementerios cada turno"],
+	# "Hasta tu próximo turno, tus Aliados no pueden ser Destruidos ni Desterrados (y ganan 1 de Fuerza
+	# permanentemente)" (susurro de los bosques): Indestructible e Indesterrable hasta tu próximo turno.
+	["own_allies_protect", "hasta tu proximo turno, tus aliados no pueden ser destruidos ni desterrados" \
+		+ "(?: y ganan (?<n>" + NUM + ") de fuerza permanentemente)?"],
 	# "Cada jugador elige (hasta) N Aliados/Oros que controle y baraja el resto / sus demás Aliados en
 	# juego" (bomba eléctrica, biwa, herido peleó mejor).
 	["keep_shuffle", "cada jugador elige (?<upto>hasta )?(?<n>" + NUM + ") (?<kind>aliados?|oros?|cartas?) que controle" \
@@ -549,7 +575,7 @@ const ATOMS := [
 ## autoloads. El compilador puede entender más de lo que se ejecuta (p.ej.
 ## "bounce"): esos planes se dejan a la cadena de patrones vieja.
 const EXECUTABLE_OPS := ["castle_look", "draw", "draw_to_match", "mill", "discard", "shuffle_from_hand", "search", "target", "mass", "choice",
-	"shuffle_from_cemetery", "self", "hand_exile", "keep_shuffle", "if", "cemetery_cleanup", "gold", "regroup_gold", "buff", "mass_buff", "reveal_until", "reveal_top", "pay", "hand_peek", "annul", "talisman_fizzle",
+	"shuffle_from_cemetery", "self", "hand_exile", "keep_shuffle", "rule", "if", "cemetery_cleanup", "gold", "regroup_gold", "buff", "mass_buff", "reveal_until", "reveal_top", "pay", "hand_peek", "annul", "talisman_fizzle",
 	"regroup_cards", "gold_to_paid", "deck_to_hand", "no_damage", "play_from", "peek_hand", "show_hand", "cost", "castle_exile", "cancel_attack", "self_raise", "mill_x", "opp_gold_to_paid", "revive_blank", "self_buff_per"]
 const EXECUTABLE_VERBS := ["destroy", "banish", "shuffle", "silence", "cost_shift"]
 
@@ -612,7 +638,9 @@ static func compile_clause(text: String) -> Dictionary:
 			if _starts_activated(s):
 				break
 			# Otra habilidad disparada pegada al bloque (simurg: "...a tu mano. Cuando sea Destruido, ...").
-			if i > 0 and _strip_trigger_prefix(s) != s:
+			# Salvo un efecto diferido del mismo Talismán (paso de la plaga: "...En tu Fase Final, tus Aliados
+			# pierden su habilidad hasta tu próximo turno"): se agenda al resolver (rule:final_silence_allies).
+			if i > 0 and _strip_trigger_prefix(s) != s and not (s in DELAYED_SENTENCES):
 				break
 			if s.begins_with("luego"):
 				s = s.trim_prefix("luego").trim_prefix(",").strip_edges()
@@ -1219,7 +1247,17 @@ static func _get_atoms() -> Array:
 static func _build(atom_name: String, m: RegExMatch) -> Dictionary:
 	"""Arma el paso de un átomo reconocido. Devuelve {} si el texto calzó
 	pero el caso es ambiguo (que lo resuelva la cadena vieja)."""
+	if atom_name.begins_with("rule:"):
+		return {"op": "rule", "kind": atom_name.trim_prefix("rule:")}
 	match atom_name:
+		"own_allies_protect":
+			var protect := {"op": "mass_buff", "verb": "buff", "side": "own", "others": false, "amount": 0,
+				"keywords": ["indestructible", "indesterrable"], "to_exile": false, "permanent": false, "turn_only": false,
+				"duration": "until_next_turn"}
+			if m.get_string("n").is_empty():
+				return protect
+			return {"op": "multi", "steps": [protect, {"op": "mass_buff", "verb": "buff", "side": "own", "others": false,
+				"amount": parse_amount(m.get_string("n")), "keywords": [], "to_exile": false, "permanent": true, "turn_only": false}]}
 		"draw":
 			return {"op": "draw", "amount": parse_amount(m.get_string("n")), "up_to": not m.get_string("upto").is_empty()}
 		"draw_to_match":

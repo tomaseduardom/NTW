@@ -266,6 +266,11 @@ func remove_from_hand(player_id: int, card: Node) -> bool:
 func _append_to_cemetery(player_id: int, card_data: Dictionary) -> void:
 	"""Punto único para agregar una entrada a un Cementerio, para que la captura de Sable de Napoleón
 	(silenciar lo que entra durante su ventana) no dependa de cada llamador."""
+	# resistir: "hasta tu próximo turno, los Talismanes que fueran a ser puestos en el Cementerio, en vez de
+	# eso son Desterrados".
+	if int(card_data.get("tipo", -1)) == Constants.CardType.TALISMAN and RuleState.active("talisman_to_exile", player_id):
+		append_to_exile(player_id, card_data)
+		return
 	if _cemetery_silence_capture_active:
 		card_data["_silenced_by_cemetery_effect"] = true
 	_zones[player_id].cemetery.append(card_data)

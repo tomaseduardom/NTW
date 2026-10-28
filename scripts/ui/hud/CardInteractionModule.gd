@@ -240,29 +240,30 @@ func await_target(prompt: String, filter: Callable, cancellable: bool = true, ch
 	"""Elige un objetivo (ver _await_target_raw()). Oro adicional por afectar cartas del rival
 	(ProtectionRules.affect_tax: manuel rodriguez, Sake): lo que no se puede pagar no es elegible, y
 	se paga recién cuando el rival cede su prioridad (_pay_affect_tax())."""
-	var taxed := _affordable_filter(filter, chooser_id)
+	var verb: String = _Rules.verb_of(prompt)
+	var taxed := _affordable_filter(filter, chooser_id, verb)
 	var chosen: Node = await _await_target_raw(prompt, taxed, cancellable, chooser_id)
-	if chosen and not await _pay_affect_tax([chosen], chooser_id):
+	if chosen and not await _pay_affect_tax([chosen], chooser_id, verb):
 		return null
 	return chosen
 
 
-func _affordable_filter(filter: Callable, chooser_id: int) -> Callable:
+func _affordable_filter(filter: Callable, chooser_id: int, verb: String = "") -> Callable:
 	return func(c: Node) -> bool:
 		if not filter.call(c):
 			return false
-		var tax: int = _Rules.affect_tax(c, chooser_id)
+		var tax: int = _Rules.affect_tax(c, chooser_id, verb)
 		return tax <= 0 or (_main and _main._gold_manager and _main._gold_manager.puede_pagar(tax, -1, "", -1, chooser_id))
 
 
-func _pay_affect_tax(cards: Array, chooser_id: int) -> bool:
+func _pay_affect_tax(cards: Array, chooser_id: int, verb: String = "") -> bool:
 	"""Elegir el objetivo (Pasos A-B) todavía no lo afecta: el Oro adicional se paga cuando el rival
 	cede su prioridad sin responder. Por eso abre antes la ventana de respuesta del efecto en curso
 	(EffectContext.ensure_window(); si ya pasó, como en las activadas, no abre otra). false si el
 	efecto quedó anulado/cancelado o no se pudo pagar: la carta no se ve afectada."""
 	var tax := 0
 	for c in cards:
-		tax += _Rules.affect_tax(c, chooser_id)
+		tax += _Rules.affect_tax(c, chooser_id, verb)
 	if tax <= 0:
 		return true
 	if await EffectContextScript.ensure_window():
@@ -270,7 +271,7 @@ func _pay_affect_tax(cards: Array, chooser_id: int) -> bool:
 	tax = 0
 	for c in cards:
 		if is_instance_valid(c):
-			tax += _Rules.affect_tax(c, chooser_id)
+			tax += _Rules.affect_tax(c, chooser_id, verb)
 	if tax <= 0:
 		return true
 	var ok: bool = await PlayerSideScript.pay(_main, chooser_id, tax)
@@ -354,12 +355,13 @@ func _board_and_hand_cards() -> Array:
 func await_multi_target(prompt_prefix: String, candidates: Array, max_count: int = -1, lock_group_key: Callable = Callable(), dynamic_filter: Callable = Callable(), cancellable: bool = true, glow_color_override = null, chooser_id: int = 0) -> Array:
 	"""Ver _await_multi_target_raw(). Con Oro adicional por afectar (ver await_target()): quedan
 	afuera las que no se pueden pagar y, si al final no alcanza, las gravadas."""
-	var affordable := _affordable_filter(func(_x): return true, chooser_id)
+	var verb: String = _Rules.verb_of(prompt_prefix)
+	var affordable := _affordable_filter(func(_x): return true, chooser_id, verb)
 	var pool: Array = candidates.filter(func(c): return not is_instance_valid(c) or affordable.call(c))
 	var chosen: Array = await _await_multi_target_raw(prompt_prefix, pool, max_count, lock_group_key, dynamic_filter,
 		cancellable, glow_color_override, chooser_id)
-	if not await _pay_affect_tax(chosen, chooser_id):
-		chosen = chosen.filter(func(c): return _Rules.affect_tax(c, chooser_id) <= 0)
+	if not await _pay_affect_tax(chosen, chooser_id, verb):
+		chosen = chosen.filter(func(c): return _Rules.affect_tax(c, chooser_id, verb) <= 0)
 	return chosen
 
 

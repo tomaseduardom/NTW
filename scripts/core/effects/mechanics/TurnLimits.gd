@@ -73,3 +73,16 @@ static func castle_removal_room(deck_owner: int) -> int:
 static func note_castle_removed(deck_owner: int, amount: int) -> void:
 	if amount > 0:
 		RuleState.add("castle_removed", deck_owner, amount)
+
+## susurro de los bosques: "por el resto del juego, los jugadores sólo pueden barajar hasta tres cartas de los
+## Cementerios cada turno". -1 = sin límite. Lo consultan las búsquedas en Cementerios con destino Castillo
+## (ActionSearch).
+static func cemetery_shuffle_room(pid: int) -> int:
+	if not RuleState.active("cemetery_shuffle_cap_3", pid):
+		return -1
+	return maxi(0, 3 - RuleState.count("cemetery_shuffled", pid))
+
+
+static func note_cemetery_shuffled(pid: int, amount: int) -> void:
+	if amount > 0 and RuleState.active("cemetery_shuffle_cap_3", pid):
+		RuleState.add("cemetery_shuffled", pid, amount)

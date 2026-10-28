@@ -27,6 +27,9 @@ const KeywordConditions = preload("res://scripts/core/cards/KeywordConditions.gd
 # tope a mano), CastleLook y ActionSearch (buscar y Desterrar).
 # -----------------------------------------------------------------------------
 static func castle_banish_blocked(deck_owner: int, actor: int = -2) -> bool:
+	# guardia varega: "no se puede ... Desterrar cartas de los Castillos ..., por efectos" (también el propio).
+	if deck_owner >= 0 and RuleState.active("no_castle_exile", deck_owner):
+		return true
 	actor = _effect_actor(actor)
 	if actor == deck_owner:
 		return false
@@ -41,7 +44,9 @@ static func castle_banish_blocked(deck_owner: int, actor: int = -2) -> bool:
 
 static func mill_blocked() -> bool:
 	"""nehushtan: "...ni Botar cartas" mientras el portador está en Línea de Defensa. Solo Botar por
-	efectos (el daño no pasa por aquí)."""
+	efectos (el daño no pasa por aquí). guardia varega: "no se puede Botar ... por efectos"."""
+	if RuleState.active("no_effect_mill", 0) or RuleState.active("no_effect_mill", 1):
+		return true
 	for e in _castle_lock_sources():
 		if e.defending and "ni botar cartas" in e.text:
 			return true
@@ -110,13 +115,27 @@ static func grant_ally_affect_tax(pid: int, until_serial: int) -> void:
 	_ally_affect_tax_until[pid] = maxi(int(_ally_affect_tax_until.get(pid, -1)), until_serial)
 
 
-static func affect_tax(card, chooser: int) -> int:
+## Verbo de una elección a partir de su texto ("Baraja...", "Destierra..."): "shuffle", "banish" o "".
+static func verb_of(prompt: String) -> String:
+	var t := prompt.to_lower()
+	if "baraj" in t:
+		return "shuffle"
+	if "destierr" in t or "desterr" in t:
+		return "banish"
+	return ""
+
+
+static func affect_tax(card, chooser: int, verb: String = "") -> int:
 	if card == null or not is_instance_valid(card) or chooser < 0:
 		return 0
 	var owner := CardQuery.controller_of(card)
 	if owner < 0 or owner == chooser or not (card.get("current_zone") in Constants.ZONES_IN_PLAY):
 		return 0
 	var tax := 0
+	# orden siniestra: "hasta tu próximo turno, tu oponente debe pagar un Oro adicional para Barajar y/o
+	# Desterrar tus cartas en juego".
+	if verb in ["shuffle", "banish"] and RuleState.active("shuffle_banish_tax", owner):
+		tax += 1
 	var zone = card.get("current_zone")
 	if card.get("card_type") == Constants.CardType.ALIADO and zone not in [Constants.Zone.RESERVA_ORO, Constants.Zone.ORO_PAGADO] \
 			and int(_ally_affect_tax_until.get(owner, -1)) >= GameManager.turn_serial:

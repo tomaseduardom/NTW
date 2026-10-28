@@ -281,6 +281,14 @@ func discard(player_id: int, cards: Array, source: String = "", skip_validation:
 		return {"success": false, "cancelled": true}
 	if EffectController.fision_blocks_player_effect(player_id):  # Fisión Nuclear
 		return {"success": false, "prevented": true}
+	# forma de leopardo / guardia varega: "no pueden descartar cartas por efectos" (un coste no es un efecto,
+	# el límite de mano tampoco).
+	if RuleState.active("no_effect_discard", player_id) and source != "coste" \
+			and not EffectContextScript.current().is_empty():
+		var lock_main := get_node_or_null("/root/Main")
+		if lock_main:
+			lock_main._update_debug("No se pueden descartar cartas por efectos")
+		return {"success": false, "prevented": true}
 	# duelo mágico: "ni Descartar y/o Desterrar más de una carta de su mano por turno".
 	if RuleState.active("hand_loss_cap_1", player_id):
 		var room: int = maxi(0, 1 - RuleState.count("hand_cards_lost", player_id))

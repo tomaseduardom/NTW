@@ -130,6 +130,15 @@ static func describe_steps(steps: Array) -> String:
 				parts.append("Descartar %d" % st.amount)
 			"shuffle_from_hand":
 				parts.append(("Tu oponente baraja %d de su mano" if st.get("who", "self") == "opponent" else "Barajar %d de tu mano") % st.amount)
+			"rule":
+				parts.append({"ally_affect_tax": "Afectar a tus Aliados cuesta un Oro más", "trigger_gold_toll": "Disparadas rivales cuestan un Oro",
+					"open_hands": "Manos descubiertas y sin descartes por efectos", "search_toll": "Buscar en el Castillo rival lo hace Desterrar",
+					"talisman_to_exile": "Talismanes al Destierro", "attack_cap_2": "Hasta dos atacantes por turno",
+					"two_per_type": "Dos cartas de cada tipo por turno", "shuffle_banish_tax": "Barajar/Desterrar tus cartas cuesta un Oro más",
+					"no_hand_limit": "Sin límite de mano", "opp_immune_turn": "Inmune a efectos rivales este turno",
+					"zombie": "Daño recibido: Bota y revive", "allies_no_leave": "Tus Aliados no salen del juego",
+					"final_silence_allies": "En tu Fase Final, tus Aliados pierden su habilidad", "castle_lock": "Sin Botar, Desterrar del Castillo ni Descartar",
+					"cemetery_shuffle_cap": "Hasta tres de los Cementerios barajadas por turno"}.get(str(st.kind), str(st.kind)))
 			"keep_shuffle":
 				var kt: Array = TYPE_LABELS.get(st.card_type, TYPE_LABELS[""])
 				parts.append("Cada jugador elige %s%d %s y baraja el resto" % ["hasta " if st.up_to else "", st.amount,

@@ -173,6 +173,8 @@ func _execute_step(main: Node, st: Dictionary, targets: Array, card: Node, contr
 			return await _shuffle_from_hand(main, st, controller_id)
 		"keep_shuffle":
 			return await _keep_shuffle(main, st, card, controller_id)
+		"rule":
+			return _apply_rule(main, st, card, controller_id)
 		"search":
 			var zones: Array = []
 			for z in st.zones:
@@ -1299,6 +1301,83 @@ func _hand_exile(main: Node, st: Dictionary, card: Node, controller_id: int) -> 
 		if picked.size() < amount:
 			all_ok = false
 	return all_ok
+
+
+func _apply_rule(main: Node, st: Dictionary, card: Node, controller_id: int) -> bool:
+	"""Reglas con duración ("hasta tu próximo turno, ..."): se anotan en RuleState y las hace cumplir el
+	punto del motor indicado en cada caso. 'Hasta tu próximo turno' = mientras no empiece el próximo turno
+	de quien controla el efecto (RuleState.next_own_turn())."""
+	var me := controller_id
+	var opp := 1 - controller_id
+	var until: int = RuleState.next_own_turn(me)
+	var name := _card_name(card)
+	var note := ""
+	match str(st.kind):
+		"ally_affect_tax":  # ProtectionRules.affect_tax (como manuel rodriguez)
+			load("res://scripts/core/effects/mechanics/ProtectionRules.gd").grant_ally_affect_tax(me, until - 1)
+			note = "afectar a tus Aliados cuesta un Oro adicional"
+		"trigger_gold_toll":  # TriggerTollPatterns.blocks_trigger
+			RuleState.set_until("trigger_gold_toll", opp, until)
+			note = "tu oponente paga un Oro para usar habilidades disparadas"
+		"open_hands":  # HandReveal / ActionModule.discard
+			for p in [0, 1]:
+				RuleState.set_until("hand_revealed", p, until)
+				RuleState.set_until("no_effect_discard", p, until)
+			load("res://scripts/core/effects/mechanics/HandReveal.gd").refresh()
+			note = "manos descubiertas y sin descartes por efectos"
+		"search_toll":  # LimitedEventTriggers (castle_searched)
+			RuleState.set_until("search_toll", me, until)
+			note = "al buscar en el Castillo oponente, tu oponente Destierra la carta del tope"
+		"talisman_to_exile":  # CardManager._append_to_cemetery
+			for p in [0, 1]:
+				RuleState.set_until("talisman_to_exile", p, until)
+			note = "los Talismanes van al Destierro en vez del Cementerio"
+		"attack_cap_2":  # GameManager.attack_cap
+			for p in [0, 1]:
+				RuleState.set_until("attack_cap_2", p, until)
+			note = "solo se puede atacar con hasta dos Aliados por turno"
+		"two_per_type":  # GoldManagerBase._card_play_locked
+			for p in [0, 1]:
+				RuleState.set_until("two_per_type", p, until)
+			note = "no más de dos cartas de cada tipo por turno"
+		"shuffle_banish_tax":  # ProtectionRules.affect_tax (verbo Barajar/Desterrar)
+			RuleState.set_until("shuffle_banish_tax", me, until)
+			note = "Barajar o Desterrar tus cartas en juego le cuesta un Oro adicional a tu oponente"
+		"no_hand_limit":  # PhaseFlowController._enforce_hand_limit
+			RuleState.set_until("no_hand_limit", me, until)
+			note = "sin límite de cartas en tu mano"
+		"opp_immune_turn":  # EffectController (opp_effect_immune)
+			RuleState.set_until("opp_effect_immune", me, GameManager.turn_serial + 1)
+			note = "no puedes ser afectado por efectos oponentes este turno"
+		"zombie":  # LimitedEventTriggers (damage)
+			RuleState.set_until("zombie", me, until)
+			note = "cada vez que recibas daño oponente, tu oponente Bota esa cantidad y pones en juego un Aliado de un Cementerio"
+		"allies_no_leave":  # EffectController._try_consume_leave_play_prevention / StackAnnul.apply
+			RuleState.set_until("allies_no_leave", me, until)
+			RuleState.set_until("ally_annul_tax", me, until)
+			note = "tus Aliados no pueden salir del juego y Anularlos cuesta un Oro adicional"
+		"final_silence_allies":
+			EffectController.schedule_next_final_phase_effect(me, func() -> void:
+				for container in PlayerSideScript.ally_containers(main, me):
+					for c in container.get_children():
+						if is_instance_valid(c) and c.get("card_type") == Constants.CardType.ALIADO:
+							await KeywordManager.silence_card(c, null, "until_next_turn")
+				main._update_debug("%s: tus Aliados pierden su habilidad hasta tu próximo turno" % name))
+			note = "en tu Fase Final, tus Aliados pierden su habilidad hasta tu próximo turno"
+		"castle_lock":  # ProtectionRules.mill_blocked / castle_banish_blocked, ActionModule.discard
+			for p in [0, 1]:
+				for key in ["no_effect_mill", "no_castle_exile", "no_effect_discard"]:
+					RuleState.set_until(key, p, until)
+			note = "no se puede Botar, Desterrar de los Castillos ni Descartar por efectos"
+		"cemetery_shuffle_cap":  # TurnLimits.cemetery_shuffle_room
+			for p in [0, 1]:
+				RuleState.set_until("cemetery_shuffle_cap_3", p, 1 << 30)
+			note = "por el resto del juego, hasta tres cartas de los Cementerios barajadas por turno"
+		_:
+			push_warning("[EffectInterpreter] Regla desconocida: %s" % st.kind)
+			return false
+	main._update_debug("%s: %s" % [name, note])
+	return true
 
 
 func _keep_shuffle(main: Node, st: Dictionary, card: Node, controller_id: int) -> bool:

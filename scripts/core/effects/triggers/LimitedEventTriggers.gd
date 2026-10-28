@@ -107,6 +107,13 @@ func _collect(event: String, args: Dictionary) -> void:
 			if e[1] == event and e[0] in text:
 				_queue({"fn": e[3], "src": args.data, "ctrl": int(args.owner), "args": args, "limit": e[2], "key": "%s:%s" % [e[3], _name(args.data)]})
 		return
+	# Reglas con duración de cartas que ya no están en juego (RuleState, EffectInterpreter._apply_rule()).
+	if event == "castle_searched" and int(args.owner) != int(args.searcher) and RuleState.active("search_toll", int(args.searcher)):
+		_queue({"fn": "_search_toll", "src": {"nombre": "Tumulto Voraz"}, "ctrl": int(args.searcher), "args": args,
+			"limit": 99, "key": "search_toll"})
+	if event == "damage" and int(args.amount) > 0 and RuleState.active("zombie", int(args.pid)):
+		_queue({"fn": "_zombie", "src": {"nombre": "Levantar Zombi"}, "ctrl": int(args.pid), "args": args,
+			"limit": 99, "key": "zombie"})
 	for e in ENTRIES:
 		if e[1] != event:
 			continue
@@ -337,6 +344,34 @@ func _calchona(_main_n: Node, src, pid: int, _a: Dictionary) -> void:
 
 func _invunche(_main_n: Node, src, pid: int, _a: Dictionary) -> void:
 	await ActionModule.mill(1 - pid, 1, true, _name(src))
+
+
+## tumulto voraz: "hasta tu próximo turno, cuando busques cartas en el Castillo oponente, tu oponente
+## Destierra una carta del tope de su Castillo".
+func _search_toll(_main_n: Node, src, pid: int, _a: Dictionary) -> void:
+	await ActionModule.mill(1 - pid, 1, true, _name(src))
+
+
+## Levantar Zombi: "hasta tu próximo turno, cada vez que recibas daño oponente, tu oponente Bota esa misma
+## cantidad y tú pones en juego un Aliado de un Cementerio como un Aliado sin habilidad".
+func _zombie(main: Node, src, pid: int, a: Dictionary) -> void:
+	await ActionModule.mill(1 - pid, int(a.amount), false, _name(src))
+	var gm = main.get("_gold_manager")
+	if not gm:
+		return
+	var res: Dictionary = await ActionModule.search_either_owner(pid, [Constants.Zone.CEMENTERIO],
+		{"type": Constants.CardType.ALIADO}, 1, true, null, -1)
+	for p in [0, 1]:
+		CardManager._update_cemetery_visual(p)
+	for d in res.get("selected", []):
+		var ally_data: Dictionary = (d as Dictionary).duplicate()
+		ally_data["habilidad"] = ""
+		ally_data["esta_oculta"] = false
+		var node: Node = main._create_card(ally_data, false)
+		node.owner_id = pid
+		node.controller_id = pid
+		main._connect_card_signals(node)
+		await gm._play_card_to_field(node)
 
 
 func _hanuch(_main_n: Node, src, _pid: int, _a: Dictionary) -> void:

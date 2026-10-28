@@ -203,7 +203,7 @@ static func _principe_orion(main: Node, card: Node, pid: int) -> void:
 
 static func _pazuzu(main: Node, card: Node, pid: int) -> void:
 	if await _exile_self(card, pid):
-		RuleState.set_until("opp_effect_immune", pid, GameManager.turn_serial)
+		RuleState.set_until("opp_effect_immune", pid, GameManager.turn_serial + 1)  # vale este turno (active: ahora < hasta)
 
 
 static func _garshasp(main: Node, card: Node, pid: int) -> void:
