@@ -33,7 +33,7 @@ const ACTION_LABELS: Dictionary = {
 	"pasar": "Pasar Turno / Prioridad",
 	"toggle_mano": "Fijar / Reposar Mano",
 	"ocultar_mano": "Ocultar / Mostrar Mano",
-	"historial": "Historial y Estado",
+	"historial": "Efectos Activos",
 	"cancelar": "Cancelar / Saltar Selección",
 }
 
@@ -41,7 +41,7 @@ const ACTION_DESCRIPTIONS: Dictionary = {
 	"pasar": "Pasa prioridad, confirma ataque o fase de daño",
 	"toggle_mano": "Fija la mano arriba o la baja a reposo",
 	"ocultar_mano": "Oculta la mano completamente para ver la mesa",
-	"historial": "Abre o cierra el panel lateral de historial",
+	"historial": "Abre o cierra el panel lateral de Efectos Activos",
 	"cancelar": "Cancela la selección de objetivo o salta una acción opcional",
 }
 
