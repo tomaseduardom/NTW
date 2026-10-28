@@ -5,9 +5,6 @@ const KeywordParserScript = preload("res://scripts/core/cards/KeywordParser.gd")
 
 ## Lo que encontró la última búsqueda ("si buscaste un Dinosaurio, ...").
 var _last_found: Array = []
-## Lo que hizo el último paso "cada jugador" del efecto, para las oraciones "de esta forma" que siguen
-## (EffectInterpreterCadaJugador): "moved" {jugador: cartas movidas}, "shown", "duel", "drawn".
-var _each: Dictionary = {}
 
 
 func _execute_steps(main: Node, steps: Array, chosen_targets: Dictionary, card: Node, controller_id: int) -> bool:
@@ -25,7 +22,7 @@ func _execute_steps(main: Node, steps: Array, chosen_targets: Dictionary, card: 
 			# Cantidad variable: se cuenta ahora ("por cada Aliado que controles", "tantas como su Fuerza").
 			var v: int = await _quantity_value(main, st.qty.q, card, controller_id)
 			st = st.duplicate()
-			st[st.qty.key] = int(st[st.qty.key]) * v if st.qty.mode == "per" else v
+			st[st.qty.key] = (int(st[st.qty.key]) * v if st.qty.mode == "per" else v) + int(st.qty.get("plus", 0))  # "...más una" (rey de amarillo)
 			print("[EffectInterpreter] %s: cantidad variable = %d" % [_card_name(card), int(st[st.qty.key])])
 			if int(st[st.qty.key]) <= 0:
 				last_ok = true
@@ -189,11 +186,21 @@ func _execute_step(main: Node, st: Dictionary, targets: Array, card: Node, contr
 				# "una copia de esta carta": mismo nombre que la carta del efecto.
 				filter.erase("name_contains")
 				filter["names_in"] = [str(card.card_data.get("nombre", "")).to_lower()] if card and card.get("card_data") != null else []
+			if st.get("same_type", false):
+				# "una carta del mismo tipo" que la Descartada antes en este efecto (kitsune, ángel redentor).
+				var same: Array = _each.get("discarded_types", [])
+				if same.is_empty():
+					main._update_debug("%s: no se Descartó una carta de la que copiar el tipo" % _card_name(card))
+					return false
+				filter["type"] = int(same[0])
 			var play: Dictionary = st.get("play", {})
+			var reduce: int = int(play.get("reduce", 0))
+			if str(play.get("reduce_per", "")) != "":
+				reduce = _count_per(main, str(play.reduce_per), controller_id)  # "tantos Oros como Tótem controles"
 			var dest: int = {"pagado": Constants.Zone.ORO_PAGADO, "cementerio": Constants.Zone.CEMENTERIO,
 				"destierro": Constants.Zone.DESTIERRO}.get(st.get("dest", "mano"), Constants.Zone.MANO)
 			var free_play: bool = play.get("free", false)
-			var deliver_later: bool = st.has("dest_alts") or st.has("dist")
+			var deliver_later: bool = st.has("dest_alts") or st.has("dist") or st.get("dest", "") == "armas"
 			if free_play or deliver_later:
 				dest = -1  # se entrega desde los datos: jugarla sin pagar, elegir destino o repartir
 			# "en el Castillo oponente" / "en un Castillo": busca en el Castillo de ese jugador y elige
@@ -207,10 +214,12 @@ func _execute_step(main: Node, st: Dictionary, targets: Array, card: Node, contr
 						main, _card_name(card), "Tu Castillo", "Castillo oponente", controller_id) else 1 - controller_id)
 			var res: Dictionary = await ActionModule.search_zones(owner, zones, filter, st.amount, true, false,
 				not play.is_empty() and not free_play, card, dest, st.get("distinct", false),
-				controller_id if owner != controller_id else -1, int(play.get("reduce", 0)))
+				controller_id if owner != controller_id else -1, reduce, int(play.get("floor", 1)) == 0)
 			var found_cards: Array = res.get("selected", [])
 			_last_found = found_cards.duplicate()  # para "si buscaste un X, ..."
-			if st.has("dist"):
+			if st.get("dest", "") == "armas":
+				await _found_as_weapons(main, found_cards, owner, card, controller_id)
+			elif st.has("dist"):
 				for mv in await _distribute(main, found_cards, st.dist, _card_name(card), controller_id):
 					await _move_revealed(main, mv[0], str(mv[1]), controller_id)
 			elif st.has("dest_alts"):
@@ -782,6 +791,10 @@ func _mill_x(main: Node, st: Dictionary, card: Node, controller_id: int) -> bool
 				if chosen and is_instance_valid(chosen):
 					pick = chosen
 			n = measure.call(pick)
+		"paid_ally":  # taira no masakado: la Fuerza del Aliado Desterrado como coste (_pay_cost())
+			n = int(_each.get("paid_strength", 0))
+		"lost_strength":  # armas campesinas: la Fuerza que perdió el paso anterior (_set_or_double_strength())
+			n = int(_each.get("strength_lost", 0))
 		"own_allies_count":
 			for cont in PlayerSideScript.ally_containers(main, controller_id):
 				for a in cont.get_children():
@@ -866,6 +879,8 @@ func _set_or_double_strength(st: Dictionary, t: Node, card: Node) -> void:
 	})
 	if t.has_method("refresh_strength_badge"):
 		t.refresh_strength_badge()
+	# armas campesinas: "...tantas cartas como Fuerza haya perdido de esta forma" (_mill_x, "lost_strength").
+	_each["strength_lost"] = int(_each.get("strength_lost", 0)) + maxi(0, current - int(ContinuousEffectManager.get_modified_strength(t)))
 
 
 func _reveal_until(main: Node, st: Dictionary, card: Node, controller_id: int) -> bool:
@@ -964,7 +979,44 @@ func _distribute(main: Node, cards: Array, dist: Array, title: String, controlle
 
 
 const REVEAL_DEST_LABELS := {"hand": "tu mano", "cemetery": "tu Cementerio", "exile": "tu Destierro",
-	"play_free": "jugar sin pagar su coste", "put": "poner en juego", "gold": "tu Oro pagado", "shuffle": "barajar en tu Castillo"}
+	"play_free": "jugar sin pagar su coste", "put": "poner en juego", "gold": "tu Oro pagado", "shuffle": "barajar en tu Castillo",
+	"gold_silenced": "tu Oro pagado, sin habilidad por el turno"}
+
+
+func _found_as_weapons(main: Node, found: Array, zone_owner: int, card: Node, controller_id: int) -> void:
+	"""oda nobunaga: las cartas buscadas se convierten en Armas sin habilidad y se portan sobre Aliados en juego
+	(como nu-galahad: is_converted + silence_card + GoldManager._equip_weapon). Quien controla el efecto elige el
+	portador de cada una (el bot, sus Aliados primero); siguen siendo del dueño del Castillo."""
+	var gm = main.get("_gold_manager")
+	if not gm:
+		return
+	var title := _card_name(card)
+	for d in found:
+		var allies: Array = []
+		for pid in [controller_id, 1 - controller_id]:
+			for cont in PlayerSideScript.ally_containers(main, pid):
+				allies.append_array(cont.get_children().filter(func(a): return is_instance_valid(a) and a.get("card_type") == Constants.CardType.ALIADO))
+		if allies.is_empty():
+			CardManager.add_to_cemetery(zone_owner, d)  # sin portador posible: va al Cementerio de su dueño
+			continue
+		var bearer: Node = allies[0]
+		if not _is_bot(controller_id) and allies.size() > 1 and main.get("_card_interaction"):
+			var picked: Node = await main._card_interaction.await_target("%s: elige el Aliado que porta %s como Arma" % [title, str(d.get("nombre", ""))],
+				func(c: Node) -> bool: return c in allies, false, controller_id)
+			if picked and is_instance_valid(picked):
+				bearer = picked
+		var weapon_data: Dictionary = (d as Dictionary).duplicate()
+		weapon_data["tipo"] = Constants.CardType.ARMA
+		weapon_data["esta_oculta"] = false
+		var weapon: Node = main._create_card(weapon_data, false)
+		weapon.owner_id = zone_owner
+		weapon.controller_id = _controller_of(bearer)
+		main._connect_card_signals(weapon)
+		weapon.is_converted = true
+		await gm._equip_weapon(weapon, bearer, false)
+		await KeywordManager.silence_card(weapon, card, "permanent", true)
+	if main.get("_zone_manager"):
+		main._zone_manager.compact_all_fields(true)
 
 
 func _move_revealed(main: Node, d: Dictionary, dest: String, controller_id: int) -> void:
@@ -978,8 +1030,10 @@ func _move_revealed(main: Node, d: Dictionary, dest: String, controller_id: int)
 			CardManager.add_to_cemetery(controller_id, d)
 		"exile":
 			CardManager.add_to_exile(controller_id, d)
-		"gold":
+		"gold", "gold_silenced":
 			if is_gold and gm:
+				if dest == "gold_silenced":
+					RuleState.set_pending("next_gold_silenced", controller_id)  # avaricia: SearchPatterns.on_card_entered
 				await gm.put_gold_directly_in_pagado(controller_id, d)
 			else:
 				PlayerSideScript.put_in_hand(main, controller_id, d)
@@ -1084,21 +1138,19 @@ func _hand_peek(main: Node, st: Dictionary, card: Node, controller_id: int) -> b
 	var hand: Array = PlayerSideScript.hand_cards(main, opp).filter(func(c): return is_instance_valid(c))
 	if hand.is_empty():
 		return false
-	if not _is_bot(controller_id):
-		SelectionManager.open_reveal(hand.map(func(c): return c.card_data), "%s: la mano de tu oponente" % title, controller_id)
 	var spec := {"types": st.get("types", []), "cost_val": st.get("cost_val", -1), "cost_cmp": st.get("cost_cmp", "")}
 	var types_not: Array = st.get("types_not", [])
+	var eligible := func(c: Node) -> bool:
+		return is_instance_valid(c) and _spec_matches(spec, c.card_data) and _type_word(int(c.card_type)) not in types_not
+	if not _is_bot(controller_id) and not hand.any(eligible):
+		SelectionManager.open_reveal(hand.map(func(c): return c.card_data), "%s: la mano de tu oponente" % title, controller_id)
 	var picked_count := 0
 	for _i in range(int(st.count)):
-		var candidates: Array = hand.filter(func(c):
-			return is_instance_valid(c) and _spec_matches(spec, c.card_data) and _type_word(int(c.card_type)) not in types_not)
-		if candidates.is_empty():
+		# La mano a la vista: se hace clic en la carta (las que no sirven se ven pero no se eligen).
+		var chosen: Node = await PlayerSideScript.pick_from_hand_view(main, controller_id, opp,
+			"%s: la mano de tu oponente — elige una carta" % title, eligible)
+		if chosen == null or not is_instance_valid(chosen):
 			break
-		var idx := 0
-		if not _is_bot(controller_id) and candidates.size() > 1:
-			idx = await SelectionManager.await_choice(main, "%s: elige una carta de su mano" % title,
-				candidates.map(func(c): return str(c.get("card_name"))), controller_id)
-		var chosen: Node = candidates[clampi(idx, 0, candidates.size() - 1)]
 		hand.erase(chosen)
 		match str(st.verb):
 			"banish":
@@ -1484,5 +1536,6 @@ func _discard(main: Node, st: Dictionary, controller_id: int) -> bool:
 		picked = await _ts._targeted_executor._select_hand_cards_for_discard(hand, amount, pid)
 	if picked.is_empty():
 		return false
+	_each["discarded_types"] = picked.map(func(c): return int(c.card_type))  # "una carta del mismo tipo" (kitsune)
 	await ActionModule.discard(pid, picked, "efecto_compilado", true)
 	return picked.size() >= st.amount

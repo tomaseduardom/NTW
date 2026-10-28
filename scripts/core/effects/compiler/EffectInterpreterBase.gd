@@ -1,6 +1,6 @@
 extends RefCounted
 ## EffectInterpreterBase — base de EffectInterpreter.gd: constantes, tablas y ayudas compartidas por todas las familias.
-## Cadena: EffectInterpreterBase <- EffectInterpreterAuxiliares <- EffectInterpreterCostes <- EffectInterpreterDeclaracion <- EffectInterpreterEjecucion <- EffectInterpreterCadaJugador <- EffectInterpreter. Lo de afuera usa solo EffectInterpreter.gd (hereda todo).
+## Cadena: EffectInterpreterBase <- EffectInterpreterAuxiliares <- EffectInterpreterCostes <- EffectInterpreterDeclaracion <- EffectInterpreterEjecucion <- EffectInterpreterCadaJugador <- EffectInterpreterOponente <- EffectInterpreter. Lo de afuera usa solo EffectInterpreter.gd (hereda todo).
 
 ## EffectInterpreter — ejecuta los planes de EffectCompiler (arquitectura.md §54).
 ## Orden: se declara todo (el "puedes", la rama de una elección "A, o B", los objetivos en juego) y
@@ -44,6 +44,12 @@ var _ts: Node  # TriggerSystem (dueño de este intérprete)
 ## La carta tocada directamente al elegir una opción de "A o B" en la mesa (BoardChoice): es el objetivo
 ## del primer paso de esa opción (_declare_targets()).
 var _preselected_target: Node = null
+
+## Lo que hicieron los pasos anteriores del mismo efecto, para las oraciones "de esta forma" que siguen
+## (EffectInterpreterCadaJugador / EffectInterpreterOponente): "moved" {jugador: cartas movidas}, "shown",
+## "duel", "drawn", "milled", "strength_lost", "paid_strength" (el Aliado pagado como coste), "toll_card".
+## Se vacía al empezar cada efecto (execute_plan()).
+var _each: Dictionary = {}
 
 
 func setup(trigger_system: Node) -> void:

@@ -253,9 +253,10 @@ func _compiler() -> void:
 	var c: Dictionary = EffectCompilerScript.compile_clause("Una vez por turno, puedes Desterrar una carta de tu mano para Robar una carta.")
 	var costs: Array = c.get("steps", []).filter(func(s): return s.get("op") == "cost")
 	check("coste: desterrar de la mano", costs[0].get("kind", "") if not costs.is_empty() else "", "banish_hand")
-	# "una carta del mismo tipo" no es un nombre de carta.
-	check("no compila: una carta del mismo tipo",
-		EffectCompilerScript.compile_clause("Busca en tu Castillo una carta del mismo tipo y ponla en tu mano.").get("ok", false), false)
+	# "una carta del mismo tipo" no es un nombre de carta: es el tipo de la carta Descartada antes (kitsune).
+	var same: Dictionary = EffectCompilerScript.compile_clause("Busca en tu Castillo una carta del mismo tipo y ponla en tu mano.")
+	var same_step: Dictionary = same.steps[0] if same.get("ok", false) else {}
+	check("mismo tipo: no es un nombre", [same_step.get("same_type", false), same_step.get("name", "")], [true, ""])
 	# "de tu mano o Cementerio" sigue en su patrón (no es solo de la mano).
 	check("no compila: de tu mano o Cementerio",
 		EffectCompilerScript.compile_clause("Una vez por turno, puedes Desterrar una carta de tu mano o Cementerio para Desterrar una carta oponente de coste 3 o menos.").get("ok", false), false)

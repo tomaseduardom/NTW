@@ -97,4 +97,10 @@ static func pay_toll(card: Node, controller_id: int, toll: int) -> bool:
 	if not pay or not await gm.pagar_coste(toll, -1, "", -1, controller_id):
 		main._update_debug("La habilidad de %s no se usa" % card_name)
 		return false
+	# guerra celestial: "Cuando tu oponente pague un Oro de esta forma, tú Robas una carta"
+	# (EffectInterpreterOponente, meta "ability_toll_reward").
+	if is_instance_valid(card) and int(card.get_meta("ability_toll_turn", -1)) == GameManager.turn_serial:
+		var reward = card.get_meta("ability_toll_reward", {})
+		if reward is Dictionary and int(reward.get("turn", -1)) == GameManager.turn_serial:
+			await ActionModule.draw(int(reward.pid), 1, "peaje_de_habilidad", true)
 	return true

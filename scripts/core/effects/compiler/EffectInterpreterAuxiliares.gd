@@ -148,6 +148,12 @@ static func describe_steps(steps: Array) -> String:
 					"hand_discard_cost": "Cada jugador descarta las de coste %d o menos" % int(st.get("amount", 1)),
 					"draw_per_discarded": "Robar una por cada descartada", "hand_show_exile": "Cada jugador destierra un Aliado de su mano",
 					"foreign_shuffle": "Cada jugador baraja lo que no es suyo", "equalize_allies": "Cada jugador baraja Aliados hasta igualar"}.get(str(st.kind), str(st.kind)))
+			"opp":
+				parts.append({"mill_half": "Tu oponente bota la mitad de su Castillo", "discard_or_shuffle": "Tu oponente descarta o baraja una carta",
+					"silence_golds": "Tu oponente deja %d Oro(s) sin habilidad" % int(st.get("amount", 1)),
+					"convert_match": "Tu oponente convierte cartas en Tótem hasta igualarte", "convert_steal": "Ganar el control de los convertidos",
+					"next_turn_lock": "Tu oponente no ataca y juega una carta de cada tipo", "ability_toll": "Sus habilidades cuestan un Oro",
+					"toll_reward_draw": "Robar si paga el Oro", "name_lock": "Nombrar una carta que no podrá jugar"}.get(str(st.kind), str(st.kind)))
 			"keep_shuffle":
 				var kt: Array = TYPE_LABELS.get(st.card_type, TYPE_LABELS[""])
 				parts.append("Cada jugador elige %s%d %s%s y baraja el resto" % ["hasta " if st.up_to else "", st.amount,

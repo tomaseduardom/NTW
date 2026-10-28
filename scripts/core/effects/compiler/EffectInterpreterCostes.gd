@@ -256,12 +256,16 @@ func _pay_cost(main: Node, c: Dictionary, card: Node, controller_id: int) -> boo
 				return false
 			match c.kind:
 				"discard":
+					_each["discarded_types"] = picked.map(func(p): return int(p.card_type))  # "una carta del mismo tipo" (ángel redentor)
 					await ActionModule.discard(controller_id, picked, "coste", true)
 				"reveal":
 					load("res://scripts/core/effects/mechanics/RevealedCards.gd").record(controller_id, picked.map(func(p): return p.card_data), name)
 				"sacrifice":
 					await ActionModule.destroy(picked, card, false, true)
 				"sacrifice_any":
+					# "...para que tu oponente Bote tantas cartas como Fuerza tenga ese Aliado" (taira no masakado).
+					_each["paid_strength"] = picked.reduce(func(acc, p): return acc + (int(ContinuousEffectManager.get_modified_strength(p))
+						if p.get("card_type") == Constants.CardType.ALIADO else 0), 0)
 					match str(c.get("verb", "destroy")):
 						"destroy":
 							await ActionModule.destroy(picked, card, false, true)

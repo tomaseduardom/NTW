@@ -184,11 +184,11 @@ static func _live(node) -> Node:
 func search_zones(player_id: int, zones: Array, filter: Dictionary, amount: int = 1, can_fail: bool = true,
 		skip_validation: bool = false, may_play: bool = false, source_card = null,
 		destination: int = Constants.Zone.MANO, distinct_names: bool = false, chooser_id: int = -1,
-		cost_reduction: int = 0) -> Dictionary:
+		cost_reduction: int = 0, cost_floor_zero: bool = false) -> Dictionary:
 	if await EffectContextScript.ensure_window():  # ventana única por efecto (§59)
 		return {"success": false, "cancelled": true}
 	return await _action_search.search_zones(player_id, zones, filter, amount, can_fail, skip_validation, may_play,
-		_live(source_card), destination, distinct_names, chooser_id, cost_reduction)
+		_live(source_card), destination, distinct_names, chooser_id, cost_reduction, cost_floor_zero)
 
 
 ## 'Busca en UN Castillo/Cementerio' (sin posesivo): selector con las zonas de los dos jugadores,

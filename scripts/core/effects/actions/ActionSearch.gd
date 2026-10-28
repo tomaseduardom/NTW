@@ -61,14 +61,20 @@ func search(player_id: int, zone: int, filter: Dictionary, amount: int = 1, can_
 		destination, distinct_names, chooser_id)
 
 
+## "hasta un mínimo de 0" del descuento de la búsqueda en curso (search_zones()).
+var _reduction_floor_zero := false
+
+
 func search_zones(player_id: int, zones: Array, filter: Dictionary, amount: int = 1, can_fail: bool = true,
 		skip_validation: bool = false, may_play: bool = false, source_card: Node = null,
 		destination: int = Constants.Zone.MANO, distinct_names: bool = false, chooser_id: int = -1,
-		cost_reduction: int = 0) -> Dictionary:
+		cost_reduction: int = 0, cost_floor_zero: bool = false) -> Dictionary:
 	"""Como search(), pero sobre VARIAS zonas del mismo jugador a la vez (p.ej. Arturo de Bretaña:
 	"busca en tu Castillo y/o Cementerio hasta dos Armas"): se mira cada zona en el selector del
 	tablero (ZoneBrowsePicker), se pueden mezclar cartas y se confirma una vez.
-	'cost_reduction': con may_play, descuento al jugarla, con el piso 1 de PaymentManager."""
+	'cost_reduction': con may_play, descuento al jugarla, con el piso 1 de PaymentManager ('cost_floor_zero':
+	"hasta un mínimo de 0", los khanta)."""
+	_reduction_floor_zero = cost_floor_zero
 	var first_zone: int = zones[0] if not zones.is_empty() else Constants.Zone.CASTILLO
 	var result = {
 		"success": true,
@@ -512,7 +518,7 @@ func _put_found_card_into_play(main: Node, player_id: int, card_data: Dictionary
 		await _main.get_tree().create_timer(0.3).timeout
 		if cost_reduction > 0:
 			PaymentManager.agregar_modificador_coste(card_node, -cost_reduction, func(c: Node) -> bool:
-				return c == card_node, false)
+				return c == card_node, _reduction_floor_zero)
 		if PaymentManager.puede_jugar_carta(card_node, player_id):
 			var coste: int = PaymentManager.calcular_coste_real(card_node)
 			var card_name: String = str(card_data.get("nombre", "la carta"))

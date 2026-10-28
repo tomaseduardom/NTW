@@ -235,6 +235,11 @@ func offer_colapso_global(searcher_id: int) -> bool:
 	cdata["esta_oculta"] = false
 	CardManager.add_to_cemetery(victim, cdata)
 	main._update_debug("Colapso Global: se previene la búsqueda o mirada del oponente")
+	# Que se vea en la mesa: si no, quien buscaba solo ve que su efecto no hizo nada (ángel redentor).
+	CombatLog.add_entry("search", "%s juega %s: se previene que %s mire su mano o busque cartas" % [
+		CombatLog.format_player(victim), CombatLog.format_card(str(cdata.get("nombre", "Colapso Global"))), CombatLog.format_player(searcher_id)])
+	if not PlayerSideScript.is_bot(searcher_id):
+		SelectionManager.open_reveal([cdata], "Tu oponente jugó Colapso Global: se previene tu búsqueda", searcher_id)
 	await ActionModule.draw(victim, 1, "Colapso Global", true)
 	return true
 

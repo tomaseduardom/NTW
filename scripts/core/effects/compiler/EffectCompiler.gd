@@ -158,6 +158,8 @@ const RULE_SKIP_RX := [
 	"^jugar este talisman en respuesta a .*$",
 	"^no puedes tener mas de tres copias.*$",
 	"^si .+, (?:cuesta un oro menos|puedes jugarlo sin pagar su coste)(?: y destierralo)?$",
+	# avaricia: habilidad desde el Cementerio, no parte del efecto al resolverse.
+	"^cuando pongas un oro en juego, puedes subir este talisman de tu cementerio a tu mano$",
 ]
 
 ## "Elige un efecto: - A. - B." — cada viñeta es una opción.
@@ -229,6 +231,8 @@ const CONDITIONS := [
 	["duel_win", "si tu aliado tiene mas fuerza, "],
 	["duel_lose", "si tiene igual o menor fuerza, "],
 	["drew_less_3", "si robas menos de tres cartas, "],
+	# vampiro eterno: lo que Botó el paso anterior ("Tu oponente Bota la mitad de su Castillo").
+	["milled_less_10", "si bota menos de diez cartas, "],
 ]
 
 ## Reemplazo sobre el paso anterior: "Si tiene Exhumar, en vez de eso, Destiérralo".
@@ -293,7 +297,7 @@ const RACE := "(?:angel(?:es)?|eternos?|dragon(?:es)?|caballeros?|paladin(?:es)?
 ## Objetos de "busca / sube": "un Aliado Dragón", "un Ángel, Eterno o Tótem", "un Aliado y un Tótem"
 ## (" y " = una carta de cada grupo, ver _object_groups()).
 const OBJ1 := "(?:(?:hasta )?" + NUM + " )?(?:" + T1 + "(?: " + RACE + "(?: o " + RACE + ")*)?|" + RACE + ")"
-const OBJS := OBJ1 + "(?:(?:, y |, | o | u | y )" + OBJ1 + ")*"
+const OBJS := OBJ1 + "(?:(?:, y |, | o | u | y/o | y )" + OBJ1 + ")*"
 ## "hasta mostrar un Oro y un Arma o Tótem de coste 2 o menos"
 ## Tipos dentro de "hasta mostrar": la coma separa cartas pedidas ("un Aliado, un Arma y un Tótem",
 ## megumi), no alternativas como en TALT.
@@ -316,6 +320,17 @@ const REVEAL_DIST_ITEM := "(?:(?:pon )?(?:" + NUM + "|otro|otra|el otro|la otra)
 const ATOMS := [
 	["draw", "(?:tu )?roba(?:s|r)? (?<upto>hasta )?(?<n>" + NUM + ") cartas?(?: de tu castillo)?"],
 	["draw_to_match", "roba(?:r)? cartas hasta tener la misma cantidad de cartas en (?:(?:la|tu) )?mano que tu oponente"],
+	# Lo que hace (o elige) tu oponente sobre lo suyo, y reglas que le pones (EffectInterpreterOponente).
+	["opp:mill_half", "tu oponente bota la mitad de su castillo,? redondeado hacia arriba"],
+	["opp:discard_or_shuffle", "tu oponente (?:debe |deba )?descartar una carta o barajar una carta que controle que no (?:sea|es) oro"],
+	["opp:silence_golds", "tu oponente elige (?<n>" + NUM + ") oros con habilidad que controle y los convierte en oros sin habilidad"],
+	["opp:convert_match", "tu oponente convierte aliados y oros que controle en totem sin habilidad,? hasta tener la misma cantidad" \
+		+ " de aliados y oros que controlas"],
+	["opp:convert_steal", "si se convierten (?<n>\\d+|" + NUM + ") o menos cartas de esa manera, gana su control"],
+	["opp:next_turn_lock", "tu oponente en su siguiente turno no puede atacar ni jugar mas de una carta de cada tipo"],
+	["opp:ability_toll", "tu oponente no puede utilizar las habilidades de esa carta este turno a menos que pague un oro"],
+	["opp:toll_reward_draw", "cuando tu oponente pague un oro de esta forma,? tu robas una carta"],
+	["opp:name_lock", "nombra una carta,? las cartas con ese nombre no pueden ser jugadas en su proximo turno"],
 	# "tu oponente Destierra cartas del tope de su Castillo como Oros tenga en su Reserva" (leng).
 	["castle_exile_reserve", "tu oponente destierra cartas del tope de su castillo como oros tenga en su reserva"],
 	["mill_per", "tu oponente bota (?<n>" + NUM + ") cartas? por cada (?<per>aliado en tu linea de defensa" \
@@ -336,6 +351,10 @@ const ATOMS := [
 	["mill_x", "(?<who>tu oponente|un jugador) bota tantas cartas como (?<src>oros haya en tu oro pagado)"],
 	# "Tu oponente Bota tantas cartas como Aliados controles" (principe ur nammu, mr smee).
 	["mill_x", "(?<who>tu oponente|un jugador) bota tantas cartas como (?<src>aliados controles)(?! o )"],
+	# La Fuerza del Aliado pagado como coste (taira no masakado: "Desterrar un Aliado... para que tu oponente
+	# Bote tantas cartas como Fuerza tenga ese Aliado") y la que perdió el paso anterior (armas campesinas).
+	["mill_x", "(?<who>tu oponente) bota tantas cartas como fuerza (?:tenga|tiene) (?<src>ese aliado)"],
+	["mill_x", "(?<who>tu oponente) bota tantas cartas como (?<src>fuerza haya perdido de esta forma)"],
 	["mill_x", "(?<exile>destierra) tantas cartas del tope del castillo oponente como fuerza tenga (?<src>un aliado que porte armas?|un aliado que controles)"],
 	["mill_opp", "tu oponente bota (?<n>" + NUM + ") cartas?"],
 	["mill_both", "(?:cada jugador bota|los jugadores botan) (?<n>" + NUM + ") cartas?(?: de su castillo)?"],
@@ -374,7 +393,8 @@ const ATOMS := [
 	# reparto ("busca tres Aliados, pon uno en tu mano y dos en tu Cementerio", kurai ketsugo).
 	["search", "busca(?:r)? (?:(?:en tu (?<z1>castillo|cementerio)(?: (?:o|y/o) (?:tu )?(?<z2>castillo|cementerio))?|en (?<zx1>un castillo|el castillo oponente)),? )?" \
 		+ "(?:(?<copy>una copia de (?:esta carta|este oro|este aliado|esta arma|este totem|este talisman))" \
-		+ "|(?<objs>" + OBJS + ")(?: (?!(?:de|del|que|y|o|u|en|con|sin|al|a)\\b)(?<nm>[a-z]+))?)" \
+		+ "|(?<objs>" + OBJS + ")(?: (?!(?:de|del|que|y|o|u|en|con|sin|al|a)\\b)(?<nm>[a-z]+(?: (?!(?:de|del|que|y|o|u|en|con|sin|al|a)\\b)[a-z]+){0,2}?))?" \
+		+ "(?<same> del mismo tipo)?)" \
 		+ "(?: que no sean? (?:un |una )?(?<n1>" + T1 + ")(?: ni (?:un |una )?(?<n2>" + T1 + "))?)?" \
 		+ "(?:,? que no sean? (?<nnot>(?!un |una )[a-z]+(?: [a-z]+){0,3}?))?" \
 		+ "(?:,? de coste (?<cval>" + NUM + ")(?: o (?<ccmp>menos|mas))?)?" \
@@ -383,13 +403,27 @@ const ATOMS := [
 		+ "(?<distinct>,? (?:con|de) (?:distinto|diferente) nombre,?)?" \
 		+ "(?: en tu (?<z3>castillo|cementerio)(?: (?:o|y/o) (?:tu )?(?<z4>castillo|cementerio))?| en (?<zx2>un castillo|el castillo oponente))?" \
 		+ "(?:,? y |, )(?:(?:ponla|ponlo|ponerla|ponerlo|ponlas|ponlos|ponerlas|ponerlos) en (?:tu (?<dest>mano|oro pagado|cementerio)" \
-		+ "(?: o (?:tu )?(?<alt>cementerio|destierro))?|(?<owncem>el cementerio de su dueno))" \
+		+ "(?: (?:o|y/o) (?:tu )?(?<alt>cementerio|destierro)s?)?|(?<owncem>el cementerio de su dueno))" \
 		+ "|(?<exile>destierralos|destierralas|destierralo|destierrala)" \
 		+ "|(?<putplay>ponlo|ponla|ponerlo|ponerla) en juego" \
 		+ "|(?<sdist>pon (?:" + NUM + ") en tu (?:mano|cementerio|destierro)(?:(?:, | y )(?:" + NUM + ") en tu (?:mano|cementerio|destierro))+)" \
 		+ "|(?<play>jugarlo|jugarla|juegalo|juegala|jugarlos|jugarlas|juegalos|juegalas)(?: (?<free>sin pagar su coste)" \
 		+ "| reduciendo su coste en (?<red>" + NUM + ") oros?(?:, hasta un minimo de (?<floor>\\d+))?" \
+		+ "| reduciendo su coste en tantos oros como (?<redq>totems? controles)(?:, hasta un minimo de (?<floor2>\\d+))?" \
 		+ "| por (?<red2>" + NUM + ") oros? menos)(?<orhand> o (?:ponlos|ponlas|ponlo|ponla|ponerlos|ponerlas|ponerlo|ponerla) en tu mano)?)"],
+	# rey de amarillo: "Busca en un Castillo una carta por cada Aliado que controles más una y Destiérralas".
+	["search_per_ally_plus", "busca en un castillo una carta por cada aliado que controles mas una y destierralas"],
+	# pebre: "Busca en tu Castillo una Empanada, un Anticucho y ponlos en tu mano" (dos nombres).
+	["search_named_two", "busca(?:r)? en tu castillo (?:un|una) (?<a>[a-z' -]+?),? (?:y )?(?:un|una) (?<b>[a-z' -]+?),? y (?:ponlos|ponlas) en tu mano"],
+	# perseguir el sol: "Busca en tu Castillo un Oro y otra carta, pon el Oro en tu Oro Pagado y la otra carta en tu mano".
+	["search_gold_and_other", "busca en tu castillo un oro y otra carta, pon el oro en tu oro pagado y la otra carta en tu mano"],
+	# avaricia: "Busca en tu Castillo tres Oros. Pon dos de ellos en tu Oro Pagado, sin habilidad por el turno, y el
+	# otro en tu mano" (las dos oraciones las junta _split_sentences()).
+	["search_gold_split", "busca en tu castillo (?<n>" + NUM + ") oros, pon (?<k>" + NUM + ") de ellos en tu oro pagado, sin habilidad por el turno, y el otro en tu mano"],
+	# oda nobunaga: "Busca en el Castillo oponente tres cartas de coste 2 o menos con distinto nombre. Conviértelas en
+	# Armas sin habilidad y pórtalas sobre Aliados en juego".
+	["search_as_weapons", "busca en el castillo oponente (?<n>" + NUM + ") cartas de coste (?<cv>\\d+) o menos con distinto nombre," \
+		+ " conviertelas en armas sin habilidad y portalas sobre aliados en juego"],
 	# "Busca un Leyaden/una Empanada en tu Castillo y ponlo en tu mano": una carta por su nombre (leyaden,
 	# empanada, yekamus).
 	["search_named", "busca(?:r)? (?:un|una) (?<name>[a-z' -]+?) en tu castillo y (?:ponlo|ponla|ponerlo|ponerla) en tu mano"],
@@ -558,7 +592,7 @@ const ATOMS := [
 	# sentido; permanente (no es Fuerza).
 	["cost_shift", "(?<det>un|una) (?<kind>carta|aliado|totem|arma)(?<opp> oponente)?(?: en juego)? aumenta o reduce su coste" \
 		+ " en (?<n>" + NUM + ") oros?"],
-	["talisman_fizzle", "hacer que el proximo talisman que juegue tu oponente este turno se resuelva sin efecto"],
+	["talisman_fizzle", "(?:hacer que )?el (?:proximo|siguiente) talisman que juegue tu oponente este turno se (?:resuelva|resuelve) sin efecto"],
 	# "Un Aliado gana Indestructible, Indesterrable o "No puede ser Barajado", hasta tu próximo turno"
 	# (Sarcófago Impío): elige UNA. Antes que "buff", que se quedaría con la lista hasta la "o".
 	# "Un Aliado o Tótem gana Indestructible o Indesterrable, mientras esté en juego" (Mina Murray):
@@ -598,7 +632,7 @@ const ATOMS := [
 ## intérprete) para que el auditor headless las consulte sin cargar
 ## autoloads. El compilador puede entender más de lo que se ejecuta (p.ej.
 ## "bounce"): esos planes se dejan a la cadena de patrones vieja.
-const EXECUTABLE_OPS := ["each", "castle_look", "draw", "draw_to_match", "mill", "discard", "shuffle_from_hand", "search", "target", "mass", "choice",
+const EXECUTABLE_OPS := ["each", "opp", "castle_look", "draw", "draw_to_match", "mill", "discard", "shuffle_from_hand", "search", "target", "mass", "choice",
 	"shuffle_from_cemetery", "self", "hand_exile", "keep_shuffle", "rule", "if", "cemetery_cleanup", "gold", "regroup_gold", "buff", "mass_buff", "reveal_until", "reveal_top", "pay", "hand_peek", "annul", "talisman_fizzle",
 	"regroup_cards", "gold_to_paid", "deck_to_hand", "no_damage", "play_from", "peek_hand", "show_hand", "cost", "castle_exile", "cancel_attack", "self_raise", "mill_x", "opp_gold_to_paid", "revive_blank", "self_buff_per"]
 const EXECUTABLE_VERBS := ["destroy", "banish", "shuffle", "silence", "cost_shift"]
@@ -792,6 +826,14 @@ static func _split_sentences(t: String) -> Array:
 					+ "|pon (?:un|una|uno|dos|tres|el otro|la otra)\\b|juega (?:uno|una)\\b)").search(s) != null:
 			out[out.size() - 1] = out.back() + " y " + s
 			continue
+		# "Busca en tu Castillo tres Aliados de diferente nombre. Pon uno en tu mano, dos en tu Cementerio" (pulso
+		# kaiju, avaricia) / "...con distinto nombre. Conviértelas en Armas..." (oda nobunaga): el destino de la
+		# búsqueda va en la oración siguiente.
+		if not out.is_empty() and RegEx.create_from_string("(?:^|, )busca en ").search(out.back()) != null \
+				and not (" pon" in out.back() or "ponl" in out.back()) \
+				and RegEx.create_from_string("^(?:pon (?!el |la )|conviertelas en armas)").search(s) != null:
+			out[out.size() - 1] = out.back() + ", " + s
+			continue
 		if not out.is_empty() and RegEx.create_from_string("(?:^|, )(?:puedes )?(?:muestra|mostrar) (?:las primeras [a-z0-9]+ cartas de tu castillo" \
 					+ "|[a-z0-9]+ cartas del tope de tu castillo)$").search(out.back()) != null \
 				and RegEx.create_from_string("^(?:pon|juega|elige) ").search(s) != null:
@@ -936,9 +978,15 @@ static func _fold_choose_one(sentences: Array) -> Array:
 			prefix = s.substr(0, s.length() - core.length())
 		var m := rx.search(core)
 		if m == null:
-			out.append(s)
-			i += 1
-			continue
+			# "Tu oponente muestra su mano y tú elige un efecto: - A. - B." (flechero): lo de antes es su propia
+			# oración.
+			m = RegEx.create_from_string("^(?<pre>.+?)(?:,| y) (?:tu )?elige (?:un|uno) efecto:?\\s*(?<rest>.*)$").search(core)
+			if m == null:
+				out.append(s)
+				i += 1
+				continue
+			out.append(prefix + m.get_string("pre"))
+			prefix = ""
 		var options: Array = []
 		for part in m.get_string("rest").split(" - "):
 			var p: String = part.strip_edges().trim_prefix("-").strip_edges()
@@ -951,6 +999,11 @@ static func _fold_choose_one(sentences: Array) -> Array:
 				if not p2.is_empty():
 					options.append(p2)
 			i += 1
+			# "- Nombra una carta. Las cartas con ese nombre..." (flechero): la oración siguiente es de la opción.
+			if not options.is_empty() and str(options.back()).ends_with("nombra una carta") and i < sentences.size() \
+					and str(sentences[i]).begins_with("las cartas con ese nombre"):
+				options[options.size() - 1] = str(options.back()) + ", " + str(sentences[i])
+				i += 1
 		out.append(prefix + "\u0001choose\u0001" + "\u0001".join(options))
 	return out
 
@@ -1308,8 +1361,9 @@ static func _build(atom_name: String, m: RegExMatch) -> Dictionary:
 	pero el caso es ambiguo (que lo resuelva la cadena vieja)."""
 	if atom_name.begins_with("rule:"):
 		return {"op": "rule", "kind": atom_name.trim_prefix("rule:")}
-	if atom_name.begins_with("each:"):
-		var each := {"op": "each", "kind": atom_name.trim_prefix("each:")}
+	if atom_name.begins_with("each:") or atom_name.begins_with("opp:"):
+		var prefix: String = atom_name.get_slice(":", 0)
+		var each := {"op": prefix, "kind": atom_name.trim_prefix(prefix + ":")}
 		if m.names.has("n") and not m.get_string("n").is_empty():
 			each["amount"] = parse_amount(m.get_string("n"))
 		return each
@@ -1382,6 +1436,10 @@ static func _build(atom_name: String, m: RegExMatch) -> Dictionary:
 				src = "own_other_card_cost"
 			elif src_word == "oros haya en tu oro pagado":
 				src = "own_paid_gold"
+			elif src_word == "ese aliado":
+				src = "paid_ally"
+			elif "perdido" in src_word:
+				src = "lost_strength"
 			return {"op": "mill_x", "who": "choose" if _group(m, "who") == "un jugador" else "opponent", "src": src,
 				"exile": not _group(m, "exile").is_empty()}
 		"cancel_attack":
@@ -1440,6 +1498,31 @@ static func _build(atom_name: String, m: RegExMatch) -> Dictionary:
 		"search_named":
 			return {"op": "search", "zones": ["castillo"], "card_type": "", "card_types": [], "types_not": [], "cost_val": -1,
 				"cost_cmp": "", "dest": "mano", "amount": 1, "up_to": false, "name": m.get_string("name").strip_edges()}
+		"search_named_two":
+			var named: Array = []
+			for g in ["a", "b"]:
+				named.append({"op": "search", "zones": ["castillo"], "card_type": "", "card_types": [], "types_not": [], "cost_val": -1,
+					"cost_cmp": "", "dest": "mano", "amount": 1, "up_to": false, "name": m.get_string(g).strip_edges()})
+			return {"op": "multi", "steps": named}
+		"search_per_ally_plus":
+			var allies_q := {"kind": "play_count", "who": "self", "defense": false, "types": ["aliado"], "race": "", "types_not": [],
+				"keyword": "", "distinct_cost": false, "str_val": -1, "str_cmp": "", "cost_val": -1, "cost_cmp": ""}
+			return {"op": "search", "zones": ["castillo"], "card_type": "", "card_types": [], "types_not": [], "cost_val": -1,
+				"cost_cmp": "", "dest": "destierro", "amount": 1, "up_to": false, "owner": "any",
+				"qty": {"mode": "set", "q": allies_q, "key": "amount", "plus": 1}}
+		"search_gold_and_other":
+			var base := {"op": "search", "zones": ["castillo"], "card_types": [], "types_not": [], "cost_val": -1, "cost_cmp": "",
+				"amount": 1, "up_to": false}
+			return {"op": "multi", "steps": [base.merged({"card_type": "oro", "dest": "pagado"}), base.merged({"card_type": "", "dest": "mano"})]}
+		"search_gold_split":
+			var k: int = parse_amount(m.get_string("k"))
+			return {"op": "search", "zones": ["castillo"], "card_type": "oro", "card_types": [], "types_not": [], "cost_val": -1,
+				"cost_cmp": "", "dest": "mano", "amount": parse_amount(m.get_string("n")), "up_to": false,
+				"dist": [{"count": k, "dest": "gold_silenced"}, {"count": 1, "dest": "hand"}]}
+		"search_as_weapons":
+			return {"op": "search", "zones": ["castillo"], "card_type": "", "card_types": [], "types_not": [],
+				"cost_val": int(m.get_string("cv")), "cost_cmp": "menos", "dest": "armas", "amount": parse_amount(m.get_string("n")),
+				"up_to": false, "owner": "opponent", "distinct": true}
 		"self_buff_per":
 			return {"op": "self_buff_per", "amount": parse_amount(m.get_string("n")),
 				"per": "opp_exile" if m.get_string("per").begins_with("carta") else "own_exile_allies"}
@@ -1469,6 +1552,10 @@ static func _build(atom_name: String, m: RegExMatch) -> Dictionary:
 			if not m.get_string("play").is_empty():
 				if not m.get_string("free").is_empty():
 					play = {"free": true}
+				elif not m.get_string("redq").is_empty():
+					# "reduciendo su coste en tantos Oros como Tótem controles, hasta un mínimo de 0" (los khanta).
+					play = {"reduce": 0, "reduce_per": "own_totems",
+						"floor": int(m.get_string("floor2")) if not m.get_string("floor2").is_empty() else 1}
 				else:
 					var red: String = m.get_string("red") if not m.get_string("red").is_empty() else m.get_string("red2")
 					play = {"reduce": parse_amount(red), "floor": int(m.get_string("floor")) if not m.get_string("floor").is_empty() else 1}
@@ -1518,6 +1605,8 @@ static func _build(atom_name: String, m: RegExMatch) -> Dictionary:
 					fs["owner"] = "any" if foreign == "un castillo" else "opponent"
 				if not m.get_string("distinct").is_empty():
 					fs["distinct"] = true
+				if not m.get_string("same").is_empty():
+					fs["same_type"] = true  # "una carta del mismo tipo": el de la carta Descartada antes (kitsune)
 				if not dest_alts.is_empty():
 					fs["dest_alts"] = dest_alts
 				if not sdist.is_empty():
@@ -1861,7 +1950,7 @@ static func _object_groups(text: String) -> Array:
 			g = g.substr(dm.get_end())
 		var alts: Array = []
 		var last_type := ""
-		for part in RegEx.create_from_string("(?:, | o | u )").sub(g, "|", true).split("|"):
+		for part in RegEx.create_from_string("(?:, | o | u | y/o )").sub(g, "|", true).split("|"):
 			var words: PackedStringArray = part.strip_edges().trim_prefix("un ").trim_prefix("una ").split(" ", false)
 			if words.is_empty():
 				continue

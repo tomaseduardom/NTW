@@ -332,7 +332,12 @@ func lock_name_from_playing(card_name: String, target_player_id: int, locking_pl
 
 
 func is_name_play_locked(player_id: int, card_name: String, card_type: int = -1) -> bool:
-	if card_type == Constants.CardType.ORO or _play_locked_names.is_empty():
+	if card_type == Constants.CardType.ORO:
+		return false
+	# flechero: "Las cartas con ese nombre no pueden ser jugadas en su próximo turno" (solo ese turno).
+	if RuleState.active("name_play_lock:" + card_name.strip_edges().to_lower(), player_id):
+		return true
+	if _play_locked_names.is_empty():
 		return false
 	return _play_locked_names.has("%d|%s" % [player_id, card_name.strip_edges().to_lower()])
 

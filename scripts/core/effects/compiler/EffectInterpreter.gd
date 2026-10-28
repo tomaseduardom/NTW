@@ -1,5 +1,5 @@
 class_name EffectInterpreter
-extends "res://scripts/core/effects/compiler/EffectInterpreterCadaJugador.gd"
+extends "res://scripts/core/effects/compiler/EffectInterpreterOponente.gd"
 ## EffectInterpreter — familia Entrada (ver EffectInterpreterBase.gd para la cabecera, constantes y ayudas).
 
 
@@ -30,6 +30,7 @@ func execute_plan(plan: Dictionary, card: Node, controller_id: int) -> void:
 	if not main:
 		return
 	var name := _card_name(card)
+	_each = {}
 
 	# ── Declarar ──────────────────────────────────────────────────────────
 	# "Puedes": si el primer paso ya se puede rechazar en el propio selector (búsqueda con mínimo 0,

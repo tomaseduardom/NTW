@@ -166,6 +166,24 @@ static func pick_from_hand(main: Node, pid: int, prompt: String, filter: Callabl
 	return await main._card_interaction.await_target(prompt, func(c: Node) -> bool: return c in cards, optional, pid)
 
 
+## Muestra la mano de 'owner' a 'viewer' con las cartas a la vista y espera que haga clic en una de las que
+## pasan 'eligible' (las demás se ven pero no se eligen): "mira la mano de tu oponente y Destierra un
+## Talismán de ahí" (carcosa). El bot elige la primera. El Remoto elige por red (await_single_pick()).
+static func pick_from_hand_view(main: Node, viewer: int, owner: int, title: String, eligible: Callable) -> Node:
+	var hand: Array = hand_cards(main, owner).filter(func(c): return is_instance_valid(c))
+	var candidates: Array = hand.filter(func(c): return eligible.call(c))
+	if candidates.is_empty():
+		return null
+	if is_bot(viewer) or candidates.size() == 1 and hand.size() == 1:
+		return candidates[0]
+	var picked: Dictionary = await SelectionManager.await_single_pick(hand.map(func(c): return c.card_data), title, false, 1,
+		func(d: Dictionary) -> bool: return candidates.any(func(c): return is_instance_valid(c) and c.card_data == d), viewer)
+	for c in candidates:
+		if is_instance_valid(c) and c.card_data == picked:
+			return c
+	return candidates[0]
+
+
 ## Saca una carta de la mano de 'pid' y devuelve sus datos (boca arriba). El
 ## Nodo se libera: el llamador decide adónde van los datos.
 static func take_from_hand(main: Node, pid: int, card: Node) -> Dictionary:

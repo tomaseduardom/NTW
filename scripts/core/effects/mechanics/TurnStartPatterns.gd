@@ -232,15 +232,15 @@ static func carcosa(card: Node, controller_id: int) -> void:
 			or await EffectController.offer_colapso_global(controller_id)
 		var hand: Array = [] if hidden else PlayerSideScript.hand_cards(main, opponent_id).filter(func(c): return is_instance_valid(c))
 		if not hand.is_empty():
-			if not PlayerSideScript.is_bot(controller_id):
-				SelectionManager.open_reveal(hand.map(func(c): return c.card_data), "%s: la mano de tu oponente" % title, controller_id)
-			var talismans: Array = hand.filter(func(c): return c.get("card_type") == Constants.CardType.TALISMAN)
-			if not talismans.is_empty():
-				var idx := 0
-				if not PlayerSideScript.is_bot(controller_id) and talismans.size() > 1:
-					idx = await SelectionManager.await_choice(main, "%s: Destierra un Talismán de su mano" % title,
-						talismans.map(func(c): return str(c.get("card_name"))), controller_id)
-				var chosen: Node = talismans[clampi(idx, 0, talismans.size() - 1)]
+			var is_talisman := func(c: Node) -> bool: return c.get("card_type") == Constants.CardType.TALISMAN
+			var chosen: Node = null
+			if hand.any(is_talisman):
+				# La mano a la vista: se hace clic en el Talismán (sin botones con nombres).
+				chosen = await PlayerSideScript.pick_from_hand_view(main, controller_id, opponent_id,
+					"%s: la mano de tu oponente — Destierra un Talismán" % title, is_talisman)
+			elif not PlayerSideScript.is_bot(controller_id):
+				SelectionManager.open_reveal(hand.map(func(c): return c.card_data), "%s: la mano de tu oponente (sin Talismanes)" % title, controller_id)
+			if chosen and is_instance_valid(chosen):
 				var data: Dictionary = PlayerSideScript.take_from_hand(main, opponent_id, chosen)
 				CardManager.add_to_exile(opponent_id, data)
 				main._update_debug("%s: Destierra %s de la mano de tu oponente" % [title, str(data.get("nombre", ""))])

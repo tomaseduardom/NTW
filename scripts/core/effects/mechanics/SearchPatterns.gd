@@ -176,4 +176,4 @@ static func on_card_entered(card: Node, zone: int) -> void:
 		return
 	RuleState.take_pending("next_gold_silenced", pid)
 	KeywordManager.silence_card(card, null, "turn", true)
-	main._update_debug("%s entra sin habilidad por el turno (Supremacia Kaiju)" % str(card.get("card_name")))
+	main._update_debug("%s entra sin habilidad por el turno" % str(card.get("card_name")))  # supremacia kaiju, avaricia
