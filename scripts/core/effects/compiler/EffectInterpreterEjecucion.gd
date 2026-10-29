@@ -18,6 +18,8 @@ func _execute_steps(main: Node, steps: Array, chosen_targets: Dictionary, card: 
 		if st.get("then", false) and not last_ok:
 			print("[EffectInterpreter] %s: 'Luego' cortado (el paso anterior no se resolvió)" % _card_name(card))
 			break
+		if st.has("unless") and _condition_holds(st.unless, card, controller_id):
+			continue  # "..., en vez de eso, ..." (jinete de la muerte): lo reemplaza el paso siguiente
 		if st.has("qty"):
 			# Cantidad variable: se cuenta ahora ("por cada Aliado que controles", "tantas como su Fuerza").
 			var v: int = await _quantity_value(main, st.qty.q, card, controller_id)
@@ -205,7 +207,7 @@ func _execute_step(main: Node, st: Dictionary, targets: Array, card: Node, contr
 			var dest: int = {"pagado": Constants.Zone.ORO_PAGADO, "cementerio": Constants.Zone.CEMENTERIO,
 				"destierro": Constants.Zone.DESTIERRO}.get(st.get("dest", "mano"), Constants.Zone.MANO)
 			var free_play: bool = play.get("free", false)
-			var deliver_later: bool = st.has("dest_alts") or st.has("dist") or st.get("dest", "") == "armas"
+			var deliver_later: bool = st.has("dest_alts") or st.has("dist") or st.get("dest", "") in ["armas", "reserva"]
 			if free_play or deliver_later:
 				dest = -1  # se entrega desde los datos: jugarla sin pagar, elegir destino o repartir
 			# "en el Castillo oponente" / "en un Castillo": busca en el Castillo de ese jugador y elige
@@ -224,6 +226,9 @@ func _execute_step(main: Node, st: Dictionary, targets: Array, card: Node, contr
 			_last_found = found_cards.duplicate()  # para "si buscaste un X, ..."
 			if st.get("dest", "") == "armas":
 				await _found_as_weapons(main, found_cards, owner, card, controller_id)
+			elif st.get("dest", "") == "reserva":
+				for d in found_cards:
+					await _move_revealed(main, d, "put", controller_id)  # lucerna: un Oro a tu Reserva
 			elif st.has("dist"):
 				for mv in await _distribute(main, found_cards, st.dist, _card_name(card), controller_id):
 					await _move_revealed(main, mv[0], str(mv[1]), controller_id)
@@ -334,9 +339,10 @@ func _execute_step(main: Node, st: Dictionary, targets: Array, card: Node, contr
 					var wanted_types: Array = spec.get("types", []).map(func(w): return _type_enum(w))
 					var not_types: Array = spec.get("not", []).map(func(w): return _type_enum(w))
 					var cost_min: int = int(spec.get("cost_min", -1))
+					var cost_max: int = int(spec.get("cost_max", -1))
 					var spec_pred := func(card_type: int, _race: String, cost: int) -> bool:
 						return card_type != Constants.CardType.ORO and (wanted_types.is_empty() or card_type in wanted_types) \
-							and not (card_type in not_types) and (cost_min < 0 or cost >= cost_min)
+							and not (card_type in not_types) and (cost_min < 0 or cost >= cost_min) and (cost_max < 0 or cost <= cost_max)
 					main._gold_manager.generar_oro_virtual_restringido(int(st.amount), spec_pred, "%s: Oro restringido" % _card_name(card), controller_id)
 				elif for_type == "":
 					main._gold_manager.generar_oros_virtuales(int(st.amount), controller_id)
@@ -658,6 +664,12 @@ func _cemetery_cleanup(main: Node, st: Dictionary, card: Node, controller_id: in
 			if main.get("_gold_manager"):
 				await main._gold_manager._resolve_armeria_barajar_desterrar(amount, _card_name(card), controller_id)
 		"banish":
+			if st.get("opp_only", false):
+				# "del Cementerio oponente": elige quien controla el efecto; lo Desterrado queda en _each.exiled.
+				var opp_res: Dictionary = await ActionModule.search_zones(1 - controller_id, [Constants.Zone.CEMENTERIO], {}, amount,
+					true, false, false, card, Constants.Zone.DESTIERRO, false, controller_id)
+				_each["exiled"] = opp_res.get("selected", [])
+				return true
 			await ActionModule.search_either_owner(controller_id, [Constants.Zone.CEMENTERIO], {}, amount, true, card,
 				Constants.Zone.DESTIERRO, false, one_zone)
 		"shuffle":
@@ -1296,6 +1308,10 @@ func _controls_holds(cond: Dictionary, card: Node) -> bool:
 	var main := _ts.get_node_or_null("/root/Main")
 	if not main:
 		return false
+	if cond.get("negate", false):
+		var positive: Dictionary = cond.duplicate()
+		positive.erase("negate")
+		return not _controls_holds(positive, card)  # "Si no controlas ..." (yamata no orochi)
 	var pid: int = _controller_of(card)
 	var containers: Array = []
 	if cond.get("attack_line", false):
@@ -1340,6 +1356,10 @@ func _controls_holds(cond: Dictionary, card: Node) -> bool:
 			if not race_forms.is_empty():
 				var card_race: String = EffectCompilerScript.normalize(str(c.get("card_raza")))
 				if not race_forms.any(func(f): return f in card_race):
+					continue
+			if int(cond.get("cost_val", -1)) >= 0:
+				var ccost: int = 0 if int(c.card_type) == Constants.CardType.ORO else int(ContinuousEffectManager.get_modified_cost(c))
+				if int(c.card_type) == Constants.CardType.ORO or (ccost > int(cond.cost_val) if cond.cost_cmp == "menos" else ccost < int(cond.cost_val)):
 					continue
 			if int(cond.get("min_strength", -1)) >= 0 \
 					and ContinuousEffectManager.get_modified_strength(c) < int(cond.min_strength):

@@ -222,8 +222,8 @@ const SUBJUNCTIVE := {
 
 ## "Si controlas (otro) (N o más) <tipo/raza> (de Fuerza N o más) (en Línea de Ataque), (además)
 ## efecto". Se evalúa al resolver.
-const CONTROL_COND_RX := "^si controlas (?<other>otro |otra )?(?:(?<n>" + NUM + ") o mas )?" \
-	+ "(?<what>[a-z]+(?: [a-z]+)?)(?: de fuerza (?<sv>\\d+) o mas)?(?<atk> en (?:tu )?linea de ataque)?" \
+const CONTROL_COND_RX := "^si (?<neg>no )?controlas (?<other>otro |otra )?(?:(?<n>" + NUM + ") o mas |(?<nx>dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez) )?" \
+	+ "(?<what>[a-z]+(?: [a-z]+)?)(?: de fuerza (?<sv>\\d+) o mas)?(?: de coste (?<ccv>\\d+) o (?<ccc>menos|mas))?(?<atk> en (?:tu )?linea de ataque)?" \
 	+ ", (?:ademas )?(?<rest>.+)$"
 
 ## Condiciones al comienzo de una oración ("si X, efecto").
@@ -242,6 +242,8 @@ const CONDITIONS := [
 	["milled_less_10", "si bota menos de diez cartas, "],
 	# caída del alba / temaukel: "Si no Destierra ninguna" (lo que hizo el paso "con ese nombre" anterior).
 	["none_named_exiled", "si no destierra ninguna, "],
+	["no_golds", "si no tienes oros, "],  # lucerna
+	["exiled_less_6", "si desterraste menos de seis cartas de esta manera, "],  # furia del exilio
 ]
 
 ## Reemplazo sobre el paso anterior: "Si tiene Exhumar, en vez de eso, Destiérralo".
@@ -333,6 +335,15 @@ const ATOMS := [
 	["draw", "(?:tu )?roba(?:s|r)? (?<upto>hasta )?(?<n>" + NUM + ") cartas?(?: de tu castillo)?"],
 	["draw_to_match", "roba(?:r)? cartas hasta tener la misma cantidad de cartas en (?:(?:la|tu) )?mano que tu oponente"],
 	# Piezas sueltas de una o pocas cartas (EffectInterpreterEspeciales).
+	# furia del exilio / santos pincheira.
+	["special:exile_all_opp_cemetery", "destierra todas las cartas del cementerio oponente"],
+	["mass_buff_exiled_cost", "tus aliados ganan fuerza igual al coste de esa carta por el turno"],
+	# duzakh / haz atómico: "Barajar una carta de coste igual o menor a la cantidad de Aliados que controles / al coste del portador".
+	["special:shuffle_cost_le", "barajar una carta de coste igual o menor (?<ref>a la cantidad de aliados que controles|al coste del portador)"],
+	# jinete de la guerra (con "Si controlas cuatro Aliados Jinete, ..."): los de esa raza.
+	["special:race_allies_furia_exile", "ganan furia y su dano es enviado al destierro"],
+	# jinete de la muerte (con "..., en vez de eso, ...").
+	["special:silence_destroy_non_race", "las cartas que no sean (?<race>[a-z]+) ni oro pierden su habilidad y son destruidas"],
 	# "Nombra una carta (que no sea Oro / de coste 3 o menos)" y lo que la usa después ("con ese nombre", "esa carta").
 	["special:name_card", "nombra una carta(?<ng> que no sea oro)?(?: de coste (?<cv>\\d+) o (?<cc>menos))?(?!,? las cartas con ese nombre)"],
 	# sombra etérea.
@@ -487,7 +498,7 @@ const ATOMS := [
 		+ "(?<nohab> sin habilidad)?" \
 		+ "(?<distinct>,? (?:con|de) (?:distinto|diferente) nombre,?)?" \
 		+ "(?: en tu (?<z3>castillo|cementerio)(?: (?:o|y/o) (?:tu )?(?<z4>castillo|cementerio))?| en (?<zx2>un castillo|el castillo oponente))?" \
-		+ "(?:,? y |, )(?:(?:ponla|ponlo|ponerla|ponerlo|ponlas|ponlos|ponerlas|ponerlos) en (?:tu (?<dest>mano|oro pagado|cementerio)" \
+		+ "(?:,? y |, )(?:(?:ponla|ponlo|ponerla|ponerlo|ponlas|ponlos|ponerlas|ponerlos) en (?:tu (?<dest>mano|oro pagado|cementerio|reserva)" \
 		+ "(?: (?:o|y/o) (?:tu )?(?<alt>cementerio|destierro)s?)?|(?<owncem>el cementerio de su dueno))" \
 		+ "|(?<exile>destierralos|destierralas|destierralo|destierrala)" \
 		+ "|(?<putplay>ponlo|ponla|ponerlo|ponerla) en juego" \
@@ -651,11 +662,13 @@ const ATOMS := [
 	# "de un Cementerio" (Carro Szgany, shoki): todas del mismo Cementerio.
 	# Sin "hasta" (suzaku: "Desterrar dos cartas de un Cementerio") igual se eligen hasta N: un
 	# Cementerio con menos no impide resolverlo.
-	["cemetery_banish", "(?:destierra|desterrar) (?:hasta )?(?<n>" + NUM + ") cartas? de (?:los cementerios|(?<one>un cementerio))"],
+	# "Destierra hasta cuatro cartas del Cementerio oponente" (los nantis, udjat, grendel, santos pincheira).
+	["cemetery_banish", "(?:destierra|desterrar) (?:hasta )?(?<n>" + NUM + ") cartas? (?:de (?:los cementerios|(?<one>un cementerio))|(?<oppc>del cementerio oponente))"],
 	["cemetery_shuffle", "(?:baraja|barajar) hasta (?<n>" + NUM + ") cartas? de (?:los cementerios|(?<one>un cementerio))"],
 	# "Genera un Oro (por el turno)" — sin restricción ("para jugar ..." queda
 	# sin consumir y el bloque no compila).
 	["gold", "genera(?:r)? (?<n>" + NUM + ") oros?(?: por el turno)?(?: para jugar (?:(?<for>aliados|un aliado|armas|un arma|talismanes|un talisman|totems?|un totem)" \
+		+ "(?: de coste (?<tcv>\\d+)(?<tcmp> o mas)?)?(?<fhand> de tu mano)?" \
 		+ "|(?<anyc>una carta|cartas)(?: de coste (?<fcv>\\d+) o mas)?(?<fnot> que no sean? aliados?)?" \
 		+ "|(?<fab>o utilizar habilidades de aliados o totems?)))?"],
 	# "Agrupa un Oro": del Oro Pagado a la Reserva.
@@ -815,6 +828,13 @@ static func compile_clause(text: String) -> Dictionary:
 					st["up_to"] = true
 		if then and not sub.steps.is_empty():
 			sub.steps[0]["then"] = true
+		if sub.has("instead"):
+			# "Si controlas cuatro Aliados Jinete, en vez de eso, ..." (jinete de la muerte): el paso anterior no se hace
+			# si se cumple.
+			if steps.is_empty():
+				plan.unparsed = s
+				return plan
+			steps[-1]["unless"] = sub.instead
 		steps.append_array(sub.steps)
 
 	# "...y juégalo. Ese Aliado no puede ser Anulado": las marcas tienen que quedar puestas ANTES de jugarlo (van
@@ -1056,8 +1076,11 @@ static func _control_condition(s: String) -> Dictionary:
 		race = words[1]
 	elif type_word == "":
 		type_word = ""  # "cartas": cualquier tipo
-	return {"rest": m.get_string("rest"), "cond": {"kind": "controls",
-		"count": parse_amount(m.get_string("n")) if not m.get_string("n").is_empty() else 1,
+	# "Si no controlas Aliados de coste 1 o menos" (yamata no orochi) / "Si controlas cuatro Aliados Jinete" (jinetes).
+	var n_word: String = m.get_string("n") if not m.get_string("n").is_empty() else m.get_string("nx")
+	return {"rest": m.get_string("rest"), "cond": {"kind": "controls", "negate": not m.get_string("neg").is_empty(),
+		"cost_val": int(m.get_string("ccv")) if not m.get_string("ccv").is_empty() else -1, "cost_cmp": m.get_string("ccc"),
+		"count": parse_amount(n_word) if not n_word.is_empty() else 1,
 		"type": type_word, "race": race, "other": not m.get_string("other").is_empty(),
 		"min_strength": int(m.get_string("sv")) if not m.get_string("sv").is_empty() else -1,
 		"attack_line": not m.get_string("atk").is_empty()}}
@@ -1156,6 +1179,11 @@ static func _compile_sentence(s: String) -> Dictionary:
 	if choose_m:
 		return _compile_sentence(choose_m.get_string("obj") + " " + _indicative(choose_m.get_string("rest")))
 	var ctl := _control_condition(s)
+	if not ctl.is_empty() and str(ctl.rest).begins_with("en vez de eso, "):
+		var instead := _compile_sentence(str(ctl.rest).substr(15))
+		if not instead.ok:
+			return instead
+		return {"ok": true, "instead": ctl.cond, "steps": [{"op": "if", "cond": ctl.cond, "steps": instead.steps}], "unparsed": ""}
 	if not ctl.is_empty():
 		var rest: String = ctl.rest
 		var optional := rest.begins_with("puedes ")
@@ -1164,6 +1192,9 @@ static func _compile_sentence(s: String) -> Dictionary:
 		var cond_inner := _compile_sentence(rest)
 		if not cond_inner.ok:
 			return cond_inner
+		for ci in cond_inner.steps:
+			if ci.op == "special" and ci.kind == "race_allies_furia_exile":
+				ci["race"] = str(ctl.cond.get("race", ""))  # "Si controlas cuatro Aliados Jinete, ganan Furia..."
 		return {"ok": true, "optional": optional,
 			"steps": [{"op": "if", "cond": ctl.cond, "steps": cond_inner.steps}], "unparsed": ""}
 	# "Si buscaste un Dinosaurio, adicionalmente busca..." (monstruo de la laguna, ignacio de la carrera):
@@ -1445,7 +1476,7 @@ static func _parse_quantity(t: String) -> Dictionary:
 			["moved", "cartas? barajadas? de esta forma"],
 			["affected_cost", "su coste(?![a-z])"],
 			# Lo que hizo un paso anterior del mismo efecto (EffectInterpreterEspeciales._quantity_value).
-			["exiled", "(?<t>" + T1 + ") desterrad[oa]s? de esta forma"],
+			["exiled", "(?<t>" + T1 + ") desterrad[oa]s? de esta (?:forma|manera)"],
 			["milled", "(?<t>" + T1 + ") botad[oa]s? de esta forma"],
 			["destroyed", "cartas? destruidas?"],
 			["paid_self", "oros? que hayas pagado por este aliado"],
@@ -1691,6 +1722,9 @@ static func _build(atom_name: String, m: RegExMatch) -> Dictionary:
 			var marks := {"no_leave": "no puede salir" in mk, "no_annul": "no puede ser anulado" in mk, "no_cancel": "canceladas" in mk,
 				"furia": "con furia" in mk, "silenced": "sin habilidad" in mk, "can_attack": "puede atacar" in mk, "shuffle_final": "barajalo" in mk}
 			return {"op": "special", "kind": "play_marks", "amount": 1, "marks": marks}
+		"mass_buff_exiled_cost":
+			return {"op": "mass_buff", "verb": "buff", "side": "own", "others": false, "amount": 1, "keywords": [], "to_exile": false,
+				"permanent": false, "turn_only": true, "qty": {"mode": "set", "q": {"kind": "exiled_cost"}, "key": "amount"}}
 		"mass_buff_chosen_cost":
 			return {"op": "mass_buff", "verb": "buff", "side": "own", "others": false, "amount": 1, "keywords": [], "to_exile": false,
 				"permanent": false, "turn_only": false,
@@ -1765,7 +1799,7 @@ static func _build(atom_name: String, m: RegExMatch) -> Dictionary:
 			if not m.get_string("putplay").is_empty():
 				play = {"free": true}  # "ponlo en juego" (ninjato): entra sin pagar su coste
 			var dest_word: String = m.get_string("dest")
-			var dest_key: String = {"oro pagado": "pagado", "cementerio": "cementerio"}.get(dest_word, "mano")
+			var dest_key: String = {"oro pagado": "pagado", "cementerio": "cementerio", "reserva": "reserva"}.get(dest_word, "mano")
 			if not m.get_string("exile").is_empty():
 				dest_key = "destierro"
 			if not m.get_string("owncem").is_empty():
@@ -1874,9 +1908,12 @@ static func _build(atom_name: String, m: RegExMatch) -> Dictionary:
 			return {"op": "mass", "verb": "destroy" if m.get_string("verb") == "destruye" else "banish",
 				"target": mass_target}
 		"cemetery_both", "cemetery_banish", "cemetery_shuffle":
-			return {"op": "cemetery_cleanup", "mode": atom_name.trim_prefix("cemetery_"),
+			var cc_step := {"op": "cemetery_cleanup", "mode": atom_name.trim_prefix("cemetery_"),
 				"amount": parse_amount(m.get_string("n")),
 				"one_zone": atom_name != "cemetery_both" and not m.get_string("one").is_empty()}
+			if _group(m, "oppc") != "":
+				cc_step["opp_only"] = true
+			return cc_step
 		"gold":
 			var for_word: String = m.get_string("for").trim_prefix("un ")
 			var gold_step := {"op": "gold", "amount": parse_amount(m.get_string("n")),
@@ -1884,6 +1921,10 @@ static func _build(atom_name: String, m: RegExMatch) -> Dictionary:
 					"talisman": "talisman", "totems": "totem", "totem": "totem"}.get(for_word, "")}
 			# "para jugar cartas de coste 3 o más" (voladora), "...que no sean Aliado" (desafiante), "para jugar o utilizar
 			# habilidades de Aliados o Tótem" (los altos solomonari), "para jugar una carta" (jabberwocky desatado).
+			# "para jugar Aliados de coste 2 o más" (ignacio de la carrera, peter pan) / "Armas de coste 1 de tu mano" (solomon).
+			if not m.get_string("tcv").is_empty():
+				gold_step["for_spec"] = {"types": [gold_step["for"]], "not": [], "cost_min": int(m.get_string("tcv")),
+					"cost_max": -1 if not m.get_string("tcmp").is_empty() else int(m.get_string("tcv"))}
 			if not m.get_string("anyc").is_empty() or not m.get_string("fab").is_empty():
 				gold_step["for_spec"] = {"types": ["aliado", "totem"] if not m.get_string("fab").is_empty() else [],
 					"not": ["aliado"] if not m.get_string("fnot").is_empty() else [],

@@ -31,6 +31,9 @@ func _quantity_value(main: Node, q: Dictionary, card: Node, controller_id: int) 
 		"each_list":  # "por cada Aliado Desterrado / Talismán Botado de esta forma"
 			var types: Array = q.get("types", [])
 			return _each.get(str(q.key), []).filter(func(d): return d is Dictionary and _spec_matches({"types": types}, d)).size()
+		"exiled_cost":  # santos pincheira: "Fuerza igual al coste de esa carta" (la Desterrada del Cementerio)
+			var ex: Array = _each.get("exiled", [])
+			return 0 if ex.is_empty() or int(ex[0].get("tipo", -1)) == Constants.CardType.ORO else int(ex[0].get("coste", 0))
 		"affected_cost":  # jabberwocky desatado: "tantos Oros como su coste"
 			var aff: Array = _each.get("affected", [])
 			if aff.is_empty():
@@ -141,6 +144,38 @@ func _special_step(main: Node, st: Dictionary, card: Node, controller_id: int) -
 			return true
 		"noop":
 			return true
+		"exile_all_opp_cemetery":  # furia del exilio (lo Desterrado queda en _each.exiled)
+			var opp := 1 - me
+			if await EffectContextScript.ensure_window():
+				return false
+			var cem: Array = CardManager.get_cemetery(opp)
+			var moved: Array = []
+			for d in cem.duplicate():
+				if CardManager.take_from_cemetery(opp, d):
+					d["esta_oculta"] = false
+					CardManager.append_to_exile(opp, d)
+					moved.append(d)
+			_each["exiled"] = moved
+			main._update_debug("%s: se Destierran %d cartas del Cementerio oponente" % [title, moved.size()])
+			return true
+		"shuffle_cost_le":
+			return await _shuffle_cost_le(main, st, card, me)
+		"race_allies_furia_exile":  # jinete de la guerra: "ganan Furia y su daño es enviado al Destierro"
+			var race: String = EffectCompilerScript.normalize(str(st.get("race", ""))).substr(0, 5)
+			for c in _controlled_in_play(main, me):
+				if c.get("card_type") == Constants.CardType.ALIADO and race in EffectCompilerScript.normalize(str(c.get("card_raza"))):
+					KeywordManager.grant_keyword(c, Constants.Keyword.FURIA, card, "permanent")
+					c.set_meta("converted_damage_to_exile", true)  # ProtectionRules.combat_damage_to_exile
+			return true
+		"silence_destroy_non_race":  # jinete de la muerte: "las cartas que no sean Jinete ni Oro pierden su habilidad y son Destruidas"
+			var keep: String = EffectCompilerScript.normalize(str(st.get("race", ""))).substr(0, 5)
+			var doomed: Array = []
+			for pid in [0, 1]:
+				doomed.append_array(_controlled_in_play(main, pid).filter(func(c): return (c.get("card_type") != Constants.CardType.ORO
+					and not (keep in EffectCompilerScript.normalize(str(c.get("card_raza")))))))
+			if doomed.is_empty():
+				return true
+			return await _apply_verb({"verb": "destroy", "count": doomed.size(), "up_to": true, "silence_first": true}, doomed, card)
 		"lock_named_turn":  # sombra etérea: "No se pueden utilizar habilidades de cartas con ese nombre por el turno"
 			if str(_each.get("named", "")).is_empty():
 				return false
@@ -663,3 +698,36 @@ func _opp_exile_named(main: Node, card: Node, me: int, all: bool) -> bool:
 			CardManager.add_to_exile(opp, PlayerSideScript.take_from_hand(main, opp, c))
 	_each["named_exiled"] = gone.size()
 	return true
+
+
+func _shuffle_cost_le(main: Node, st: Dictionary, card: Node, me: int) -> bool:
+	"""duzakh: 'Barajar una carta de coste igual o menor a la cantidad de Aliados que controles'; haz atómico: '...al coste
+	del portador'. Un Oro no tiene coste: no se elige. El bot, la carta oponente de mayor coste."""
+	var limit := 0
+	if str(st.get("ref", "")).begins_with("a la cantidad"):
+		limit = _controlled_in_play(main, me).filter(func(c): return c.get("card_type") == Constants.CardType.ALIADO).size()
+	else:
+		var bearer = card.get_parent() if is_instance_valid(card) and card.get_parent() and card.get_parent().get("equipped_weapons") is Array else null
+		if bearer == null:
+			return false
+		limit = int(ContinuousEffectManager.get_modified_cost(bearer))
+	var pool: Array = []
+	for pid in [0, 1]:
+		pool.append_array(_controlled_in_play(main, pid).filter(func(c): return (c.get("card_type") != Constants.CardType.ORO
+			and int(ContinuousEffectManager.get_modified_cost(c)) <= limit)))
+	if pool.is_empty():
+		main._update_debug("%s: no hay una carta de coste %d o menos" % [_card_name(card), limit])
+		return true
+	var target: Node = null
+	if _is_bot(me):
+		var rivals: Array = pool.filter(func(c): return _controller_of(c) != me)
+		if rivals.is_empty():
+			return true
+		rivals.sort_custom(func(a: Node, b: Node) -> bool: return int(ContinuousEffectManager.get_modified_cost(a)) > int(ContinuousEffectManager.get_modified_cost(b)))
+		target = rivals[0]
+	elif main.get("_card_interaction"):
+		target = await main._card_interaction.await_target("%s: puedes Barajar una carta de coste %d o menos (ESC: no)" % [_card_name(card), limit],
+			func(c: Node) -> bool: return c in pool, true, me)
+	if target == null or not is_instance_valid(target):
+		return true
+	return await _apply_verb({"verb": "shuffle", "count": 1, "up_to": true}, [target], card)

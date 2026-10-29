@@ -16,6 +16,11 @@ func _execute_step(main: Node, st: Dictionary, targets: Array, card: Node, contr
 func _condition_holds(cond, card: Node, controller_id: int = -1) -> bool:
 	if str(cond) == "milled_less_10":  # vampiro eterno: "Si Bota menos de diez cartas"
 		return int(_each.get("milled", 0)) < 10
+	if str(cond) == "no_golds":  # lucerna: "Si no tienes Oros" (en juego)
+		var main := _ts.get_node_or_null("/root/Main")
+		return main != null and _controlled_in_play(main, controller_id).filter(func(c): return c.get("card_type") == Constants.CardType.ORO).is_empty()
+	if str(cond) == "exiled_less_6":  # furia del exilio
+		return _each.get("exiled", []).size() < 6
 	if str(cond) == "none_named_exiled":  # caída del alba / temaukel: "Si no Destierra ninguna"
 		return int(_each.get("named_exiled", 0)) == 0
 	return super(cond, card, controller_id)
