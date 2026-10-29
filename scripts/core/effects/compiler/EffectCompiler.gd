@@ -343,6 +343,29 @@ const ATOMS := [
 	["special:grant_affected", "un aliado de coste (?<cv>\\d+) o (?<cc>mas|menos)(?<own> que controles) gana su habilidad por el resto del juego"],
 	# soberbia (la habilidad que da): "Barajar todos los Aliados de menor Fuerza que este Aliado".
 	["special:shuffle_weaker", "barajar todos los aliados de menor fuerza que este aliado"],
+	# "Elige un Aliado que controles / un tipo de carta" y lo que lo usa después ("ese Aliado", "de ese tipo").
+	["special:choose_card", "elige un aliado(?<own> que controles)"],
+	# y vivieron felices.
+	["special:type_silence_shuffle", "elige un tipo de carta que no sea oro para que pierdan su habilidad y sean barajadas"],
+	["special:choose_type", "elige un tipo de carta"],
+	["mass_buff_chosen_cost", "tus aliados ganan tanta fuerza como coste tenga ese aliado"],  # golpe eléctrico
+	["special:silence_chosen_type", "las cartas en juego de ese tipo pierden su habilidad hasta tu proximo turno"],  # sibila saint germain
+	["special:shuffle_exiles_chosen_type", "baraja de los destierros todas las cartas del tipo elegido en el castillo de su dueno"],  # convocar el caos
+	["draw_if_chosen", "si elegiste aliados, roba (?<a>" + NUM + ") cartas, sino roba (?<b>" + NUM + ") cartas"],
+	# envidia mortal.
+	["special:envy", "cada jugador muestra su mano y si tu oponente tiene mas cartas en su mano de ese tipo, buscar una carta en tu castillo," \
+		+ " ponla en tu mano y tu oponente destierra una carta del tipo nombrado de su mano"],
+	["special:envy_else", "de lo contrario, tu robas (?<n>" + NUM + ") cartas"],
+	["rule:castle_shield_extra_draw", "por el resto del juego, tu oponente no puede desterrar cartas de tu castillo por efectos y al final de tu turno" \
+		+ " robas una carta adicional"],
+	# descubrir disfraz.
+	["special:disguise", "elige un aliado y busca en un castillo una copia de ese aliado, juegalo bajo tu control reduciendo su coste en" \
+		+ " (?<n>" + NUM + ") oros hasta un minimo de 0 y no puede ser anulado"],
+	# regresa la razón.
+	["special:look_both_choose", "elige un aliado y mira tantas cartas del tope de ambos castillos como fuerza impresa tenga"],
+	["special:look_both_place", "pon tus cartas en tu mano o las oponentes en su cementerio y ordena el resto"],
+	# kasha: "Cada jugador Baraja tres cartas de su mano".
+	["each_shuffle_hand", "cada jugador baraja (?<n>" + NUM + ") cartas de su mano"],
 	# abel: "un Aliado gana Fuerza igual a la cantidad de Aliados que controles o que controle tu oponente".
 	["buff_eq_allies", "un aliado gana fuerza igual a la cantidad de aliados que controles o que controle tu oponente"],
 	# kuji-in.
@@ -574,7 +597,7 @@ const ATOMS := [
 	["keep_silence_shuffle", "cada jugador elige una carta que controle y las demas cartas que no sean oros? pierden su habilidad y son barajadas"],
 	# Lo que hace cada jugador sobre lo suyo (EffectInterpreterCadaJugador). Las oraciones "de esta forma" que
 	# siguen leen lo que movió.
-	["each:shuffle_all", "cada jugador baraja las cartas que controle que no sean oros?"],
+	["each:shuffle_all", "cada jugador baraja (?:todas )?las cartas que controle que no sean oros?"],
 	["each:hand_to", "los jugadores barajan cartas de su mano o roban cartas,? hasta tener (?<n>" + NUM + ") cartas en su mano"],
 	["each:duel_put", "cada jugador pone desde su mano en juego un aliado de coste (?<n>\\d+) o menos y entran sin habilidad por el turno"],
 	["each:duel_destroy", "destruye el aliado oponente"],
@@ -760,6 +783,10 @@ static func compile_clause(text: String) -> Dictionary:
 			sub.steps[0]["then"] = true
 		steps.append_array(sub.steps)
 
+	# "Elige un tipo de carta": qué le conviene al bot depende de lo que hace el paso siguiente.
+	for si in range(steps.size() - 1):
+		if steps[si].op == "special" and steps[si].kind == "choose_type":
+			steps[si]["bot"] = {"shuffle_exiles_chosen_type": "own_exile", "envy": "hand_diff"}.get(str(steps[si + 1].get("kind", "")), "play_diff")
 	plan.steps = steps
 	plan.ok = not steps.is_empty()
 	if not plan.ok:
@@ -939,6 +966,10 @@ static func _had_timing_prefix(s: String) -> bool:
 
 
 static func _is_static(s: String) -> bool:
+	# "Tus Aliados ganan tanta Fuerza como coste tenga ese Aliado" (golpe eléctrico): lo que se refiere a lo elegido
+	# antes es parte del efecto.
+	if " ese aliado" in s or " ese tipo" in s:
+		return false
 	for p in STATIC_STARTS:
 		if s.begins_with(p):
 			return true
@@ -1608,6 +1639,16 @@ static func _build(atom_name: String, m: RegExMatch) -> Dictionary:
 				"exclude_gold": false, "stat": "", "cmp": ">=", "value": 0}, "qty": {"mode": "set", "q": kuji_q, "key": "amount"}}
 		"opp_hand_exile":
 			return {"op": "hand_exile", "who": "opponent", "amount": parse_amount(m.get_string("n"))}
+		"mass_buff_chosen_cost":
+			return {"op": "mass_buff", "verb": "buff", "side": "own", "others": false, "amount": 1, "keywords": [], "to_exile": false,
+				"permanent": false, "turn_only": false,
+				"qty": {"mode": "set", "q": {"kind": "stat", "stat": "coste", "printed": false, "of": "ese aliado"}, "key": "amount"}}
+		"draw_if_chosen":
+			return {"op": "special", "kind": "draw_if_chosen", "amount": 1, "yes": parse_amount(m.get_string("a")), "no": parse_amount(m.get_string("b"))}
+		"each_shuffle_hand":
+			var sh_n: int = parse_amount(m.get_string("n"))
+			return {"op": "multi", "steps": [{"op": "shuffle_from_hand", "amount": sh_n, "up_to": false},
+				{"op": "shuffle_from_hand", "amount": sh_n, "up_to": false, "who": "opponent"}]}
 		"search_named_two":
 			var named: Array = []
 			for g in ["a", "b"]:

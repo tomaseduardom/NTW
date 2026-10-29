@@ -33,6 +33,9 @@ static func castle_banish_blocked(deck_owner: int, actor: int = -2) -> bool:
 	actor = _effect_actor(actor)
 	if actor == deck_owner:
 		return false
+	# y vivieron felices: "por el resto del juego, tu oponente no puede Desterrar cartas de tu Castillo por efectos".
+	if deck_owner >= 0 and RuleState.active("castle_exile_shield", deck_owner):
+		return true
 	for e in _castle_lock_sources():
 		var t: String = e.text
 		if e.pid == deck_owner and "tu oponente no puede desterrar cartas de tu castillo" in t:

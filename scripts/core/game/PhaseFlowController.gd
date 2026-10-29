@@ -530,8 +530,10 @@ func _resolve_fase_final(player_id: int) -> void:
 	elif GameManager.is_first_turn:
 		_main._update_debug("Fase Final: primer turno — sin robo")
 	else:
-		_main._update_debug("Fase Final: jugador %d roba %d carta(s)" % [player_id + 1, Constants.CARDS_DRAWN_PER_TURN])
-		for i in range(Constants.CARDS_DRAWN_PER_TURN):
+		# y vivieron felices: "al final de tu turno Robas una carta adicional" (RuleState "extra_final_draw").
+		var to_draw: int = Constants.CARDS_DRAWN_PER_TURN + (1 if RuleState.active("extra_final_draw", player_id) else 0)
+		_main._update_debug("Fase Final: jugador %d roba %d carta(s)" % [player_id + 1, to_draw])
+		for i in range(to_draw):
 			if not await _main._zone_manager.draw_card(player_id):
 				break
 

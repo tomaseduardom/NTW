@@ -139,7 +139,8 @@ static func describe_steps(steps: Array) -> String:
 					"zombie": "Daño recibido: Bota y revive", "allies_no_leave": "Tus Aliados no salen del juego",
 					"final_silence_allies": "En tu Fase Final, tus Aliados pierden su habilidad", "castle_lock": "Sin Botar, Desterrar del Castillo ni Descartar",
 					"cemetery_shuffle_cap": "Hasta tres de los Cementerios barajadas por turno",
-					"cemetery_exile_lock": "Tu oponente no puede Desterrar de tu Cementerio salvo Talismanes"}.get(str(st.kind), str(st.kind)))
+					"cemetery_exile_lock": "Tu oponente no puede Desterrar de tu Cementerio salvo Talismanes",
+					"castle_shield_extra_draw": "Castillo protegido y un robo más"}.get(str(st.kind), str(st.kind)))
 			"each":
 				parts.append({"shuffle_all": "Cada jugador baraja sus cartas que no sean Oro", "hand_to": "Cada jugador queda con %d cartas en la mano" % int(st.get("amount", 5)),
 					"duel_put": "Cada jugador pone un Aliado de su mano sin habilidad", "duel_destroy": "Destruir el Aliado oponente",
@@ -152,7 +153,12 @@ static func describe_steps(steps: Array) -> String:
 				parts.append({"castle_top_ally": "Poner cartas del tope de un Castillo como Aliados", "draw_per_destroyed_ctrl": "Cada controlador roba por sus destruidos",
 					"next_ally_discount_furia": "El próximo Aliado cuesta un Oro menos y gana Furia", "name_lock_attack": "Un Aliado y sus copias no atacan",
 					"drain_distribute": "Quitar Fuerza y repartirla", "grant_quoted": "Un Aliado gana la habilidad", "grant_affected": "Un Aliado gana su habilidad",
-					"shuffle_weaker": "Barajar los Aliados de menor Fuerza"}.get(str(st.kind), str(st.kind)))
+					"shuffle_weaker": "Barajar los Aliados de menor Fuerza", "choose_card": "Elegir un Aliado que controles",
+					"choose_type": "Elegir un tipo de carta", "silence_chosen_type": "Las de ese tipo pierden su habilidad",
+					"shuffle_exiles_chosen_type": "Barajar las de ese tipo de los Destierros", "draw_if_chosen": "Robar según el tipo elegido",
+					"envy": "Mostrar las manos y comparar", "envy_else": "Si no, robar %d" % int(st.get("amount", 2)),
+					"type_silence_shuffle": "Barajar sin habilidad las de un tipo", "disguise": "Jugar una copia de un Aliado",
+					"look_both_choose": "Elegir un Aliado", "look_both_place": "Mirar ambos Castillos"}.get(str(st.kind), str(st.kind)))
 			"repeat":
 				parts.append("Repetir: %s" % describe_steps(st.steps))
 			"hand_exile":
