@@ -12,6 +12,7 @@ class_name TurnClock
 ##   terminar el turno. En el Anfitrión lo hace _auto_resolve_host() (y las ventanas, con
 ##   NetworkClient.local_timeout); para el Remoto, NetworkClient.forced_intent devuelve el intent por
 ##   defecto y se le manda {"op":"force_close"} para que cierre lo que tenga abierto.
+## - Mientras alguien se reconecta (NetworkClient.reconnecting_now / peer_away) los relojes no corren.
 ## - Fase Final del jugador activo sin tiempo: FINAL_GRACE segundos para descartar por límite de
 ##   mano; después se descartan las primeras cartas de la izquierda.
 
@@ -150,7 +151,11 @@ func _process(delta: float) -> void:
 		NetworkClient.local_timeout = false
 		return
 	var opp_deciding := _opp_deciding()
-	if opp_deciding:
+	# Alguien se está reconectando (NetworkClient): los relojes se detienen hasta que vuelva.
+	var frozen: bool = NetworkClient.reconnecting_now or NetworkClient.peer_away
+	if frozen:
+		pass
+	elif opp_deciding:
 		if _opp_remaining > 0.0:
 			_opp_remaining -= delta
 			if _opp_remaining <= 0.0:

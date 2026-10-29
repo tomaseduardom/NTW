@@ -32,8 +32,12 @@ Cualquier hosting que corra un proceso Node.js persistente con un puerto expuest
 
 No hace falta base de datos ni almacenamiento persistente — todo el estado (qué salas existen,
 quién está en cada una) vive en memoria del proceso y se pierde si se reinicia, lo cual es
-aceptable: si el relay se cae, la partida en curso también termina (regla ya decidida en el
-diseño — sin reconexión en la v1).
+aceptable: si el relay se cae, la partida en curso también termina.
+
+Reconexión: si un jugador pierde la conexión en plena partida, el relay le guarda el lugar
+`GRACE_MS` (60 s por defecto), guarda lo que el otro le manda y se lo reenvía cuando vuelve
+(`rejoin` con el token que le dio al crear/unirse). Los mensajes van numerados de los dos lados para
+no perder ni repetir nada. Ver los comentarios de `server.js`.
 
 ## Protocolo
 

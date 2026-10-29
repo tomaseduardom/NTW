@@ -9,6 +9,9 @@ class_name MatchConnectionWatcher
 ##   y el Remoto muestra la misma pantalla de Victoria/Derrota.
 ## - Concesión del Remoto: {"op":"concede"} al Anfitrión, que lo aplica con GameManager.
 ## Al salir de una partida en línea (menú de pausa, fin de partida) se llama leave_match().
+## - Cortes breves (NetworkClient.in_match): la conexión propia se reintenta sola y el relay le guarda el
+##   lugar al rival un rato; mientras, un aviso arriba ("Reconectando..." / "El rival se está
+##   reconectando (N s)"). Solo si no vuelve a tiempo llegan connection_lost / peer_disconnected.
 
 var _main: Node = null
 var _active: bool = false
@@ -18,14 +21,24 @@ var _ended: bool = false
 var _remote_started: bool = false
 
 
+func _ready() -> void:
+	set_process(false)  # solo con el aviso de reconexión a la vista
+
+
 func setup(main: Node) -> void:
 	_main = main
 	_active = NetworkClient.room_code != ""
 	if not _active:
 		return
+	NetworkClient.in_match = true
 	NetworkClient.peer_disconnected.connect(_on_peer_disconnected)
 	NetworkClient.connection_lost.connect(_on_connection_lost)
 	NetworkClient.message_received.connect(_on_message)
+	NetworkClient.reconnecting.connect(func() -> void: _show_banner("Conexión perdida: reconectando...", 0))
+	NetworkClient.reconnected.connect(_hide_banner)
+	NetworkClient.peer_reconnecting.connect(func(grace_s: int) -> void:
+		_show_banner("El rival perdió la conexión: esperando que vuelva", grace_s))
+	NetworkClient.peer_returned.connect(_hide_banner)
 	GameManager.game_ended.connect(_on_game_ended)
 
 
@@ -72,6 +85,7 @@ func _on_game_ended(winner: int) -> void:
 
 
 func _on_peer_disconnected() -> void:
+	_hide_banner()
 	if _ended or _cancelled_by_bootstrap():
 		return
 	if NetworkClient.is_host and GameManager.is_game_active:
@@ -86,10 +100,69 @@ func _on_peer_disconnected() -> void:
 
 
 func _on_connection_lost() -> void:
+	_hide_banner()
 	if _ended or _cancelled_by_bootstrap():
 		return
 	_ended = true
 	_show_exit_dialog("Conexión perdida", "Se perdió la conexión con el servidor. La partida terminó.")
+
+
+# --- Aviso de reconexión ------------------------------------------------------
+var _banner_layer: CanvasLayer = null
+var _banner_label: Label = null
+var _banner_text: String = ""
+var _banner_until_ms: int = 0
+
+
+func _show_banner(text: String, seconds: int) -> void:
+	if _ended:
+		return
+	if _banner_layer == null:
+		_banner_layer = CanvasLayer.new()
+		_banner_layer.layer = 95
+		var panel := PanelContainer.new()
+		panel.set_anchors_preset(Control.PRESET_CENTER_TOP)
+		panel.offset_top = 12
+		panel.grow_horizontal = Control.GROW_DIRECTION_BOTH
+		panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		var style := StyleBoxFlat.new()
+		style.bg_color = Color(0.08, 0.06, 0.04, 0.92)
+		style.border_color = Color(1.0, 0.8, 0.2)
+		style.set_border_width_all(2)
+		style.set_corner_radius_all(6)
+		style.set_content_margin_all(10)
+		panel.add_theme_stylebox_override("panel", style)
+		_banner_label = Label.new()
+		_banner_label.add_theme_color_override("font_color", Color(1.0, 0.85, 0.35))
+		_banner_label.add_theme_font_size_override("font_size", 16)
+		panel.add_child(_banner_label)
+		_banner_layer.add_child(panel)
+		_main.add_child(_banner_layer)
+	_banner_text = text
+	_banner_until_ms = Time.get_ticks_msec() + seconds * 1000 if seconds > 0 else 0
+	_banner_layer.visible = true
+	_refresh_banner()
+	set_process(true)
+
+
+func _hide_banner() -> void:
+	if _banner_layer:
+		_banner_layer.visible = false
+	set_process(false)
+
+
+func _process(_delta: float) -> void:
+	_refresh_banner()
+
+
+func _refresh_banner() -> void:
+	if _banner_label == null:
+		return
+	if _banner_until_ms > 0:
+		var left: int = maxi(0, ceili((_banner_until_ms - Time.get_ticks_msec()) / 1000.0))
+		_banner_label.text = "%s (%d s)" % [_banner_text, left]
+	else:
+		_banner_label.text = _banner_text
 
 
 func _show_exit_dialog(title: String, text: String) -> void:
