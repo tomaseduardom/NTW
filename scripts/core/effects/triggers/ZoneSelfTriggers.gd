@@ -54,6 +54,8 @@ static func run(data: Dictionary, owner: int, zone: String, effect: String) -> b
 	proxy.controller_id = owner
 	proxy.set_meta("zone_data", data)
 	proxy.set_meta("zone", zone)
+	# "puedes jugarlo ...": la carta misma, desde la zona a la que llegó (EffectCompiler, special:play_self).
+	effect = RegEx.create_from_string("\\b(?:jugarlo|jugarla|juegalo|juegala)\\b").sub(effect, "jugar esta carta desde su zona", true)
 	var done: bool = await TriggerSystem._effect_interpreter.try_execute(proxy, effect, owner)
 	if is_instance_valid(proxy):
 		proxy.queue_free()

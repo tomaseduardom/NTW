@@ -399,7 +399,9 @@ const ATOMS := [
 	["special:regain_owned", "(?<each>cada jugador )?gana el control de (?:todas )?las cartas de las que sea(?:s)? dueno"],
 	# "(puedes) jugarlo sin pagar su coste / reduciendo su coste en un Oro / pagando su coste": la carta misma desde la zona
 	# a la que acaba de llegar (Destierro, Castillo), en los disparadores de zona (ZoneSelfTriggers).
-	["special:play_self", "(?:jugarlo|jugarla|juegalo|juegala)(?: (?<free>sin pagar su coste)| reduciendo su coste en (?<red>" + NUM + ") oros?" \
+	# Solo existe en esos disparadores: ZoneSelfTriggers reescribe "jugarlo" a "jugar esta carta desde su zona" (en otro
+	# texto "jugarlo" es la carta buscada: perla de sangre, azazel).
+	["special:play_self", "jugar esta carta desde su zona(?: (?<free>sin pagar su coste)| reduciendo su coste en (?<red>" + NUM + ") oros?" \
 		+ "(?:, hasta un minimo de (?<floor>\\d+))?| por (?<red2>" + NUM + ") oros? menos| pagando su coste)"],
 	# Piezas sueltas de una o pocas cartas (EffectInterpreterEspeciales).
 	# furia del exilio / santos pincheira.
