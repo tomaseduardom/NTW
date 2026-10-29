@@ -144,6 +144,11 @@ func _special_step(main: Node, st: Dictionary, card: Node, controller_id: int) -
 			return true
 		"noop":
 			return true
+		"self_gain":  # "Este Aliado gana Furia" (shade)
+			if not _alive(card):
+				return false
+			return await _buff({"amount": int(st.get("gain", 0)), "count": 1, "keywords": st.get("keywords", []), "to_exile": st.get("to_exile", false),
+				"turn_only": st.get("turn_only", false), "permanent": false}, [card], card)
 		"gain_control_affected":  # "...y ganar su control" (zmeu abismal): lo que afectó el paso anterior
 			for a in _each.get("affected", []):
 				if is_instance_valid(a.node) and _alive(a.node):

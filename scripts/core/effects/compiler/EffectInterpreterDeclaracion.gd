@@ -17,6 +17,12 @@ func _resolve_choices(main: Node, steps: Array, card: Node, controller_id: int) 
 		var options: Array = st.options.filter(func(o): return _option_possible(o, card, controller_id))
 		if options.is_empty():
 			options = st.options
+		if int(st.get("pick_max", 1)) > 1 or int(st.get("pick_min", 1)) != 1:
+			# "Elige dos (efectos)", "uno o más", "cualquier cantidad de efectos" (amanecer oscuro, aegishjalmur, ritual del
+			# fuego, tierra del fuego): se eligen de a uno; cada opción una sola vez.
+			for chosen in await _pick_options(main, st, options, card, controller_id):
+				out.append_array(await _resolve_choices(main, chosen, card, controller_id))
+			continue
 		var picked := 0
 		if _is_bot(controller_id) or options.size() == 1:
 			picked = 0
@@ -41,6 +47,45 @@ func _resolve_choices(main: Node, steps: Array, card: Node, controller_id: int) 
 				_preselected_target = load("res://scripts/ui/hud/BoardChoice.gd").last_target
 			picked = clampi(picked, 0, options.size() - 1)
 		out.append_array(await _resolve_choices(main, options[picked], card, controller_id))
+	return out
+
+
+func _pick_options(main: Node, st: Dictionary, options: Array, card: Node, controller_id: int) -> Array:
+	"""Varias opciones de una elección, en el orden en que se eligen. pick_min / pick_max (-1 = todas). El bot toma las
+	primeras que puede pagar (una opción con "pagar N Oros" la cuenta contra su Oro)."""
+	var pick_max: int = int(st.get("pick_max", 1))
+	if pick_max < 0:
+		pick_max = options.size()
+	pick_max = mini(pick_max, options.size())
+	var pick_min: int = mini(int(st.get("pick_min", 1)), pick_max)
+	var left: Array = options.duplicate()
+	var out: Array = []
+	if _is_bot(controller_id):
+		var gold_left: int = main._gold_manager.get_oro_disponible(controller_id) if main.get("_gold_manager") else 0
+		for o in left:
+			if out.size() >= maxi(pick_min, mini(pick_max, 2)):
+				break
+			var cost := 0
+			for s in o:
+				if s.op == "pay":
+					cost += int(s.amount)
+			if cost > gold_left:
+				continue
+			gold_left -= cost
+			out.append(o)
+		return out
+	while out.size() < pick_max and not left.is_empty():
+		var labels: Array = left.map(func(o): return describe_steps(o))
+		var can_stop: bool = out.size() >= pick_min
+		if can_stop:
+			labels.append("Listo (no elegir más)")
+		var idx: int = await SelectionManager.await_choice(main, "%s: elige una opción (%d de %s)" % [_card_name(card), out.size() + 1,
+			str(pick_max) if pick_max == pick_min else "hasta %d" % pick_max], labels, controller_id)
+		if can_stop and idx == left.size():
+			break
+		idx = clampi(idx, 0, left.size() - 1)
+		out.append(left[idx])
+		left.remove_at(idx)
 	return out
 
 

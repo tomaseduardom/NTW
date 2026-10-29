@@ -165,7 +165,11 @@ const RULE_SKIP_RX := [
 ]
 
 ## "Elige un efecto: - A. - B." — cada viñeta es una opción.
-const CHOOSE_ONE_RX := "^elige (?:un|uno) efecto:?\\s*(?<rest>.*)$"
+const CHOOSE_ONE_RX := "^elige (?:(?<k1>un|uno) efecto|(?<k>dos|tres|hasta dos|uno o mas|cualquier cantidad de)(?= efectos|:) ?(?:efectos)?)" \
+	+ "(?: y paga un coste adicional por cada efecto)?(?: y destierra este talisman)?:?\\s*(?<rest>.*)$"
+## "Elige efectos según las razas que controles: - Caballero: ... - Guerrero: ..." (clamor de los justos, legiones): cada
+## efecto vale si controlas un Aliado de esa raza.
+const CHOOSE_RACES_RX := "^elige efectos segun las razas que controles:?\\s*(?<rest>.*)$"
 
 ## Costes al comienzo de una oración, antes de "para (que) ...": "pagar un Oro para Robar dos cartas",
 ## "Desterrarlo de tu Cementerio y pagar un Oro para...", "Descartar una carta para que un Aliado
@@ -184,14 +188,14 @@ const COST_PIECES := [
 	# "puedes Barajarlo (en tu Castillo) para..." (rafael, miguel grau, amaterasu, illapa).
 	["self_shuffle", "barajarl[oa](?: (?:de|desde) tu (?:mano|cementerio|destierro|reserva))?(?: en tu castillo)?"],
 	["gold", "(?:pagar|paga) (?<n>" + NUM + ") oros?"],
-	["discard", "descartar (?:(?<dn>" + NUM + ") cartas?(?: de tu mano)?|(?:un|una) (?<types>" + TALT + ")(?: de tu mano)?)"],
+	["discard", "(?:descartar|descarta) (?:(?<dn>" + NUM + ") cartas?(?: de tu mano)?|(?:un|una) (?<types>" + TALT + ")(?: de tu mano)?)"],
 	# "Desterrar (otra) una/dos cartas de tu Cementerio para..." (udjat, grendel, argos, rosa pincheira,
 	# forma canina). Nunca la carta misma. No "de tu Cementerio o mano" (van helsing, sigue en su patrón).
 	["banish_cemetery", "desterrar (?:otra |otras )?(?<cn>" + NUM + ") cartas? de tu cementerio(?! o )"],
 	# "Desterrar una carta de tu mano para..." (hijo de la tierra, melmoth, yekamus...). No "de tu mano o
 	# cementerio" ni "o que controles": esos siguen en sus patrones.
 	["banish_hand", "desterrar (?:(?<bn>" + NUM + ") cartas?|(?:un|una) (?<types>" + TALT + ")) de tu mano(?! o )"],
-	["mill", "botar (?<n>" + NUM + ")(?: cartas?)?"],
+	["mill", "(?:botar|bota) (?<n>" + NUM + ")(?: cartas?)?"],
 	["reveal", "mostrar (?:un|una) (?<types>" + T1 + ")(?: (?<race>" + RACE + "))? de tu mano"],
 	["sacrifice", "destruir otro aliado que controles"],
 	# "Destruir/Desterrar/Barajar un Oro / una carta / un Aliado de coste 1 o más que controles para..."
@@ -380,6 +384,7 @@ const ATOMS := [
 	["special:cemetery_to_ally", "(?:convierte|convertir) (?<det>(?:hasta )?" + NUM + ") cartas? de (?<zone>tu cementerio|los cementerios|un cementerio)" \
 		+ " en (?:un |unos )?aliados?(?: (?<race>[a-z]+))?(?: sin habilidad)? de fuerza (?<v>\\d+)(?: (?<q>con la habilidad [\"“”¨][^\"“”¨]+[\"“”¨]))?" \
 		+ "(?:, de raza a tu eleccion)?(?: y ponlos en tu linea de defensa)?"],
+	["self_gain", "(?:este aliado|esta carta) gana (?<list>" + GRANT_ITEM + "(?:(?:, y |, | y |,? e )" + GRANT_ITEM + ")*)(?<turn> por el turno| este turno)?"],
 	# Piezas sueltas de una o pocas cartas (EffectInterpreterEspeciales).
 	# furia del exilio / santos pincheira.
 	["special:exile_all_opp_cemetery", "destierra todas las cartas del cementerio oponente"],
@@ -710,15 +715,16 @@ const ATOMS := [
 	# Cementerio con menos no impide resolverlo.
 	# "Destierra hasta cuatro cartas del Cementerio oponente" (los nantis, udjat, grendel, santos pincheira).
 	["cemetery_banish", "(?:destierra|desterrar) (?:hasta )?(?<n>" + NUM + ") cartas? (?:de (?:los cementerios|(?<one>un cementerio))|(?<oppc>del cementerio oponente))"],
-	["cemetery_shuffle", "(?:baraja|barajar) hasta (?<n>" + NUM + ") cartas? de (?:los cementerios|(?<one>un cementerio))"],
+	["cemetery_shuffle", "(?:baraja|barajar) (?:hasta )?(?<n>" + NUM + ") cartas? de (?:los cementerios|(?<one>un cementerio))"],
 	# "Genera un Oro (por el turno)" — sin restricción ("para jugar ..." queda
 	# sin consumir y el bloque no compila).
-	["gold", "genera(?:r)? (?<n>" + NUM + ") oros?(?: por el turno)?(?: para jugar (?:(?<for>aliados|un aliado|armas|un arma|talismanes|un talisman|totems?|un totem)" \
-		+ "(?: de coste (?<tcv>\\d+)(?<tcmp> o mas)?)?(?<fhand> de tu mano)?" \
+	["gold", "genera(?:r)? (?<n>" + NUM + ") oros?(?: por el turno)?(?: para (?:jugar )?(?:(?<for>aliados|un aliado|armas|un arma|talismanes|un talisman|totems?|un totem)" \
+		+ "(?: o (?<for2>aliados|armas|totems?|talismanes)(?: caballero)?)?" \
+		+ "(?: de coste (?<tcv>\\d+)(?<tcmp> o mas)?)?(?<fhand> de tu mano)?(?: por el turno)?" \
 		+ "|(?<anyc>una carta|cartas)(?: de coste (?<fcv>\\d+) o mas)?(?<fnot> que no sean? aliados?)?" \
 		+ "|(?<fab>o utilizar habilidades de aliados o totems?)))?"],
 	# "Agrupa un Oro": del Oro Pagado a la Reserva.
-	["regroup_gold", "agrupa(?:r)? (?<n>" + NUM + ") oros?"],
+	["regroup_gold", "agrupa(?:r)? (?<n>" + NUM + ") oros?(?: que controles)?"],
 	# "Agrupa dos cartas" (iga ryu): Oros Pagados y/o Aliados de Línea de Ataque (DAR 5.1).
 	["regroup_cards", "agrupa(?:r)? (?<n>" + NUM + ") cartas?"],
 	# "Un Aliado gana Furia, Imbloqueable, 3 de Fuerza y hace daño al Destierro
@@ -757,7 +763,7 @@ const ATOMS := [
 	# "Un Aliado hace el doble de daño este turno" / "Un Aliado no hace daño de combate este turno",
 	# sin "gana": mismo paso buff (las metas de BattleManager).
 	["combat_flag", "(?<det>(?:hasta )?" + NUM + ") (?<kind>aliados?)(?: (?<race>" + RACE + "))?(?<opp> oponentes?)?(?: en juego)?" + STAT_FILTER \
-		+ " (?<what>ha(?:ce|ga) (?:el )?doble (?:de )?dano(?: de combate)?|no ha(?:ce|ga) dano de combate" \
+		+ " (?<what>ha(?:ce|ga|cen) (?:el )?doble (?:de )?dano(?: de combate)?|no ha(?:ce|ga) dano de combate" \
 		+ "|no (?:puede|pueda) bloquear(?: ni hacer dano(?: de combate)?)?)(?: este turno| por el turno)?"],
 	# "Un Aliado de coste 2 o menos gana..." / "Un Aliado gana o pierde 2 de Fuerza" (se elige).
 	["buff", "(?<det>(?:hasta )?" + NUM + ") (?<kind>aliados?)(?: (?<race>" + RACE + "))?(?<opp> oponentes?)?(?: en juego)?" + STAT_FILTER \
@@ -1161,10 +1167,19 @@ static func _fold_choose_one(sentences: Array) -> Array:
 		if core != s:
 			prefix = s.substr(0, s.length() - core.length())
 		var m := rx.search(core)
+		var marker := "\u0001choose\u0001"
+		var races_m := RegEx.create_from_string(CHOOSE_RACES_RX).search(core)
+		if races_m:
+			m = races_m
+			marker = "\u0001races\u0001"
+		elif m != null and not m.get_string("k").is_empty():
+			marker = "\u0001choose:%s\u0001" % m.get_string("k")
 		if m == null:
-			# "Tu oponente muestra su mano y tú elige un efecto: - A. - B." (flechero): lo de antes es su propia
-			# oración.
-			m = RegEx.create_from_string("^(?<pre>.+?)(?:,| y) (?:tu )?elige (?:un|uno) efecto:?\\s*(?<rest>.*)$").search(core)
+			# "Tu oponente muestra su mano y tú elige un efecto: - A. - B." (flechero) / "Roba dos cartas y elige un efecto:"
+			# (kasha): lo de antes es su propia oración.
+			m = RegEx.create_from_string("^(?<pre>.+?)(?:,| y) (?:tu )?elige (?<k>un|uno|dos) efectos?:?\\s*(?<rest>.*)$").search(core)
+			if m != null:
+				marker = "\u0001choose:%s\u0001" % m.get_string("k")
 			if m == null:
 				out.append(s)
 				i += 1
@@ -1188,7 +1203,7 @@ static func _fold_choose_one(sentences: Array) -> Array:
 					and str(sentences[i]).begins_with("las cartas con ese nombre"):
 				options[options.size() - 1] = str(options.back()) + ", " + str(sentences[i])
 				i += 1
-		out.append(prefix + "\u0001choose\u0001" + "\u0001".join(options))
+		out.append(prefix + marker + "\u0001".join(options))
 	return out
 
 
@@ -1196,11 +1211,38 @@ static func _compile_sentence(s: String) -> Dictionary:
 	"""Una oración: primero intenta la secuencia completa; si no, una
 	elección 'A, o B' de nivel superior. Una condición inicial ('si X, ...')
 	envuelve toda la oración en un paso 'if'."""
+	if s.begins_with("\u0001races\u0001"):
+		# "- Caballero: X. - Guerrero: Y": cada efecto, si controlas un Aliado de esa raza.
+		var race_steps: Array = []
+		for ropt in s.substr(7).split("\u0001"):
+			var rm := RegEx.create_from_string("^(?<race>[a-z]+): (?<x>.+)$").search(ropt)
+			if rm == null:
+				return {"ok": false, "steps": [], "unparsed": ropt}
+			var rsub := _compile_sentence(rm.get_string("x"))
+			if not rsub.ok:
+				return rsub
+			race_steps.append({"op": "if", "cond": {"kind": "controls", "count": 1, "type": "aliado", "race": rm.get_string("race"),
+				"other": false, "min_strength": -1, "attack_line": false}, "steps": rsub.steps})
+		return {"ok": not race_steps.is_empty(), "steps": race_steps, "unparsed": ""}
+	var k_m := RegEx.create_from_string("^\u0001choose:(?<k>[a-z ]+)\u0001").search(s)
+	if k_m:
+		# "\u0001choose:dos\u0001A\u0001B": la cantidad de opciones a elegir.
+		var k: String = k_m.get_string("k")
+		var picks: Array = {"dos": [2, 2], "tres": [3, 3], "hasta dos": [1, 2], "uno o mas": [1, -1], "cualquier cantidad de": [0, -1]}.get(k, [1, 1])
+		var inner_choice := _compile_sentence("\u0001choose\u0001" + s.substr(k_m.get_end()))
+		if inner_choice.ok and (picks[0] != 1 or picks[1] != 1):
+			inner_choice.steps[0]["pick_min"] = picks[0]
+			inner_choice.steps[0]["pick_max"] = picks[1]
+		return inner_choice
 	if s.begins_with("\u0001choose\u0001"):
 		var options: Array = []
 		for opt in s.substr(8).split("\u0001"):
 			if opt.is_empty():
 				continue
+			# "- Un Oro: ..." / "- Dos Oros: ..." (ritual del fuego): el coste adicional de esa opción.
+			var cost_opt := RegEx.create_from_string("^(?<g>un|dos|tres) oros?: (?<x>.+)$").search(opt)
+			if cost_opt:
+				opt = "pagar %s oro%s para %s" % [cost_opt.get_string("g"), "" if cost_opt.get_string("g") == "un" else "s", cost_opt.get_string("x")]
 			var sub := _compile_sentence(opt)
 			if not sub.ok:
 				return sub
@@ -1211,6 +1253,14 @@ static func _compile_sentence(s: String) -> Dictionary:
 		if options.size() < 2:
 			return {"ok": false, "steps": [], "unparsed": s}
 		return {"ok": true, "steps": [{"op": "choice", "options": options}], "unparsed": ""}
+	# "Elige entre A o B" / "(puedes) elegir A o que B" (tótem del dragón ancestral, amaterasu, tauro, virgo).
+	var entre_m := RegEx.create_from_string("^(?:elige|elegir) (?:entre )?(?<rest>.+ o .+)$").search(s)
+	if entre_m and not s.begins_with("elige un ") and not s.begins_with("elige una "):
+		var alt: String = entre_m.get_string("rest").replace(" o que ", " o ")
+		alt = _indicative(alt)
+		var entre_inner := _compile_sentence(alt)
+		if entre_inner.ok and entre_inner.steps.size() == 1 and entre_inner.steps[0].op == "choice":
+			return entre_inner
 	var costs := _parse_costs(s)
 	if not costs.is_empty():
 		var paid := _compile_sentence(costs.rest)
@@ -1221,9 +1271,11 @@ static func _compile_sentence(s: String) -> Dictionary:
 	# subjuntivo pasa a indicativo y se compila como "un Aliado gana Furia".
 	if s.begins_with("hacer que ") and not s.begins_with("hacer que el proximo talisman"):
 		return _compile_sentence(_indicative(s.substr(10)))
-	var choose_m := RegEx.create_from_string("^elegir (?<obj>(?:un|una) [a-z ]+?) para que (?<rest>.+)$").search(s)
+	var choose_m := RegEx.create_from_string("^(?:elegir|elige) (?<obj>(?:hasta )?(?:un|una|dos|tres) [a-z ]+?) para que (?<rest>.+)$").search(s)
 	if choose_m:
-		return _compile_sentence(choose_m.get_string("obj") + " " + _indicative(choose_m.get_string("rest")))
+		var chose := _compile_sentence(choose_m.get_string("obj") + " " + _indicative(choose_m.get_string("rest")))
+		if chose.ok or s.begins_with("elegir "):
+			return chose
 	var ctl := _control_condition(s)
 	if not ctl.is_empty() and str(ctl.rest).begins_with("en vez de eso, "):
 		var instead := _compile_sentence(str(ctl.rest).substr(15))
@@ -1341,6 +1393,8 @@ static func _compile_sentence(s: String) -> Dictionary:
 	if cut > 0:
 		var a := _compile_sequence(s.substr(0, cut))
 		var b := _compile_sequence(s.substr(cut + 4))
+		if a.ok and not b.ok:
+			b = _compile_sentence(s.substr(cut + 4))
 		if a.ok and b.ok:
 			return {"ok": true, "steps": [{"op": "choice", "options": [a.steps, b.steps]}], "unparsed": ""}
 	# "Baraja una carta de coste 3 o menos o Anula un Talismán oponente": sin coma. Cada " o " (la de
@@ -1350,6 +1404,8 @@ static func _compile_sentence(s: String) -> Dictionary:
 		var left := _compile_sequence(s.substr(0, at))
 		if left.ok:
 			var right := _compile_sequence(s.substr(at + 3))
+			if not right.ok and not s.substr(at + 3).contains(" o "):
+				right = _compile_sentence(s.substr(at + 3))
 			if right.ok:
 				return {"ok": true, "steps": [{"op": "choice", "options": [left.steps, right.steps]}], "unparsed": ""}
 		at = s.find(" o ", at + 3)
@@ -1798,6 +1854,22 @@ static func _build(atom_name: String, m: RegExMatch) -> Dictionary:
 				"exclude_gold": false, "stat": "", "cmp": ">=", "value": 0}, "qty": {"mode": "set", "q": kuji_q, "key": "amount"}}
 		"opp_hand_exile":
 			return {"op": "hand_exile", "who": "opponent", "amount": parse_amount(m.get_string("n"))}
+		"self_gain":
+			var sg_amount := 0
+			var sg_kws: Array = []
+			var sg_exile := false
+			for im in RegEx.create_from_string(GRANT_ITEM).search_all(m.get_string("list")):
+				var it: String = im.get_string()
+				if it.ends_with("de fuerza"):
+					sg_amount += int(it.split(" ")[0])
+				elif it == "hace dano al destierro":
+					sg_exile = true
+				elif "dano" in it:
+					return {}
+				else:
+					sg_kws.append(it)
+			return {"op": "special", "kind": "self_gain", "amount": 1, "gain": sg_amount, "keywords": sg_kws, "to_exile": sg_exile,
+				"turn_only": not m.get_string("turn").is_empty()}
 		"play_marks":
 			var mk: String = m.get_string("m")
 			var marks := {"no_leave": "no puede salir" in mk, "no_annul": "no puede ser anulado" in mk, "no_cancel": "canceladas" in mk,
@@ -2023,9 +2095,13 @@ static func _build(atom_name: String, m: RegExMatch) -> Dictionary:
 					"talisman": "talisman", "totems": "totem", "totem": "totem"}.get(for_word, "")}
 			# "para jugar cartas de coste 3 o más" (voladora), "...que no sean Aliado" (desafiante), "para jugar o utilizar
 			# habilidades de Aliados o Tótem" (los altos solomonari), "para jugar una carta" (jabberwocky desatado).
+			# "para jugar Aliados o Armas" (pandemonium, calfucura, padre de la patria).
+			if not m.get_string("for2").is_empty():
+				gold_step["for_spec"] = {"types": [gold_step["for"], TYPE_WORDS.get(m.get_string("for2"), "")], "not": [], "cost_min": -1, "cost_max": -1}
+				gold_step["for"] = ""
 			# "para jugar Aliados de coste 2 o más" (ignacio de la carrera, peter pan) / "Armas de coste 1 de tu mano" (solomon).
 			if not m.get_string("tcv").is_empty():
-				gold_step["for_spec"] = {"types": [gold_step["for"]], "not": [], "cost_min": int(m.get_string("tcv")),
+				gold_step["for_spec"] = {"types": gold_step.get("for_spec", {}).get("types", [gold_step["for"]]), "not": [], "cost_min": int(m.get_string("tcv")),
 					"cost_max": -1 if not m.get_string("tcmp").is_empty() else int(m.get_string("tcv"))}
 			if not m.get_string("anyc").is_empty() or not m.get_string("fab").is_empty():
 				gold_step["for_spec"] = {"types": ["aliado", "totem"] if not m.get_string("fab").is_empty() else [],
