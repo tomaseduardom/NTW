@@ -18,8 +18,6 @@ const NO_BLOCK := "elige un aliado oponente para que no pueda bloquear este turn
 const MARTIRES := "no se pueden utilizar habilidades ni jugar cartas por el resto del turno"
 const ARTURO := "duplica su fuerza por el turno y es destruido en la fase final"
 const FUMA := "la proxima carta que juegue tu oponente cuesta un oro adicional"
-## ryujin el atormentador: "puedes Desterrar hasta dos cartas cuyos costes sumen 3 o menos".
-const BANISH_SUM_RX := "puedes desterrar hasta (?<n>\\w+) cartas cuyos costes sumen (?<sum>\\d+) o menos"
 const JOSE := "hasta tu proximo turno a tu oponente le cuesta un oro adicional utilizar habilidades de aliados de ese coste"
 const HUASO := "baraja todas las cartas oponentes de ese coste y no se puede jugar cartas de ese coste hasta tu proximo turno"
 const DAISUKE := "a tu oponente le cuesta un oro adicional utilizar habilidades de oro hasta tu proximo turno"
@@ -256,12 +254,6 @@ static func try_execute(card: Node, clause: String, controller_id: int) -> bool:
 		if main and card.has_method("is_in_play") and card.is_in_play():
 			await _arturo(main, card, controller_id)
 		return true
-	var cost_sum: RegExMatch = RegEx.create_from_string(BANISH_SUM_RX).search(t)
-	if cost_sum:
-		if main and main._card_interaction:
-			await _banish_cost_sum(main, card, controller_id, EffectCompiler.parse_amount(cost_sum.get_string("n")),
-				int(cost_sum.get_string("sum")))
-		return true
 	for pair in [[LADY_MINA, "_lady_mina"], [URIKO, "_uriko"], [DHAMPIR, "_dhampir"], [HOMBRE_INVISIBLE, "_hombre_invisible"],
 			[ANDRAS, "_andras"]]:
 		if pair[0] in t:
@@ -342,14 +334,6 @@ static func try_execute(card: Node, clause: String, controller_id: int) -> bool:
 			await _no_block(main, card, controller_id)
 		return true
 	return false
-
-
-## Elegir con presupuesto en vivo (como Ngenechén): cartas en juego que no sean Oro (no tienen coste).
-static func _banish_cost_sum(main: Node, card: Node, pid: int, max_count: int, max_sum: int) -> void:
-	var chosen: Array = await _pick_cost_sum(main, card, pid, max_count, max_sum,
-		"%s: puedes Desterrar hasta %d cartas cuyos costes sumen %d o menos" % [str(card.get("card_name")), max_count, max_sum])
-	if not chosen.is_empty():
-		await ActionModule.banish(chosen, card, true)
 
 
 static func _pick_cost_sum(main: Node, card: Node, pid: int, max_count: int, max_sum: int, prompt: String) -> Array:
@@ -543,7 +527,6 @@ static func _no_block(main: Node, card: Node, pid: int) -> void:
 		"description": "No puede bloquear este turno (%s)" % title,
 	})
 	main._update_debug("%s no puede bloquear este turno" % str(target.get("card_name")))
-
 
 
 # =============================================================================

@@ -347,30 +347,3 @@ static func _conocimiento(main: Node, card: Node, pid: int) -> void:
 		CardManager.add_to_cemetery(found[play_idx].owner, found[play_idx].data)
 
 
-static func _combate_naval(main: Node, card: Node, pid: int) -> void:
-	var candidates: Array = []
-	for side in [1 - pid, pid]:
-		candidates.append_array(EnterScript._in_play(main, side, func(c): return c.get("card_type") == Constants.CardType.TOTEM))
-		candidates.append_array(CardQuery.weapons_in_play(side))
-	candidates = candidates.filter(func(c): return is_instance_valid(c) and EnterScript._cost(c) <= 4)
-	if candidates.is_empty():
-		return
-	var picked: Array = []
-	if PlayerSideScript.is_bot(pid):
-		var rivals: Array = candidates.filter(func(c): return CardQuery.controller_of(c) != pid)
-		rivals.sort_custom(func(a, b): return EnterScript._cost(a) > EnterScript._cost(b))
-		var total := 0
-		for c in rivals:
-			if picked.size() < 2 and total + EnterScript._cost(c) <= 4:
-				picked.append(c)
-				total += EnterScript._cost(c)
-	else:
-		var fits := func(so_far: Array, c: Node) -> bool:
-			var total := 0
-			for x in so_far:
-				total += EnterScript._cost(x)
-			return so_far.size() < 2 and total + EnterScript._cost(c) <= 4
-		picked = await main._card_interaction.await_multi_target(
-			"%s: Destierra hasta dos Armas y/o Tótem cuyos costes sumen hasta 4" % _name(card), candidates, 2, Callable(), fits, true, null, pid)
-	if not picked.is_empty():
-		await ActionModule.banish(picked, card, true)

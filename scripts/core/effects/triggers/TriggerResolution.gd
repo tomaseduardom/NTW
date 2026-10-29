@@ -421,8 +421,6 @@ func _resolve_look_and_play_patterns(card: Node, full_ability_text: String, isol
 		return _hit("look_and_play.try_execute_pay_x_banish_opponent_castillo_draw_per_talisman_totem_pattern")
 	if await _main._look_and_play.try_execute_shuffle_one_in_play_and_four_cemetery_pattern(full_ability_text, controller_id, card):
 		return _hit("look_and_play.try_execute_shuffle_one_in_play_and_four_cemetery_pattern")
-	if await _main._look_and_play.try_execute_banish_opponent_cost_sum_six_pattern(full_ability_text, card, controller_id):
-		return _hit("look_and_play.try_execute_banish_opponent_cost_sum_six_pattern")
 	if await _main._look_and_play.try_execute_transformacion_pattern(full_ability_text, controller_id):
 		return _hit("look_and_play.try_execute_transformacion_pattern")
 	if await _main._look_and_play.try_execute_search_azi_ally_to_hand_pattern(full_ability_text, controller_id, card):

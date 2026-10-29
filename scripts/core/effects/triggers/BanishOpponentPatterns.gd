@@ -124,44 +124,6 @@ func try_execute_banish_opponent_castillo_by_titan_ignis_cost_draw_pattern(abili
 	return true
 
 
-func try_execute_banish_opponent_cost_sum_six_pattern(ability_text: String, card: Node, controller_id: int) -> bool:
-	"""'Cuando entra en juego Destierra cartas oponentes cuyos costes sumen hasta 6' (Ngenechén) —
-	solo esta cláusula. Las otras: 'Al comienzo del turno oponente...' en MechanicPatterns y la
-	prevención en EffectController (registro de prevenciones)."""
-	var lower := ability_text.to_lower()
-	# "cuyos coste sumen" en una impresión (errata del texto).
-	if not ("destierra cartas oponentes cuyos costes sumen hasta 6" in lower or "destierra cartas oponentes cuyos coste sumen hasta 6" in lower):
-		return false
-	var main := _main.get_node_or_null("/root/Main")
-	if not main:
-		return true
-	var opponent_cards: Array = []
-	var rival_fields: Array = [main.opponent_field, main.opponent_linea_ataque, main.opponent_linea_apoyo, main.opponent_gold] if controller_id == 0 \
-		else [main.player_field, main.player_linea_ataque, main.player_linea_apoyo, main.player_gold]
-	for field in rival_fields:
-		if field:
-			opponent_cards.append_array(field.get_children())
-	if opponent_cards.is_empty():
-		return true
-	if not main._card_interaction:
-		return true
-	# Click directo con presupuesto en vivo (dynamic_filter, ver arquitectura.md §10.20/Tempilcahue) en
-	# vez del modal viejo que reintentaba toda la selección si te pasabas de 6.
-	var budget_filter := func(chosen_so_far: Array, c: Node) -> bool:
-		var sum_cost: int = 0
-		for x in chosen_so_far:
-			sum_cost += int(x.get("card_cost")) if x.get("card_cost") != null else 0
-		var c_cost: int = int(c.get("card_cost")) if c.get("card_cost") != null else 0
-		return sum_cost + c_cost <= 6
-	var chosen: Array = await main._card_interaction.await_multi_target(
-		"Destierra cartas rivales cuyos costes sumen hasta 6", opponent_cards, -1, Callable(), budget_filter, true, null, controller_id)
-	if not chosen.is_empty():
-		# Sin ventana genérica a propósito: banish() con can_be_prevented = true ya consulta Prevención;
-		# abrirla aquí preguntaría dos veces por el mismo efecto.
-		await ActionModule.banish(chosen, card, true)
-	return true
-
-
 func try_execute_pay_x_banish_opponent_castillo_draw_per_talisman_totem_pattern(ability_text: String, controller_id: int) -> bool:
 	"""ea poe: "Cuando lo juegues, puedes pagar cualquier cantidad de Oros. Destierra tantas cartas
 	del tope del Castillo oponente como Oros hayas pagado por este Talismán más dos. Por cada

@@ -43,7 +43,6 @@ const KINDS := {
 	"convierte una carta de coste 2 o menos en un totem sin habilidad y gana su control. muestra cartas del tope de tu castillo hasta mostrar un aliado y ponlo en tu mano": "_stevenson",
 	"muestra la primera carta de tu castillo. si es un aliado, ponlo en tu cementerio y tu oponente bota dos cartas": "_falso_profeta",
 	"busca un talisman en tu castillo de coste 3 o menos y un talisman en el castillo oponente. juega uno sin pagar su coste y destierra el otro": "_conocimiento",
-	"destierra hasta dos arma y/o totem cuyos costes sumen hasta 4": "_combate_naval",
 	# Segundo lote.
 	"sube una carta oponente en juego que no sea oro a la mano de su dueno": "_favor_corte",
 	"sube un aliado oponente de coste 3 o menos a la mano de su dueno. si esta en tu mano": "_descarnados",

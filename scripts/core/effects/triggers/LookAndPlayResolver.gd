@@ -213,10 +213,6 @@ func try_execute_banish_opponent_castillo_by_titan_ignis_cost_draw_pattern(abili
 	return await _banish_opponent.try_execute_banish_opponent_castillo_by_titan_ignis_cost_draw_pattern(ability_text, card, controller_id)
 
 
-func try_execute_banish_opponent_cost_sum_six_pattern(ability_text: String, card: Node, controller_id: int) -> bool:
-	return await _banish_opponent.try_execute_banish_opponent_cost_sum_six_pattern(ability_text, card, controller_id)
-
-
 func try_execute_pay_x_banish_opponent_castillo_draw_per_talisman_totem_pattern(ability_text: String, controller_id: int) -> bool:
 	return await _banish_opponent.try_execute_pay_x_banish_opponent_castillo_draw_per_talisman_totem_pattern(ability_text, controller_id)
 

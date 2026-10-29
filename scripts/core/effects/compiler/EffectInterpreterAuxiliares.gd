@@ -76,6 +76,9 @@ static func _type_word(ctype: int) -> String:
 static func _object_label(spec: Dictionary, count: int) -> String:
 	var types: Array = spec.get("card_types", [])
 	var words: Array = TYPE_LABELS.get(types[0] if not types.is_empty() else "", TYPE_LABELS[""])
+	if int(spec.get("sum_max", -1)) >= 0:  # "hasta dos cartas cuyos costes sumen 3 o menos" (átomo cost_sum)
+		return "%s%s%s cuyos costes sumen hasta %d" % ["hasta %d " % count if count > 0 else "", words[1],
+			" oponentes" if spec.get("controller", "any") == "opponent" else "", int(spec.sum_max)]
 	var noun: String = words[0] if count == 1 else "%d %s" % [count, words[1]]
 	var article := ("un " if words[0] in ["Aliado", "Tótem", "Talismán", "Oro"] else "una ") if count == 1 else ""
 	var suffix := " oponente" if spec.get("controller", "any") == "opponent" else ""
@@ -183,7 +186,10 @@ static func describe_steps(steps: Array) -> String:
 					zones.append("tu Castillo" if z == "castillo" else "tu Cementerio")
 				parts.append("Buscar %s en %s" % [t[0] if st.amount == 1 else "%d %s" % [st.amount, t[1]], " o ".join(zones)])
 			"target":
-				parts.append("%s %s" % [_upper_first(VERB_LABELS.get(st.verb, st.verb)), _object_label(st.target, st.count)])
+				var verb_words: String = VERB_LABELS.get(st.verb, st.verb)
+				if str(st.get("verb_alt", "")) != "":  # "baraja y/o destierra" / "destruye o baraja" (átomo cost_sum)
+					verb_words += (" y/o " if st.get("alt_each", false) else " o ") + str(VERB_LABELS.get(st.verb_alt, st.verb_alt))
+				parts.append("%s %s" % [_upper_first(verb_words), _object_label(st.target, st.count)])
 			"mass":
 				parts.append("%s todos" % _upper_first(VERB_LABELS.get(st.verb, st.verb)))
 			"shuffle_from_cemetery":

@@ -831,6 +831,12 @@ const ATOMS := [
 	# Barajar/Desterrar sin zona explícita = en juego (ver
 	# DSR_ShuffleDrawCombos.try_execute_draw_and_shuffle_opponent_card_pattern()); por eso se rechaza
 	# si sigue "de tu/los...".
+	# "Destierra hasta dos cartas cuyos costes sumen 3 o menos" (hastur, akuma, calchona...), "baraja y/o destierra..."
+	# (castillo drácula), "destruye o baraja..." (atrapar): se eligen con el total de costes como tope.
+	["cost_sum", "(?<verb>destruye|destruir|destierra|desterrar|baraja|barajar)(?: (?<alt>o|y/o) (?<verb2>destruye|destruir|destierra|desterrar|baraja|barajar))?" \
+		+ " (?:(?<det>hasta " + NUM + ") |cualquier cantidad de )?" \
+		+ "(?<kind>armas? y/o totems?|totems? y/o armas?|aliados?|cartas?|totems?|armas?)(?<opp> oponentes?)?(?: en juego)?(?<own> que controles)?" \
+		+ ",? cuyos? costes? (?:totales )?sum[ae]n (?:hasta (?<sum>\\d+)|(?<sum2>\\d+) o menos)"],
 	# (?![a-z]): sin cortar una palabra ("hasta cinco carta|s de tu Cementerio").
 	["target", "(?<verb>destruye|destruir|destierra|desterrar|baraja|barajar) " + TARGET_RX + "(?![a-z])(?! de (?:tu|los|un|su) )"],
 ]
@@ -2466,14 +2472,30 @@ static func _build(atom_name: String, m: RegExMatch) -> Dictionary:
 				"double_damage": o[0].double_damage})
 			return gc_step
 		"target":
-			var verb_word: String = m.get_string("verb")
-			var verb := "destroy"
-			if verb_word.begins_with("destierra") or verb_word.begins_with("desterrar"):
-				verb = "banish"
-			elif verb_word.begins_with("baraj"):
-				verb = "shuffle"
-			return _target_step(verb, m)
+			return _target_step(_verb_of(m.get_string("verb")), m)
+		"cost_sum":
+			var det_s: String = _group(m, "det")
+			var kind_s: String = m.get_string("kind")
+			var sum_types: Array = ["arma", "totem"] if "y/o" in kind_s else ([TYPE_WORDS[kind_s]] if TYPE_WORDS.get(kind_s, "") != "" else [])
+			var sum_v: int = int(_group(m, "sum") if not _group(m, "sum").is_empty() else _group(m, "sum2"))
+			var sum_step := {"op": "target", "verb": _verb_of(m.get_string("verb")),
+				"count": parse_amount(det_s.trim_prefix("hasta ")) if not det_s.is_empty() else -1, "up_to": true,
+				"target": {"card_types": sum_types,
+					"controller": "opponent" if not _group(m, "opp").is_empty() else ("own" if not _group(m, "own").is_empty() else "any"),
+					"exclude_gold": true, "stat": "coste", "cmp": "<=", "value": sum_v, "sum_max": sum_v}}
+			if not _group(m, "verb2").is_empty():
+				sum_step["verb_alt"] = _verb_of(m.get_string("verb2"))
+				sum_step["alt_each"] = m.get_string("alt") == "y/o"  # "baraja y/o destierra": carta por carta
+			return sum_step
 	return {}
+
+
+static func _verb_of(word: String) -> String:
+	if word.begins_with("destierra") or word.begins_with("desterrar"):
+		return "banish"
+	if word.begins_with("baraj"):
+		return "shuffle"
+	return "destroy"
 
 
 static func _search_steps(m: RegExMatch, zones: Array, dest: String, play: Dictionary) -> Dictionary:

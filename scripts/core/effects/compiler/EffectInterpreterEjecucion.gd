@@ -445,8 +445,15 @@ func _apply_verb(st: Dictionary, targets: Array, card: Node) -> bool:
 	# Separar por verbo final (el reemplazo por keyword puede cambiarlo).
 	var by_verb := {}
 	var repl: Dictionary = st.get("replace_if_keyword", {})
+	# "Destruye o baraja..." (atrapar): un verbo para todas; "baraja y/o destierra..." (castillo drácula): carta por carta.
+	var alt: String = str(st.get("verb_alt", ""))
+	var alt_once: String = ""
+	if alt != "" and not st.get("alt_each", false) and not alive.is_empty():
+		alt_once = await _choose_verb(st.verb, alt, card, null)
 	for t in alive:
 		var verb: String = st.verb
+		if alt != "":
+			verb = alt_once if alt_once != "" else await _choose_verb(st.verb, alt, card, t)
 		if not repl.is_empty() and KeywordManager.has_keyword(t, _keyword_enum(repl.keyword)):
 			verb = repl.verb
 		if not by_verb.has(verb):
@@ -499,6 +506,16 @@ func _apply_verb(st: Dictionary, targets: Array, card: Node) -> bool:
 					else:
 						all_ok = false
 	return all_ok
+
+
+func _choose_verb(first: String, second: String, card: Node, target: Node) -> String:
+	var ctrl: int = _controller_of(card)
+	if _is_bot(ctrl):
+		return first
+	var title: String = _card_name(card) + (": %s" % str(target.get("card_name")) if is_instance_valid(target) else "")
+	var pick_first: bool = await SelectionManager.await_two_choice(_ts.get_node_or_null("/root/Main"), title,
+		str(VERB_LABELS.get(first, first)).capitalize(), str(VERB_LABELS.get(second, second)).capitalize(), ctrl)
+	return first if pick_first else second
 
 
 func _search_filter(st: Dictionary) -> Dictionary:

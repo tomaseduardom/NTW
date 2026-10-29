@@ -638,35 +638,6 @@ static func _horda_tenebris(main: Node, card: Node, pid: int) -> void:
 			PlayerSideScript.put_in_hand(main, pid, pk.data)
 
 
-static func _ivi_atua(main: Node, card: Node, pid: int) -> void:
-	var chosen: Array = await AttackScript._pick_cost_sum(main, card, pid, 2, 2, "%s: hasta dos cartas cuyos costes sumen hasta 2" % _name(card))
-	if not chosen.is_empty():
-		await ActionModule.banish(chosen, card, true)
-	await ActionModule.draw(pid, 2, _name(card), true)
-
-
-static func _akuma(main: Node, card: Node, pid: int) -> void:
-	var rivals := EnterScript._in_play(main, 1 - pid, func(c): return c.get("card_type") != Constants.CardType.ORO)
-	var picked: Array = []
-	if PlayerSideScript.is_bot(pid):
-		rivals.sort_custom(func(a, b): return EnterScript._cost(a) > EnterScript._cost(b))
-		var total := 0
-		for c in rivals:
-			if picked.size() < 2 and total + EnterScript._cost(c) <= 4:
-				picked.append(c)
-				total += EnterScript._cost(c)
-	else:
-		var fits := func(so_far: Array, c: Node) -> bool:
-			var total := 0
-			for x in so_far:
-				total += EnterScript._cost(x)
-			return so_far.size() < 2 and total + EnterScript._cost(c) <= 4
-		picked = await main._card_interaction.await_multi_target("%s: hasta dos cartas oponentes cuyos costes sumen hasta 4" % _name(card),
-			rivals, 2, Callable(), fits, true, null, pid)
-	if not picked.is_empty():
-		await ActionModule.banish(picked, card, true)
-
-
 static func _alucard_destierra(main: Node, card: Node, pid: int) -> void:
 	var top := true
 	if not PlayerSideScript.is_bot(pid):

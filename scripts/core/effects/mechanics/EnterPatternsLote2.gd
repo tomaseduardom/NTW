@@ -162,36 +162,6 @@ static func _libra(main: Node, card: Node, pid: int) -> void:
 		Constants.Zone.ORO_PAGADO)
 
 
-static func _cost_sum_then(main: Node, card: Node, pid: int, count: int, max_sum: int, verb: String, optional: bool) -> Array:
-	if optional and not await _confirm(main, pid, _name(card), "%s hasta %d cartas cuyos costes sumen %d o menos" % [verb, count, max_sum]):
-		return []
-	var chosen: Array = await AttackScript._pick_cost_sum(main, card, pid, count, max_sum,
-		"%s: %s hasta %d cartas cuyos costes sumen %d o menos" % [_name(card), verb, count, max_sum])
-	if chosen.is_empty() or await _window(card, pid):
-		return []
-	return chosen
-
-
-static func _calchona(main: Node, card: Node, pid: int) -> void:
-	var chosen := await _cost_sum_then(main, card, pid, 2, 3, "Destruye", false)
-	if not chosen.is_empty():
-		await ActionModule.destroy(chosen, card, true)
-
-
-static func _hastur(main: Node, card: Node, pid: int) -> void:
-	var chosen := await _cost_sum_then(main, card, pid, 3, 4, "Destierra", false)
-	if not chosen.is_empty():
-		await ActionModule.banish(chosen, card, true)
-
-
-static func _yodo_dono(main: Node, card: Node, pid: int) -> void:
-	var chosen := await _cost_sum_then(main, card, pid, 2, 2, "Desterrar", true)
-	if chosen.is_empty():
-		return
-	await ActionModule.banish(chosen, card, true)
-	await ActionModule.draw(pid, 1, _name(card), true)
-
-
 static func _vaku(main: Node, card: Node, pid: int) -> void:
 	var targets: Array = []
 	for side in [1 - pid, pid]:

@@ -136,8 +136,6 @@ const KINDS := {
 	"puedes buscar en cada castillo dos cartas": "_hacha_seth",
 	"puedes descartar una carta que no sea talisman para buscar en tu castillo una carta del mismo tipo y ponerla en tu mano": "_luxor",
 	"puedes botar tres cartas para subir hasta una carta de coste 2 o menos a la mano de su dueno y hasta una carta que no sea talisman de tu cementerio a tu mano": "_horda_tenebris",
-	"puedes desterrar hasta dos cartas cuyos costes sumen hasta 2 y robar dos cartas": "_ivi_atua",
-	"destierra hasta dos cartas oponentes cuyos costes sumen hasta 4": "_akuma",
 	"destierra cinco cartas del tope del castillo oponente o hasta dos cartas en juego cuyos costes sumen hasta 3": "_alucard_destierra",
 	"tu oponente bota tantas cartas como fuerza tenga un aliado que controle y subelo a la mano de su dueno": "_faraon_negro_1",
 	"puedes robar dos cartas y descartar una carta. luego, hasta dos aliados imbloqueable ganan furia por el turno": "_castillo_kumamoto",

@@ -105,7 +105,11 @@ func _declare_targets(main: Node, st: Dictionary, card: Node, controller_id: int
 	if candidates.is_empty():
 		return []
 	var count: int = st.count
+	if count < 0:
+		count = candidates.size()  # "cualquier cantidad de cartas cuyos costes sumen..."
 	var mandatory: bool = not st.up_to and not may_decline
+	if int(spec.get("sum_max", -1)) >= 0:
+		return await _pick_cost_sum(main, st, candidates, count, int(spec.sum_max), controller_id)
 	if is_instance_valid(_preselected_target):
 		var pre: Node = _preselected_target
 		_preselected_target = null
@@ -133,6 +137,30 @@ func _declare_targets(main: Node, st: Dictionary, card: Node, controller_id: int
 		return [picked] if picked and is_instance_valid(picked) else []
 	return await main._card_interaction.await_multi_target(prompt, candidates, count, Callable(), Callable(),
 		not mandatory, null, controller_id)
+
+
+func _pick_cost_sum(main: Node, st: Dictionary, candidates: Array, count: int, sum_max: int, controller_id: int) -> Array:
+	"""Hasta 'count' cartas cuyos costes sumen hasta 'sum_max' (EffectCompiler, átomo cost_sum). El bot: las más caras del
+	rival que entren en el tope."""
+	var cost_of := func(c: Node) -> int: return int(ContinuousEffectManager.get_modified_cost(c))
+	var fits := func(so_far: Array, c: Node) -> bool:
+		var total := 0
+		for x in so_far:
+			total += cost_of.call(x)
+		return so_far.size() < count and total + cost_of.call(c) <= sum_max
+	if _is_bot(controller_id):
+		var pool: Array = candidates.filter(func(c): return _controller_of(c) != controller_id)
+		pool.sort_custom(func(a, b): return cost_of.call(a) > cost_of.call(b))
+		var out: Array = []
+		for c in pool:
+			if fits.call(out, c):
+				out.append(c)
+		return out
+	var verbs: String = VERB_LABELS.get(st.verb, st.verb)
+	if str(st.get("verb_alt", "")) != "":
+		verbs += (" y/o " if st.get("alt_each", false) else " o ") + VERB_LABELS.get(st.verb_alt, st.verb_alt)
+	var prompt := "Elige cartas cuyos costes sumen hasta %d para %s" % [sum_max, verbs]
+	return await main._card_interaction.await_multi_target(prompt, candidates, count, Callable(), fits, true, null, controller_id)
 
 
 func _candidates(main: Node, spec: Dictionary, source: Node, controller_id: int) -> Array:
