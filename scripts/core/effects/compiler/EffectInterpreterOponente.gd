@@ -16,6 +16,14 @@ func _execute_step(main: Node, st: Dictionary, targets: Array, card: Node, contr
 func _condition_holds(cond, card: Node, controller_id: int = -1) -> bool:
 	if str(cond) == "milled_less_10":  # vampiro eterno: "Si Bota menos de diez cartas"
 		return int(_each.get("milled", 0)) < 10
+	if cond is Dictionary and cond.get("kind", "") == "affected_cost":  # white worm: "Si era de coste 3 o más"
+		var aff: Array = _each.get("affected", [])
+		if aff.is_empty():
+			return false
+		var cost: int = int(aff[0].get("cost", 0))
+		return cost >= int(cond.n) if cond.cmp == "mas" else cost <= int(cond.n)
+	if cond is Dictionary and cond.get("kind", "") == "opp_exile_at_least":  # lucy
+		return CardManager.get_exile(1 - controller_id).size() >= int(cond.n)
 	if str(cond) == "no_golds":  # lucerna: "Si no tienes Oros" (en juego)
 		var main := _ts.get_node_or_null("/root/Main")
 		return main != null and _controlled_in_play(main, controller_id).filter(func(c): return c.get("card_type") == Constants.CardType.ORO).is_empty()

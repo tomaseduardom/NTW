@@ -276,6 +276,8 @@ const STATIC_STARTS := [
 	# Reglas pegadas a una activada (abel: "Convertir cartas y Barajar Aliados Héroe... cuesta un Oro adicional"; mug ruith:
 	# "Si hay diez o más cartas en los Destierros, tus Aliados ganan...").
 	"convertir cartas y barajar", "si hay diez o mas cartas en los destierros",
+	# paladín tríada / dolor de rocinante: otra habilidad de la carta.
+	"el primer aliado de coste", "al comienzo de la fase final oponente si esta en tu cementerio",
 ]
 
 const TYPE_WORDS := {
@@ -334,6 +336,37 @@ const REVEAL_DIST_ITEM := "(?:(?:pon )?(?:" + NUM + "|otro|otra|el otro|la otra)
 const ATOMS := [
 	["draw", "(?:tu )?roba(?:s|r)? (?<upto>hasta )?(?<n>" + NUM + ") cartas?(?: de tu castillo)?"],
 	["draw_to_match", "roba(?:r)? cartas hasta tener la misma cantidad de cartas en (?:(?:la|tu) )?mano que tu oponente"],
+	# "en un Tótem sin habilidad (y gana su control)" (pachamama, tenshi z, r l stevenson, vâlva apei, prisionero de drácula,
+	# dolor de rocinante).
+	["special:convert_totem", "(?:convierte|convertir) (?<det>(?:hasta )?" + NUM + ") (?<what>cartas?|aliados?)(?<opp> oponentes?)?(?: de coste (?<cv>\\d+) o menos)?" \
+		+ " en (?:un )?totems? sin habilidad(?<gc>,? (?:y )?gana(?:r)? su control)?"],
+	# rugiaevit: lo elige tu oponente.
+	["special:opp_converts_totem", "tu oponente convierte una carta que controle que no sea oro en un totem sin habilidad y tu ganas su control"],
+	# "en un Oro sin habilidad y muévelo a tu Oro Pagado" (transilvania, espada de magog, batalla de waterloo, white worm, zmey).
+	["special:convert_gold_paid", "(?:convierte|convertir) (?<det>un|una) (?<what>cartas?|aliados?)(?<ng> que no sea oro)?(?: de coste (?<cv>\\d+) o menos)?" \
+		+ " en un oro sin habilidad y (?:muevelo|moverlo|ponlo|ponerlo) (?:a|en) tu oro pagado"],
+	# Del Castillo a tu Oro Pagado: "la primera carta de un Castillo / del Castillo oponente / la carta del fondo de tu
+	# Castillo / una carta del tope de un Castillo" (ángel barachiel, jabberwocky, el mundo, huevos de oro).
+	["special:castle_to_gold_paid", "(?:convierte|convertir) (?:la primera carta|una carta del tope|la carta del tope|(?<bottom>la carta del fondo)) (?:de|del)" \
+		+ " (?<which>un castillo|castillo oponente|tu castillo) en un oro sin habilidad y (?:ponlo|ponerlo|muevelo|moverlo) (?:a|en) tu oro pagado"],
+	# "la primera carta / la carta del tope de un Castillo en un Aliado de Fuerza N (sin habilidad) y ponlo (en juego) bajo tu
+	# control" (paladín tríada, mycroft holmes, isla de poveglia): como estirpe maldita.
+	["special:castle_top_ally", "(?:convierte|convertir) la (?:primera carta|carta del tope) de un castillo en un aliado de fuerza (?<v>\\d+)(?: sin habilidad)?" \
+		+ " y (?:ponlo|ponla) (?:en juego )?bajo tu control"],
+	# "un Aliado (oponente) de coste N o menos en un Aliado (Sombra) sin habilidad y gana su control" (paso del camahueto,
+	# esfinge antártica, tatarigami).
+	["special:convert_ally_steal", "(?:convierte|convertir) un aliado(?<opp> oponente)? de coste (?<cv>\\d+) o menos en un aliado(?: [a-z]+)? sin habilidad y gana su control"],
+	# Convertir (DAR 8). "en una carta del mismo tipo sin habilidad" / "un Oro en un Oro sin habilidad" = pierde su
+	# habilidad (estrella de kirin, agabar, capitán o'brien, peripillan, kokudaka, sibila, lucy, zmeu abismal...).
+	["convert_same", "(?:convierte|convertir) (?<det>(?:hasta )?" + NUM + ") (?<what>oros?|cartas?|aliados?|totems?|armas?)(?<orc> o (?:una )?cartas?)?" \
+		+ "(?<opp> oponentes?)?(?: en juego)?(?: de coste (?<cv>\\d+) o menos)?,? en (?:(?:una |unas )?cartas? del mismo tipo,?(?: pero)?|(?:un )?oros?)" \
+		+ " sin habilidad(?<dur> por el turno|,? hasta tu proximo turno)?(?<gc> y ganar su control)?"],
+	# presencia de inari: "Una carta oponente se convierte en una carta del mismo tipo sin habilidad".
+	["convert_same", "(?<det>una) (?<what>carta)(?<opp> oponente) se convierte en una carta del mismo tipo sin habilidad"],
+	# "Convierte (todos) los Oros (en juego / en su Reserva) en Oros sin habilidad" (koi dragon, la muerte, bojutsu) /
+	# "todas las cartas oponentes en cartas del mismo tipo sin habilidad" (isabel riquelme).
+	["convert_mass", "(?:cada jugador )?convierte (?:todos )?(?:los oros|(?<all>todas las cartas)(?<opp> oponentes))(?: en juego| en su reserva)?" \
+		+ " en (?:oros|cartas del mismo tipo) sin habilidad"],
 	# Piezas sueltas de una o pocas cartas (EffectInterpreterEspeciales).
 	# furia del exilio / santos pincheira.
 	["special:exile_all_opp_cemetery", "destierra todas las cartas del cementerio oponente"],
@@ -499,7 +532,7 @@ const ATOMS := [
 		+ "(?<distinct>,? (?:con|de) (?:distinto|diferente) nombre,?)?" \
 		+ "(?: en tu (?<z3>castillo|cementerio)(?: (?:o|y/o) (?:tu )?(?<z4>castillo|cementerio))?| en (?<zx2>un castillo|el castillo oponente))?" \
 		+ "(?:,? y |, )(?:(?:ponla|ponlo|ponerla|ponerlo|ponlas|ponlos|ponerlas|ponerlos) en (?:tu (?<dest>mano|oro pagado|cementerio|reserva)" \
-		+ "(?: (?:o|y/o) (?:tu )?(?<alt>cementerio|destierro)s?)?|(?<owncem>el cementerio de su dueno))" \
+		+ "(?: (?:o|y/o) (?:tu )?(?<alt>cementerio|destierro)s?)?(?<resnohab> sin habilidad por el turno)?|(?<owncem>el cementerio de su dueno))" \
 		+ "|(?<exile>destierralos|destierralas|destierralo|destierrala)" \
 		+ "|(?<putplay>ponlo|ponla|ponerlo|ponerla) en juego" \
 		+ "|(?<sdist>pon (?:" + NUM + ") en tu (?:mano|cementerio|destierro)(?:(?:, | y )(?:" + NUM + ") en tu (?:mano|cementerio|destierro))+)" \
@@ -1247,6 +1280,22 @@ static func _compile_sentence(s: String) -> Dictionary:
 	var is_kw := RegEx.create_from_string("^((?:un|una) aliado(?: que controles)?) es (furia|imbloqueable|indestructible|indesterrable)\\b").search(s)
 	if is_kw:
 		return _compile_sentence(is_kw.get_string(1) + " gana " + is_kw.get_string(2) + s.substr(is_kw.get_end()))
+	# "Si era de coste 3 o más, ..." (white worm): la carta que afectó / convirtió el paso anterior.
+	var was_m := RegEx.create_from_string("^si era de coste (?<n>\\d+) o (?<cmp>mas|menos), (?<rest>.+)$").search(s)
+	if was_m:
+		var was_inner := _compile_sentence(was_m.get_string("rest"))
+		if not was_inner.ok:
+			return was_inner
+		return {"ok": true, "steps": [{"op": "if", "cond": {"kind": "affected_cost", "n": int(was_m.get_string("n")), "cmp": was_m.get_string("cmp")},
+			"steps": was_inner.steps}], "unparsed": ""}
+	# "Si tu oponente tiene ocho o más cartas en su Destierro, ..." (lucy).
+	var exile_m := RegEx.create_from_string("^si tu oponente tiene (?<n>" + NUM + ") o mas cartas en su destierro, (?<rest>.+)$").search(s)
+	if exile_m:
+		var ex_inner := _compile_sentence(exile_m.get_string("rest"))
+		if not ex_inner.ok:
+			return ex_inner
+		return {"ok": true, "steps": [{"op": "if", "cond": {"kind": "opp_exile_at_least", "n": parse_amount(exile_m.get_string("n"))},
+			"steps": ex_inner.steps}], "unparsed": ""}
 	# "Anula o Destierra un Tótem de coste 3 o menos" (jurado descontento): una elección entre los dos verbos.
 	var ad_m := RegEx.create_from_string("^anula o destierra (?<obj>.+)$").search(s)
 	if ad_m:
@@ -1568,9 +1617,13 @@ static func _build(atom_name: String, m: RegExMatch) -> Dictionary:
 			each["amount"] = parse_amount(m.get_string("n"))
 		if prefix == "special":
 			each["amount"] = int(each.get("amount", 1))
-			for g in ["v", "cv", "cc", "own", "ng"]:  # Fuerza, filtro de coste, "que controles", "que no sea Oro"
-				if m.names.has(g) and not m.get_string(g).is_empty():
+			# Todos los grupos con valor (Fuerza, filtro de coste, "que controles", "oponente", "y gana su control"...).
+			for g in m.names:
+				if g != "n" and not m.get_string(g).is_empty():
 					each[g] = m.get_string(g)
+			if each.has("det"):  # "(hasta) dos cartas"
+				each["amount"] = parse_amount(str(each.det).trim_prefix("hasta "))
+				each["up_to"] = str(each.det).begins_with("hasta ")
 		return each
 	match atom_name:
 		"own_allies_protect":
@@ -1722,6 +1775,25 @@ static func _build(atom_name: String, m: RegExMatch) -> Dictionary:
 			var marks := {"no_leave": "no puede salir" in mk, "no_annul": "no puede ser anulado" in mk, "no_cancel": "canceladas" in mk,
 				"furia": "con furia" in mk, "silenced": "sin habilidad" in mk, "can_attack": "puede atacar" in mk, "shuffle_final": "barajalo" in mk}
 			return {"op": "special", "kind": "play_marks", "amount": 1, "marks": marks}
+		"convert_same":
+			var cs_det: String = m.get_string("det")
+			var cs_types: Array = []
+			var cs_word: String = TYPE_WORDS.get(m.get_string("what"), "")
+			if not cs_word.is_empty() and m.get_string("orc").is_empty():
+				cs_types = [cs_word]
+			var cs_dur: String = m.get_string("dur").strip_edges().trim_prefix(",").strip_edges()
+			var cs_step := {"op": "target", "verb": "silence", "count": parse_amount(cs_det.trim_prefix("hasta ")),
+				"up_to": cs_det.begins_with("hasta "), "duration": {"por el turno": "turn", "hasta tu proximo turno": "until_next_turn"}.get(cs_dur, "permanent"),
+				"target": {"card_types": cs_types, "controller": "opponent" if not _group(m, "opp").is_empty() else "any", "exclude_gold": false,
+					"stat": "coste" if not _group(m, "cv").is_empty() else "", "cmp": "<=", "value": int(_group(m, "cv")) if not _group(m, "cv").is_empty() else 0,
+					"gold_ok": cs_word == "oro" or not m.get_string("orc").is_empty()}}
+			if _group(m, "gc").is_empty():
+				return cs_step
+			return {"op": "multi", "steps": [cs_step, {"op": "special", "kind": "gain_control_affected", "amount": 1}]}
+		"convert_mass":
+			var cm_all: bool = not m.get_string("all").is_empty()
+			return {"op": "special", "kind": "silence_mass", "amount": 1, "golds_only": not cm_all, "opp_only": cm_all,
+				"reserve_only": "en su reserva" in m.get_string()}
 		"mass_buff_exiled_cost":
 			return {"op": "mass_buff", "verb": "buff", "side": "own", "others": false, "amount": 1, "keywords": [], "to_exile": false,
 				"permanent": false, "turn_only": true, "qty": {"mode": "set", "q": {"kind": "exiled_cost"}, "key": "amount"}}
@@ -1842,6 +1914,8 @@ static func _build(atom_name: String, m: RegExMatch) -> Dictionary:
 					fs["owner"] = "any" if foreign == "un castillo" else "opponent"
 				if not m.get_string("distinct").is_empty():
 					fs["distinct"] = true
+				if not m.get_string("resnohab").is_empty():
+					fs["silenced_turn"] = true  # lucerna: "ponlo en tu Reserva sin habilidad por el turno"
 				if not m.get_string("same").is_empty():
 					fs["same_type"] = true  # "una carta del mismo tipo": el de la carta Descartada antes (kitsune)
 				if not dest_alts.is_empty():

@@ -144,6 +144,49 @@ func _special_step(main: Node, st: Dictionary, card: Node, controller_id: int) -
 			return true
 		"noop":
 			return true
+		"gain_control_affected":  # "...y ganar su control" (zmeu abismal): lo que afectó el paso anterior
+			for a in _each.get("affected", []):
+				if is_instance_valid(a.node) and _alive(a.node):
+					ContinuousEffectManager.gain_control_of_card(a.node, me)
+			return true
+		"silence_mass":  # koi dragon / la muerte / bojutsu (Oros) / isabel riquelme (cartas oponentes)
+			if await EffectContextScript.ensure_window():
+				return false
+			for pid in ([1 - me] if st.get("opp_only", false) else [0, 1]):
+				var pool: Array = _controlled_in_play(main, pid)
+				if st.get("golds_only", false):
+					pool = pool.filter(func(c): return c.get("card_type") == Constants.CardType.ORO)
+				if st.get("reserve_only", false):
+					var reserve = PlayerSideScript.gold_reserva(main, pid)
+					pool = pool.filter(func(c): return c.get_parent() == reserve)
+				for c in pool:
+					await KeywordManager.silence_card(c, card, "permanent")
+			return true
+		"convert_totem":
+			return await _convert_pick(main, st, card, me, "totem")
+		"convert_gold_paid":
+			return await _convert_pick(main, st, card, me, "gold")
+		"convert_ally_steal":
+			return await _convert_pick(main, st, card, me, "ally")
+		"opp_converts_totem":  # rugiaevit: tu oponente elige una carta suya que no sea Oro; pasa a ser tu Tótem sin habilidad
+			var opp := 1 - me
+			var theirs: Array = _controlled_in_play(main, opp).filter(func(c): return c.get("card_type") != Constants.CardType.ORO)
+			if theirs.is_empty():
+				return false
+			var victim: Node = theirs[0]
+			if _is_bot(opp):
+				theirs.sort_custom(func(a: Node, b: Node) -> bool: return int(ContinuousEffectManager.get_modified_cost(a)) < int(ContinuousEffectManager.get_modified_cost(b)))
+				victim = theirs[0]
+			elif theirs.size() > 1 and main.get("_card_interaction"):
+				var chosen_v: Array = await main._card_interaction._await_multi_target_raw("%s: elige una carta tuya que no sea Oro (pasa a ser un Tótem del oponente)" % title,
+					theirs, 1, Callable(), Callable(), false, null, opp)
+				if not chosen_v.is_empty() and is_instance_valid(chosen_v[0]):
+					victim = chosen_v[0]
+			if await EffectContextScript.ensure_window():
+				return false
+			return await ConvertPatternsScript.convert_in_play_to_totem(victim, card, me)
+		"castle_to_gold_paid":
+			return await _castle_to_gold_paid(main, st, card, me)
 		"exile_all_opp_cemetery":  # furia del exilio (lo Desterrado queda en _each.exiled)
 			var opp := 1 - me
 			if await EffectContextScript.ensure_window():
@@ -731,3 +774,135 @@ func _shuffle_cost_le(main: Node, st: Dictionary, card: Node, me: int) -> bool:
 	if target == null or not is_instance_valid(target):
 		return true
 	return await _apply_verb({"verb": "shuffle", "count": 1, "up_to": true}, [target], card)
+
+
+func _convert_pick(main: Node, st: Dictionary, card: Node, me: int, into: String) -> bool:
+	"""Convertir cartas en juego (DAR 8): elige quien controla el efecto ((hasta) N, de coste N o menos, oponente / que no
+	sea Oro); el bot, las rivales de mayor coste. into: "totem" (Tótem sin habilidad; con "gana su control" pasa a ti),
+	"gold" (Oro sin habilidad en tu Oro Pagado, bajo tu control), "ally" (Aliado sin habilidad, ganas su control)."""
+	var title := _card_name(card)
+	var det: String = str(st.get("det", ""))
+	var count: int = int(st.get("amount", 1))
+	var what: String = str(st.get("what", "carta"))
+	var pool: Array = []
+	for pid in ([1 - me] if st.has("opp") else [0, 1]):
+		pool.append_array(_controlled_in_play(main, pid).filter(func(c): return c != card))
+	if what.begins_with("aliado") or into == "ally":
+		pool = pool.filter(func(c): return c.get("card_type") == Constants.CardType.ALIADO)
+	if into != "totem" or st.has("ng"):
+		pool = pool.filter(func(c): return c.get("card_type") != Constants.CardType.ORO or into == "totem")
+	if st.has("cv"):
+		pool = pool.filter(func(c): return (c.get("card_type") != Constants.CardType.ORO
+			and int(ContinuousEffectManager.get_modified_cost(c)) <= int(st.cv)))
+	if into == "totem":
+		pool = pool.filter(func(c): return c.get("card_type") != Constants.CardType.TOTEM)
+	if pool.is_empty():
+		main._update_debug("%s: no hay una carta que convertir" % title)
+		return st.get("up_to", false)
+	count = mini(count, pool.size())
+	var picked: Array = []
+	if _is_bot(me):
+		var rivals: Array = pool.filter(func(c): return _controller_of(c) != me)
+		rivals.sort_custom(func(a: Node, b: Node) -> bool: return int(ContinuousEffectManager.get_modified_cost(a)) > int(ContinuousEffectManager.get_modified_cost(b)))
+		picked = rivals.slice(0, count)
+	elif main.get("_card_interaction"):
+		picked = await main._card_interaction.await_multi_target("%s: elige %s%d carta(s) para convertir" % [title, "hasta " if st.get("up_to", false) else "", count],
+			pool, count, Callable(), Callable(), st.get("up_to", false), null, me)
+	picked = picked.filter(func(c): return _alive(c))
+	if picked.is_empty():
+		return st.get("up_to", false)
+	_note_affected(picked)  # "Si era de coste 3 o más" (white worm)
+	if await EffectContextScript.ensure_window():
+		return false
+	for c in picked:
+		match into:
+			"totem":
+				var new_ctrl: int = me if st.has("gc") else _controller_of(c)
+				await _convert_node_to_totem(main, c, card, new_ctrl)
+			"gold":
+				await _convert_node_to_paid_gold(main, c, card, me)
+			"ally":
+				if await ConvertPatternsScript._take_and_convert_in_play(c, me, card):
+					c.is_converted = true
+					await KeywordManager.silence_card(c, card, "permanent", true)
+	return true
+
+
+func _convert_node_to_totem(main: Node, c: Node, card: Node, new_ctrl: int) -> bool:
+	"""Tótem sin habilidad (ConvertPatterns); si era un Oro, deja de contarse en su Reserva / Oro Pagado."""
+	var owner_pid: int = _controller_of(c)
+	var parent = c.get_parent()
+	var was_reserve: bool = parent == PlayerSideScript.gold_reserva(main, owner_pid)
+	var was_paid: bool = parent == PlayerSideScript.oro_pagado(main, owner_pid)
+	if not await ConvertPatternsScript.convert_in_play_to_totem(c, card, new_ctrl):
+		return false
+	if was_reserve:
+		GameState.agregar_oro_reserva(owner_pid, -1)
+	elif was_paid:
+		GameState.agregar_oro_pagado(owner_pid, -1)
+	if (was_reserve or was_paid) and owner_pid == 0 and main.get("gold_cards") is Array:
+		main.gold_cards.erase(c)
+	if main._gold_manager and (was_reserve or was_paid):
+		main._gold_manager._update_gold_display()
+	return true
+
+
+func _convert_node_to_paid_gold(main: Node, c: Node, card: Node, me: int) -> bool:
+	"""Una carta en juego pasa a ser un Oro sin habilidad en tu Oro Pagado, bajo tu control (sigue siendo de su dueño;
+	card_data queda igual: al salir del juego vuelve a ser la carta original)."""
+	if not is_instance_valid(c) or await ConvertPatternsScript.conversion_prevented(c, card):
+		return false
+	var wielder = c.get_parent()
+	if wielder and wielder.get("equipped_weapons") is Array:
+		wielder.equipped_weapons.erase(c)
+	var weapons = c.get("equipped_weapons")
+	if weapons is Array:
+		for w in weapons.duplicate():
+			if is_instance_valid(w):
+				await CardManager.destroy_card(w.owner_id if w.get("owner_id") != null else me, w)
+	var paid: Node = PlayerSideScript.oro_pagado(main, me)
+	var old_parent = c.get_parent()
+	if old_parent:
+		old_parent.remove_child(c)
+	paid.add_child(c)
+	c.card_type = Constants.CardType.ORO
+	c.controller_id = me
+	c.top_level = false
+	c.set_zone(Constants.Zone.ORO_PAGADO)
+	c.scale = Constants.GOLD_CARD_SCALE
+	c.base_scale = Constants.GOLD_CARD_SCALE
+	c.modulate = Color(0.6, 0.6, 0.6, 1.0)
+	c.can_interact = (me == 0)
+	c.is_converted = true
+	GameState.agregar_oro_pagado(me, 1)
+	if me == 0 and main.get("gold_cards") is Array:
+		main.gold_cards.append(c)
+	await KeywordManager.silence_card(c, card, "permanent", true)
+	ContinuousEffectManager.remove_modifiers_from_source(c)
+	if main._gold_manager:
+		main._gold_manager.update_gold_containers_spacing()
+		main._gold_manager._update_gold_display()
+	if main.get("_zone_manager"):
+		main._zone_manager.compact_all_fields(true)
+	return true
+
+
+func _castle_to_gold_paid(main: Node, st: Dictionary, card: Node, me: int) -> bool:
+	"""ángel barachiel / jabberwocky / el mundo / huevos de oro: la carta del tope (o del fondo) de un Castillo pasa a tu
+	Oro Pagado como un Oro sin habilidad (como Jabberwocky en ConvertAndMiscResolver)."""
+	var which: String = str(st.get("which", "un castillo"))
+	var from: int = me if which == "tu castillo" else 1 - me
+	if which == "un castillo" and not _is_bot(me):
+		from = me if await SelectionManager.await_two_choice(main, _card_name(card), "Tu Castillo", "Castillo oponente", me) else 1 - me
+	var deck: Array = CardManager.get_deck(from)
+	if deck.is_empty() or not main.get("_gold_manager"):
+		return false
+	if await EffectContextScript.ensure_window():
+		return false
+	var data: Dictionary = (deck.pop_back() if st.has("bottom") else deck.pop_front()).duplicate()
+	data["tipo"] = Constants.CardType.ORO
+	data["habilidad"] = ""
+	await main._gold_manager.put_gold_directly_in_pagado(me, data)
+	if main.get("_zone_manager"):
+		main._zone_manager._update_castillo_counts()
+	return true

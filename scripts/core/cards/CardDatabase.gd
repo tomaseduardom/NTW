@@ -251,6 +251,8 @@ const TEXT_CORRECTIONS: Dictionary = {
 	# Usuario: Zadquiel no dispara al atacar sino al hacer daño de combate (se distingue a propósito de
 	# "daño" a secas).
 	"zadquiel": [["Cuando ataca, mira la mano de tu oponente", "Cuando haga daño de combate, mira la mano de tu oponente"]],
+	# lucerna: errata oficial, el Oro entra sin habilidad por el turno (decisión del usuario, 2026-10-28).
+	"lucerna": [["un Oro y ponlo en tu Reserva.", "un Oro y ponlo en tu Reserva sin habilidad por el turno."]],
 	# Erratas de la API ("del topde de tu Castillo", "cancelas").
 	"signo amarillo": [["del topde de tu Castillo", "del tope de tu Castillo"], ["para cancelas la habilidad", "para cancelar la habilidad"]],
 }

@@ -228,6 +228,8 @@ func _execute_step(main: Node, st: Dictionary, targets: Array, card: Node, contr
 				await _found_as_weapons(main, found_cards, owner, card, controller_id)
 			elif st.get("dest", "") == "reserva":
 				for d in found_cards:
+					if st.get("silenced_turn", false) and int(d.get("tipo", -1)) == Constants.CardType.ORO:
+						RuleState.set_pending("next_gold_silenced", controller_id)  # sin habilidad por el turno (SearchPatterns.on_card_entered)
 					await _move_revealed(main, d, "put", controller_id)  # lucerna: un Oro a tu Reserva
 			elif st.has("dist"):
 				for mv in await _distribute(main, found_cards, st.dist, _card_name(card), controller_id):

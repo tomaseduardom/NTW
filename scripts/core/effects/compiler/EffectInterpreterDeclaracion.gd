@@ -132,6 +132,8 @@ func _matches(c: Node, spec: Dictionary, source: Node, controller_id: int) -> bo
 	if not race.is_empty() and not (race.substr(0, 5) in EffectCompilerScript.normalize(str(c.get("card_raza")))):
 		return false
 	var stat: String = spec.get("stat", "")
+	if stat == "coste" and ctype == Constants.CardType.ORO and spec.get("gold_ok", false):
+		return true  # "un Oro o carta de coste 2 o menos": el Oro no se mide por coste
 	if stat == "coste" and ctype == Constants.CardType.ORO:
 		return false  # Un Oro no tiene coste: nunca es "de coste N o menos/más"
 	if stat != "":
