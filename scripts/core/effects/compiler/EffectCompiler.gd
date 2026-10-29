@@ -385,6 +385,14 @@ const ATOMS := [
 		+ " en (?:un |unos )?aliados?(?: (?<race>[a-z]+))?(?: sin habilidad)? de fuerza (?<v>\\d+)(?: (?<q>con la habilidad [\"“”¨][^\"“”¨]+[\"“”¨]))?" \
 		+ "(?:, de raza a tu eleccion)?(?: y ponlos en tu linea de defensa)?"],
 	["self_gain", "(?:este aliado|esta carta) gana (?<list>" + GRANT_ITEM + "(?:(?:, y |, | y |,? e )" + GRANT_ITEM + ")*)(?<turn> por el turno| este turno)?"],
+	# Ganar el control (ebikame, tanuki, ryugu-jo, contacto con friendship, gabriel, atacar al vampiro, dulgruss, iga ryu,
+	# leviathan, transformación de lucy).
+	["special:gain_control", "gana(?:r)? el control de (?<det>(?:hasta )?" + NUM + "|cualquier) (?<what>cartas?|aliados?|totems?|armas?|oros?)(?<alt> o totems?)?" \
+		+ "(?<opp> oponentes?)?(?: en juego)?(?<ng> que no sean? oro)?(?: de (?<stat>fuerza|coste) (?<val>\\d+) o (?<cmp>menos|mas))?" \
+		+ "(?<owned> de las? que seas dueno| del que seas dueno)?(?<fs> y en tu fase final, barajalo)?"],
+	# "Gana el control de las cartas de las que seas dueño" (regan liberator) / "Cada jugador gana el control de todas las
+	# cartas de las que sea dueño" (abu simbel).
+	["special:regain_owned", "(?<each>cada jugador )?gana el control de (?:todas )?las cartas de las que sea(?:s)? dueno"],
 	# Piezas sueltas de una o pocas cartas (EffectInterpreterEspeciales).
 	# furia del exilio / santos pincheira.
 	["special:exile_all_opp_cemetery", "destierra todas las cartas del cementerio oponente"],
@@ -1360,6 +1368,20 @@ static func _compile_sentence(s: String) -> Dictionary:
 			if not nc_inner.ok:
 				return nc_inner
 			return {"ok": true, "optional": true, "steps": [{"op": "if", "cond": nc.cond, "steps": nc_inner.steps}], "unparsed": ""}
+	# Condiciones del estado del juego ("si solo controlas Sacerdotes", "si porta Armas", "si tienes cuatro o más Aliados
+	# en tu Cementerio", "si atacaste en tu turno anterior"...): EffectInterpreterOponente._condition_holds().
+	var state := _state_condition(s)
+	if not state.is_empty():
+		var st_rest: String = state.rest
+		var st_optional := st_rest.begins_with("puedes ")
+		if st_optional:
+			st_rest = st_rest.substr(7)
+		if st_rest.begins_with("gana "):
+			st_rest = "este aliado " + st_rest  # "Si porta Armas, gana 2 de Fuerza y Furia" (la carta misma)
+		var st_inner := _compile_sentence(st_rest)
+		if not st_inner.ok:
+			return st_inner
+		return {"ok": true, "optional": st_optional, "steps": [{"op": "if", "cond": state.cond, "steps": st_inner.steps}], "unparsed": ""}
 	# "Si era de coste 3 o más, ..." (white worm): la carta que afectó / convirtió el paso anterior.
 	var was_m := RegEx.create_from_string("^si era de coste (?<n>\\d+) o (?<cmp>mas|menos), (?<rest>.+)$").search(s)
 	if was_m:
@@ -1410,6 +1432,42 @@ static func _compile_sentence(s: String) -> Dictionary:
 				return {"ok": true, "steps": [{"op": "choice", "options": [left.steps, right.steps]}], "unparsed": ""}
 		at = s.find(" o ", at + 3)
 	return seq
+
+
+static var _state_rxs: Array = []
+
+
+static func _state_condition(s: String) -> Dictionary:
+	"""{cond, rest} para "si <estado del juego>, <efecto>"; {} si no es una de estas."""
+	if _state_rxs.is_empty():
+		for pair in [
+			["only_controls", "^si solo controlas (?:aliados )?(?<what>[a-z ]+?)(?: de coste (?<cv>\\d+) o (?<cc>mas|menos))?,? (?<rest>.+)$"],
+			["all_same_race", "^si todos los aliados que controlas son de (?:(?<same>la misma raza)|raza (?<race>[a-z]+)),? (?<rest>.+)$"],
+			["armed", "^si porta armas?,? (?<rest>.+)$"],
+			["count_zone", "^si tienes (?:(?<n>" + NUM + ") o (?<cmp>mas|menos)|(?<n2>" + NUM + ") cartas o (?<cmp2>mas|menos)|menos de (?<lt>" + NUM + "|\\d+|veinte))" \
+				+ " (?<what>cartas|aliados|tipos de cartas?)?(?: cartas)? en (?<z>tu mano|tu cementerio|juego|tu destierro|tu castillo),? (?<rest>.+)$"],
+			["exile_count", "^si hay (?<n>" + NUM + ") o mas (?<what>cartas|tipos de cartas?) en (?<z>los destierros|tu destierro),? (?<rest>.+)$"],
+			["reserve_golds", "^si (?<neg>no )?tienes oros en (?:tu )?reserva,? (?<rest>.+)$"],
+			["opp_reserve_golds", "^si tu oponente tiene (?<n>" + NUM + ") (?:o mas oros|oros o mas) en (?:su )?reserva,? (?<rest>.+)$"],
+			["not_more_than_opp", "^si no controlas mas (?<what>oros|aliados) que tu oponente,? (?<rest>.+)$"],
+			["paid_cost", "^si pagaste su coste,? (?<rest>.+)$"],
+			["was_cost", "^si tenia coste (?<n>\\d+) o (?<cmp>mas|menos),? (?<rest>.+)$"],
+			["bearer_did", "^si el portador (?<what>hizo dano(?: de combate)?|ataco) este turno,? (?<rest>.+)$"],
+			["attacked_prev", "^si atacaste en tu (?:anterior turno|turno anterior),? (?<rest>.+)$"],
+		]:
+			_state_rxs.append({"kind": pair[0], "rx": RegEx.create_from_string(pair[1])})
+	for e in _state_rxs:
+		var m: RegExMatch = e.rx.search(s)
+		if m == null:
+			continue
+		var cond := {"kind": e.kind}
+		for g in m.names:
+			if g != "rest" and not m.get_string(g).is_empty():
+				cond[g] = m.get_string(g)
+		if e.kind == "was_cost":
+			cond = {"kind": "affected_cost", "n": int(m.get_string("n")), "cmp": m.get_string("cmp")}
+		return {"cond": cond, "rest": m.get_string("rest")}
+	return {}
 
 
 static func _is_cemetery_self_ability(s: String) -> bool:

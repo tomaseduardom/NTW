@@ -152,7 +152,17 @@ func _special_step(main: Node, st: Dictionary, card: Node, controller_id: int) -
 		"gain_control_affected":  # "...y ganar su control" (zmeu abismal): lo que afectó el paso anterior
 			for a in _each.get("affected", []):
 				if is_instance_valid(a.node) and _alive(a.node):
-					ContinuousEffectManager.gain_control_of_card(a.node, me)
+					_gain_control(main, a.node, me)
+			return true
+		"gain_control":
+			return await _gain_control_pick(main, st, card, me)
+		"regain_owned":  # regan liberator / abu simbel
+			if await EffectContextScript.ensure_window():
+				return false
+			for pid in ([0, 1] if st.has("each") else [me]):
+				for c in _controlled_in_play(main, 1 - pid):
+					if int(c.get("owner_id") if c.get("owner_id") != null else -1) == pid:
+						_gain_control(main, c, pid)
 			return true
 		"silence_mass":  # koi dragon / la muerte / bojutsu (Oros) / isabel riquelme (cartas oponentes)
 			if await EffectContextScript.ensure_window():
@@ -1066,3 +1076,92 @@ func _cemetery_to_ally(main: Node, st: Dictionary, card: Node, me: int) -> bool:
 		if gm:
 			await gm._play_card_to_field(node)
 	return true
+
+
+func _gain_control(main: Node, c: Node, new_ctrl: int) -> bool:
+	"""ContinuousEffectManager.gain_control_of_card() y, si es un Oro, sus contadores de Reserva / Oro Pagado."""
+	if not is_instance_valid(c) or _controller_of(c) == new_ctrl:
+		return false
+	var old_ctrl: int = _controller_of(c)
+	var parent = c.get_parent()
+	var is_gold: bool = c.get("card_type") == Constants.CardType.ORO
+	var was_reserve: bool = is_gold and parent == PlayerSideScript.gold_reserva(main, old_ctrl)
+	var was_paid: bool = is_gold and parent == PlayerSideScript.oro_pagado(main, old_ctrl)
+	ContinuousEffectManager.gain_control_of_card(c, new_ctrl)
+	if _controller_of(c) != new_ctrl:
+		return false  # Abu Simbel / "no puede cambiar de controlador"
+	if is_gold:
+		if was_reserve:
+			GameState.agregar_oro_reserva(old_ctrl, -1)
+		elif was_paid:
+			GameState.agregar_oro_pagado(old_ctrl, -1)
+		GameState.agregar_oro_reserva(new_ctrl, 1)  # gain_control_of_card() lo deja en la Reserva del nuevo controlador
+		if main.get("gold_cards") is Array:
+			if old_ctrl == 0:
+				main.gold_cards.erase(c)
+			elif new_ctrl == 0 and not (c in main.gold_cards):
+				main.gold_cards.append(c)
+		if main._gold_manager:
+			main._gold_manager.update_gold_containers_spacing()
+			main._gold_manager._update_gold_display()
+	if main.get("_zone_manager"):
+		main._zone_manager.compact_all_fields(true)
+	return true
+
+
+func _gain_control_pick(main: Node, st: Dictionary, card: Node, me: int) -> bool:
+	"""'Gana el control de (hasta) N <tipo> (oponente / que no sea Oro / de coste o Fuerza N / del que seas dueño)': de
+	las cartas que controla tu oponente; elige quien controla el efecto (el bot, las de mayor coste). "...y en tu Fase
+	Final, Barájalo" (leviathan)."""
+	var title := _card_name(card)
+	var what: String = str(st.get("what", "carta"))
+	var types: Array = []
+	var w: String = EffectCompilerScript.TYPE_WORDS.get(what, "")
+	if not w.is_empty():
+		types.append(w)
+	if st.has("alt"):
+		types.append("totem")
+	var pool: Array = _controlled_in_play(main, 1 - me).filter(func(c): return c != card and (types.is_empty() or _type_word(int(c.card_type)) in types))
+	if st.has("ng"):
+		pool = pool.filter(func(c): return c.get("card_type") != Constants.CardType.ORO)
+	if st.has("owned"):
+		pool = pool.filter(func(c): return int(c.get("owner_id") if c.get("owner_id") != null else -1) == me)
+	if st.has("stat"):
+		var val: int = int(st.get("val", "0"))
+		var at_most: bool = str(st.get("cmp", "menos")) == "menos"
+		pool = pool.filter(func(c): return _stat_ok(c, str(st.stat), val, at_most))
+	if pool.is_empty():
+		main._update_debug("%s: no hay una carta de la que ganar el control" % title)
+		return st.get("up_to", false)
+	var count: int = pool.size() if str(st.get("det", "")) == "cualquier" else mini(int(st.get("amount", 1)), pool.size())
+	var picked: Array = []
+	if _is_bot(me):
+		pool.sort_custom(func(a: Node, b: Node) -> bool: return int(a.get("card_cost") if a.get("card_cost") != null else 0) > int(b.get("card_cost") if b.get("card_cost") != null else 0))
+		picked = pool.slice(0, count)
+	elif main.get("_card_interaction"):
+		picked = await main._card_interaction.await_multi_target("%s: gana el control de %s%d carta(s)" % [title, "hasta " if st.get("up_to", false) else "", count],
+			pool, count, Callable(), Callable(), st.get("up_to", false), null, me)
+	picked = picked.filter(func(c): return _alive(c))
+	if picked.is_empty():
+		return st.get("up_to", false)
+	_note_affected(picked)  # "...y descarta tantas cartas de tu mano como su coste" (transformación de lucy)
+	if await EffectContextScript.ensure_window():
+		return false
+	for c in picked:
+		if _gain_control(main, c, me) and st.has("fs"):
+			EffectController.schedule_next_final_phase_effect(me, func() -> void:
+				if is_instance_valid(c) and c.has_method("is_in_play") and c.is_in_play():
+					await _apply_verb({"verb": "shuffle", "count": 1, "up_to": true}, [c], null))
+	return true
+
+
+func _stat_ok(c: Node, stat: String, val: int, at_most: bool) -> bool:
+	if stat == "coste":
+		if c.get("card_type") == Constants.CardType.ORO:
+			return false  # un Oro no tiene coste
+		var cost: int = int(ContinuousEffectManager.get_modified_cost(c))
+		return cost <= val if at_most else cost >= val
+	if c.get("card_type") != Constants.CardType.ALIADO:
+		return false
+	var s: int = int(ContinuousEffectManager.get_modified_strength(c))
+	return s <= val if at_most else s >= val

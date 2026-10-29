@@ -26,6 +26,9 @@ func _condition_holds(cond, card: Node, controller_id: int = -1) -> bool:
 		return CardManager.get_exile(1 - controller_id).size() >= int(cond.n)
 	if cond is Dictionary and cond.get("kind", "") == "played_talismans":  # amuleto de cazador: "Si jugaste dos o más Talismanes"
 		return RuleState.count("played_type:%d" % Constants.CardType.TALISMAN, controller_id) >= int(cond.n)
+	if cond is Dictionary and str(cond.get("kind", "")) in ["only_controls", "all_same_race", "armed", "count_zone", "exile_count",
+			"reserve_golds", "opp_reserve_golds", "not_more_than_opp", "paid_cost", "bearer_did", "attacked_prev"]:
+		return _state_holds(cond, card, controller_id)
 	if str(cond) == "no_golds":  # lucerna: "Si no tienes Oros" (en juego)
 		var main := _ts.get_node_or_null("/root/Main")
 		return main != null and _controlled_in_play(main, controller_id).filter(func(c): return c.get("card_type") == Constants.CardType.ORO).is_empty()
@@ -223,3 +226,101 @@ func _name_lock(main: Node, card: Node, me: int) -> bool:
 	RuleState.set_window("name_play_lock:" + picked_name.strip_edges().to_lower(), opp, start, start + 1)
 	main._update_debug("%s: tu oponente no puede jugar '%s' en su próximo turno" % [_card_name(card), picked_name])
 	return true
+
+
+func _state_holds(cond: Dictionary, card: Node, me: int) -> bool:
+	"""Condiciones del estado del juego (EffectCompiler._state_condition())."""
+	var main := _ts.get_node_or_null("/root/Main")
+	if not main:
+		return false
+	var opp := 1 - me
+	var allies := func(pid: int) -> Array:
+		return _controlled_in_play(main, pid).filter(func(c): return c.get("card_type") == Constants.CardType.ALIADO)
+	var race_of := func(c: Node) -> String: return EffectCompilerScript.normalize(str(c.get("card_raza")))
+	var golds := func(pid: int) -> Array:
+		return _controlled_in_play(main, pid).filter(func(c): return c.get("card_type") == Constants.CardType.ORO)
+	match str(cond.kind):
+		"only_controls":  # "Si solo controlas Sacerdotes / Aliados Titán o Ignis / Aliados de coste 2 o más"
+			var mine: Array = allies.call(me)
+			if mine.is_empty():
+				return false
+			var words: Array = []
+			for w in str(cond.get("what", "")).split(" o "):
+				var ww: String = w.strip_edges()
+				if ww != "" and ww != "aliados":
+					words.append(ww.substr(0, 5))
+			for c in mine:
+				if not words.is_empty() and not words.any(func(w): return w in race_of.call(c)):
+					return false
+				if cond.has("cv"):
+					var cost: int = int(ContinuousEffectManager.get_modified_cost(c))
+					if (cost < int(cond.cv)) if str(cond.get("cc", "mas")) == "mas" else (cost > int(cond.cv)):
+						return false
+			return true
+		"all_same_race":  # ragnarok / lamia
+			var mine2: Array = allies.call(me)
+			if mine2.is_empty():
+				return false
+			if cond.has("race"):
+				var r: String = str(cond.race).substr(0, 5)
+				return mine2.all(func(c): return r in race_of.call(c))
+			var first: String = race_of.call(mine2[0])
+			return mine2.all(func(c): return race_of.call(c) == first)
+		"armed":  # "Si porta Armas"
+			return is_instance_valid(card) and card.get("equipped_weapons") is Array and not card.equipped_weapons.is_empty()
+		"count_zone":  # "Si tienes cuatro o más Aliados en tu Cementerio / dos o menos cartas en tu mano / menos de veinte..."
+			var z: String = str(cond.get("z", ""))
+			var pool: Array = []
+			match z:
+				"tu mano":
+					pool = _hand_cards(main, me).map(func(c): return c.card_data)
+				"tu cementerio":
+					pool = CardManager.get_cemetery(me)
+				"tu destierro":
+					pool = CardManager.get_exile(me)
+				"tu castillo":
+					pool = CardManager.get_deck(me)
+				"juego":
+					pool = _controlled_in_play(main, me).map(func(c): return c.card_data.merged({"tipo": int(c.card_type)}, true))
+			var what: String = str(cond.get("what", "cartas"))
+			var n_have: int = pool.size()
+			if what == "aliados":
+				n_have = pool.filter(func(d): return int(d.get("tipo", -1)) == Constants.CardType.ALIADO).size()
+			elif what.begins_with("tipos"):
+				var seen := {}
+				for d in pool:
+					seen[int(d.get("tipo", -1))] = true
+				n_have = seen.size()
+			if cond.has("lt"):
+				return n_have < (20 if str(cond.lt) == "veinte" else EffectCompilerScript.parse_amount(str(cond.lt)))
+			var n: int = EffectCompilerScript.parse_amount(str(cond.get("n", cond.get("n2", "1"))))
+			var cmp: String = str(cond.get("cmp", cond.get("cmp2", "mas")))
+			return n_have >= n if cmp == "mas" else n_have <= n
+		"exile_count":  # "Si hay tres o más (tipos de) cartas en los Destierros / tu Destierro"
+			var ex: Array = CardManager.get_exile(me) + (CardManager.get_exile(opp) if str(cond.get("z", "")) == "los destierros" else [])
+			var count: int = ex.size()
+			if str(cond.get("what", "")).begins_with("tipos"):
+				var types := {}
+				for d in ex:
+					types[int(d.get("tipo", -1))] = true
+				count = types.size()
+			return count >= EffectCompilerScript.parse_amount(str(cond.n))
+		"reserve_golds":  # "Si (no) tienes Oros en tu Reserva"
+			var has_any: bool = GameState.get_oro_reserva(me) > 0
+			return not has_any if cond.has("neg") else has_any
+		"opp_reserve_golds":
+			return GameState.get_oro_reserva(opp) >= EffectCompilerScript.parse_amount(str(cond.n))
+		"not_more_than_opp":  # "Si no controlas más Oros / Aliados que tu oponente"
+			var pick: Callable = golds if str(cond.what) == "oros" else allies
+			return pick.call(me).size() <= pick.call(opp).size()
+		"paid_cost":  # "Si pagaste su coste" (no se jugó sin pagarlo)
+			return is_instance_valid(card) and not card.get_meta("played_free", false)
+		"bearer_did":  # "Si el portador hizo daño (de combate) / atacó este turno"
+			var bearer = card.get_parent() if is_instance_valid(card) else null
+			if bearer == null or not (bearer.get("equipped_weapons") is Array):
+				return false
+			var key: String = "declared_attacker_turn" if str(cond.what) == "ataco" else "combat_damage_turn"
+			return int(bearer.get_meta(key, -1)) == GameManager.turn_serial
+		"attacked_prev":  # "Si atacaste en tu turno anterior"
+			return BattleManager.attacked_in_previous_own_turn(me)
+	return false
