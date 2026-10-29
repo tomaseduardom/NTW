@@ -743,6 +743,8 @@ func _buff(st: Dictionary, targets: Array, card: Node) -> bool:
 			})
 		if st.get("no_leave", false):
 			t.set_meta("no_leave_turn", GameManager.turn_serial)  # kuji-in: EffectController._try_consume_leave_play_prevention
+		if st.get("no_leave_until_next", false):
+			t.set_meta("no_leave_until", RuleState.next_own_turn(_controller_of(card)) - 1)  # jafet: hasta tu próximo turno
 		if st.has("set_strength") or st.get("double", false):
 			_set_or_double_strength(st, t, card)
 			continue
@@ -1531,6 +1533,31 @@ func _apply_rule(main: Node, st: Dictionary, card: Node, controller_id: int) -> 
 			RuleState.set_until("castle_exile_shield", me, 1 << 30)
 			RuleState.set_until("extra_final_draw", me, 1 << 30)
 			note = "por el resto del juego, tu oponente no puede Desterrar de tu Castillo y robas una carta más al final de tu turno"
+		"one_attack_three_draws":  # sabiduría de la oruga: GameManager.attack_cap / ActionModule.draw
+			for p in [0, 1]:
+				RuleState.set_until("attack_cap_1", p, until + 1)
+				RuleState.set_until("draw_cap_3", p, until + 1)
+			note = "hasta el final de tu próximo turno, un solo atacante y hasta tres robos por efectos por turno"
+		"two_per_type_long":  # aklo sabaoth: GoldManager._card_play_locked
+			for p in [0, 1]:
+				RuleState.set_until("two_per_type", p, until + 1)
+			note = "hasta el final de tu próximo turno, hasta dos cartas de cada tipo por turno"
+		"one_per_type_two_turns":  # perugia: el turno siguiente y el que le sigue
+			for p in [0, 1]:
+				RuleState.set_window("one_per_type", p, GameManager.turn_serial + 1, GameManager.turn_serial + 3)
+			note = "durante los próximos dos turnos, una carta de cada tipo por turno"
+		"argos_tax":  # PaymentManager (la primera carta de coste 1 o menos de cada turno)
+			for p in [0, 1]:
+				RuleState.set_until("argos_tax", p, until)
+			note = "la primera carta de coste 1 o menos de cada turno cuesta un Oro más"
+		"no_mas_magia":  # PaymentManager
+			for p in [0, 1]:
+				RuleState.set_until("no_mas_magia", p, 1 << 30)
+			note = "por el resto del juego, jugar Talismanes y cartas sin pagar su coste cuesta un Oro adicional"
+		"no_combat_damage_two_turns":  # cambiar de tamaño: este turno y el siguiente
+			for p in [0, 1]:
+				RuleState.set_until("no_combat_damage", p, GameManager.turn_serial + 2)
+			note = "este turno y el siguiente, los jugadores no reciben daño de combate"
 		"cemetery_exile_lock":  # ActionSearch (Cementerio -> Destierro)
 			RuleState.set_until("cemetery_exile_lock", me, 1 << 30)
 			note = "por el resto del juego, tu oponente no puede Desterrar cartas de tu Cementerio que no sean Talismán"

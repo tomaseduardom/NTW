@@ -403,6 +403,20 @@ const ATOMS := [
 	# texto "jugarlo" es la carta buscada: perla de sangre, azazel).
 	["special:play_self", "jugar esta carta desde su zona(?: (?<free>sin pagar su coste)| reduciendo su coste en (?<red>" + NUM + ") oros?" \
 		+ "(?:, hasta un minimo de (?<floor>\\d+))?| por (?<red2>" + NUM + ") oros? menos| pagando su coste)"],
+	# "La próxima habilidad que utilice tu oponente este turno es cancelada" (gusano de haftvad) / "La próxima carta que
+	# juegue tu oponente cuesta un Oro adicional" (fuma kotaro) / "El próximo Oro que ponga en juego tu oponente entra sin
+	# habilidad por el turno" (supremacía kaiju).
+	["special:cancel_next_opp_ability", "la proxima habilidad que utilice tu oponente este turno es cancelada"],
+	["special:next_opp_card_surcharge", "la proxima carta que juegue tu oponente cuesta un oro adicional"],
+	["special:next_opp_gold_silenced", "el proximo oro que ponga en juego tu oponente entra sin habilidad por el turno"],
+	# "El próximo Aliado (de coste 2 o más) / Talismán que juegues este turno reduce su coste en un Oro (hasta un mínimo
+	# de N) y no puede ser Anulado (ni sus habilidades canceladas este turno)" (corrupción del alma, dis, rey de los
+	# loçolicos).
+	["special:next_play", "el proximo (?<what>aliado|talisman)(?: de coste (?<cv>\\d+) o mas)? que juegues este turno" \
+		+ "(?: reduce su coste en (?<rn>" + NUM + ") oros?(?:,? hasta un minimo de (?<fl>\\d+))?)?(?:,? y)?(?<na> no puede ser anulado)?" \
+		+ "(?<nc> ni sus habilidades canceladas este turno)?(?!,? (?:y )?gana)"],  # "...y gana Furia": next_ally_discount_furia
+	# jafet: "Hasta dos Aliados no pueden salir del juego hasta tu próximo turno".
+	["no_leave_target", "(?<det>(?:hasta )?" + NUM + ") (?<kind>aliados?)(?<opp> oponentes?)? no (?:puede|pueden) salir (?:del|de) juego(?<dur> hasta tu proximo turno| este turno| por el turno)?"],
 	# Piezas sueltas de una o pocas cartas (EffectInterpreterEspeciales).
 	# furia del exilio / santos pincheira.
 	["special:exile_all_opp_cemetery", "destierra todas las cartas del cementerio oponente"],
@@ -692,7 +706,15 @@ const ATOMS := [
 	["each_draw", "cada jugador roba (?<n>" + NUM + ") cartas?"],
 	# Reglas con duración ("hasta tu próximo turno, ..."): cada frase es una regla del motor que se anota en
 	# RuleState (o su equivalente) al resolver; quien la hace cumplir está en EffectInterpreter._apply_rule().
-	["rule:ally_affect_tax", "hasta tu proximo turno, (?:afectar a tus aliados cuesta un oro adicional" \
+	# Las mismas claves y ventanas que usaban sus rutinas (TalismanPatterns, EnterPatternsLote3).
+	["rule:one_attack_three_draws", "hasta el final (?:de )?tu proximo turno, los jugadores solo pueden atacar con un aliado y solo pueden robar hasta tres cartas" \
+		+ " por efectos por turno"],  # sabiduría de la oruga
+	["rule:two_per_type_long", "hasta el final de tu proximo turno, solo se puede jugar hasta dos cartas de cada tipo por turno"],  # aklo sabaoth
+	["rule:one_per_type_two_turns", "durante los proximos dos turnos, los jugadores solo pueden jugar una carta de cada tipo por turno"],  # perugia
+	["rule:argos_tax", "hasta tu proximo turno, la primera carta de coste 1 o menos que ponga en juego cada jugador en cada turno, cuesta un oro adicional"],
+	["rule:no_mas_magia", "por el resto del juego, jugar talismanes y cartas sin pagar su coste cuesta un oro adicional"],
+	["rule:no_combat_damage_two_turns", "durante este y el siguiente turno, los jugadores no reciben dano de combate"],  # cambiar de tamaño
+	["rule:ally_affect_tax", "hasta tu proximo turno,? (?:afectar a tus aliados cuesta un oro adicional" \
 		+ "|a tu oponente le cuesta un oro adicional afectar a tus aliados)"],
 	["rule:trigger_gold_toll", "hasta tu proximo turno,? tu oponente no puede utilizar habilidades disparadas a menos que pague un oro"],
 	["rule:open_hands", "hasta tu proximo turno, los jugadores juegan con su mano descubierta y no pueden descartar cartas por efectos"],
@@ -795,7 +817,7 @@ const ATOMS := [
 	# "Un Aliado hace el doble de daño este turno" / "Un Aliado no hace daño de combate este turno",
 	# sin "gana": mismo paso buff (las metas de BattleManager).
 	["combat_flag", "(?<det>(?:hasta )?" + NUM + ") (?<kind>aliados?)(?: (?<race>" + RACE + "))?(?<opp> oponentes?)?(?: en juego)?" + STAT_FILTER \
-		+ " (?<what>ha(?:ce|ga|cen) (?:el )?doble (?:de )?dano(?: de combate)?|no ha(?:ce|ga) dano de combate" \
+		+ " (?<what>ha(?:ce|ga|cen) (?:el )?doble (?:de )?dano(?: de combate)?|no ha(?:ce|ga|cen) dano de combate" \
 		+ "|no (?:puede|pueda) bloquear(?: ni hacer dano(?: de combate)?)?)(?: este turno| por el turno)?"],
 	# "Un Aliado de coste 2 o menos gana..." / "Un Aliado gana o pierde 2 de Fuerza" (se elige).
 	["buff", "(?<det>(?:hasta )?" + NUM + ") (?<kind>aliados?)(?: (?<race>" + RACE + "))?(?<opp> oponentes?)?(?: en juego)?" + STAT_FILTER \
@@ -1373,6 +1395,12 @@ static func _compile_sentence(s: String) -> Dictionary:
 					st["qty"] = {"mode": "per", "q": per_q.q, "key": QTY_KEYS[st.op]}
 				return per_inner
 			return {"ok": true, "steps": [{"op": "repeat", "q": per_q.q, "steps": per_inner.steps}], "unparsed": ""}
+	var race_subj := RegEx.create_from_string("^(?<det>(?:hasta )?" + NUM + ") (?<race>" + RACE + ") (?<rest>(?:ganan|pierden|gana|pierde) .+)$").search(s)
+	if race_subj and not TYPE_WORDS.has(race_subj.get_string("race")):
+		var rr: String = race_subj.get_string("race")
+		var rs := _compile_sentence("%s aliados %s %s" % [race_subj.get_string("det"), rr, race_subj.get_string("rest")])
+		if rs.ok:
+			return rs
 	# "Un Aliado es Indestructible por el turno" (luis carrera) = "gana Indestructible".
 	var is_kw := RegEx.create_from_string("^((?:un|una) aliado(?: que controles)?) es (furia|imbloqueable|indestructible|indesterrable)\\b").search(s)
 	if is_kw:
@@ -1787,6 +1815,8 @@ static func _build(atom_name: String, m: RegExMatch) -> Dictionary:
 			for g in m.names:
 				if g != "n" and not m.get_string(g).is_empty():
 					each[g] = m.get_string(g)
+			if each.kind == "next_play" and not (each.has("rn") or each.has("na") or each.has("nc")):
+				return {}  # sin ventaja entendida: que pruebe otro átomo (forma de araña: "...y gana Furia")
 			if each.has("det"):  # "(hasta) dos cartas"
 				each["amount"] = parse_amount(str(each.det).trim_prefix("hasta "))
 				each["up_to"] = str(each.det).begins_with("hasta ")
@@ -1936,6 +1966,16 @@ static func _build(atom_name: String, m: RegExMatch) -> Dictionary:
 				"exclude_gold": false, "stat": "", "cmp": ">=", "value": 0}, "qty": {"mode": "set", "q": kuji_q, "key": "amount"}}
 		"opp_hand_exile":
 			return {"op": "hand_exile", "who": "opponent", "amount": parse_amount(m.get_string("n"))}
+		"no_leave_target":
+			var nl_det: String = m.get_string("det")
+			var nl_step := {"op": "buff", "verb": "buff", "count": parse_amount(nl_det.trim_prefix("hasta ")), "up_to": nl_det.begins_with("hasta "),
+				"amount": 0, "keywords": [], "to_exile": false, "permanent": false, "turn_only": false, "target": _target_from(m)}
+			nl_step.target.card_types = ["aliado"]
+			if m.get_string("dur").strip_edges() == "hasta tu proximo turno":
+				nl_step["no_leave_until_next"] = true
+			else:
+				nl_step["no_leave"] = true
+			return nl_step
 		"self_gain":
 			var sg_amount := 0
 			var sg_kws: Array = []

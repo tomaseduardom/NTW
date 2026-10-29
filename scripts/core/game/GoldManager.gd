@@ -1082,7 +1082,13 @@ func _apply_play_marks(card: Node, pid: int) -> Dictionary:
 	"""Marcas que un efecto dejó para el próximo Aliado que juegue 'pid' este turno (EffectInterpreterEspeciales,
 	"Ese Aliado no puede ser Anulado / entra sin habilidad por el turno y puede atacar ese turno / no puede salir
 	del juego hasta tu próximo turno"): se ponen antes de que entre a la Pila. Devuelve las que van después."""
-	if card.get("card_type") != Constants.CardType.ALIADO or not RuleState.has_pending("next_play_marks", pid):
+	if not RuleState.has_pending("next_play_marks", pid):
+		return {}
+	var peek = RuleState._pending.get("next_play_marks", {}).get(pid)
+	# Tipo y coste mínimo de la marca ("el próximo Talismán", "el próximo Aliado de coste 2 o más"): si no es esa carta,
+	# la marca sigue esperando.
+	if not (peek is Dictionary) or card.get("card_type") != int(peek.get("type", Constants.CardType.ALIADO)) \
+			or (int(peek.get("min_cost", -1)) >= 0 and int(card.get("card_cost")) < int(peek.min_cost)):
 		return {}
 	var entry = RuleState.take_pending("next_play_marks", pid)
 	if not (entry is Dictionary) or int(entry.get("serial", -1)) != GameManager.turn_serial:

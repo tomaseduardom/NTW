@@ -144,6 +144,19 @@ func _special_step(main: Node, st: Dictionary, card: Node, controller_id: int) -
 			return true
 		"noop":
 			return true
+		"cancel_next_opp_ability":  # gusano de haftvad (TriggerTollPatterns.consume_cancel_next)
+			RuleState.set_turn_data("cancel_next_ability:%d" % (1 - me), {"by": me})
+			main._update_debug("%s: la próxima habilidad de tu oponente este turno es cancelada" % title)
+			return true
+		"next_opp_card_surcharge":  # fuma kotaro
+			PaymentManager.add_next_card_surcharge(1 - me)
+			main._update_debug("%s: la próxima carta de tu oponente cuesta un Oro adicional" % title)
+			return true
+		"next_opp_gold_silenced":  # supremacía kaiju (SearchPatterns.on_card_entered)
+			RuleState.set_pending("next_gold_silenced", 1 - me)
+			return true
+		"next_play":
+			return _next_play(main, st, card, me)
 		"play_self":
 			return await _play_self(main, st, card, me)
 		"search_each_castle":  # "busca en cada Castillo dos cartas y ponlas en el Cementerio de su dueño" (elige quien controla el efecto)
@@ -1228,4 +1241,25 @@ func _play_self(main: Node, st: Dictionary, card: Node, me: int) -> bool:
 			return false
 	if main.get("_zone_manager"):
 		main._zone_manager._update_castillo_counts()
+	return true
+
+
+func _next_play(main: Node, st: Dictionary, card: Node, me: int) -> bool:
+	"""'El próximo Aliado (de coste N o más) / Talismán que juegues este turno reduce su coste en N Oros (hasta un mínimo) y
+	no puede ser Anulado (ni sus habilidades canceladas)': descuento como corrupción del alma y marcas en
+	GoldManager._apply_play_marks() (tipo y coste mínimo en la marca)."""
+	var serial: int = GameManager.turn_serial
+	var want: int = Constants.CardType.TALISMAN if str(st.get("what", "aliado")) == "talisman" else Constants.CardType.ALIADO
+	var min_cost: int = int(st.get("cv", "-1"))
+	if st.has("rn"):
+		var rn: int = EffectCompilerScript.parse_amount(str(st.rn))
+		var base: int = RuleState.count("played_type:%d" % want, me)  # solo el próximo, desde ahora
+		PaymentManager.agregar_modificador_coste(card, -rn, func(c: Node) -> bool:
+			return (c.get("card_type") == want and c.get("owner_id") != null and int(c.owner_id) == me
+				and (min_cost < 0 or int(c.get("card_cost")) >= min_cost)
+				and GameManager.turn_serial == serial and RuleState.count("played_type:%d" % want, me) == base), str(st.get("fl", "1")) == "0")
+	if st.has("na") or st.has("nc"):
+		RuleState.set_pending("next_play_marks", me, {"serial": serial, "type": want, "min_cost": min_cost,
+			"marks": {"no_annul": st.has("na"), "no_cancel": st.has("nc")}, "until": serial})
+	main._update_debug("%s: el próximo %s que juegues este turno tiene su ventaja" % [_card_name(card), "Talismán" if want == Constants.CardType.TALISMAN else "Aliado"])
 	return true
