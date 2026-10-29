@@ -964,18 +964,23 @@ func _reveal_until(main: Node, st: Dictionary, card: Node, controller_id: int) -
 	var revealed: Array = []
 	var taken: Array = []
 	var taken_names: Array = []  # por spec, para "de distinto nombre"
+	var taken_costs: Array = []  # por spec, para "de distinto coste" (alicia, camahueto)
 	for _sp in st.specs:
 		taken_names.append([])
+		taken_costs.append([])
 	while not deck.is_empty() and need.any(func(n): return n > 0):
 		var top: Dictionary = deck.pop_front()
 		revealed.append(top)
 		var top_name: String = str(top.get("nombre", "")).to_lower()
 		for i in range(st.specs.size()):
+			var top_cost: int = int(top.get("coste", 0))
 			if need[i] > 0 and _spec_matches(st.specs[i], top) \
-					and not (st.specs[i].get("distinct", false) and top_name in taken_names[i]):
+					and not (st.specs[i].get("distinct", false) and top_name in taken_names[i]) \
+					and not (st.specs[i].get("distinct_cost", false) and top_cost in taken_costs[i]):
 				need[i] -= 1
 				taken.append(top)
 				taken_names[i].append(top_name)
+				taken_costs[i].append(top_cost)
 				break
 	var title := _card_name(card)
 	load("res://scripts/core/effects/mechanics/RevealedCards.gd").record(controller_id, revealed, title)
@@ -1142,7 +1147,7 @@ func _reveal_top(main: Node, st: Dictionary, card: Node, controller_id: int) -> 
 		var d: Dictionary = revealed[i]
 		if _spec_matches(spec, d) and not (playing and int(d.get("tipo", -1)) == Constants.CardType.ORO):
 			eligible.append(i)
-	var k: int = mini(int(st.get("pick", 1)), eligible.size())
+	var k: int = eligible.size() if int(st.get("pick", 1)) < 0 else mini(int(st.get("pick", 1)), eligible.size())  # -1: todas las que sirven
 	var chosen_idx: Array = eligible.slice(0, k)
 	if not _is_bot(controller_id) and not revealed.is_empty():
 		var entries: Array = []
@@ -1210,6 +1215,9 @@ func _hand_peek(main: Node, st: Dictionary, card: Node, controller_id: int) -> b
 		return false
 	var spec := {"types": st.get("types", []), "cost_val": st.get("cost_val", -1), "cost_cmp": st.get("cost_cmp", "")}
 	var types_not: Array = st.get("types_not", [])
+	if st.get("up_to", false) and int(st.count) >= 99:
+		st = st.duplicate()
+		st["count"] = hand.filter(func(c): return is_instance_valid(c) and _spec_matches(spec, c.card_data) and _type_word(int(c.card_type)) not in types_not).size()
 	var eligible := func(c: Node) -> bool:
 		return is_instance_valid(c) and _spec_matches(spec, c.card_data) and _type_word(int(c.card_type)) not in types_not
 	if not _is_bot(controller_id) and not hand.any(eligible):

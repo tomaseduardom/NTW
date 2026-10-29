@@ -144,6 +144,13 @@ func _special_step(main: Node, st: Dictionary, card: Node, controller_id: int) -
 			return true
 		"noop":
 			return true
+		"search_each_castle":  # "busca en cada Castillo dos cartas y ponlas en el Cementerio de su dueño" (elige quien controla el efecto)
+			var each_n: int = EffectCompilerScript.parse_amount(str(st.get("n", st.get("n2", "1"))))
+			var each_filter := {"types_not": [Constants.CardType.TALISMAN]} if st.has("nt") else {}
+			for pid in [1 - me, me]:
+				await ActionModule.search_zones(pid, [Constants.Zone.CASTILLO], each_filter, each_n, true, false, false, card,
+					Constants.Zone.CEMENTERIO, false, me if pid != me else -1)
+			return true
 		"self_gain":  # "Este Aliado gana Furia" (shade)
 			if not _alive(card):
 				return false
