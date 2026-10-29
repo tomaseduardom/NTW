@@ -1209,7 +1209,35 @@ func _play_talisman(card: Node) -> void:
 	# debe volver al Cementerio/Destierro de ese jugador.
 	var true_owner: int = card.owner_id if card.get("owner_id") != null else 0
 
-	if card.get("is_exhumed") == true:
+	var resolve_to = card.get_meta("resolve_to", {})
+	if resolve_to is Dictionary and not resolve_to.is_empty() and card.get("is_exhumed") != true:
+		# "Cuando este Talismán se resuelva, conviértelo en un Oro sin habilidad y ponlo en tu Oro Pagado" (abiku, alma del
+		# viento, vuelo ninja) / "...en un Tótem sin habilidad y ponlo en tu Línea de Apoyo" (los olvidados).
+		var new_data: Dictionary = card.card_data.duplicate(true)
+		new_data["habilidad"] = str(resolve_to.get("text", ""))
+		new_data["keywords"] = []
+		var to_pid: int = (1 - true_owner) if resolve_to.get("to_opp", false) else true_owner
+		if card.get_parent():
+			card.get_parent().remove_child(card)
+		card.queue_free()
+		if str(resolve_to.get("into", "oro")) == "totem":
+			new_data["tipo"] = Constants.CardType.TOTEM
+			var totem: Node = _main._create_card(new_data, false)
+			totem.owner_id = true_owner
+			totem.controller_id = to_pid
+			totem.is_converted = true
+			_main._connect_card_signals(totem)
+			PlayerSideScript.line_containers(_main, to_pid)[2].add_child(totem)
+			totem.top_level = false
+			totem.set_zone(Constants.Zone.LINEA_APOYO)
+			if _main.get("_zone_manager"):
+				_main._zone_manager.compact_all_fields(true)
+		else:
+			new_data["tipo"] = Constants.CardType.ORO
+			var gold: Node = await put_gold_directly_in_pagado(to_pid, new_data)
+			if gold:
+				gold.owner_id = true_owner
+	elif card.get("is_exhumed") == true:
 		# Exhumar manda siempre al Destierro, sin importar el propio texto
 		# de la carta (ni "barájala" ni el Cementerio por defecto aplican).
 		await EffectController.exile_card(true_owner, card)

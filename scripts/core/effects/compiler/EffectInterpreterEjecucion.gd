@@ -1359,6 +1359,8 @@ func _controls_holds(cond: Dictionary, card: Node) -> bool:
 				var card_race: String = EffectCompilerScript.normalize(str(c.get("card_raza")))
 				if not race_forms.any(func(f): return f in card_race):
 					continue
+			if str(cond.get("keyword", "")) != "" and not KeywordManager.has_keyword(c, _keyword_enum(str(cond.keyword))):
+				continue  # "Si controlas Aliados con Furia" (colmillo arcano)
 			if int(cond.get("cost_val", -1)) >= 0:
 				var ccost: int = 0 if int(c.card_type) == Constants.CardType.ORO else int(ContinuousEffectManager.get_modified_cost(c))
 				if int(c.card_type) == Constants.CardType.ORO or (ccost > int(cond.cost_val) if cond.cost_cmp == "menos" else ccost < int(cond.cost_val)):

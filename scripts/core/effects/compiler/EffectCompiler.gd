@@ -223,7 +223,7 @@ const SUBJUNCTIVE := {
 ## "Si controlas (otro) (N o más) <tipo/raza> (de Fuerza N o más) (en Línea de Ataque), (además)
 ## efecto". Se evalúa al resolver.
 const CONTROL_COND_RX := "^si (?<neg>no )?controlas (?<other>otro |otra )?(?:(?<n>" + NUM + ") o mas |(?<nx>dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez) )?" \
-	+ "(?<what>[a-z]+(?: [a-z]+)?)(?: de fuerza (?<sv>\\d+) o mas)?(?: de coste (?<ccv>\\d+) o (?<ccc>menos|mas))?(?<atk> en (?:tu )?linea de ataque)?" \
+	+ "(?<what>[a-z]+(?: (?!con\\b)[a-z]+)?)(?: con (?<kw>furia|imbloqueable|indestructible|indesterrable))?(?: de fuerza (?<sv>\\d+) o mas)?(?: de coste (?<ccv>\\d+) o (?<ccc>menos|mas))?(?<atk> en (?:tu )?linea de ataque)?" \
 	+ ", (?:ademas )?(?<rest>.+)$"
 
 ## Condiciones al comienzo de una oración ("si X, efecto").
@@ -339,12 +339,12 @@ const ATOMS := [
 	# "en un Tótem sin habilidad (y gana su control)" (pachamama, tenshi z, r l stevenson, vâlva apei, prisionero de drácula,
 	# dolor de rocinante).
 	["special:convert_totem", "(?:convierte|convertir) (?<det>(?:hasta )?" + NUM + ") (?<what>cartas?|aliados?)(?<opp> oponentes?)?(?: de coste (?<cv>\\d+) o menos)?" \
-		+ " en (?:un )?totems? sin habilidad(?<gc>,? (?:y )?gana(?:r)? su control)?"],
+		+ " en (?:un )?totems? (?:sin habilidad|(?<q>con la habilidad [\"“”¨][^\"“”¨]+[\"“”¨]))(?<gc>,? (?:y )?gana(?:r)? su control)?"],
 	# rugiaevit: lo elige tu oponente.
 	["special:opp_converts_totem", "tu oponente convierte una carta que controle que no sea oro en un totem sin habilidad y tu ganas su control"],
 	# "en un Oro sin habilidad y muévelo a tu Oro Pagado" (transilvania, espada de magog, batalla de waterloo, white worm, zmey).
 	["special:convert_gold_paid", "(?:convierte|convertir) (?<det>un|una) (?<what>cartas?|aliados?)(?<ng> que no sea oro)?(?: de coste (?<cv>\\d+) o menos)?" \
-		+ " en un oro sin habilidad y (?:muevelo|moverlo|ponlo|ponerlo) (?:a|en) tu oro pagado"],
+		+ " en un oro (?:sin habilidad|(?<q>con la habilidad [\"“”¨][^\"“”¨]+[\"“”¨]))(?: y (?:muevelo|moverlo|ponlo|ponerlo) (?:a|en) tu (?<gdest>oro pagado|reserva))"],
 	# Del Castillo a tu Oro Pagado: "la primera carta de un Castillo / del Castillo oponente / la carta del fondo de tu
 	# Castillo / una carta del tope de un Castillo" (ángel barachiel, jabberwocky, el mundo, huevos de oro).
 	["special:castle_to_gold_paid", "(?:convierte|convertir) (?:la primera carta|una carta del tope|la carta del tope|(?<bottom>la carta del fondo)) (?:de|del)" \
@@ -367,6 +367,19 @@ const ATOMS := [
 	# "todas las cartas oponentes en cartas del mismo tipo sin habilidad" (isabel riquelme).
 	["convert_mass", "(?:cada jugador )?convierte (?:todos )?(?:los oros|(?<all>todas las cartas)(?<opp> oponentes))(?: en juego| en su reserva)?" \
 		+ " en (?:oros|cartas del mismo tipo) sin habilidad"],
+	# A: un Oro que se convierte (hasta tu próximo turno) en un Aliado con otra habilidad (colmillo arcano, gema del grifo,
+	# amuleto de cazador). Vuelve a ser el Oro al empezar tu próximo turno (GoldManager.revert_converted_golds).
+	["special:self_to_ally", "convertirlo(?<until> hasta tu proximo turno)? en un aliado de fuerza (?<v>\\d+) con la habilidad [\"“”¨][^\"“”¨]+[\"“”¨]"],
+	# C: el Talismán, al resolverse, pasa a ser un Oro / Tótem (abiku, fuego del desierto, alma del viento, vuelo ninja, los
+	# olvidados): GoldManager._play_talisman lo deja ahí en vez del Cementerio.
+	["special:resolve_self_convert", "cuando (?:este talisman )?se resuelva, (?<cond>si no controlas mas oros que tu oponente, )?(?:conviertelo|convierte este talisman)" \
+		+ " en un (?<into>oro|totem) (?:sin habilidad|(?<q>con la habilidad [\"“”¨][^\"“”¨]+[\"“”¨]))" \
+		+ " y ponlo en (?<where>tu oro pagado|el oro pagado oponente|tu linea de apoyo)"],
+	["special:resolve_else_draw", "de lo contrario, roba (?<n>" + NUM + ") cartas"],
+	# D: cartas de los Cementerios que entran en juego como Aliados (marchosias, reunión sorpresa).
+	["special:cemetery_to_ally", "(?:convierte|convertir) (?<det>(?:hasta )?" + NUM + ") cartas? de (?<zone>tu cementerio|los cementerios|un cementerio)" \
+		+ " en (?:un |unos )?aliados?(?: (?<race>[a-z]+))?(?: sin habilidad)? de fuerza (?<v>\\d+)(?: (?<q>con la habilidad [\"“”¨][^\"“”¨]+[\"“”¨]))?" \
+		+ "(?:, de raza a tu eleccion)?(?: y ponlos en tu linea de defensa)?"],
 	# Piezas sueltas de una o pocas cartas (EffectInterpreterEspeciales).
 	# furia del exilio / santos pincheira.
 	["special:exile_all_opp_cemetery", "destierra todas las cartas del cementerio oponente"],
@@ -1111,7 +1124,7 @@ static func _control_condition(s: String) -> Dictionary:
 		type_word = ""  # "cartas": cualquier tipo
 	# "Si no controlas Aliados de coste 1 o menos" (yamata no orochi) / "Si controlas cuatro Aliados Jinete" (jinetes).
 	var n_word: String = m.get_string("n") if not m.get_string("n").is_empty() else m.get_string("nx")
-	return {"rest": m.get_string("rest"), "cond": {"kind": "controls", "negate": not m.get_string("neg").is_empty(),
+	return {"rest": m.get_string("rest"), "cond": {"kind": "controls", "negate": not m.get_string("neg").is_empty(), "keyword": m.get_string("kw"),
 		"cost_val": int(m.get_string("ccv")) if not m.get_string("ccv").is_empty() else -1, "cost_cmp": m.get_string("ccc"),
 		"count": parse_amount(n_word) if not n_word.is_empty() else 1,
 		"type": type_word, "race": race, "other": not m.get_string("other").is_empty(),
@@ -1280,6 +1293,21 @@ static func _compile_sentence(s: String) -> Dictionary:
 	var is_kw := RegEx.create_from_string("^((?:un|una) aliado(?: que controles)?) es (furia|imbloqueable|indestructible|indesterrable)\\b").search(s)
 	if is_kw:
 		return _compile_sentence(is_kw.get_string(1) + " gana " + is_kw.get_string(2) + s.substr(is_kw.get_end()))
+	var played_m := RegEx.create_from_string("^si jugaste (?<n>" + NUM + ") o mas talismanes,? puedes (?<rest>.+)$").search(s)
+	if played_m:
+		var pl_inner := _compile_sentence(played_m.get_string("rest"))
+		if not pl_inner.ok:
+			return pl_inner
+		return {"ok": true, "optional": true, "steps": [{"op": "if", "cond": {"kind": "played_talismans", "n": parse_amount(played_m.get_string("n"))},
+			"steps": pl_inner.steps}], "unparsed": ""}
+	var nocomma_m := RegEx.create_from_string("^(?<c>si controlas [a-z0-9 ]+?) puedes (?<rest>convertirlo .+)$").search(s)
+	if nocomma_m:
+		var nc := _control_condition(nocomma_m.get_string("c") + ", x")
+		if not nc.is_empty():
+			var nc_inner := _compile_sentence(nocomma_m.get_string("rest"))
+			if not nc_inner.ok:
+				return nc_inner
+			return {"ok": true, "optional": true, "steps": [{"op": "if", "cond": nc.cond, "steps": nc_inner.steps}], "unparsed": ""}
 	# "Si era de coste 3 o más, ..." (white worm): la carta que afectó / convirtió el paso anterior.
 	var was_m := RegEx.create_from_string("^si era de coste (?<n>\\d+) o (?<cmp>mas|menos), (?<rest>.+)$").search(s)
 	if was_m:

@@ -853,6 +853,40 @@ func revert_converted_golds(pid: int) -> void:
 		for c in container.get_children():
 			if is_instance_valid(c) and int(c.get_meta("converted_until_turn_of", -1)) == pid:
 				await _revert_converted_gold(c, pid)
+	# Al revés (colmillo arcano, gema del grifo, amuleto de cazador): el Oro convertido en Aliado "hasta tu próximo turno"
+	# vuelve a tu Reserva.
+	for container in PlayerSideScript.ally_containers(_main, pid):
+		for c in container.get_children():
+			if is_instance_valid(c) and int(c.get_meta("revert_to_gold_turn_of", -1)) == pid:
+				_revert_ally_to_gold(c, pid)
+
+
+func _revert_ally_to_gold(card: Node, pid: int) -> void:
+	var original: Dictionary = card.get_meta("revert_gold_data", {})
+	card.remove_meta("revert_to_gold_turn_of")
+	card.remove_meta("revert_gold_data")
+	if original.is_empty():
+		return
+	ContinuousEffectManager.remove_modifiers_from_source(card)
+	KeywordManager.clear_all_for_card(card)
+	if card.get_parent():
+		card.get_parent().remove_child(card)
+	card.load_from_data(original)
+	var reserve: Node = PlayerSideScript.gold_reserva(_main, pid)
+	reserve.add_child(card)
+	card.top_level = false
+	card.set_zone(Constants.Zone.RESERVA_ORO)
+	card.scale = Constants.GOLD_CARD_SCALE
+	card.base_scale = Constants.GOLD_CARD_SCALE
+	card.modulate = Color(1, 1, 1, 1)
+	GameState.agregar_oro_reserva(pid, 1)
+	if pid == 0 and not (card in _main.gold_cards):
+		_main.gold_cards.append(card)
+	ContinuousEffectManager._invalidate_cache()
+	update_gold_containers_spacing()
+	_update_gold_display()
+	if _main.get("_zone_manager"):
+		_main._zone_manager.compact_all_fields(true)
 
 
 func _revert_converted_gold(card: Node, pid: int) -> void:

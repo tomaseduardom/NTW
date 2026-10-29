@@ -187,6 +187,25 @@ func _special_step(main: Node, st: Dictionary, card: Node, controller_id: int) -
 			return await ConvertPatternsScript.convert_in_play_to_totem(victim, card, me)
 		"castle_to_gold_paid":
 			return await _castle_to_gold_paid(main, st, card, me)
+		"self_to_ally":
+			return await _self_to_ally(main, st, card, me)
+		"resolve_self_convert":  # GoldManager._play_talisman() lo pone donde dice en vez del Cementerio
+			if st.has("cond"):
+				var mine_g: int = _controlled_in_play(main, me).filter(func(c): return c.get("card_type") == Constants.CardType.ORO).size()
+				var theirs_g: int = _controlled_in_play(main, 1 - me).filter(func(c): return c.get("card_type") == Constants.CardType.ORO).size()
+				_each["resolve_failed"] = mine_g > theirs_g
+				if mine_g > theirs_g:
+					return true
+			if is_instance_valid(card):
+				card.set_meta("resolve_to", {"into": str(st.get("into", "oro")), "text": _quoted_text(card) if st.has("q") else "",
+					"to_opp": str(st.get("where", "")) == "el oro pagado oponente"})
+			return true
+		"resolve_else_draw":  # vuelo ninja: "De lo contrario, Roba dos cartas"
+			if _each.get("resolve_failed", false):
+				await ActionModule.draw(me, int(st.get("amount", 2)), "efecto_compilado", true)
+			return true
+		"cemetery_to_ally":
+			return await _cemetery_to_ally(main, st, card, me)
 		"exile_all_opp_cemetery":  # furia del exilio (lo Desterrado queda en _each.exiled)
 			var opp := 1 - me
 			if await EffectContextScript.ensure_window():
@@ -814,13 +833,16 @@ func _convert_pick(main: Node, st: Dictionary, card: Node, me: int, into: String
 	_note_affected(picked)  # "Si era de coste 3 o más" (white worm)
 	if await EffectContextScript.ensure_window():
 		return false
+	var gained_text: String = _quoted_text(card) if st.has("q") else ""
 	for c in picked:
 		match into:
 			"totem":
 				var new_ctrl: int = me if st.has("gc") else _controller_of(c)
-				await _convert_node_to_totem(main, c, card, new_ctrl)
+				if await _convert_node_to_totem(main, c, card, new_ctrl) and not gained_text.is_empty():
+					_give_text(c, gained_text)  # los olvidados: Tótem "con la habilidad ..."
 			"gold":
-				await _convert_node_to_paid_gold(main, c, card, me)
+				if await _convert_node_to_paid_gold(main, c, card, me, str(st.get("gdest", "oro pagado")) == "reserva") and not gained_text.is_empty():
+					_give_text(c, gained_text)  # azi sruvara / gokin
 			"ally":
 				if await ConvertPatternsScript._take_and_convert_in_play(c, me, card):
 					c.is_converted = true
@@ -847,7 +869,20 @@ func _convert_node_to_totem(main: Node, c: Node, card: Node, new_ctrl: int) -> b
 	return true
 
 
-func _convert_node_to_paid_gold(main: Node, c: Node, card: Node, me: int) -> bool:
+func _quoted_text(card: Node) -> String:
+	"""El primer texto entre comillas de la carta original (con mayúsculas y tildes)."""
+	var m := RegEx.create_from_string("[\"“”¨]([^\"“”¨]+)[\"“”¨]").search(str(card.get("card_ability")) if is_instance_valid(card) else "")
+	return m.get_string(1).strip_edges() if m else ""
+
+
+func _give_text(c: Node, text: String) -> void:
+	"""La carta convertida queda con esta habilidad en vez de "sin habilidad"."""
+	KeywordManager.clear_all_for_card(c)
+	EnterPatternsScript.set_ability(c, text)
+	c.is_converted = true
+
+
+func _convert_node_to_paid_gold(main: Node, c: Node, card: Node, me: int, to_reserve: bool = false) -> bool:
 	"""Una carta en juego pasa a ser un Oro sin habilidad en tu Oro Pagado, bajo tu control (sigue siendo de su dueño;
 	card_data queda igual: al salir del juego vuelve a ser la carta original)."""
 	if not is_instance_valid(c) or await ConvertPatternsScript.conversion_prevented(c, card):
@@ -860,7 +895,7 @@ func _convert_node_to_paid_gold(main: Node, c: Node, card: Node, me: int) -> boo
 		for w in weapons.duplicate():
 			if is_instance_valid(w):
 				await CardManager.destroy_card(w.owner_id if w.get("owner_id") != null else me, w)
-	var paid: Node = PlayerSideScript.oro_pagado(main, me)
+	var paid: Node = PlayerSideScript.gold_reserva(main, me) if to_reserve else PlayerSideScript.oro_pagado(main, me)
 	var old_parent = c.get_parent()
 	if old_parent:
 		old_parent.remove_child(c)
@@ -868,13 +903,16 @@ func _convert_node_to_paid_gold(main: Node, c: Node, card: Node, me: int) -> boo
 	c.card_type = Constants.CardType.ORO
 	c.controller_id = me
 	c.top_level = false
-	c.set_zone(Constants.Zone.ORO_PAGADO)
+	c.set_zone(Constants.Zone.RESERVA_ORO if to_reserve else Constants.Zone.ORO_PAGADO)
 	c.scale = Constants.GOLD_CARD_SCALE
 	c.base_scale = Constants.GOLD_CARD_SCALE
-	c.modulate = Color(0.6, 0.6, 0.6, 1.0)
+	c.modulate = Color(1, 1, 1, 1) if to_reserve else Color(0.6, 0.6, 0.6, 1.0)
 	c.can_interact = (me == 0)
 	c.is_converted = true
-	GameState.agregar_oro_pagado(me, 1)
+	if to_reserve:
+		GameState.agregar_oro_reserva(me, 1)  # gokin: "ponlo en tu Reserva"
+	else:
+		GameState.agregar_oro_pagado(me, 1)
 	if me == 0 and main.get("gold_cards") is Array:
 		main.gold_cards.append(c)
 	await KeywordManager.silence_card(c, card, "permanent", true)
@@ -905,4 +943,121 @@ func _castle_to_gold_paid(main: Node, st: Dictionary, card: Node, me: int) -> bo
 	await main._gold_manager.put_gold_directly_in_pagado(me, data)
 	if main.get("_zone_manager"):
 		main._zone_manager._update_castillo_counts()
+	return true
+
+
+func _self_to_ally(main: Node, st: Dictionary, card: Node, me: int) -> bool:
+	"""colmillo arcano / gema del grifo / amuleto de cazador: este Oro pasa a ser un Aliado de Fuerza N con la habilidad
+	entre comillas en tu Línea de Defensa; "hasta tu próximo turno" vuelve a ser el Oro en tu Reserva
+	(GoldManager.revert_converted_golds, meta "revert_to_gold_turn_of")."""
+	if not is_instance_valid(card):
+		return false
+	if card.get("current_zone") == Constants.Zone.CEMENTERIO:
+		# tesoro del santiaguillo: "Cuando sea Destruido, puedes convertirlo en un Aliado..." — desde el Cementerio.
+		var owner_c: int = card.owner_id if card.get("owner_id") != null else me
+		if not CardManager.get_cemetery(owner_c).has(card.card_data) or await EffectContextScript.ensure_window():
+			return false
+		var cdata: Dictionary = card.card_data
+		CardManager.take_from_cemetery(owner_c, cdata)
+		var ally_data: Dictionary = cdata.duplicate()
+		ally_data["tipo"] = Constants.CardType.ALIADO
+		ally_data["fuerza"] = int(st.get("v", "1"))
+		ally_data["habilidad"] = _quoted_text(card)
+		ally_data["esta_oculta"] = false
+		var ally: Node = main._create_card(ally_data, false)
+		ally.owner_id = owner_c
+		ally.controller_id = me
+		ally.is_converted = true
+		main._connect_card_signals(ally)
+		if main.get("_gold_manager"):
+			await main._gold_manager._play_card_to_field(ally)
+		return true
+	if card.get("card_type") != Constants.CardType.ORO:
+		return false
+	if await EffectContextScript.ensure_window():
+		return false
+	var parent = card.get_parent()
+	if parent == PlayerSideScript.gold_reserva(main, me):
+		GameState.agregar_oro_reserva(me, -1)
+	elif parent == PlayerSideScript.oro_pagado(main, me):
+		GameState.agregar_oro_pagado(me, -1)
+	if me == 0 and main.get("gold_cards") is Array:
+		main.gold_cards.erase(card)
+	if st.has("until"):
+		card.set_meta("revert_to_gold_turn_of", me)
+		card.set_meta("revert_gold_data", card.card_data.duplicate())
+	var data: Dictionary = card.card_data.duplicate()
+	data["tipo"] = Constants.CardType.ALIADO
+	data["fuerza"] = int(st.get("v", "1"))
+	data["habilidad"] = _quoted_text(card)
+	if parent:
+		parent.remove_child(card)
+	card.load_from_data(data)
+	var field: Node = PlayerSideScript.ally_containers(main, me)[0]
+	field.add_child(card)
+	card.top_level = false
+	card.set_zone(Constants.Zone.LINEA_DEFENSA)
+	card.scale = Vector2.ONE
+	card.base_scale = Vector2.ONE
+	card.modulate = Color(1, 1, 1, 1)
+	card.can_interact = (me == 0)
+	KeywordManager.scan_and_apply_keywords(card)
+	ContinuousEffectManager._invalidate_cache()
+	if main._gold_manager:
+		main._gold_manager.update_gold_containers_spacing()
+		main._gold_manager._update_gold_display()
+	if main.get("_zone_manager"):
+		main._zone_manager.compact_all_fields(true)
+	main._update_debug("%s es ahora un Aliado de Fuerza %d%s" % [_card_name(card), int(data.fuerza), " hasta tu próximo turno" if st.has("until") else ""])
+	return true
+
+
+func _cemetery_to_ally(main: Node, st: Dictionary, card: Node, me: int) -> bool:
+	"""marchosias / reunión sorpresa: (hasta) N cartas de un Cementerio entran en juego bajo tu control como Aliados de
+	Fuerza N (sin habilidad, o con la habilidad entre comillas); siguen siendo de su dueño. El bot, de su Cementerio."""
+	var title := _card_name(card)
+	var zone: String = str(st.get("zone", "tu cementerio"))
+	var owners: Array = [me] if zone == "tu cementerio" else [me, 1 - me]
+	var need: int = int(st.get("amount", 1))
+	var boxes: Array = []
+	for pid in owners:
+		var entries: Array = CardManager.get_cemetery(pid).map(func(d): return {"data": d, "eligible": true})
+		boxes.append({"is_own": pid == me, "zone": Constants.Zone.CEMENTERIO, "cards": entries, "exclusive": zone == "un cementerio", "pid": pid})
+	var chosen: Array = []  # [pid, data]
+	if _is_bot(me):
+		for b in boxes:
+			for e in b.cards:
+				if chosen.size() < need:
+					chosen.append([b.pid, e.data])
+	else:
+		var raw: Array = await ActionModule.pick_in_zones(me, "%s: elige %s%d carta(s) de %s" % [title, "hasta " if st.get("up_to", false) else "", need,
+			"tu Cementerio" if zone == "tu cementerio" else "los Cementerios"], boxes, 0 if st.get("up_to", false) else need, need)
+		for r in raw:
+			if r is Array and r.size() == 2 and int(r[0]) >= 0 and int(r[0]) < boxes.size():
+				var box: Dictionary = boxes[int(r[0])]
+				if int(r[1]) >= 0 and int(r[1]) < box.cards.size():
+					chosen.append([box.pid, box.cards[int(r[1])].data])
+	if chosen.is_empty():
+		return st.get("up_to", false)
+	if await EffectContextScript.ensure_window():
+		return false
+	var gm = main.get("_gold_manager")
+	var text: String = _quoted_text(card) if st.has("q") else ""
+	for pair in chosen:
+		if not CardManager.take_from_cemetery(int(pair[0]), pair[1]):
+			continue
+		var data: Dictionary = (pair[1] as Dictionary).duplicate()
+		data["tipo"] = Constants.CardType.ALIADO
+		data["fuerza"] = int(st.get("v", "1"))
+		data["habilidad"] = text
+		data["esta_oculta"] = false
+		if st.has("race"):
+			data["raza"] = str(st.race).capitalize()
+		var node: Node = main._create_card(data, false)
+		node.owner_id = int(pair[0])
+		node.controller_id = me
+		node.is_converted = true
+		main._connect_card_signals(node)
+		if gm:
+			await gm._play_card_to_field(node)
 	return true
