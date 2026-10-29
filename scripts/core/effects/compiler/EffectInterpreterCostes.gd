@@ -31,6 +31,12 @@ func _cost_candidates(main: Node, c: Dictionary, card: Node, controller_id: int)
 					if is_instance_valid(a) and a != card and a.get("card_type") == Constants.CardType.ALIADO:
 						out.append(a)
 			return out
+		"shuffle_reserve_gold":  # cae megido
+			var reserve = PlayerSideScript.gold_reserva(main, controller_id)
+			return reserve.get_children().filter(func(g): return is_instance_valid(g) and g.get("card_type") == Constants.CardType.ORO) if reserve else []
+		"shuffle_play_or_hand":  # drangue / custodios: "un Arma que controles o de tu mano"
+			var both: Array = _controlled_in_play(main, controller_id) + _hand_cards(main, controller_id)
+			return both.filter(func(x): return x != card and (c.get("types", []).is_empty() or _type_word(int(x.card_type)) in c.types))
 		"sacrifice_any":
 			return _controlled_in_play(main, controller_id).filter(func(x: Node) -> bool:
 				if not c.get("types", []).is_empty() and _type_word(int(x.card_type)) not in c.types:
@@ -144,7 +150,7 @@ func _cost_unpayable(main: Node, c: Dictionary, card: Node, controller_id: int) 
 		"banish_cemetery":
 			if _own_cemetery_cost_pool(card, controller_id).size() < int(c.amount):
 				return "no tienes %d cartas en tu Cementerio" % int(c.amount)
-		"discard", "reveal", "sacrifice", "banish_hand", "sacrifice_any":
+		"discard", "reveal", "sacrifice", "banish_hand", "sacrifice_any", "shuffle_play_or_hand", "shuffle_reserve_gold":
 			if _cost_candidates(main, c, card, controller_id).size() < int(c.amount):
 				return "no tienes con qué pagar el coste"
 	return ""
@@ -200,7 +206,7 @@ func _pay_cost(main: Node, c: Dictionary, card: Node, controller_id: int) -> boo
 				main._gold_manager._update_gold_display()
 			return true
 		"shuffle_hand":
-			return await _shuffle_from_hand(main, {"amount": int(c.amount), "up_to": false}, controller_id)
+			return await _shuffle_from_hand(main, {"amount": int(c.amount), "up_to": false, "exclude": card}, controller_id)
 		"self_pay":
 			var diverted: bool = await main._gold_manager._mover_oro_a_pagado(card)
 			if not diverted:
@@ -234,7 +240,7 @@ func _pay_cost(main: Node, c: Dictionary, card: Node, controller_id: int) -> boo
 					d["esta_oculta"] = false
 					CardManager.append_to_exile(controller_id, d)
 			return true
-		"discard", "reveal", "sacrifice", "banish_hand", "sacrifice_any":
+		"discard", "reveal", "sacrifice", "banish_hand", "sacrifice_any", "shuffle_play_or_hand", "shuffle_reserve_gold":
 			var pool := _cost_candidates(main, c, card, controller_id)
 			var n: int = int(c.amount)
 			var picked: Array = []
@@ -247,6 +253,8 @@ func _pay_cost(main: Node, c: Dictionary, card: Node, controller_id: int) -> boo
 				var sac_verb := {"destroy": "Destruye", "banish": "Destierra", "shuffle": "Baraja"}
 				var what := {"reveal": "muestra una carta de tu mano", "sacrifice": "Destruye otro Aliado que controles",
 					"banish_hand": "Destierra %d carta(s) de tu mano" % n,
+					"shuffle_play_or_hand": "Baraja %d carta(s) que controles o de tu mano" % n,
+					"shuffle_reserve_gold": "Baraja %d Oro(s) de tu Reserva" % n,
 					"sacrifice_any": "%s %d carta(s) que controles" % [sac_verb.get(str(c.get("verb", "")), ""), n]}
 				var prompt := "%s: %s" % [name, what.get(c.kind, "")]
 				picked = await main._card_interaction.await_multi_target(prompt, pool, n, Callable(), Callable(),
@@ -264,6 +272,8 @@ func _pay_cost(main: Node, c: Dictionary, card: Node, controller_id: int) -> boo
 					await ActionModule.destroy(picked, card, false, true)
 				"sacrifice_any":
 					# "...para que tu oponente Bote tantas cartas como Fuerza tenga ese Aliado" (taira no masakado).
+					_each["paid_cost"] = picked.reduce(func(acc, p): return acc + (0 if p.get("card_type") == Constants.CardType.ORO
+						else int(ContinuousEffectManager.get_modified_cost(p))), 0)  # duelo a siete pasos
 					_each["paid_strength"] = picked.reduce(func(acc, p): return acc + (int(ContinuousEffectManager.get_modified_strength(p))
 						if p.get("card_type") == Constants.CardType.ALIADO else 0), 0)
 					match str(c.get("verb", "destroy")):
@@ -277,6 +287,21 @@ func _pay_cost(main: Node, c: Dictionary, card: Node, controller_id: int) -> boo
 							for p in picked:
 								var s_owner: int = p.owner_id if p.get("owner_id") != null else controller_id
 								await ActionModule.return_to_deck(p, s_owner, true, card)
+				"shuffle_reserve_gold":
+					for p in picked:
+						await ActionModule.return_to_deck(p, p.owner_id if p.get("owner_id") != null else controller_id, true, card)
+					if main._gold_manager:
+						main._gold_manager._update_gold_display()
+				"shuffle_play_or_hand":
+					for p in picked:
+						if p.get("current_zone") == Constants.Zone.MANO:
+							var hdata: Dictionary = PlayerSideScript.take_from_hand(main, controller_id, p)
+							hdata["esta_oculta"] = true
+							CardManager.add_to_deck_top(controller_id, hdata)
+							CardManager.shuffle_deck(controller_id)
+						else:
+							var p_owner: int = p.owner_id if p.get("owner_id") != null else controller_id
+							await ActionModule.return_to_deck(p, p_owner, true, card)
 				"banish_hand":
 					for p in picked:
 						var data: Dictionary = PlayerSideScript.take_from_hand(main, controller_id, p)
@@ -293,7 +318,7 @@ func _shuffle_from_hand(main: Node, st: Dictionary, controller_id: int) -> bool:
 	# "Tu oponente baraja una carta de su mano" (kukri): la elige el dueño de la mano.
 	var pid: int = 1 - controller_id if st.get("who", "self") == "opponent" else controller_id
 	var hand_container = PlayerSideScript.hand(main, pid)
-	var hand := _hand_cards(main, pid)
+	var hand := _hand_cards(main, pid).filter(func(h): return h != st.get("exclude"))  # el Talismán que se está jugando
 	if not hand_container or hand.is_empty():
 		return st.up_to  # "hasta N" con la mano vacía igual se resolvió
 	var pick_amount: int = mini(st.amount, hand.size())

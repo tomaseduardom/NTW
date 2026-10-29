@@ -125,6 +125,8 @@ func _matches(c: Node, spec: Dictionary, source: Node, controller_id: int) -> bo
 		return false
 	if spec.get("controller", "any") == "own" and _controller_of(c) != controller_id:
 		return false  # "un Aliado que controles" (kuji-in)
+	if spec.get("owned", false) and int(c.get("owner_id") if c.get("owner_id") != null else controller_id) != controller_id:
+		return false  # "del que seas dueño" (lurulu)
 	# "un Aliado Bandido": raza sin tildes; los 5 primeros caracteres cubren plurales.
 	var race: String = str(spec.get("race", ""))
 	if not race.is_empty() and not (race.substr(0, 5) in EffectCompilerScript.normalize(str(c.get("card_raza")))):

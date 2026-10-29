@@ -328,7 +328,17 @@ func _execute_step(main: Node, st: Dictionary, targets: Array, card: Node, contr
 		"gold":
 			if main.get("_gold_manager"):
 				var for_type: String = st.get("for", "")
-				if for_type == "":
+				if st.has("for_spec"):
+					# "para jugar cartas de coste 3 o más / que no sean Aliado / Aliados o Tótem / una carta".
+					var spec: Dictionary = st.for_spec
+					var wanted_types: Array = spec.get("types", []).map(func(w): return _type_enum(w))
+					var not_types: Array = spec.get("not", []).map(func(w): return _type_enum(w))
+					var cost_min: int = int(spec.get("cost_min", -1))
+					var spec_pred := func(card_type: int, _race: String, cost: int) -> bool:
+						return card_type != Constants.CardType.ORO and (wanted_types.is_empty() or card_type in wanted_types) \
+							and not (card_type in not_types) and (cost_min < 0 or cost >= cost_min)
+					main._gold_manager.generar_oro_virtual_restringido(int(st.amount), spec_pred, "%s: Oro restringido" % _card_name(card), controller_id)
+				elif for_type == "":
 					main._gold_manager.generar_oros_virtuales(int(st.amount), controller_id)
 				else:
 					# "Genera un Oro para jugar Aliados": Oro Virtual restringido a ese tipo.
@@ -383,14 +393,13 @@ func _note_affected(targets: Array) -> void:
 	habilidad"; chivateo: "su controlador roba")."""
 	_each["affected"] = targets.filter(func(c): return is_instance_valid(c)).map(func(c): return {
 		"node": c, "habilidad": str(c.card_data.get("habilidad", "")) if c.get("card_data") is Dictionary else "",
-		"controller": _controller_of(c), "type": int(c.get("card_type")) if c.get("card_type") != null else -1})
+		"controller": _controller_of(c), "type": int(c.get("card_type")) if c.get("card_type") != null else -1,
+		"cost": 0 if c.get("card_type") == Constants.CardType.ORO else int(ContinuousEffectManager.get_modified_cost(c))})
 
 
 func _note_destroyed(st: Dictionary, targets: Array) -> void:
 	"""Cuántas salieron del juego por el paso (rey del camino: "por cada carta Destruida"), en total y por
 	controlador."""
-	if str(st.get("verb", "")) != "destroy":
-		return
 	var by_ctrl := {0: 0, 1: 0}
 	var gone := 0
 	for a in _each.get("affected", []):
@@ -399,6 +408,9 @@ func _note_destroyed(st: Dictionary, targets: Array) -> void:
 			gone += 1
 			if int(a.type) == Constants.CardType.ALIADO:
 				by_ctrl[int(a.controller)] = int(by_ctrl[int(a.controller)]) + 1
+	_each["gone"] = gone  # nautilus: "esa misma cantidad"
+	if str(st.get("verb", "")) != "destroy":
+		return
 	_each["destroyed"] = gone
 	_each["destroyed_allies_by_ctrl"] = by_ctrl
 
@@ -547,6 +559,10 @@ func _play_from(main: Node, st: Dictionary, card: Node, controller_id: int) -> b
 			data = res.selected[0]
 		if await EffectContextScript.ensure_window():
 			return false
+		# "...y Robar tantas cartas como su coste" (ten no senshi): la carta jugada.
+		var played_data: Dictionary = node.card_data if node else data
+		_each["affected"] = [{"node": node, "habilidad": "", "controller": controller_id, "type": int(played_data.get("tipo", -1)),
+			"cost": int(played_data.get("coste", 0))}]
 		if play.get("free", false):
 			if node:
 				data = PlayerSideScript.take_from_hand(main, controller_id, node)

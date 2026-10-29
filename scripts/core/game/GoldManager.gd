@@ -2,6 +2,8 @@ class_name GoldManager
 extends "res://scripts/core/game/GoldManagerColocar.gd"
 ## GoldManager — familia Jugar (ver GoldManagerBase.gd para la cabecera, constantes y ayudas).
 
+const TalismanExtraCostScript = preload("res://scripts/core/game/TalismanExtraCost.gd")
+
 
 func play_card(card: Node) -> bool:
 	# player_id = controller_id de la carta (quien la controla paga y juega; p.ej. Miguel juega del
@@ -125,6 +127,16 @@ func play_card(card: Node) -> bool:
 				if card.get("card_data") is Dictionary:
 					card.card_data["_no_annul"] = true
 
+	# "Para jugar este Talismán, Baraja una carta de tu mano" (TalismanExtraCost): se revisa antes y se paga junto
+	# con el Oro.
+	var extra_costs: Array = TalismanExtraCostScript.cost_steps(card)
+	if not extra_costs.is_empty():
+		var why: String = TalismanExtraCostScript.unpayable(_main, card, extra_costs, player_id)
+		if not why.is_empty():
+			_main._update_debug("%s: %s" % [card.card_name, why])
+			PaymentManager.remover_modificador_coste(card)
+			await _return_card_rejected(card)
+			return false
 	# Asequibilidad ANTES de elegir portador: no ofrecer portador para un Arma que no se puede pagar
 	# (p.ej. con Lobo Sagrado en Guerra de Talismanes).
 	var coste_real = PaymentManager.calcular_coste_real(card)
@@ -161,6 +173,11 @@ func play_card(card: Node) -> bool:
 			PaymentManager.remover_modificador_coste(card)
 			await _return_card_rejected(card)
 			return false
+	if not extra_costs.is_empty() and not await TalismanExtraCostScript.pay(_main, card, extra_costs, player_id):
+		_main._update_debug("%s: no se pagó el coste adicional" % card.card_name)
+		PaymentManager.remover_modificador_coste(card)
+		await _return_card_rejected(card)
+		return false
 	if coste_real > 0:
 		await pagar_coste(coste_real, card.card_type, card.get("card_raza") if card.get("card_raza") != null else "", card.card_cost, player_id)
 		PaymentManager.registrar_pago(coste_real)
@@ -242,6 +259,9 @@ func play_card_from_exile(card_data: Dictionary, discount: int = 0, owner_id: in
 			card.queue_free()
 			return false
 
+	if not await _talisman_extra_cost_ok(card, owner_id):
+		card.queue_free()
+		return false
 	var exile: Array = CardManager.get_exile(owner_id)
 	var idx: int = exile.find(card_data)
 	if idx < 0:
@@ -279,6 +299,8 @@ func play_found_card(card_data: Dictionary, original_owner: int, controller_id: 
 	var coste_real: int = PaymentManager.calcular_coste_real(card)
 	var chosen_wielder: Node = null
 	var ok: bool = PaymentManager.puede_jugar_carta(card, controller_id)
+	if ok:
+		ok = await _talisman_extra_cost_ok(card, controller_id)
 	if ok and card_type == Constants.CardType.ARMA:
 		chosen_wielder = await _select_weapon_wielder(controller_id)
 		ok = chosen_wielder != null and is_instance_valid(chosen_wielder)
@@ -389,6 +411,9 @@ func play_card_from_cemetery(card_data: Dictionary, owner_id: int = 0) -> bool:
 	# Solo con todo confirmado (portador elegido, Oro alcanza) se retira
 	# de verdad del Cementerio — igual que play_card() con la mano, para que
 	# cancelar a mitad de camino no deje el Cementerio corrompido.
+	if not await _talisman_extra_cost_ok(card, owner_id):
+		card.queue_free()
+		return false
 	var cemetery: Array = CardManager.get_cemetery(owner_id)
 	var idx: int = cemetery.find(card_data)
 	if idx < 0:
@@ -473,6 +498,10 @@ func play_card_for_free(card_data: Dictionary, owner_id: int = 0, exile_after: b
 			card.queue_free()
 			return false
 
+	# "sin pagar su coste" no exime del coste adicional ("Para jugar este Talismán, ...").
+	if not await _talisman_extra_cost_ok(card, owner_id):
+		card.queue_free()
+		return false
 	if card_type == Constants.CardType.TALISMAN:
 		await _play_talisman(card)
 	elif card_type == Constants.CardType.ARMA:
@@ -1043,6 +1072,20 @@ func _consume_next_talisman_buff(card: Node) -> void:
 		if card.get("card_data") is Dictionary:
 			card.card_data["_no_annul"] = true
 	_clear_next_talisman_buff(pid)
+
+
+func _talisman_extra_cost_ok(card: Node, pid: int) -> bool:
+	"""Coste adicional de un Talismán ("Para jugar este Talismán, Baraja una carta de tu mano", TalismanExtraCost)
+	en los caminos que no son la mano (Destierro, Cementerio, Castillo, sin pagar su coste): true si no tiene o se
+	pagó."""
+	var steps: Array = TalismanExtraCostScript.cost_steps(card)
+	if steps.is_empty():
+		return true
+	var why: String = TalismanExtraCostScript.unpayable(_main, card, steps, pid)
+	if not why.is_empty():
+		_main._update_debug("%s: %s" % [str(card.get("card_name")), why])
+		return false
+	return await TalismanExtraCostScript.pay(_main, card, steps, pid)
 
 
 func _play_talisman(card: Node) -> void:

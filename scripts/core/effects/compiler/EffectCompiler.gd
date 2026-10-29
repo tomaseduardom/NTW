@@ -158,6 +158,8 @@ const RULE_SKIP_RX := [
 	"^jugar este talisman en respuesta a .*$",
 	"^no puedes tener mas de tres copias.*$",
 	"^si .+, (?:cuesta un oro menos|puedes jugarlo sin pagar su coste)(?: y destierralo)?$",
+	# "Para jugar este Talismán, Baraja una carta de tu mano": coste adicional al jugarlo (TalismanExtraCost).
+	"^para jugar este talisman, .+$",
 	# avaricia: habilidad desde el Cementerio, no parte del efecto al resolverse.
 	"^cuando pongas un oro en juego, puedes subir este talisman de tu cementerio a tu mano$",
 ]
@@ -194,7 +196,12 @@ const COST_PIECES := [
 	["sacrifice", "destruir otro aliado que controles"],
 	# "Destruir/Desterrar/Barajar un Oro / una carta / un Aliado de coste 1 o más que controles para..."
 	# (veles, piedra de la iglesia, dodomeki, molotok, arco patagon...). Puede ser la carta misma.
-	["sacrifice_any", "(?<sv>destruir|desterrar|barajar) (?<sn>un|una|dos|tres) (?<types>" + TALT + ")" \
+	# cae megido: "Para jugar este Talismán, Baraja un Oro de tu Reserva" (TalismanExtraCost).
+	["shuffle_reserve_gold", "barajar un oro de tu reserva"],
+	# drangue / custodios: "Barajar un Arma que controles o de tu mano para..." (de las dos zonas).
+	["shuffle_play_or_hand", "barajar (?:un|una) (?<types>" + T1 + ") que controles o de tu mano"],
+	# Imperativo también: "Destruye una carta que controles para desterrar..." (ignis azotamundos).
+	["sacrifice_any", "(?<sv>destruir|desterrar|barajar|destruye|destierra|baraja) (?<sn>un|una|dos|tres) (?<types>" + TALT + ")" \
 		+ "(?: de coste (?<cval>\\d+) o (?<ccmp>mas|menos))? que controles"],
 	# "subir este Oro a tu mano" (hem hem real): la carta misma, de juego a la mano.
 	["self_bounce", "(?:subir (?:este oro|esta carta|este aliado|esta arma|este totem)|subirlo|subirla) a tu mano"],
@@ -277,7 +284,7 @@ const TYPE_WORDS := {
 ## barajar/subir. Grupos con nombre (PCRE2).
 const TARGET_RX := "(?<det>(?:hasta )?" + NUM + ") (?<kind>aliados?|cartas?|totems?|armas?)" \
 	+ "(?<opp> oponentes?)?(?: en juego)?(?<nogold> que no sean? (?:un )?oro)?" \
-	+ "(?: de (?<stat>fuerza|coste) (?<val>\\d+)(?: o (?<cmp>menos|mas))?)?"
+	+ "(?: de (?<stat>fuerza|coste) (?<val>\\d+)(?: o (?<cmp>menos|mas))?)?(?<own> que controles)?(?<owned> del que seas dueno)?"
 
 ## "de Fuerza 3 o menos" / "de coste 2 o más" tras el sujeto ("Un Aliado de coste 2 o menos gana...").
 const STAT_FILTER := "(?: de (?<stat>fuerza|coste) (?<val>\\d+) o (?<cmp>menos|mas))?"
@@ -324,6 +331,14 @@ const ATOMS := [
 	["draw", "(?:tu )?roba(?:s|r)? (?<upto>hasta )?(?<n>" + NUM + ") cartas?(?: de tu castillo)?"],
 	["draw_to_match", "roba(?:r)? cartas hasta tener la misma cantidad de cartas en (?:(?:la|tu) )?mano que tu oponente"],
 	# Piezas sueltas de una o pocas cartas (EffectInterpreterEspeciales).
+	# golpe de agua.
+	["special:shuffle_own_and_cheaper", "baraja una carta que controles y una carta oponente del mismo o menor coste"],
+	# nautilus: después de "Baraja hasta dos cartas que controles".
+	["special:opp_pick_same_count", "tu oponente elige esa misma cantidad de aliados que controle"],
+	["special:silence_shuffle_picked", "esos aliados pierden su habilidad y son barajados"],
+	# duelo a siete pasos (el coste adicional lo pagó GoldManager al jugarlo).
+	["special:choose_opp_le_paid", "elige una carta oponente del mismo o menor coste que la carta destruida"],
+	["special:silence_destroy_chosen", "esa carta pierde su habilidad y es destruida"],
 	# estirpe maldita (con "Por cada Aliado que controles, ..."): la carta del tope entra como Aliado sin habilidad.
 	["special:castle_top_ally", "pon una carta del tope de un castillo en juego como un aliado de fuerza (?<v>\\d+) sin habilidad"],
 	# chivateo del mandinga: lo que destruyó el paso anterior, por controlador.
@@ -623,7 +638,9 @@ const ATOMS := [
 	["cemetery_shuffle", "(?:baraja|barajar) hasta (?<n>" + NUM + ") cartas? de (?:los cementerios|(?<one>un cementerio))"],
 	# "Genera un Oro (por el turno)" — sin restricción ("para jugar ..." queda
 	# sin consumir y el bloque no compila).
-	["gold", "genera(?:r)? (?<n>" + NUM + ") oros?(?: por el turno)?(?: para jugar (?<for>aliados|un aliado|armas|un arma|talismanes|un talisman|totems?|un totem))?"],
+	["gold", "genera(?:r)? (?<n>" + NUM + ") oros?(?: por el turno)?(?: para jugar (?:(?<for>aliados|un aliado|armas|un arma|talismanes|un talisman|totems?|un totem)" \
+		+ "|(?<anyc>una carta|cartas)(?: de coste (?<fcv>\\d+) o mas)?(?<fnot> que no sean? aliados?)?" \
+		+ "|(?<fab>o utilizar habilidades de aliados o totems?)))?"],
 	# "Agrupa un Oro": del Oro Pagado a la Reserva.
 	["regroup_gold", "agrupa(?:r)? (?<n>" + NUM + ") oros?"],
 	# "Agrupa dos cartas" (iga ryu): Oros Pagados y/o Aliados de Línea de Ataque (DAR 5.1).
@@ -1272,11 +1289,13 @@ static func _cost_step(kind: String, m: RegExMatch) -> Dictionary:
 			var sv: String = m.get_string("sv")
 			return {"op": "cost", "kind": "sacrifice_any", "amount": parse_amount(m.get_string("sn")),
 				"types": _type_list(m.get_string("types")),
-				"verb": "destroy" if sv == "destruir" else ("banish" if sv == "desterrar" else "shuffle"),
+				"verb": "destroy" if sv.begins_with("destru") else ("banish" if sv.begins_with("dest") else "shuffle"),
 				"cost_val": int(m.get_string("cval")) if not m.get_string("cval").is_empty() else -1,
 				"cost_cmp": m.get_string("ccmp")}
 		"banish_cemetery":
 			return {"op": "cost", "kind": "banish_cemetery", "amount": parse_amount(m.get_string("cn"))}
+		"shuffle_play_or_hand":
+			return {"op": "cost", "kind": "shuffle_play_or_hand", "amount": 1, "types": _type_list(m.get_string("types"))}
 		"banish_hand":
 			if not m.get_string("bn").is_empty():
 				return {"op": "cost", "kind": "banish_hand", "amount": parse_amount(m.get_string("bn")), "types": []}
@@ -1329,7 +1348,7 @@ static func _compile_sequence(s: String) -> Dictionary:
 		var set_qty := {}
 		var tm: RegExMatch = null
 		if step.is_empty():
-			tm = RegEx.create_from_string("^(?<a>(?:(?!, | y ).)*?)\\btantas (?<b>(?:(?!, | y ).)*?) como (?<q>.+)$").search(rest)
+			tm = RegEx.create_from_string("^(?<a>(?:(?!, | y ).)*?)\\btant(?:as|os) (?<b>(?:(?!, | y ).)*?) como (?<q>.+)$").search(rest)
 		if tm:
 			var tq := _parse_quantity(tm.get_string("q"))
 			if not tq.is_empty():
@@ -1387,7 +1406,7 @@ static func _compile_sequence(s: String) -> Dictionary:
 
 ## Pasos que aceptan una cantidad variable y qué campo cambia (ver _parse_quantity()). Los objetivos en
 ## juego no: se eligen antes de resolver, con la cantidad impresa.
-const QTY_KEYS := {"special": "amount", "draw": "amount", "mill": "amount", "discard": "amount", "cemetery_cleanup": "amount",
+const QTY_KEYS := {"gold": "amount", "special": "amount", "draw": "amount", "mill": "amount", "discard": "amount", "cemetery_cleanup": "amount",
 	"shuffle_from_cemetery": "amount", "shuffle_from_hand": "amount", "castle_exile": "amount", "buff": "amount"}
 static var _qty_rxs: Array = []
 
@@ -1399,6 +1418,7 @@ static func _parse_quantity(t: String) -> Dictionary:
 	if _qty_rxs.is_empty():
 		for pair in [
 			["moved", "cartas? barajadas? de esta forma"],
+			["affected_cost", "su coste(?![a-z])"],
 			# Lo que hizo un paso anterior del mismo efecto (EffectInterpreterEspeciales._quantity_value).
 			["exiled", "(?<t>" + T1 + ") desterrad[oa]s? de esta forma"],
 			["milled", "(?<t>" + T1 + ") botad[oa]s? de esta forma"],
@@ -1427,6 +1447,8 @@ static func _parse_quantity(t: String) -> Dictionary:
 				q = {"kind": "moved"}  # nahualismo: lo que barajó el paso "cada jugador" anterior
 			"exiled", "milled":  # takiyasha hime / forma de araña: los datos que movió el paso anterior
 				q = {"kind": "each_list", "key": "exiled" if pat.kind == "exiled" else "milled_cards", "types": _type_list(m.get_string("t"))}
+			"affected_cost":  # jabberwocky desatado: el coste de lo que afectó el paso anterior
+				q = {"kind": "affected_cost"}
 			"destroyed":  # rey del camino
 				q = {"kind": "each_count", "key": "destroyed"}
 			"paid_self":  # nguruvilu (GoldManager: meta "gold_paid")
@@ -1827,9 +1849,16 @@ static func _build(atom_name: String, m: RegExMatch) -> Dictionary:
 				"one_zone": atom_name != "cemetery_both" and not m.get_string("one").is_empty()}
 		"gold":
 			var for_word: String = m.get_string("for").trim_prefix("un ")
-			return {"op": "gold", "amount": parse_amount(m.get_string("n")),
+			var gold_step := {"op": "gold", "amount": parse_amount(m.get_string("n")),
 				"for": {"aliados": "aliado", "aliado": "aliado", "armas": "arma", "arma": "arma", "talismanes": "talisman",
 					"talisman": "talisman", "totems": "totem", "totem": "totem"}.get(for_word, "")}
+			# "para jugar cartas de coste 3 o más" (voladora), "...que no sean Aliado" (desafiante), "para jugar o utilizar
+			# habilidades de Aliados o Tótem" (los altos solomonari), "para jugar una carta" (jabberwocky desatado).
+			if not m.get_string("anyc").is_empty() or not m.get_string("fab").is_empty():
+				gold_step["for_spec"] = {"types": ["aliado", "totem"] if not m.get_string("fab").is_empty() else [],
+					"not": ["aliado"] if not m.get_string("fnot").is_empty() else [],
+					"cost_min": int(m.get_string("fcv")) if not m.get_string("fcv").is_empty() else -1}
+			return gold_step
 		"regroup_gold":
 			return {"op": "regroup_gold", "amount": parse_amount(m.get_string("n"))}
 		"regroup_cards":
@@ -2152,7 +2181,7 @@ static func _group(m: RegExMatch, name: String) -> String:
 static func _target_from(m: RegExMatch) -> Dictionary:
 	var t := {
 		"card_types": [],
-		"controller": "opponent" if not _group(m, "opp").is_empty() else "any",
+		"controller": "opponent" if not _group(m, "opp").is_empty() else ("own" if not _group(m, "own").is_empty() else "any"),
 		"exclude_gold": not _group(m, "nogold").is_empty(),
 		"stat": _group(m, "stat"),
 		"cmp": {"menos": "<=", "mas": ">="}.get(_group(m, "cmp"), "==" if not _group(m, "val").is_empty() else ">="),
@@ -2161,6 +2190,8 @@ static func _target_from(m: RegExMatch) -> Dictionary:
 	var tw: String = TYPE_WORDS.get(_group(m, "kind"), "")
 	if not tw.is_empty():
 		t.card_types = [tw]
+	if not _group(m, "owned").is_empty():
+		t["owned"] = true  # lurulu: "un Aliado que controles del que seas dueño"
 	if not _group(m, "race").is_empty():
 		t["race"] = _group(m, "race")
 	return t

@@ -158,7 +158,10 @@ static func describe_steps(steps: Array) -> String:
 					"shuffle_exiles_chosen_type": "Barajar las de ese tipo de los Destierros", "draw_if_chosen": "Robar según el tipo elegido",
 					"envy": "Mostrar las manos y comparar", "envy_else": "Si no, robar %d" % int(st.get("amount", 2)),
 					"type_silence_shuffle": "Barajar sin habilidad las de un tipo", "disguise": "Jugar una copia de un Aliado",
-					"look_both_choose": "Elegir un Aliado", "look_both_place": "Mirar ambos Castillos"}.get(str(st.kind), str(st.kind)))
+					"look_both_choose": "Elegir un Aliado", "look_both_place": "Mirar ambos Castillos",
+					"shuffle_own_and_cheaper": "Barajar una tuya y una oponente de igual o menor coste",
+					"opp_pick_same_count": "Tu oponente elige la misma cantidad de Aliados", "silence_shuffle_picked": "Esos Aliados pierden su habilidad y se barajan",
+					"choose_opp_le_paid": "Elegir una carta oponente de igual o menor coste", "silence_destroy_chosen": "Pierde su habilidad y es Destruida"}.get(str(st.kind), str(st.kind)))
 			"repeat":
 				parts.append("Repetir: %s" % describe_steps(st.steps))
 			"hand_exile":
@@ -204,6 +207,8 @@ static func describe_steps(steps: Array) -> String:
 					"shuffle_hand": "Barajar %d de tu mano" % st.amount,
 					"banish_hand": "Desterrar %d de tu mano" % st.amount,
 					"banish_cemetery": "Desterrar %d de tu Cementerio" % st.amount,
+					"shuffle_play_or_hand": "Barajar %d que controles o de tu mano" % st.amount,
+					"shuffle_reserve_gold": "Barajar %d Oro(s) de tu Reserva" % st.amount,
 					"sacrifice_any": "%s %d que controles" % [{"destroy": "Destruir", "banish": "Desterrar",
 						"shuffle": "Barajar"}.get(str(st.get("verb", "")), ""), st.amount]}.get(st.kind, st.kind))
 			"hand_peek":

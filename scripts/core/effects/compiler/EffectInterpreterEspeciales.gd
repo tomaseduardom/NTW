@@ -31,6 +31,11 @@ func _quantity_value(main: Node, q: Dictionary, card: Node, controller_id: int) 
 		"each_list":  # "por cada Aliado Desterrado / Talismán Botado de esta forma"
 			var types: Array = q.get("types", [])
 			return _each.get(str(q.key), []).filter(func(d): return d is Dictionary and _spec_matches({"types": types}, d)).size()
+		"affected_cost":  # jabberwocky desatado: "tantos Oros como su coste"
+			var aff: Array = _each.get("affected", [])
+			if aff.is_empty():
+				return 0
+			return int(aff[0].get("cost", 0))  # anotado antes de que saliera del juego
 		"each_count":  # "por cada carta Destruida"
 			return int(_each.get(str(q.key), 0))
 		"paid_self":  # nguruvilu: "por cada Oro que hayas pagado por este Aliado" (GoldManager, meta "gold_paid")
@@ -100,6 +105,51 @@ func _special_step(main: Node, st: Dictionary, card: Node, controller_id: int) -
 			if weaker.is_empty():
 				return true
 			return await _apply_verb({"verb": "shuffle", "count": weaker.size(), "up_to": true}, weaker, card)
+		"shuffle_own_and_cheaper":
+			return await _shuffle_own_and_cheaper(main, card, me)
+		"opp_pick_same_count":  # nautilus: tu oponente elige tantos Aliados suyos como cartas se Barajaron
+			var opp := 1 - me
+			var need: int = int(_each.get("gone", 0))
+			var theirs: Array = _controlled_in_play(main, opp).filter(func(c): return c.get("card_type") == Constants.CardType.ALIADO)
+			need = mini(need, theirs.size())
+			_each["picked"] = []
+			if need <= 0:
+				return true
+			var chosen_opp: Array = theirs.slice(0, need)
+			if _is_bot(opp):
+				theirs.sort_custom(func(a: Node, b: Node) -> bool: return ContinuousEffectManager.get_modified_strength(a) < ContinuousEffectManager.get_modified_strength(b))
+				chosen_opp = theirs.slice(0, need)
+			elif theirs.size() > need and main.get("_card_interaction"):
+				chosen_opp = await main._card_interaction._await_multi_target_raw("%s: elige %d Aliado(s) que controles" % [title, need],
+					theirs, need, Callable(), Callable(), false, null, opp)
+			_each["picked"] = chosen_opp
+			return true
+		"silence_shuffle_picked":  # "Esos Aliados pierden su habilidad y son Barajados"
+			var picked: Array = _each.get("picked", []).filter(func(c): return _alive(c))
+			if picked.is_empty():
+				return true
+			return await _apply_verb({"verb": "shuffle", "count": picked.size(), "up_to": true, "silence_first": true}, picked, card)
+		"choose_opp_le_paid":  # duelo a siete pasos: el coste de la carta Destruida al jugarlo (TalismanExtraCost)
+			var limit: int = int(card.get_meta("extra_cost_paid_cost", -1)) if is_instance_valid(card) else -1
+			var pool: Array = _controlled_in_play(main, 1 - me).filter(func(c): return (c.get("card_type") != Constants.CardType.ORO
+				and int(ContinuousEffectManager.get_modified_cost(c)) <= limit))
+			if pool.is_empty():
+				main._update_debug("%s: no hay una carta oponente de coste %d o menos" % [title, limit])
+				return false
+			pool.sort_custom(func(a: Node, b: Node) -> bool: return int(ContinuousEffectManager.get_modified_cost(a)) > int(ContinuousEffectManager.get_modified_cost(b)))
+			var target: Node = pool[0]
+			if not _is_bot(me) and pool.size() > 1 and main.get("_card_interaction"):
+				var pk: Node = await main._card_interaction.await_target("%s: elige una carta oponente de coste %d o menos" % [title, limit],
+					func(c: Node) -> bool: return c in pool, false, me)
+				if pk and is_instance_valid(pk):
+					target = pk
+			_each["chosen_card"] = target
+			return true
+		"silence_destroy_chosen":  # "Esa carta pierde su habilidad y es Destruida"
+			var victim = _each.get("chosen_card")
+			if victim == null or not _alive(victim):
+				return false
+			return await _apply_verb({"verb": "destroy", "count": 1, "up_to": false, "silence_first": true}, [victim], card)
 		"choose_card":  # "Elige un Aliado que controles" (el bot, el de mayor coste)
 			var own: Array = _controlled_in_play(main, me).filter(func(c): return c.get("card_type") == Constants.CardType.ALIADO)
 			if own.is_empty():
@@ -476,3 +526,33 @@ func _look_both_place(main: Node, card: Node, me: int) -> bool:
 			"min": n, "max": n}], "%s: al Cementerio oponente" % title)
 		await look_script.look(me, me, n, true, look_script.rest_box(true), "%s: ordena las de tu Castillo" % title)
 	return true
+
+
+func _shuffle_own_and_cheaper(main: Node, card: Node, me: int) -> bool:
+	"""golpe de agua: 'Baraja una carta que controles y una carta oponente del mismo o menor coste' — las dos se eligen
+	(un Oro no tiene coste: no sirve de medida ni de objetivo). El bot: su carta más barata que tenga un objetivo."""
+	var title := _card_name(card)
+	var cost_of := func(c: Node) -> int: return int(ContinuousEffectManager.get_modified_cost(c))
+	var mine: Array = _controlled_in_play(main, me).filter(func(c): return c.get("card_type") != Constants.CardType.ORO and c != card)
+	var theirs: Array = _controlled_in_play(main, 1 - me).filter(func(c): return c.get("card_type") != Constants.CardType.ORO)
+	var usable: Array = mine.filter(func(c): return theirs.any(func(o): return cost_of.call(o) <= cost_of.call(c)))
+	if usable.is_empty():
+		main._update_debug("%s: no hay una carta tuya con una carta oponente del mismo o menor coste" % title)
+		return false
+	usable.sort_custom(func(a: Node, b: Node) -> bool: return cost_of.call(a) < cost_of.call(b))
+	var own: Node = usable[0]
+	if not _is_bot(me) and usable.size() > 1 and main.get("_card_interaction"):
+		var pk: Node = await main._card_interaction.await_target("%s: elige una carta que controles" % title,
+			func(c: Node) -> bool: return c in usable, false, me)
+		if pk and is_instance_valid(pk):
+			own = pk
+	var limit: int = cost_of.call(own)
+	var targets: Array = theirs.filter(func(o): return cost_of.call(o) <= limit)
+	targets.sort_custom(func(a: Node, b: Node) -> bool: return cost_of.call(a) > cost_of.call(b))
+	var other: Node = targets[0]
+	if not _is_bot(me) and targets.size() > 1 and main.get("_card_interaction"):
+		var pk2: Node = await main._card_interaction.await_target("%s: elige una carta oponente de coste %d o menos" % [title, limit],
+			func(c: Node) -> bool: return c in targets, false, me)
+		if pk2 and is_instance_valid(pk2):
+			other = pk2
+	return await _apply_verb({"verb": "shuffle", "count": 2, "up_to": true}, [own, other], card)

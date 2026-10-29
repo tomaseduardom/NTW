@@ -9,9 +9,10 @@ extends RefCounted
 ## La entrada solo recibe el objetivo en 'applies' y la carta en 'is_available': el objetivo de este
 ## ofrecimiento lo guarda EffectController en _last_applies_arg.
 
-const RX := "puedes (?<cost>[^.]+?) para prevenir que (?<what>uno o mas oros|un aliado o totem|un aliado con (?<kw>[a-z, ]+?)" \
+## custodios: "...para prevenir un efecto que fuera a afectar una de tus cartas" = afectada por un efecto oponente.
+const RX := "puedes (?<cost>[^.]+?) para prevenir (?:que (?<what>uno o mas oros|un aliado o totem|un aliado con (?<kw>[a-z, ]+?)" \
 	+ "|(?:un|una|otra) (?:aliado|totem|carta|oro)) (?:sea|sean) (?<v>anulad[oa]s?(?: o su habilidad cancelada)?" \
-	+ "|afectad[oa]s? por (?:un )?efectos? oponentes?)"
+	+ "|afectad[oa]s? por (?:un )?efectos? oponentes?)|un efecto que fuera a afectar una de tus cartas)"
 const KEYWORDS := {"furia": Constants.Keyword.FURIA, "imbloqueable": Constants.Keyword.IMBLOQUEABLE,
 	"indestructible": Constants.Keyword.INDESTRUCTIBLE}
 
