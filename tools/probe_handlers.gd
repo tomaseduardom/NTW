@@ -37,6 +37,9 @@ func _ready() -> void:
 		get_tree().quit(1)
 		return
 	var args := OS.get_cmdline_user_args()
+	# PROBE_TIME_SCALE: acelera los timers del árbol (rinde poco: casi todo el tiempo va en cuadros, no en timers).
+	if OS.get_environment("PROBE_TIME_SCALE") != "":
+		Engine.time_scale = float(OS.get_environment("PROBE_TIME_SCALE"))
 	var out_path: String = args[0] if args.size() > 0 else "user://probe_handlers.md"
 	var from_i: int = int(args[1]) if args.size() > 1 else 0
 	var to_i: int = int(args[2]) if args.size() > 2 else 1 << 30

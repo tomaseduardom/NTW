@@ -117,7 +117,8 @@ func _declare_targets(main: Node, st: Dictionary, card: Node, controller_id: int
 		# Ganar Fuerza o una palabra clave: el bot prefiere sus propios Aliados.
 		if st.op == "buff" and (int(st.get("amount", 0)) > 0 or st.get("double", false) or st.get("double_damage", false)
 				or (int(st.get("amount", 0)) == 0 and not st.get("no_damage", false)
-				and not st.has("set_strength") and (not st.get("keywords", []).is_empty() or st.get("no_shuffle", false)))):
+				and not st.has("set_strength") and (not st.get("keywords", []).is_empty() or st.get("no_shuffle", false)
+				or st.has("grant_options")))):
 			return _bot_pick(candidates, 1 - controller_id, count)
 		# "Hasta N" / "puedes": el bot no se perjudica a sí mismo si puede no elegir nada.
 		if not mandatory:

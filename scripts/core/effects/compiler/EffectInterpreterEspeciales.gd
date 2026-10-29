@@ -883,6 +883,7 @@ func _convert_pick(main: Node, st: Dictionary, card: Node, me: int, into: String
 			"ally":
 				if await ConvertPatternsScript._take_and_convert_in_play(c, me, card):
 					c.is_converted = true
+					c.set_meta("converted_blank", true)
 					await KeywordManager.silence_card(c, card, "permanent", true)
 	return true
 
@@ -915,6 +916,7 @@ func _quoted_text(card: Node) -> String:
 func _give_text(c: Node, text: String) -> void:
 	"""La carta convertida queda con esta habilidad en vez de "sin habilidad"."""
 	KeywordManager.clear_all_for_card(c)
+	c.remove_meta("converted_blank")  # convertida "con la habilidad ..."
 	EnterPatternsScript.set_ability(c, text)
 	c.is_converted = true
 
@@ -946,6 +948,7 @@ func _convert_node_to_paid_gold(main: Node, c: Node, card: Node, me: int, to_res
 	c.modulate = Color(1, 1, 1, 1) if to_reserve else Color(0.6, 0.6, 0.6, 1.0)
 	c.can_interact = (me == 0)
 	c.is_converted = true
+	c.set_meta("converted_blank", true)  # KeywordManager.is_silenced
 	if to_reserve:
 		GameState.agregar_oro_reserva(me, 1)  # gokin: "ponlo en tu Reserva"
 	else:

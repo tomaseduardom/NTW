@@ -69,17 +69,29 @@ func resolve_next_trigger() -> Dictionary:
 	_main.is_resolving = true
 	var trigger = _main.trigger_queue.pop_front()
 
-	var card: Node = trigger.card
+	var raw_card = trigger.card  # sin tipo: puede estar liberada
 	var trigger_type: String = trigger.trigger_type
 	var event_data: Dictionary = trigger.event_data
 	var controller_id: int = trigger.get("controller_id", 0)
+	var proxy_made := false
 
 	# Verificar que la carta sigue en juego
-	if not is_instance_valid(card):
-		print("[TriggerSystem] Carta ya no existe, saltando trigger")
-		return await resolve_next_trigger()
+	if not is_instance_valid(raw_card):
+		# "Cuando salga del juego" de una carta ya liberada (carcosa Desterrada por su propio efecto): sobre un sustituto.
+		if trigger_type == "on_leave_play" and trigger.has("card_data") and _main.get_node_or_null("/root/Main"):
+			var main_node: Node = _main.get_node("/root/Main")
+			raw_card = main_node._create_card(trigger.card_data.duplicate(), false)
+			raw_card.visible = false
+			main_node.add_child(raw_card)
+			raw_card.owner_id = int(trigger.get("owner_id", controller_id))
+			raw_card.controller_id = controller_id
+			proxy_made = true
+		else:
+			print("[TriggerSystem] Carta ya no existe, saltando trigger")
+			return await resolve_next_trigger()
+	var card: Node = raw_card
 
-	if not card.is_in_play():
+	if not proxy_made and not card.is_in_play():
 		print("[TriggerSystem] %s ya no está en juego, saltando trigger" % card.card_name)
 		return await resolve_next_trigger()
 
@@ -118,15 +130,21 @@ func resolve_next_trigger() -> Dictionary:
 	# carta de su mano.
 	if await Deck170Script.matriz_v_blocks_trigger(card, controller_id):
 		_main.awaiting_response = false
+		if proxy_made and is_instance_valid(card):
+			card.queue_free()
 		return await resolve_next_trigger()
 	# Mecha-Daikaiju: pagar un Oro para usar habilidades disparadas.
 	if await TriggerTollScript.blocks_trigger(card, controller_id):
 		_main.awaiting_response = false
+		if proxy_made and is_instance_valid(card):
+			card.queue_free()
 		return await resolve_next_trigger()
 	var ctx_token: int = EffectContextScript.push(card, controller_id, "disparada", "pending")
 	var result = await _execute_trigger_effect(card, trigger_type, event_data)
 	var window_state: String = EffectContextScript.window_state(ctx_token)
 	EffectContextScript.pop(ctx_token)
+	if proxy_made and is_instance_valid(card):
+		card.queue_free()
 	var was_cancelled: bool = window_state == "cancelled"
 	if was_cancelled:
 		_main.awaiting_response = false

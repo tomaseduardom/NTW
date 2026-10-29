@@ -2455,7 +2455,15 @@ static func _build(atom_name: String, m: RegExMatch) -> Dictionary:
 				options.append([step])
 			if options.size() < 2:
 				return {}
-			return {"op": "choice", "options": options}
+			# Primero se elige el Aliado y después qué gana (sarcófago impío): un solo paso con las opciones, que _buff()
+			# pregunta al resolver.
+			var gc_step: Dictionary = options[0][0].duplicate(true)
+			gc_step["keywords"] = []
+			gc_step["no_shuffle"] = false
+			gc_step["double_damage"] = false
+			gc_step["grant_options"] = options.map(func(o): return {"keywords": o[0].keywords, "no_shuffle": o[0].no_shuffle,
+				"double_damage": o[0].double_damage})
+			return gc_step
 		"target":
 			var verb_word: String = m.get_string("verb")
 			var verb := "destroy"

@@ -38,6 +38,7 @@ static func convert_in_play_to_totem(node: Node, source: Node, controller_id: in
 	node.set_zone(Constants.Zone.LINEA_APOYO)
 	node.can_interact = (controller_id == 0)
 	node.is_converted = true
+	node.set_meta("converted_blank", true)  # KeywordManager.is_silenced: sin habilidad aunque tenga protección
 	await KeywordManager.silence_card(node, source, "permanent", true)
 	ContinuousEffectManager.remove_modifiers_from_source(node)
 	if main.get("_zone_manager"):
@@ -84,7 +85,8 @@ static func tenshi_convert(source_card: Node, ability: Dictionary) -> void:
 
 
 ## Ángel Jeremiel: "Cuando entra en juego, tu oponente elige dos cartas de su
-## mano. Conviértelas en Tótem sin habilidad y ponlos en tu Línea de Defensa."
+## mano. Conviértelas en Tótem sin habilidad y ponlos en tu Línea de Defensa." Un Tótem va a la Línea de Apoyo
+## (decisión del usuario, 2026-10-29).
 static func jeremiel_enter(card: Node, controller_id: int) -> void:
 	var main := CardQuery.main_node()
 	if not main:
@@ -106,7 +108,8 @@ static func jeremiel_enter(card: Node, controller_id: int) -> void:
 				Callable(), Callable(), false, null, opp)
 	if await TriggerSystem.open_response_window(card, title, controller_id):
 		return
-	var field: Node = PlayerSideScript.ally_containers(main, controller_id)[0]
+	# Un Tótem va a la Línea de Apoyo (no a la de Defensa).
+	var field: Node = PlayerSideScript.line_containers(main, controller_id)[2]
 	for c in chosen:
 		if not is_instance_valid(c):
 			continue
@@ -117,9 +120,10 @@ static func jeremiel_enter(card: Node, controller_id: int) -> void:
 		node.controller_id = controller_id
 		main._connect_card_signals(node)
 		field.add_child(node)
-		node.set_zone(Constants.Zone.LINEA_DEFENSA)
+		node.set_zone(Constants.Zone.LINEA_APOYO)
 		node.can_interact = (controller_id == 0)
 		node.is_converted = true
+		node.set_meta("converted_blank", true)
 		await KeywordManager.silence_card(node, card, "permanent", true)
 		main._update_debug("%s: %s es ahora tu Tótem sin habilidad" % [title, str(data.get("nombre", ""))])
 	if main.get("_zone_manager"):
@@ -263,6 +267,7 @@ static func _finish_conversion(node: Node, source: Node, controller_id: int, str
 		damage_to_exile: bool) -> void:
 	node.can_interact = (controller_id == 0)
 	node.is_converted = true
+	node.set_meta("converted_blank", true)
 	await KeywordManager.silence_card(node, source, "permanent", true)
 	var removed: Dictionary = KeywordManager._removed_keywords.get(node.get_instance_id(), {})
 	for kw in keywords:

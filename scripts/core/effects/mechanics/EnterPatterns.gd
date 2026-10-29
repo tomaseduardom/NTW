@@ -81,6 +81,8 @@ static func set_ability(node: Node, text: String) -> void:
 	if node.get("card_data") is Dictionary:
 		node.card_data["habilidad"] = text
 	node.is_converted = false
+	if node.has_meta("converted_blank"):
+		node.remove_meta("converted_blank")  # vuelve a tener una habilidad (KeywordManager.is_silenced)
 	node.card_ability = text
 	KeywordManager.scan_and_apply_keywords(node)
 	ContinuousEffectManager.request_strength_badge_refresh()

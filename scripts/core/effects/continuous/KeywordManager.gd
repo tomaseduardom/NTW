@@ -501,6 +501,10 @@ func is_silenced(card: Node) -> bool:
 	real (TriggerSystem._check_trigger_conditions)."""
 	if not is_instance_valid(card):
 		return false
+	# Convertida "sin habilidad" (Tótem / Oro / Aliado sin habilidad, ConvertPatterns): es otra carta, sin habilidad; no
+	# es "perder la habilidad", así que ninguna protección de silencio la cubre.
+	if card.get_meta("converted_blank", false):
+		return true
 	var entries = _silenced_cards.get(card.get_instance_id(), [])
 	if not entries.is_empty():
 		return true

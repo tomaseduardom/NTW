@@ -211,6 +211,11 @@ func register_trigger(card: Node, trigger_type: String, event_data: Dictionary) 
 		"event_data": event_data,
 		"controller_id": card.controller_id if card.get("controller_id") != null else 0
 	}
+	# "Cuando salga del juego": la carta puede liberarse antes de que se resuelva (carcosa se Destierra
+	# con su propio efecto); con sus datos, TriggerResolution lo resuelve sobre un sustituto.
+	if trigger_type == "on_leave_play" and card.get("card_data") is Dictionary:
+		trigger_data["card_data"] = card.card_data.duplicate()
+		trigger_data["owner_id"] = card.owner_id if card.get("owner_id") != null else trigger_data.controller_id
 
 	var active_player = GameManager.active_player_id if GameManager else 0
 

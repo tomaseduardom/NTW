@@ -185,7 +185,9 @@ func _process_agrupacion() -> void:
 	# Y a que termine todo lo de la Agrupación (agrupar, "Al comienzo del turno"/"En tu Agrupación" con sus
 	# elecciones y ventanas de respuesta): si no, la Vigilia del bot arrancaba encima de la elección del
 	# jugador y abría otra ventana de respuesta por detrás (Armería del Guerrero).
-	while agrupacion_busy:
+	# También los "Al comienzo del turno (oponente)" de la cola de disparadores (carcosa): el jugador puede estar
+	# eligiendo mientras el turno del bot quiere seguir.
+	while agrupacion_busy or TriggerSystem.is_resolving or not TriggerSystem.trigger_queue.is_empty():
 		await get_tree().process_frame
 
 	_change_phase(Constants.Phase.VIGILIA)

@@ -713,6 +713,20 @@ func _buff(st: Dictionary, targets: Array, card: Node) -> bool:
 			continue
 		if await EffectController.offer_prevention(t, card, "strength_change"):
 			continue
+		if st.has("grant_options"):
+			# "Gana Indestructible, Indesterrable o No puede ser Barajado" (sarcófago impío): ya elegido el Aliado, qué gana.
+			st = st.duplicate()
+			var opts: Array = st.grant_options
+			var gi := 0
+			if not _is_bot(_controller_of(card)) and opts.size() > 1:
+				var main_node := _ts.get_node_or_null("/root/Main")
+				gi = await SelectionManager.await_choice(main_node, "%s: %s gana..." % [_card_name(card), str(t.get("card_name"))],
+					opts.map(func(o): return "No puede ser Barajado" if o.no_shuffle else ("Hace el doble de daño" if o.double_damage
+						else ", ".join(o.keywords.map(func(k): return str(k).capitalize())))), _controller_of(card))
+			var chosen_opt: Dictionary = opts[clampi(gi, 0, opts.size() - 1)]
+			st["keywords"] = chosen_opt.keywords
+			st["no_shuffle"] = chosen_opt.no_shuffle
+			st["double_damage"] = chosen_opt.double_damage
 		var kw_duration: String = "turn" if st.get("turn_only", false) else "permanent"
 		if st.get("duration", "") == "until_next_turn":
 			kw_duration = "until_next_turn"
