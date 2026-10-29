@@ -175,37 +175,38 @@ func _create_ability_overlay_button(
 	# En reposo: fondo transparente (sin tintes que oscurezcan el pergamino), trazo fino de 1px bien definido.
 	# En hover: el borde se ilumina en cian eléctrico y resplandor sutil.
 
-	# Estilo normal: Fondo 100% transparente; marco rúnico celeste bien definido
+	# Estilo normal: Fondo transparente; marco rúnico celeste bien definido con sutil halo luminoso
 	var style_normal = StyleBoxFlat.new()
 	style_normal.bg_color = Color(0.0, 0.0, 0.0, 0.0)
 	style_normal.set_border_width_all(1)
-	style_normal.border_color = Color(0.18, 0.65, 0.95, 0.70)
-	style_normal.shadow_size = 0
+	style_normal.border_color = Color(0.20, 0.72, 1.0, 0.85)
+	style_normal.shadow_color = Color(0.12, 0.65, 1.0, 0.35)
+	style_normal.shadow_size = 2
 	style_normal.anti_aliasing = true
-	_apply_corners(style_normal, corner_top, corner_bottom, 4)
+	_apply_corners(style_normal, corner_top, corner_bottom, 5)
 	btn.add_theme_stylebox_override("normal", style_normal)
 	btn.add_theme_stylebox_override("focus", style_normal)
 
-	# Estilo hover: Borde cian eléctrico luminoso y velo de luz ultra-sutil (no azul fuerte invasivo)
+	# Estilo hover: Borde cian eléctrico luminoso y velo de luz ultra-sutil
 	var style_hover = StyleBoxFlat.new()
-	style_hover.bg_color = Color(0.20, 0.65, 0.98, 0.08)
+	style_hover.bg_color = Color(0.20, 0.72, 1.0, 0.10)
 	style_hover.set_border_width_all(1)
-	style_hover.border_color = Color(0.35, 0.92, 1.0, 1.0)
-	style_hover.shadow_color = Color(0.15, 0.70, 1.0, 0.40)
-	style_hover.shadow_size = 2
+	style_hover.border_color = Color(0.40, 0.95, 1.0, 1.0)
+	style_hover.shadow_color = Color(0.25, 0.85, 1.0, 0.65)
+	style_hover.shadow_size = 4
 	style_hover.anti_aliasing = true
-	_apply_corners(style_hover, corner_top, corner_bottom, 4)
+	_apply_corners(style_hover, corner_top, corner_bottom, 5)
 	btn.add_theme_stylebox_override("hover", style_hover)
 
 	# Estilo pressed: Destello celeste de confirmación al hacer clic
 	var style_pressed = StyleBoxFlat.new()
-	style_pressed.bg_color = Color(0.20, 0.70, 1.0, 0.20)
+	style_pressed.bg_color = Color(0.20, 0.75, 1.0, 0.22)
 	style_pressed.set_border_width_all(1)
 	style_pressed.border_color = Color(0.85, 0.96, 1.0, 1.0)
-	style_pressed.shadow_color = Color(0.30, 0.85, 1.0, 0.50)
-	style_pressed.shadow_size = 3
+	style_pressed.shadow_color = Color(0.30, 0.85, 1.0, 0.70)
+	style_pressed.shadow_size = 5
 	style_pressed.anti_aliasing = true
-	_apply_corners(style_pressed, corner_top, corner_bottom, 4)
+	_apply_corners(style_pressed, corner_top, corner_bottom, 5)
 	btn.add_theme_stylebox_override("pressed", style_pressed)
 
 	return btn

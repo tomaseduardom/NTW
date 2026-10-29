@@ -788,30 +788,78 @@ func _calculate_ability_line_offsets(habilidad_text: String, all_parsed: Array, 
 
 	var norm_lower: String = normalized_full.to_lower()
 	var offsets_by_index: Dictionary = {}
+	var search_cursor: int = 0
 
 	for a in all_parsed:
 		var raw_t: String = a.get("raw_text", "").strip_edges()
 		var idx: int = a.get("ability_index", -1)
 		var raw_lower: String = raw_t.to_lower()
 
-		var chunk_start: String = raw_lower.substr(0, mini(24, raw_lower.length())).strip_edges()
-		if has_gained and not (chunk_start in habilidad_text.to_lower()):
-			continue
+		var candidates: Array[String] = [raw_lower]
+		if raw_lower.begins_with("una vez por turno, "):
+			candidates.append(raw_lower.substr("una vez por turno, ".length()).strip_edges())
+		elif raw_lower.begins_with("una vez por turno "):
+			candidates.append(raw_lower.substr("una vez por turno ".length()).strip_edges())
 
-		var pos_start: int = norm_lower.find(chunk_start) if not chunk_start.is_empty() else -1
-		if pos_start == -1 and raw_lower.length() > 12:
-			chunk_start = raw_lower.substr(0, 14)
-			pos_start = norm_lower.find(chunk_start)
+		var effect_t: String = str(a.get("effect_text", "")).to_lower().strip_edges()
+		if not effect_t.is_empty() and effect_t.length() > 8 and not (effect_t in candidates):
+			candidates.append(effect_t)
 
-		var chunk_end_len: int = mini(24, raw_lower.length())
-		var chunk_end: String = raw_lower.substr(raw_lower.length() - chunk_end_len).strip_edges()
+		var pos_start: int = -1
 		var pos_end: int = -1
-		if not chunk_end.is_empty() and pos_start != -1:
-			pos_end = norm_lower.find(chunk_end, pos_start)
-		if pos_end != -1:
-			pos_end += chunk_end.length()
-		elif pos_start != -1:
-			pos_end = pos_start + raw_lower.length()
+
+		# 1. Intentar encontrar coincidencia partiendo desde search_cursor (orden de lectura)
+		for cand in candidates:
+			if cand.is_empty():
+				continue
+			var chunk_len: int = mini(32, cand.length())
+			var chunk_start: String = cand.substr(0, chunk_len).strip_edges()
+			if chunk_start.is_empty():
+				continue
+			var p: int = norm_lower.find(chunk_start, search_cursor)
+			if p != -1:
+				var chunk_end_len: int = mini(28, cand.length())
+				var chunk_end: String = cand.substr(maxi(0, cand.length() - chunk_end_len)).strip_edges()
+				var p_end: int = norm_lower.find(chunk_end, p) if not chunk_end.is_empty() else -1
+				if p_end != -1:
+					p_end += chunk_end.length()
+				else:
+					p_end = p + cand.length()
+				pos_start = p
+				pos_end = p_end
+				break
+
+		# 2. Fallback: buscar desde el inicio si search_cursor avanzó demasiado
+		if pos_start == -1 and search_cursor > 0:
+			for cand in candidates:
+				if cand.is_empty():
+					continue
+				var chunk_len: int = mini(32, cand.length())
+				var chunk_start: String = cand.substr(0, chunk_len).strip_edges()
+				if chunk_start.is_empty():
+					continue
+				var p: int = norm_lower.find(chunk_start, 0)
+				if p != -1:
+					var chunk_end_len: int = mini(28, cand.length())
+					var chunk_end: String = cand.substr(maxi(0, cand.length() - chunk_end_len)).strip_edges()
+					var p_end: int = norm_lower.find(chunk_end, p) if not chunk_end.is_empty() else -1
+					if p_end != -1:
+						p_end += chunk_end.length()
+					else:
+						p_end = p + cand.length()
+					pos_start = p
+					pos_end = p_end
+					break
+
+		# 3. Si inmediatamente después hay una cláusula restrictiva asociada ("Sólo puedes utilizar esta habilidad... una vez por turno"),
+		# incluirla para que el marco cubra todo el bloque visual de la habilidad (p.ej. Cuervo Nocturno)
+		if pos_start != -1 and pos_end != -1 and pos_end < norm_lower.length():
+			var rest_sub: String = norm_lower.substr(pos_end, 120)
+			var rx_qual := RegEx.create_from_string("^[\\s\\.]*(?:s[óo]lo puedes (?:utilizar|usar) (?:esta|la) habilidad[^\\.]*una vez por turno[\\.]?)")
+			if rx_qual:
+				var m_qual := rx_qual.search(rest_sub)
+				if m_qual:
+					pos_end += m_qual.get_end()
 
 		var start_line: int = -1
 		var end_line: int = -1
@@ -824,19 +872,21 @@ func _calculate_ability_line_offsets(habilidad_text: String, all_parsed: Array, 
 					if start_line == -1:
 						start_line = l_idx
 					end_line = l_idx
+			search_cursor = pos_end
 
 		if start_line == -1:
 			# Fallback proporcional robusto
-			var spos: int = habilidad_text.to_lower().find(chunk_start) if not chunk_start.is_empty() else 0
+			var spos: int = habilidad_text.to_lower().find(raw_lower.substr(0, mini(16, raw_lower.length())))
 			if spos < 0:
-				spos = 0
+				spos = search_cursor
 			var full_len: float = float(maxi(habilidad_text.length(), 1))
 			start_line = int(floor((float(spos) / full_len) * float(total_lines)))
 			var lines_count: int = maxi(1, int(round((float(raw_t.length()) / full_len) * float(total_lines))))
 			end_line = mini(total_lines - 1, start_line + lines_count - 1)
+			search_cursor = spos + raw_t.length()
 
-		var y0: float = zone_top + float(start_line) * line_height_px
-		var y1: float = zone_top + float(end_line + 1) * line_height_px
+		var y0: float = zone_top + float(start_line) * line_height_px - 1.0
+		var y1: float = zone_top + float(end_line + 1) * line_height_px + 1.0
 		y0 = clampf(y0, zone_top - 2.0, zone_bottom - 8.0)
 		y1 = clampf(y1, y0 + 10.0, zone_bottom + 2.0)
 		offsets_by_index[idx] = Vector2(y0, y1)

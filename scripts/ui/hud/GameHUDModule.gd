@@ -17,6 +17,8 @@ var _style_hover: StyleBoxTexture = null
 var _style_pressed: StyleBoxTexture = null
 var _style_disabled: StyleBoxTexture = null
 var _paso_glow_tween: Tween = null
+var _paso_green_aura: Panel = null
+var _paso_shadow_panel: Panel = null
 ## Generación de la cuenta regresiva del botón: sube en cada start/stop para que un bucle viejo deje
 ## de escribir el texto.
 var _countdown_generation: int = 0
@@ -162,6 +164,28 @@ func _setup_paso_button() -> void:
 	sb_shadow.shadow_offset = Vector2(0, 8)
 	shadow.add_theme_stylebox_override("panel", sb_shadow)
 	_paso_button.add_child(shadow)
+	_paso_shadow_panel = shadow
+
+	# Halo mágica verde esmeralda para ventanas de respuesta al oponente
+	var green_aura := Panel.new()
+	green_aura.name = "PasoButtonGreenAura"
+	green_aura.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	green_aura.set_anchors_preset(Control.PRESET_FULL_RECT)
+	green_aura.offset_left = 18.0
+	green_aura.offset_top = 4.0
+	green_aura.offset_right = -18.0
+	green_aura.offset_bottom = -4.0
+	var sb_aura := StyleBoxFlat.new()
+	sb_aura.bg_color = Color(0.12, 0.85, 0.42, 0.08)
+	sb_aura.set_border_width_all(2)
+	sb_aura.border_color = Color(0.35, 0.95, 0.55, 0.90)
+	sb_aura.set_corner_radius_all(10)
+	sb_aura.shadow_color = Color(0.12, 0.88, 0.45, 0.70)
+	sb_aura.shadow_size = 14
+	green_aura.add_theme_stylebox_override("panel", sb_aura)
+	green_aura.visible = false
+	_paso_button.add_child(green_aura)
+	_paso_green_aura = green_aura
 
 	_main.add_child(_paso_button)
 	_paso_button.pressed.connect(func(): _main._phase_flow._on_paso_pressed())
@@ -278,18 +302,53 @@ func is_paso_button_ready() -> bool:
 	return _paso_button != null and _paso_button.visible
 
 
-func start_paso_glow() -> void:
-	"""Activa el estilo hover para indicar ventana de respuesta activa sin destellos ni cambios de color molestos."""
+func start_paso_glow(is_response_window: bool = false) -> void:
+	"""Activa el brillo del botón. Si es ventana de respuesta al oponente, brilla con un hermoso halo verde esmeralda."""
 	if not _paso_button:
 		return
 	if _paso_glow_tween and _paso_glow_tween.is_valid():
 		_paso_glow_tween.kill()
 	_paso_glow_tween = null
-	_paso_button.modulate = Color.WHITE
 
-	if _style_hover:
-		_paso_button.add_theme_stylebox_override("normal", _style_hover)
-	_paso_button.add_theme_color_override("font_color", Color(1.0, 1.0, 0.95, 1.0))
+	if not is_response_window:
+		is_response_window = PriorityManager.priority_window_active and (
+			(PriorityManager.current_priority_context == PriorityManager.PriorityContext.RESPONSE_WINDOW and PriorityManager.current_stack_controller != 0)
+			or (PriorityManager.current_priority_context == PriorityManager.PriorityContext.GUERRA_TALISMANES and PriorityManager.current_stack_controller != 0)
+		)
+
+	if is_response_window:
+		if _paso_green_aura:
+			_paso_green_aura.visible = true
+			_paso_green_aura.modulate.a = 0.85
+		if _paso_shadow_panel:
+			var sb: StyleBoxFlat = _paso_shadow_panel.get_theme_stylebox("panel") as StyleBoxFlat
+			if sb:
+				sb.shadow_color = Color(0.10, 0.88, 0.42, 0.85)
+				sb.shadow_size = 24
+		_paso_button.add_theme_color_override("font_color", Color(0.85, 1.0, 0.90, 1.0))
+		_paso_button.add_theme_color_override("font_shadow_color", Color(0.02, 0.20, 0.08, 0.95))
+
+		# Pulsación suave verde mágica
+		_paso_glow_tween = _paso_button.create_tween().set_loops()
+		_paso_glow_tween.tween_property(_paso_button, "modulate", Color(0.80, 1.25, 0.85, 1.0), 0.6).set_ease(Tween.EASE_IN_OUT).set_trans(Tween.TRANS_SINE)
+		if _paso_green_aura:
+			_paso_glow_tween.parallel().tween_property(_paso_green_aura, "modulate:a", 1.0, 0.6).set_ease(Tween.EASE_IN_OUT)
+		_paso_glow_tween.tween_property(_paso_button, "modulate", Color(0.60, 1.45, 0.72, 1.0), 0.6).set_ease(Tween.EASE_IN_OUT).set_trans(Tween.TRANS_SINE)
+		if _paso_green_aura:
+			_paso_glow_tween.parallel().tween_property(_paso_green_aura, "modulate:a", 0.50, 0.6).set_ease(Tween.EASE_IN_OUT)
+	else:
+		if _paso_green_aura:
+			_paso_green_aura.visible = false
+		_paso_button.modulate = Color.WHITE
+		if _paso_shadow_panel:
+			var sb: StyleBoxFlat = _paso_shadow_panel.get_theme_stylebox("panel") as StyleBoxFlat
+			if sb:
+				sb.shadow_color = Color(0, 0, 0, 0.88)
+				sb.shadow_size = 18
+		if _style_hover:
+			_paso_button.add_theme_stylebox_override("normal", _style_hover)
+		_paso_button.add_theme_color_override("font_color", Color(1.0, 1.0, 0.95, 1.0))
+		_paso_button.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.98))
 
 
 func stop_paso_glow() -> void:
@@ -300,10 +359,18 @@ func stop_paso_glow() -> void:
 	if not _paso_button:
 		return
 	_paso_button.modulate = Color.WHITE
+	if _paso_green_aura:
+		_paso_green_aura.visible = false
+	if _paso_shadow_panel:
+		var sb: StyleBoxFlat = _paso_shadow_panel.get_theme_stylebox("panel") as StyleBoxFlat
+		if sb:
+			sb.shadow_color = Color(0, 0, 0, 0.88)
+			sb.shadow_size = 18
 
 	if _style_normal:
 		_paso_button.add_theme_stylebox_override("normal", _style_normal)
 	_paso_button.add_theme_color_override("font_color", Color(1.0, 0.96, 0.84, 1.0))
+	_paso_button.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.98))
 
 
 # =============================================================================

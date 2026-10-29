@@ -217,7 +217,11 @@ func _on_priority_changed_glow(player_id: int) -> void:
 	# se refresca en cada cambio de prioridad dentro de la fase, no solo al cambiar de fase.
 	_main._game_hud.update_paso_button_state()
 	if player_id == 0:
-		_main._game_hud.start_paso_glow()
+		var is_response_to_opp := PriorityManager.priority_window_active and (
+			(PriorityManager.current_priority_context == PriorityManager.PriorityContext.RESPONSE_WINDOW and PriorityManager.current_stack_controller != 0)
+			or (PriorityManager.current_priority_context == PriorityManager.PriorityContext.GUERRA_TALISMANES and PriorityManager.current_stack_controller != 0)
+		)
+		_main._game_hud.start_paso_glow(is_response_to_opp)
 		# Punto único de auto-pase del humano en RESPONSE_WINDOW, arranque la ventana contigo o te llegue
 		# a mitad (priority_changed se emite en ambos casos). La única decisión real aquí es Signo
 		# Amarillo (ResponseWindowHandler._offer_signo_amarillo_for_step_d()), que lo suprime con
@@ -225,14 +229,11 @@ func _on_priority_changed_glow(player_id: int) -> void:
 		# Bloqueo de fase esperan tu decisión.
 		if PriorityManager.current_priority_context == PriorityManager.PriorityContext.RESPONSE_WINDOW \
 				and not (_main._easy_bot is RemotePlayerController):
-			# Contra el bot local, pase rápido (0.2 s): no tiene sentido esperar 5 s por una decisión del
-			# bot. refresh_activatable_glows() igual marca qué carta podría responder (§10.51/§10.52). El
-			# Remoto va por la rama de abajo.
-			if _main._card_inspector:
-				_main._card_inspector.refresh_activatable_glows()
-			# Si la ventana es sobre algo del rival y tienes un Talismán de respuesta que puedes pagar, se
+			var has_activatable: bool = _main._card_inspector != null and _main._card_inspector.refresh_activatable_glows()
+			# Si la ventana es sobre algo del rival y tienes un Talismán de respuesta que puedes pagar, o una habilidad activable en juego, se
 			# espera como online (5 s con cuenta regresiva); si no, el pase rápido.
-			if PriorityManager.needs_real_decision(0) and _human_has_instant_response_talisman_in_hand():
+			var has_response: bool = _human_has_instant_response_talisman_in_hand() or has_activatable
+			if PriorityManager.needs_real_decision(0) and has_response:
 				_main._game_hud.start_paso_countdown(int(PriorityManager.ONLINE_RESPONSE_TIMEOUT))
 				_human_pass_after(PriorityManager.ONLINE_RESPONSE_TIMEOUT, PriorityManager._window_generation)
 				return
