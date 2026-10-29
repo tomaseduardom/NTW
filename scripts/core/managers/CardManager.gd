@@ -204,7 +204,21 @@ func add_to_deck_bottom(player_id: int, card_data: Dictionary) -> void:
 func shuffle_deck(player_id: int) -> void:
 	"""Baraja el mazo de un jugador"""
 	_zones[player_id].deck.shuffle()
+	_note_cards_shuffled()
 	print("[CardManager] Mazo de jugador %d barajado" % player_id)
+
+
+## Cuatro Esposas: "si no barajaste cartas este turno". Cuenta para quien controla el efecto en curso cuando su
+## texto Baraja cartas (no "baraja tu Castillo" tras buscar ni "baraja el resto" de lo mostrado).
+func _note_cards_shuffled() -> void:
+	var ctx: Dictionary = load("res://scripts/core/effects/EffectContext.gd").current()
+	if ctx.is_empty() or not is_instance_valid(ctx.get("card")):
+		return
+	var data = ctx.card.get("card_data")
+	var text: String = load("res://scripts/core/cards/CardText.gd").fold(str(data.get("habilidad", "")) if data is Dictionary else "").to_lower()
+	var rx := RegEx.create_from_string("\\bbaraj\\w* (?!(?:tu|su|ambos|los) castillos?\\b|el resto\\b|las demas\\b|los demas\\b)")
+	if rx.search(text) != null:
+		RuleState.add("cards_shuffled", int(ctx.controller_id))
 
 
 func add_to_exile(player_id: int, card_data: Dictionary) -> void:

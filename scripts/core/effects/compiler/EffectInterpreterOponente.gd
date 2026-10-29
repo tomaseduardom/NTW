@@ -34,6 +34,8 @@ func _condition_holds(cond, card: Node, controller_id: int = -1) -> bool:
 		return main != null and _controlled_in_play(main, controller_id).filter(func(c): return c.get("card_type") == Constants.CardType.ORO).is_empty()
 	if str(cond) == "exiled_less_6":  # furia del exilio
 		return _each.get("exiled", []).size() < 6
+	if str(cond) == "no_shuffled_turn":  # cuatro esposas: "Si no Barajaste cartas este turno"
+		return RuleState.count("cards_shuffled", controller_id) == 0
 	if str(cond) == "none_named_exiled":  # caída del alba / temaukel: "Si no Destierra ninguna"
 		return int(_each.get("named_exiled", 0)) == 0
 	return super(cond, card, controller_id)

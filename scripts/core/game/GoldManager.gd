@@ -23,6 +23,16 @@ func play_card(card: Node) -> bool:
 	# en el turno de cualquiera (PhaseStartWindow).
 	var phase_start_ok: bool = load("res://scripts/core/game/PhaseStartWindow.gd").allows_now(card, player_id)
 	phase_exception = phase_exception or phase_start_ok
+	# rayo gaia: solo cuando un Aliado fuera a salir del juego por un efecto oponente; se ofrece en ese momento.
+	if card.card_type == Constants.CardType.TALISMAN and load("res://scripts/core/effects/mechanics/RayoGaia.gd").is_rayo(str(card.get("card_ability"))):
+		_main._update_debug("%s se juega en respuesta a que un Aliado fuera a salir del juego por un efecto oponente (se ofrece en ese momento)" % card.card_name)
+		await _return_card_rejected(card)
+		return false
+	# "Solo puedes jugar este Talismán al comienzo de la Vigilia" (eco de la muerte, ta kona): solo en esa ventana.
+	if not phase_start_ok and not load("res://scripts/core/game/PhaseStartWindow.gd").only_at(str(card.get("card_ability"))).is_empty():
+		_main._update_debug("%s solo se puede jugar al comienzo de la fase que indica" % card.card_name)
+		await _return_card_rejected(card)
+		return false
 	# Talismanes de respuesta (Anula/Cancela, p.ej. Red de Plata, Sacrificio Solar): se juegan cuando
 	# el jugador tiene la palabra, no solo en Vigilia.
 	var is_instant_response: bool = card.card_type == Constants.CardType.TALISMAN and _is_response_only_talisman(card)
@@ -1082,6 +1092,12 @@ func _apply_play_marks(card: Node, pid: int) -> Dictionary:
 	"""Marcas que un efecto dejó para el próximo Aliado que juegue 'pid' este turno (EffectInterpreterEspeciales,
 	"Ese Aliado no puede ser Anulado / entra sin habilidad por el turno y puede atacar ese turno / no puede salir
 	del juego hasta tu próximo turno"): se ponen antes de que entre a la Pila. Devuelve las que van después."""
+	# eco de la muerte: "tus Aliados entran en juego sin habilidad por el turno y no pueden ser Anulados".
+	if card.get("card_type") == Constants.CardType.ALIADO and RuleState.active("eco_muerte_allies", pid):
+		card.set_meta("protected_from_annul_this_turn", true)
+		if card.get("card_data") is Dictionary:
+			card.card_data["_no_annul"] = true
+		card.set_meta("silenced_until", GameManager.turn_serial)
 	if not RuleState.has_pending("next_play_marks", pid):
 		return {}
 	var peek = RuleState._pending.get("next_play_marks", {}).get(pid)

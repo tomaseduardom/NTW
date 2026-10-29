@@ -532,6 +532,19 @@ func _build_prevention_registry() -> void:
 					"first": first, "filter": PreventionCosts.same_type_low_cost_filter(first)}
 				return true,
 		},
+		{
+			# rayo gaia (RayoGaia.gd): se juega desde la mano cuando un Aliado fuera a salir del juego por un efecto
+			# oponente. Solo "previene" si Destierra justo ese Aliado.
+			"name": "rayo gaia",
+			"detect": func(text: String) -> bool: return RayoGaiaScript.is_rayo(text),
+			"zones": "hand",
+			"effect_tags": ["destroy", "exile", "leave_play"],
+			"opponent_only": true,
+			"applies": func(target) -> bool:
+				return target is Node and is_instance_valid(target) and target.get("card_type") == Constants.CardType.ALIADO,
+			"is_available": func(card: Node) -> bool: return RayoGaiaScript.can_use(card),
+			"on_used": func(card: Node) -> bool: return await RayoGaiaScript.use(card, _last_prevention_target),
+		},
 		# Al final, para que las entradas de arriba tengan prioridad (CompiledPrevention.spec() las
 		# excluye): "Puedes <coste> para prevenir que un Tótem sea Anulado o su habilidad cancelada"
 		# (Ángel Gadreel, Serafín, wendy, orden del águila negra).
@@ -958,6 +971,7 @@ const PreventionCosts = preload("res://scripts/core/effects/mechanics/Prevention
 const TurnLimits = preload("res://scripts/core/effects/mechanics/TurnLimits.gd")
 
 const CompiledPrevention = preload("res://scripts/core/effects/mechanics/CompiledPrevention.gd")
+const RayoGaiaScript = preload("res://scripts/core/effects/mechanics/RayoGaia.gd")
 
 var _fision_shields: Dictionary = {}  # player_id -> true
 

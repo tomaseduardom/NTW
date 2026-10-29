@@ -453,7 +453,7 @@ func _exile_proxies() -> Array:
 	if not _main._card_inspector:
 		return []
 	for data in CardManager.get_exile(1):
-		if not _main._card_inspector._ability_is_destierro_usable(str(data.get("habilidad", ""))):
+		if not _main._card_inspector._ability_is_destierro_usable(str(data.get("habilidad", ""))) 				and not load("res://scripts/core/effects/mechanics/RayoGaia.gd").usable_from_exile(data, 1):  # rayo gaia
 			continue
 		var node = _main._create_card(data, false)
 		node.owner_id = 1

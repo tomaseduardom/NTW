@@ -389,7 +389,7 @@ func activate_ability(source_card_data: Dictionary, ability_data: Dictionary, co
 	# instance_id, no source_card_data.id (compartido por todas las copias): cada copia tiene su propio
 	# cupo.
 	var card_node = context.get("source_card_node")
-	var card_id: String    = str(card_node.get_instance_id()) if card_node and is_instance_valid(card_node) else str(source_card_data.get("id", ""))
+	var card_id: String    = load("res://scripts/core/effects/mechanics/RayoGaia.gd").usage_key(card_node) if card_node and is_instance_valid(card_node) else str(source_card_data.get("id", ""))
 	var ability_index: int = ability_data.get("ability_index", 0)
 	var cost_type: int     = ability_data.get("cost_type", UniversalCardParser.CostType.NONE)
 	var cost_amount: int   = ability_data.get("cost_amount", 0)
@@ -490,7 +490,7 @@ func can_activate_ability(source_card_data: Dictionary, ability_data: Dictionary
 	# copias, que entonces compartían el cupo de "una vez por turno"). Cae a source_card_data.id solo
 	# si no hay Nodo.
 	var context_node = context.get("source_card_node")
-	var card_id        = str(context_node.get_instance_id()) if context_node and is_instance_valid(context_node) else str(source_card_data.get("id", ""))
+	var card_id        = load("res://scripts/core/effects/mechanics/RayoGaia.gd").usage_key(context_node) if context_node and is_instance_valid(context_node) else str(source_card_data.get("id", ""))
 	var ability_index  = ability_data.get("ability_index", 0)
 	var cost_type      = ability_data.get("cost_type", UniversalCardParser.CostType.NONE)
 	var cost_amount    = ability_data.get("cost_amount", 0)

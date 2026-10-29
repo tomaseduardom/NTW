@@ -108,6 +108,7 @@ const KINDS := {
 	"cada vez que un aliado fuera a ganar fuerza en vez de eso gana el doble, hasta un maximo de 4 de fuerza por vez": "_marca_justos",
 	"juega hasta un aliado angel de tu cementerio reduciendo su coste en un oro, hasta un minimo de 0 y tu oponente juega mostrando su mano": "_invocar_angeles",
 	"las cartas que sean puestas en el cementerio este turno pierden su habilidad por el turno": "_niebla_muerte",
+	"hasta el final de tu proximo turno, no se puede atacar y tus aliados entran en juego sin habilidad por el turno y no pueden ser anulados": "_eco_muerte",
 	"destruye hasta dos cartas con habilidad de coste 1 o mas que controles": "_comer_insectos",
 	"tu oponente solo puede jugar una carta mas o utilizar una habilidad mas por el turno": "_anillo_tierra",
 	"cada jugador muestra su mano. el jugador con el coste total de cartas mas alto en su mano": "_duelo_magico",

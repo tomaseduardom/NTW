@@ -252,6 +252,7 @@ const CONDITIONS := [
 	["none_named_exiled", "si no destierra ninguna, "],
 	["no_golds", "si no tienes oros, "],  # lucerna
 	["exiled_less_6", "si desterraste menos de seis cartas de esta manera, "],  # furia del exilio
+	["no_shuffled_turn", "si no barajaste cartas este turno, "],  # cuatro esposas (CardManager._note_cards_shuffled)
 ]
 
 ## Reemplazo sobre el paso anterior: "Si tiene Exhumar, en vez de eso, Destiérralo".

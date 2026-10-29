@@ -44,8 +44,29 @@ static func _text(card) -> String:
 	return str(card.get("card_ability")).to_lower().replace("\n", " ")
 
 
+const ONLY_AT_PHASES := {"agrupacion": Constants.Phase.AGRUPACION, "vigilia": Constants.Phase.VIGILIA,
+	"ataque": Constants.Phase.ATAQUE, "bloqueo": Constants.Phase.BLOQUEO,
+	"guerra de talismanes": Constants.Phase.GUERRA_TALISMANES, "fase final": Constants.Phase.FINAL}
+
+
+## "Solo puedes jugar este Talismán al comienzo de la Vigilia" (eco de la muerte), "Solo puedes jugarlo al
+## comienzo del Ataque" (ta kona): solo en la ventana de comienzo de esa fase. {"phase", "own"} o {} si el texto no
+## lo limita. El Ataque es siempre el del jugador activo: cuenta como "tu".
+static func only_at(text: String) -> Dictionary:
+	var t: String = load("res://scripts/core/cards/CardText.gd").fold(text)
+	var m := RegEx.create_from_string("solo puedes jugar(?:lo|la| este talisman| esta carta) al comienzo (?<who>de la |del |de tu )"
+		+ "(?<p>agrupacion|vigilia|ataque|bloqueo|guerra de talismanes|fase final)").search(t)
+	if m == null:
+		return {}
+	var phase: int = ONLY_AT_PHASES[m.get_string("p")]
+	return {"phase": phase, "own": m.get_string("who") == "de tu " or phase == Constants.Phase.ATAQUE}
+
+
 ## ¿El texto de la carta permite jugarla al comienzo de 'phase'?
 static func text_allows(text: String, phase: int, is_own_turn: bool) -> bool:
+	var only := only_at(text)
+	if not only.is_empty():
+		return phase == int(only.phase) and (is_own_turn or not only.own)
 	var is_final: bool = phase == Constants.Phase.FINAL
 	if "al comienzo de cualquier fase final" in text:
 		return is_final

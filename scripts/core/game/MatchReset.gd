@@ -43,6 +43,7 @@ const STATIC_SCRIPTS := [
 	"res://scripts/core/effects/mechanics/RevealedCards.gd",
 	"res://scripts/core/effects/triggers/LimitedEventTriggers.gd",
 	"res://scripts/core/game/PhaseStartWindow.gd",
+	"res://scripts/core/effects/mechanics/RayoGaia.gd",
 	"res://scripts/ui/hud/BoardChoice.gd",
 ]
 

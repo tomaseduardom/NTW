@@ -41,6 +41,11 @@ func _connect_leave_play() -> void:
 	ec.on_card_left_play.connect(func(pid: int, card: Node, from_zone: int) -> void:
 		if from_zone == Constants.Zone.LINEA_APOYO and is_instance_valid(card) and card.get("card_type") == Constants.CardType.TOTEM:
 			add("totem_left_support", pid))
+	# eco de la muerte: los Aliados que entran en juego sin jugarlos (por efectos) también quedan sin habilidad por el
+	# turno; los jugados ya lo reciben en GoldManager._apply_play_marks().
+	ec.on_card_entered_play.connect(func(pid: int, card: Node, _zone: int) -> void:
+		if is_instance_valid(card) and card.get("card_type") == Constants.CardType.ALIADO and active("eco_muerte_allies", pid):
+			card.set_meta("silenced_until", GameManager.turn_serial))
 
 
 func reset() -> void:

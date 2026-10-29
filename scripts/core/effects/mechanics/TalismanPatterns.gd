@@ -348,6 +348,23 @@ static func _marca_justos(main: Node, card: Node, _pid: int) -> void:
 # =============================================================================
 
 
+static func _eco_muerte(main: Node, card: Node, pid: int) -> void:
+	# "Hasta el final de tu próximo turno, no se puede atacar y tus Aliados entran en juego sin habilidad por el turno
+	# y no pueden ser Anulados. Baraja hasta dos cartas de los Cementerios." Cuándo se juega: PhaseStartWindow.only_at().
+	var until: int = RuleState.next_own_turn(pid) + 1
+	for p in [0, 1]:
+		RuleState.set_until("no_attacks", p, until)
+	RuleState.set_until("eco_muerte_allies", pid, until)  # GoldManager._apply_play_marks / RuleState (entran en juego)
+	main._update_debug("%s: hasta el final de tu próximo turno no se puede atacar y tus Aliados entran sin habilidad" % _name(card))
+	var res: Dictionary = await ActionModule.search_either_owner(pid, [Constants.Zone.CEMENTERIO], {}, 2, true, card,
+		Constants.Zone.CASTILLO, false, false)
+	for p in [0, 1]:
+		for d in res.get("selected", []):
+			if CardManager.get_deck(p).has(d):
+				CardManager.shuffle_deck(p)
+				break
+
+
 static func _niebla_muerte(main: Node, card: Node, pid: int) -> void:
 	# "Las cartas que sean puestas en el Cementerio este turno pierden su habilidad por el turno."
 	var serial: int = GameManager.turn_serial

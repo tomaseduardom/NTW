@@ -107,7 +107,7 @@ func _validate_ability(ability: Dictionary, source_card: Node, player_id: int = 
 			# instance_id, NO card_data.id (corrección: card_data.id es el ID de la carta/impresión,
 			# compartido por TODAS las copias en juego — con 2 Aho en juego, usar uno marcaba el cupo también
 			# para el otro. Cada copia física necesita su propio cupo).
-			var card_id: String = str(source_card.get_instance_id())
+			var card_id: String = load("res://scripts/core/effects/mechanics/RayoGaia.gd").usage_key(source_card)
 			var ability_idx: int = ability.get("ability_index", 0)
 			var turn: int = GameManager.turn_serial
 			if UniversalCardParser.turn_registry.is_exhausted(card_id, ability_idx, turn, int(ability.get("uses_per_turn", 1))):
@@ -115,7 +115,7 @@ func _validate_ability(ability: Dictionary, source_card: Node, player_id: int = 
 
 	# Flag once_per_turn desde parse_abilities() (puede venir sin cost_type ONCE_PER_TURN)
 	if ability.get("once_per_turn", false) and cost_type != UniversalCardParser.CostType.ONCE_PER_TURN:
-		var card_id: String = str(source_card.get_instance_id())
+		var card_id: String = load("res://scripts/core/effects/mechanics/RayoGaia.gd").usage_key(source_card)
 		var ability_idx: int = ability.get("ability_index", 0)
 		var turn: int = GameManager.turn_serial
 		if UniversalCardParser.turn_registry.is_exhausted(card_id, ability_idx, turn, int(ability.get("uses_per_turn", 1))):

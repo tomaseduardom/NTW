@@ -656,7 +656,10 @@ func usable_abilities_for(source_card: Node, player_id: int) -> Array:
 	var source_zone = source_card.get("current_zone")
 	if source_zone == null:
 		return []
-	var in_play: bool = source_zone in Constants.ZONES_IN_PLAY
+	# rayo gaia: "puedes utilizar la habilidad de ese Aliado desde tu Destierro como si estuviera en juego".
+	var in_play: bool = source_zone in Constants.ZONES_IN_PLAY or (source_zone == Constants.Zone.DESTIERRO
+		and source_card.get("card_data") is Dictionary
+		and load("res://scripts/core/effects/mechanics/RayoGaia.gd").usable_from_exile(source_card.card_data, player_id))
 	if not in_play and not (source_zone in [Constants.Zone.MANO, Constants.Zone.CEMENTERIO, Constants.Zone.DESTIERRO]):
 		return []
 	# Terminal P-12: hasta dos habilidades de cartas fuera del juego por turno.
