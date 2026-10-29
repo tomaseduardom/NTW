@@ -98,6 +98,10 @@ const TRIGGER_PREFIXES := [
 	"cuando salga del juego o sea puesto en tu destierro por la habilidad de un aliado sacerdote",
 	"cuando salga del juego", "cuando sale del juego", "al salir del juego",
 	"cuando sea destruido", "al ser destruido",
+	# La propia carta al llegar a una zona (ZoneSelfTriggers): el efecto lo manda ese despachador.
+	"cuando sea puesto en tu destierro por la habilidad de un aliado sacerdote", "cuando sea puesto en tu destierro por la habilidad de un aliado",
+	"cuando sea puesto en tu destierro", "cuando sea barajado desde tu mano por la habilidad de un aliado que controles",
+	"cuando sea barajado desde tu mano",
 	"cuando hace dano al castillo oponente", "cuando haga dano al castillo oponente",
 	"cuando haga dano de combate", "cuando haga dano",
 	"en tu fase final", "al comienzo de tu vigilia", "al comienzo de la vigilia",
@@ -393,6 +397,10 @@ const ATOMS := [
 	# "Gana el control de las cartas de las que seas dueño" (regan liberator) / "Cada jugador gana el control de todas las
 	# cartas de las que sea dueño" (abu simbel).
 	["special:regain_owned", "(?<each>cada jugador )?gana el control de (?:todas )?las cartas de las que sea(?:s)? dueno"],
+	# "(puedes) jugarlo sin pagar su coste / reduciendo su coste en un Oro / pagando su coste": la carta misma desde la zona
+	# a la que acaba de llegar (Destierro, Castillo), en los disparadores de zona (ZoneSelfTriggers).
+	["special:play_self", "(?:jugarlo|jugarla|juegalo|juegala)(?: (?<free>sin pagar su coste)| reduciendo su coste en (?<red>" + NUM + ") oros?" \
+		+ "(?:, hasta un minimo de (?<floor>\\d+))?| por (?<red2>" + NUM + ") oros? menos| pagando su coste)"],
 	# Piezas sueltas de una o pocas cartas (EffectInterpreterEspeciales).
 	# furia del exilio / santos pincheira.
 	["special:exile_all_opp_cemetery", "destierra todas las cartas del cementerio oponente"],

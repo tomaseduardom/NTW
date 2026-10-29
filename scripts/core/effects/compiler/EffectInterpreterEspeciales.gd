@@ -144,6 +144,8 @@ func _special_step(main: Node, st: Dictionary, card: Node, controller_id: int) -
 			return true
 		"noop":
 			return true
+		"play_self":
+			return await _play_self(main, st, card, me)
 		"search_each_castle":  # "busca en cada Castillo dos cartas y ponlas en el Cementerio de su dueño" (elige quien controla el efecto)
 			var each_n: int = EffectCompilerScript.parse_amount(str(st.get("n", st.get("n2", "1"))))
 			var each_filter := {"types_not": [Constants.CardType.TALISMAN]} if st.has("nt") else {}
@@ -1172,3 +1174,58 @@ func _stat_ok(c: Node, stat: String, val: int, at_most: bool) -> bool:
 		return false
 	var s: int = int(ContinuousEffectManager.get_modified_strength(c))
 	return s <= val if at_most else s >= val
+
+
+func _play_self(main: Node, st: Dictionary, card: Node, me: int) -> bool:
+	"""'Puedes jugarlo (sin pagar su coste / reduciendo su coste en N Oros / pagando su coste)' en un disparador de zona: la
+	carta es un sustituto (ZoneSelfTriggers) con sus datos en meta "zone_data" y la zona en "zone" ("exile" / "deck").
+	Sale de esa zona y se juega; si no se puede pagar o no se juega, vuelve a donde estaba."""
+	if not is_instance_valid(card) or not card.has_meta("zone_data"):
+		return false
+	var data: Dictionary = card.get_meta("zone_data")
+	var zone: String = str(card.get_meta("zone", "exile"))
+	var owner_id: int = card.owner_id if card.get("owner_id") != null else me
+	var pool: Array = CardManager.get_exile(owner_id) if zone == "exile" else CardManager.get_deck(owner_id)
+	if not pool.has(data):
+		return false
+	var gm = main.get("_gold_manager")
+	if not gm:
+		return false
+	if await EffectContextScript.ensure_window():
+		return false
+	pool.erase(data)
+	var put_back := func() -> void:
+		var back: Dictionary = data
+		if zone == "exile":
+			back["esta_oculta"] = false
+			CardManager.append_to_exile(owner_id, back)
+		else:
+			back["esta_oculta"] = true
+			CardManager.get_deck(owner_id).append(back)
+			CardManager.shuffle_deck(owner_id)
+	if st.has("free"):
+		var played_free: bool = await gm.play_card_for_free(data.duplicate(), me)
+		if not played_free:
+			put_back.call()
+		return played_free
+	var reduce: int = EffectCompilerScript.parse_amount(str(st.get("red", st.get("red2", "0")))) if st.has("red") or st.has("red2") else 0
+	var hand_data: Dictionary = data.duplicate()
+	hand_data["esta_oculta"] = false
+	var node: Node = PlayerSideScript.put_in_hand(main, me, hand_data)
+	if node == null:
+		put_back.call()
+		return false
+	node.owner_id = owner_id
+	if reduce > 0:
+		PaymentManager.agregar_modificador_coste(node, -reduce, func(c: Node) -> bool: return c == node, str(st.get("floor", "1")) == "0")
+	await PlayerSideScript.play_from_hand(main, me, node)
+	if is_instance_valid(node):
+		if reduce > 0:
+			PaymentManager.remover_modificador_coste(node)
+		if node.get("current_zone") == Constants.Zone.MANO:
+			PlayerSideScript.take_from_hand(main, me, node)
+			put_back.call()  # no se jugó: vuelve a su zona
+			return false
+	if main.get("_zone_manager"):
+		main._zone_manager._update_castillo_counts()
+	return true

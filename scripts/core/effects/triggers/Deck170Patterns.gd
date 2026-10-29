@@ -323,6 +323,11 @@ static func on_shuffled_from_hand(main: Node, pid: int, data: Dictionary) -> voi
 		return
 	var i: int = text.find("puedes buscar un talismán")
 	if i < 0:
+		# Los demás (pincoy, kanillu, huenchula, laftrache, tres pascualas, arakiel): el genérico compila el efecto.
+		var zst = load("res://scripts/core/effects/triggers/ZoneSelfTriggers.gd")
+		var eff: String = zst.shuffle_effect(data, pid)
+		if not eff.is_empty():
+			await zst.run(data, pid, "deck", eff)
 		return
 	if await TalismanSearchScript.try_execute(null, text.substr(i), pid):
 		if "y barajar una carta de tu mano" in text:

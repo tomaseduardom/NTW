@@ -103,9 +103,18 @@ func _collect(event: String, args: Dictionary) -> void:
 		return
 	if event == "self_exiled":
 		var text := _norm(args.get("data", {}).get("habilidad", ""))
+		var matched := false
 		for e in ENTRIES:
 			if e[1] == event and e[0] in text:
+				matched = true
 				_queue({"fn": e[3], "src": args.data, "ctrl": int(args.owner), "args": args, "limit": e[2], "key": "%s:%s" % [e[3], _name(args.data)]})
+		# Sin entrada puntual: el genérico (ZoneSelfTriggers) compila el efecto (mu, yodo-dono, tadg, shinigami...).
+		if not matched:
+			var eff: String = load("res://scripts/core/effects/triggers/ZoneSelfTriggers.gd").exile_effect(args.data,
+				args.get("by_ally", false), str(args.get("ally_race", "")))
+			if not eff.is_empty():
+				_queue({"fn": "_zone_self", "src": args.data, "ctrl": int(args.owner), "args": args.merged({"effect": eff}), "limit": 99,
+					"key": "zone_self:%s" % _name(args.data)})
 		return
 	# Reglas con duración de cartas que ya no están en juego (RuleState, EffectInterpreter._apply_rule()).
 	if event == "castle_searched" and int(args.owner) != int(args.searcher) and RuleState.active("search_toll", int(args.searcher)):
@@ -489,6 +498,11 @@ func _lady_madeline(main: Node, src, pid: int, _a: Dictionary) -> void:
 		await ActionModule.draw(pid, 2, _name(src), true)
 
 
+func _zone_self(_main_node: Node, src, pid: int, a: Dictionary) -> void:
+	"""Disparador genérico de la propia carta al llegar a tu Destierro (ZoneSelfTriggers)."""
+	await load("res://scripts/core/effects/triggers/ZoneSelfTriggers.gd").run(src, pid, "exile", str(a.get("effect", "")))
+
+
 func _carnacki(main: Node, src, pid: int, a: Dictionary) -> void:
 	if not a.get("by_ally_ability", false):
 		return
@@ -524,7 +538,8 @@ static func on_card_to_zone(owner: int, data: Dictionary, zone: String) -> void:
 	if zone == "exile":
 		var ctx: Dictionary = EffectContextScript.current()
 		var by_ally: bool = not ctx.is_empty() and is_instance_valid(ctx.get("card")) and ctx.card.get("card_type") == Constants.CardType.ALIADO
-		fire("self_exiled", {"owner": owner, "data": data, "by_ally": by_ally, "by_ally_ability": by_ally})
+		var race: String = str(ctx.card.get("card_raza")) if by_ally else ""
+		fire("self_exiled", {"owner": owner, "data": data, "by_ally": by_ally, "by_ally_ability": by_ally, "ally_race": race})
 
 
 ## EffectController.on_card_entered_play.
