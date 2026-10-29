@@ -331,7 +331,7 @@ func _get_card_texture(race: String, deck_name: String, idx: int) -> Texture2D:
 		return TEX_IMP
 	elif "heroe" in r or "héroe" in r or "defensor" in r:
 		return TEX_HEROE
-	elif "guerrero" in r or "barbaro" in r or "bárbaro" in r:
+	elif "guerrero" in r or "barbaro" in r or "bárbaro" in r or "douglas" in r:
 		return TEX_GUERRERO
 	elif "faerie" in r or "hada" in r or "mago" in r:
 		return TEX_FAERIE
@@ -339,10 +339,12 @@ func _get_card_texture(race: String, deck_name: String, idx: int) -> Texture2D:
 		return TEX_SACERDOTE
 	elif "sombra" in r or "undead" in r or "no-muerto" in r:
 		return TEX_SOMBRA
+	elif "eterno" in r or "inmortal" in r:
+		return TEX_ETERNO
 
 	var all_textures := [
 		TEX_CABALLERO, TEX_BESTIA, TEX_DRAGON, TEX_IMP,
-		TEX_HEROE, TEX_GUERRERO, TEX_FAERIE, TEX_SACERDOTE, TEX_SOMBRA
+		TEX_HEROE, TEX_GUERRERO, TEX_FAERIE, TEX_SACERDOTE, TEX_SOMBRA, TEX_ETERNO
 	]
 	return all_textures[idx % all_textures.size()]
 
@@ -350,6 +352,8 @@ func _get_card_texture(race: String, deck_name: String, idx: int) -> Texture2D:
 func _extract_race_or_archetype(mazo: Dictionary) -> String:
 	var val: String = str(mazo.get("raza", mazo.get("race", mazo.get("arquetipo", mazo.get("archetype", "")))))
 	val = _sanitize_utf8(val)
+	if val.to_lower() == "douglas":
+		return "Guerrero"
 	if val.is_empty():
 		var nombre_lower := _sanitize_utf8(str(mazo.get("nombre", mazo.get("name", "")))).to_lower()
 		for r in ["caballero", "bestia", "dragon", "dragón", "sombra", "faerie", "sacerdote", "eterno", "heroe", "héroe", "guerrero", "imp"]:
@@ -467,6 +471,8 @@ func _refresh_selection(cards: Array, selected_idx: int) -> void:
 
 		# Raza / Arquetipo
 		var raza := str(mazo.get("arquetipo", mazo.get("raza", mazo.get("race", "")))).strip_edges().to_upper()
+		if raza == "DOUGLAS":
+			raza = "GUERRERO"
 
 		# Fila secundaria con glifos rúnicos
 		var sub_parts: Array[String] = []

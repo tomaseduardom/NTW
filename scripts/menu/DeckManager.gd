@@ -26,7 +26,7 @@ const RACE_TEXTURES := {
 	"faerie": preload("res://assets/ui/deck_selector/card_faerie.png"),
 	"sacerdote": preload("res://assets/ui/deck_selector/card_sacerdote.png"),
 	"sombra": preload("res://assets/ui/deck_selector/card_sombra.png"),
-	"eterno": preload("res://assets/ui/deck_selector/card_sombra.png"),
+	"eterno": preload("res://assets/ui/deck_selector/card_eterno.png"),
 	"generic": preload("res://assets/ui/deck_selector/card_generic.png"),
 }
 

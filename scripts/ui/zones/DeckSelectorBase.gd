@@ -46,6 +46,8 @@ const TEX_SACERDOTE := preload("res://assets/ui/deck_selector/card_sacerdote.png
 
 const TEX_SOMBRA := preload("res://assets/ui/deck_selector/card_sombra.png")
 
+const TEX_ETERNO := preload("res://assets/ui/deck_selector/card_eterno.png")
+
 # Fondo diegético y spinner de carga
 const BACKGROUND_TEXTURE := preload("res://assets/ui/deck_selector/altar_deck_selector.jpg")
 
