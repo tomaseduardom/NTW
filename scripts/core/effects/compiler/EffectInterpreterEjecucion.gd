@@ -483,6 +483,12 @@ func _apply_verb(st: Dictionary, targets: Array, card: Node) -> bool:
 				for t in group:
 					if not _ts._targeted_executor._target_text_denies(t, ["no puede perder su habilidad", "no pierde su habilidad"]):
 						await KeywordManager.silence_card(t, card, str(st.get("duration", "permanent")))
+			"bounce":
+				# "Sube X a la mano de su dueño" (eurytus, anillo de aire, batalla de trafalgar, favor de la corte).
+				var bouncer = load("res://scripts/core/effects/mechanics/EnterPatternsBase.gd")
+				for t in group:
+					if is_instance_valid(t) and not await bouncer.bounce_to_owner_hand(_ts.get_node_or_null("/root/Main"), t, card):
+						all_ok = false
 			"shuffle":
 				for t in group:
 					if not is_instance_valid(t):

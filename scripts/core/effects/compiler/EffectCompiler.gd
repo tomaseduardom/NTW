@@ -836,12 +836,12 @@ const ATOMS := [
 
 ## Piezas que EffectInterpreter sabe ejecutar HOY. Viven aquí (y no en el
 ## intérprete) para que el auditor headless las consulte sin cargar
-## autoloads. El compilador puede entender más de lo que se ejecuta (p.ej.
-## "bounce"): esos planes se dejan a la cadena de patrones vieja.
+## autoloads. El compilador puede entender más de lo que se ejecuta: esos planes se dejan a la
+## cadena de patrones vieja.
 const EXECUTABLE_OPS := ["each", "opp", "special", "repeat", "castle_look", "draw", "draw_to_match", "mill", "discard", "shuffle_from_hand", "search", "target", "mass", "choice",
 	"shuffle_from_cemetery", "self", "hand_exile", "keep_shuffle", "rule", "if", "cemetery_cleanup", "gold", "regroup_gold", "buff", "mass_buff", "reveal_until", "reveal_top", "pay", "hand_peek", "annul", "talisman_fizzle",
 	"regroup_cards", "gold_to_paid", "deck_to_hand", "no_damage", "play_from", "peek_hand", "show_hand", "cost", "castle_exile", "cancel_attack", "self_raise", "mill_x", "opp_gold_to_paid", "revive_blank", "self_buff_per"]
-const EXECUTABLE_VERBS := ["destroy", "banish", "shuffle", "silence", "cost_shift"]
+const EXECUTABLE_VERBS := ["destroy", "banish", "shuffle", "silence", "cost_shift", "bounce"]
 
 static var _compiled_atoms: Array = []
 static var _connector_rx: RegEx = null
