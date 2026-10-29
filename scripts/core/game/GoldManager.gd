@@ -184,12 +184,14 @@ func play_card(card: Node) -> bool:
 	card.set_meta("gold_paid", maxi(coste_real, 0))  # Valac: "como Oros hayas pagado por este Aliado"
 	_register_play_limit(card)
 	PriorityManager.begin_guerra_action(player_id)
+	var marks: Dictionary = _apply_play_marks(card, player_id)
 	if card.card_type == Constants.CardType.TALISMAN:
 		await _play_talisman(card)
 	elif card.card_type == Constants.CardType.ARMA:
 		await _equip_weapon(card, chosen_wielder)
 	else:
 		await _play_card_to_field(card)
+	_apply_play_marks_after(card, player_id, marks)
 	PriorityManager.end_guerra_action()
 	return true
 
@@ -502,12 +504,14 @@ func play_card_for_free(card_data: Dictionary, owner_id: int = 0, exile_after: b
 	if not await _talisman_extra_cost_ok(card, owner_id):
 		card.queue_free()
 		return false
+	var marks: Dictionary = _apply_play_marks(card, owner_id)
 	if card_type == Constants.CardType.TALISMAN:
 		await _play_talisman(card)
 	elif card_type == Constants.CardType.ARMA:
 		await _equip_weapon(card, chosen_wielder)
 	else:
 		await _play_card_to_field(card)
+	_apply_play_marks_after(card, owner_id, marks)
 	return true
 
 
@@ -1072,6 +1076,43 @@ func _consume_next_talisman_buff(card: Node) -> void:
 		if card.get("card_data") is Dictionary:
 			card.card_data["_no_annul"] = true
 	_clear_next_talisman_buff(pid)
+
+
+func _apply_play_marks(card: Node, pid: int) -> Dictionary:
+	"""Marcas que un efecto dejó para el próximo Aliado que juegue 'pid' este turno (EffectInterpreterEspeciales,
+	"Ese Aliado no puede ser Anulado / entra sin habilidad por el turno y puede atacar ese turno / no puede salir
+	del juego hasta tu próximo turno"): se ponen antes de que entre a la Pila. Devuelve las que van después."""
+	if card.get("card_type") != Constants.CardType.ALIADO or not RuleState.has_pending("next_play_marks", pid):
+		return {}
+	var entry = RuleState.take_pending("next_play_marks", pid)
+	if not (entry is Dictionary) or int(entry.get("serial", -1)) != GameManager.turn_serial:
+		return {}
+	var marks: Dictionary = entry.marks
+	if marks.get("no_annul", false):
+		card.set_meta("protected_from_annul_this_turn", true)
+		if card.get("card_data") is Dictionary:
+			card.card_data["_no_annul"] = true
+	if marks.get("no_cancel", false):
+		card.set_meta("protected_from_cancel_turn", GameManager.turn_serial)  # StackAnnul.protected_from_cancel
+	if marks.get("silenced", false):
+		card.set_meta("silenced_until", GameManager.turn_serial)
+	if marks.get("can_attack", false):
+		card.set_meta("can_attack_turn", GameManager.turn_serial)  # KeywordManager.can_attack_immediately
+	if marks.get("no_leave", false):
+		card.set_meta("no_leave_until", int(entry.get("until", GameManager.turn_serial)))
+	return marks
+
+
+func _apply_play_marks_after(card: Node, pid: int, marks: Dictionary) -> void:
+	"""La parte de las marcas que va con el Aliado ya en juego: Furia y "en la Fase Final, Barájalo" (behemot)."""
+	if marks.is_empty() or not is_instance_valid(card) or not (card.has_method("is_in_play") and card.is_in_play()):
+		return
+	if marks.get("furia", false):
+		KeywordManager.grant_keyword(card, Constants.Keyword.FURIA, null, "permanent")
+	if marks.get("shuffle_final", false):
+		EffectController.schedule_next_final_phase_effect(pid, func() -> void:
+			if is_instance_valid(card) and card.has_method("is_in_play") and card.is_in_play():
+				await ActionModule.return_to_deck(card, card.owner_id if card.get("owner_id") != null else pid, true, null))
 
 
 func _talisman_extra_cost_ok(card: Node, pid: int) -> bool:

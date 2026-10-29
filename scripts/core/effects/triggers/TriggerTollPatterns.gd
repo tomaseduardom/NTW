@@ -55,6 +55,19 @@ static func ability_toll(card: Node, controller_id: int) -> int:
 		n += 1
 	if toll.call("name_ability_toll:" + str(card.get("card_name")).to_lower()):
 		n += 1
+	# zapatillas rojas (en una Reserva): "no se pueden utilizar habilidades de cartas nombradas con este Oro, a menos que
+	# se pague un Oro" (meta "named_card", EffectInterpreterEspeciales).
+	var main := _main_node()
+	if main:
+		for pid in [0, 1]:
+			var reserve = PlayerSideScript.gold_reserva(main, pid)
+			if reserve == null:
+				continue
+			for g in reserve.get_children():
+				if is_instance_valid(g) and str(g.get_meta("named_card", "")) == str(card.get("card_name")).to_lower() \
+						and "habilidades de cartas nombradas con este oro" in str(g.get("card_ability")).to_lower() \
+						and not KeywordManager.is_silenced(g):
+					n += 1
 	# koto: "elige una carta. Tu oponente no puede utilizar su habilidad este turno a menos que pague un Oro".
 	if int(card.get_meta("ability_toll_turn", -1)) == GameManager.turn_serial \
 			and not EffectController.opp_cost_waived(controller_id, 1 - controller_id):

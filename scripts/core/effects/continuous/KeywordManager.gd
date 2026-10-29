@@ -214,6 +214,8 @@ func can_attack_immediately(card: Node) -> bool:
 	cuando entra en juego" (Sir Galahad, brujo mendigo, Jaques de Molay)."""
 	if has_keyword(card, Keyword.FURIA):
 		return true
+	if is_instance_valid(card) and int(card.get_meta("can_attack_turn", -1)) == GameManager.turn_serial:
+		return true  # corvo campesino: "puede atacar ese turno" (GoldManager._apply_play_marks)
 	return is_instance_valid(card) and not is_silenced(card) and card.get("card_ability") != null \
 		and "puede atacar cuando entra en juego" in str(card.card_ability).to_lower()
 

@@ -107,6 +107,60 @@ func _special_step(main: Node, st: Dictionary, card: Node, controller_id: int) -
 			return await _apply_verb({"verb": "shuffle", "count": weaker.size(), "up_to": true}, weaker, card)
 		"shuffle_own_and_cheaper":
 			return await _shuffle_own_and_cheaper(main, card, me)
+		"name_card":
+			var picked_name: String = await _name_a_card(main, st, card, me)
+			_each["named"] = picked_name
+			_each["named_type"] = int(_each.get("_named_type", -1))
+			if is_instance_valid(card):
+				card.set_meta("named_card", picked_name.to_lower())  # zapatillas rojas / escuela de caligrafía
+			return not picked_name.is_empty()
+		"opp_may_exile_named", "opp_exile_all_named":
+			return await _opp_exile_named(main, card, me, str(st.kind) == "opp_exile_all_named")
+		"exile_named_from_opp_castle":  # "busca todas las copias de esa carta en su Castillo y Destiérralas"
+			var nm: String = str(_each.get("named", "")).to_lower()
+			if nm.is_empty():
+				return false
+			var opp := 1 - me
+			if EffectController.fision_hides_zones_of(opp, me, Constants.Zone.CASTILLO) or await EffectController.offer_colapso_global(me):
+				return false
+			if load("res://scripts/core/effects/mechanics/ProtectionRules.gd").castle_banish_blocked(opp, me):
+				main._update_debug("%s: no se puede Desterrar del Castillo oponente" % title)
+				return false
+			if await EffectContextScript.ensure_window():
+				return false
+			var deck: Array = CardManager.get_deck(opp)
+			var copies: Array = deck.filter(func(d): return str(d.get("nombre", "")).to_lower() == nm)
+			for d in copies:
+				deck.erase(d)
+				d["esta_oculta"] = false
+				CardManager.add_to_exile(opp, d)
+			CardManager.shuffle_deck(opp)
+			if main.get("_zone_manager"):
+				main._zone_manager._update_castillo_counts()
+			main._update_debug("%s: se Destierran %d copia(s) de %s del Castillo oponente" % [title, copies.size(), nm])
+			return true
+		"noop":
+			return true
+		"lock_named_turn":  # sombra etérea: "No se pueden utilizar habilidades de cartas con ese nombre por el turno"
+			if str(_each.get("named", "")).is_empty():
+				return false
+			KeywordManager.lock_name_this_turn(str(_each.named), -1)
+			return true
+		"reveal_named_type":  # "...hasta mostrar una carta del mismo tipo que la carta nombrada y ponla en tu mano"
+			var ntype: int = int(_each.get("named_type", -1))
+			if ntype < 0:
+				return false
+			return await _reveal_until(main, {"op": "reveal_until", "specs": [{"count": 1, "types": [_type_word(ntype)], "race": "",
+				"types_not": [], "name_not": "", "cost_val": -1, "cost_cmp": "", "str_val": -1, "str_cmp": "", "ability": "", "keyword": "",
+				"distinct": false}], "play_free": false, "dest": "hand", "dist": []}, card, me)
+		"play_marks":  # GoldManager._apply_play_marks() las pone en el próximo Aliado que juegue 'me' este turno
+			RuleState.set_pending("next_play_marks", me, {"serial": GameManager.turn_serial, "marks": st.marks,
+				"until": RuleState.next_own_turn(me) - 1})
+			return true
+		"clear_play_marks":
+			if RuleState.has_pending("next_play_marks", me):
+				RuleState.take_pending("next_play_marks", me)
+			return true
 		"opp_pick_same_count":  # nautilus: tu oponente elige tantos Aliados suyos como cartas se Barajaron
 			var opp := 1 - me
 			var need: int = int(_each.get("gone", 0))
@@ -556,3 +610,56 @@ func _shuffle_own_and_cheaper(main: Node, card: Node, me: int) -> bool:
 		if pk2 and is_instance_valid(pk2):
 			other = pk2
 	return await _apply_verb({"verb": "shuffle", "count": 2, "up_to": true}, [own, other], card)
+
+
+func _name_a_card(main: Node, st: Dictionary, card: Node, me: int) -> String:
+	"""'Nombra una carta (que no sea Oro / de coste N o menos)': el buscador de nombres (el Remoto por red, el bot
+	nombra solo). Un nombre que no cumple la condición no vale."""
+	var title := _card_name(card)
+	var cond := ""
+	if st.has("ng"):
+		cond = " que no sea Oro"
+	if st.has("cv"):
+		cond = " de coste %d o menos" % int(st.cv)
+	for _try in range(2):
+		var picked: Dictionary = await TriggerSystem._card_name_search.open_and_wait("%s: nombra una carta%s" % [title, cond], me)
+		if picked.is_empty():
+			return ""
+		var ok := true
+		if st.has("ng") and int(picked.get("tipo", -1)) == Constants.CardType.ORO:
+			ok = false
+		if st.has("cv") and (int(picked.get("tipo", -1)) == Constants.CardType.ORO or int(picked.get("coste", 0)) > int(st.cv)):
+			ok = false
+		if ok:
+			_each["_named_type"] = int(picked.get("tipo", -1))
+			return str(picked.get("nombre", ""))
+		main._update_debug("%s: esa carta no cumple la condición%s" % [title, cond])
+	return ""
+
+
+func _opp_exile_named(main: Node, card: Node, me: int, all: bool) -> bool:
+	"""caída del alba: 'tu oponente puede Desterrar una carta de su mano con ese nombre' (elige él; el bot lo hace si
+	puede). creación de temaukel: 'tu oponente muestra su mano y Destierra todas las cartas de ahí con ese nombre'.
+	Anota en _each.named_exiled cuántas Desterró ("Si no Destierra ninguna...")."""
+	var opp := 1 - me
+	var title := _card_name(card)
+	var nm: String = str(_each.get("named", "")).to_lower()
+	_each["named_exiled"] = 0
+	if nm.is_empty():
+		return true
+	var hand: Array = _hand_cards(main, opp)
+	if all and not _is_bot(me):
+		SelectionManager.open_reveal(hand.map(func(c): return c.card_data), "%s: la mano de tu oponente" % title, me)
+	var matching: Array = hand.filter(func(c): return str(c.get("card_name")).to_lower() == nm)
+	if matching.is_empty():
+		return true
+	var gone: Array = matching
+	if not all:
+		var yes: bool = true if _is_bot(opp) else await SelectionManager.await_two_choice(main, title,
+			"Desterrar %s de tu mano" % str(matching[0].get("card_name")), "No Desterrar", opp)
+		gone = matching.slice(0, 1) if yes else []
+	for c in gone:
+		if is_instance_valid(c):
+			CardManager.add_to_exile(opp, PlayerSideScript.take_from_hand(main, opp, c))
+	_each["named_exiled"] = gone.size()
+	return true

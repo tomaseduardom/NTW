@@ -16,6 +16,8 @@ func _execute_step(main: Node, st: Dictionary, targets: Array, card: Node, contr
 func _condition_holds(cond, card: Node, controller_id: int = -1) -> bool:
 	if str(cond) == "milled_less_10":  # vampiro eterno: "Si Bota menos de diez cartas"
 		return int(_each.get("milled", 0)) < 10
+	if str(cond) == "none_named_exiled":  # caída del alba / temaukel: "Si no Destierra ninguna"
+		return int(_each.get("named_exiled", 0)) == 0
 	return super(cond, card, controller_id)
 
 

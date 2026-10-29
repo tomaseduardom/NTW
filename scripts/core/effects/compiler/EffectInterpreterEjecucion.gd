@@ -1491,6 +1491,10 @@ func _apply_rule(main: Node, st: Dictionary, card: Node, controller_id: int) -> 
 			for p in [0, 1]:
 				RuleState.set_until("cemetery_shuffle_cap_3", p, 1 << 30)
 			note = "por el resto del juego, hasta tres cartas de los Cementerios barajadas por turno"
+		"opp_no_search_draw":  # creación de temaukel: ActionSearch.search_zones / ActionModule.draw
+			RuleState.set_until("no_effect_search", opp, until)
+			RuleState.set_until("no_effect_draw", opp, until)
+			note = "hasta tu próximo turno, tu oponente no puede buscar ni Robar cartas por efectos"
 		"castle_shield_extra_draw":  # y vivieron felices: ProtectionRules.castle_banish_blocked / PhaseFlowController
 			RuleState.set_until("castle_exile_shield", me, 1 << 30)
 			RuleState.set_until("extra_final_draw", me, 1 << 30)

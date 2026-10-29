@@ -118,6 +118,9 @@ func validate_action(action_type: String, params: Dictionary, context: Dictionar
 func draw(player_id: int, amount: int, source: String = "", skip_validation: bool = false) -> Dictionary:
 	if await EffectContextScript.ensure_window():  # ventana única por efecto (§59)
 		return {"success": false, "cancelled": true}
+	# creación de temaukel: "tu oponente no puede ... Robar cartas por efectos" (el robo del turno no pasa por aquí).
+	if RuleState.active("no_effect_draw", player_id):
+		return {"success": false, "prevented": true}
 	# sabiduría de la oruga: "sólo pueden Robar hasta tres cartas por efectos por turno".
 	if RuleState.active("draw_cap_3", player_id):
 		amount = mini(amount, maxi(0, 3 - RuleState.count("effect_draws", player_id)))

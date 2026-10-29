@@ -157,6 +157,13 @@ func search_zones(player_id: int, zones: Array, filter: Dictionary, amount: int 
 		if to_select <= 0:
 			await _main._end_trigger_collection_and_resolve()
 			return result
+	# creación de temaukel: "tu oponente no puede buscar cartas ... por efectos".
+	if RuleState.active("no_effect_search", effective_chooser):
+		var main_s := _main.get_node_or_null("/root/Main")
+		if main_s:
+			main_s._update_debug("No puedes buscar cartas por efectos hasta el próximo turno del oponente")
+		await _main._end_trigger_collection_and_resolve()
+		return result
 	if await EffectController.offer_colapso_global(effective_chooser):  # Colapso Global
 		await _main._end_trigger_collection_and_resolve()
 		return result

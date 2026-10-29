@@ -383,6 +383,11 @@ func _static_type_and_cheap_surcharge(card: Node) -> int:
 				if int(plaza.get_meta("named_type", -1)) == int(card_type) \
 						and not EffectController.opp_cost_waived(int(card.owner_id) if card.get("owner_id") != null else 0, pid):
 					n += 1
+		# escuela de caligrafía: "Esa carta cuesta un Oro adicional mientras este Tótem esté en juego" (meta "named_card").
+		for pid in [0, 1]:
+			for escuela in CardQuery.cards_in_play_with(pid, "esa carta cuesta un oro adicional mientras este totem este en juego"):
+				if str(escuela.get_meta("named_card", "")) == str(card.get("card_name")).to_lower():
+					n += 1
 	var owner: int = int(card.owner_id) if card.get("owner_id") != null else 0
 	# Costes adicionales que puso el rival: no los paga un jugador que no puede ser afectado (DAR abril 2026).
 	var tax := func(key: String) -> bool:

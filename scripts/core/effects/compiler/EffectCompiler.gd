@@ -240,6 +240,8 @@ const CONDITIONS := [
 	["drew_less_3", "si robas menos de tres cartas, "],
 	# vampiro eterno: lo que Botó el paso anterior ("Tu oponente Bota la mitad de su Castillo").
 	["milled_less_10", "si bota menos de diez cartas, "],
+	# caída del alba / temaukel: "Si no Destierra ninguna" (lo que hizo el paso "con ese nombre" anterior).
+	["none_named_exiled", "si no destierra ninguna, "],
 ]
 
 ## Reemplazo sobre el paso anterior: "Si tiene Exhumar, en vez de eso, Destiérralo".
@@ -331,6 +333,21 @@ const ATOMS := [
 	["draw", "(?:tu )?roba(?:s|r)? (?<upto>hasta )?(?<n>" + NUM + ") cartas?(?: de tu castillo)?"],
 	["draw_to_match", "roba(?:r)? cartas hasta tener la misma cantidad de cartas en (?:(?:la|tu) )?mano que tu oponente"],
 	# Piezas sueltas de una o pocas cartas (EffectInterpreterEspeciales).
+	# "Nombra una carta (que no sea Oro / de coste 3 o menos)" y lo que la usa después ("con ese nombre", "esa carta").
+	["special:name_card", "nombra una carta(?<ng> que no sea oro)?(?: de coste (?<cv>\\d+) o (?<cc>menos))?(?!,? las cartas con ese nombre)"],
+	# sombra etérea.
+	["special:lock_named_turn", "no se pueden utilizar habilidades de cartas con ese nombre por el turno"],
+	["special:reveal_named_type", "muestra cartas del tope de tu castillo hasta mostrar una carta del mismo tipo que la carta nombrada y ponla en tu mano"],
+	["special:opp_may_exile_named", "tu oponente puede desterrar una carta de su mano con ese nombre"],  # caída del alba
+	["special:opp_exile_all_named", "tu oponente muestra su mano y destierra todas las cartas de ahi con ese nombre"],  # creación de temaukel
+	["special:exile_named_from_opp_castle", "(?:busca todas las copias de esa carta en su castillo|busca en el castillo oponente todas las copias" \
+		+ " de esa carta) y destierralas"],  # temaukel, sagitario
+	# escuela de caligrafía: el recargo lo suma PaymentManager mientras el Tótem esté en juego (meta "named_card").
+	["special:noop", "esa carta cuesta un oro adicional mientras este totem este en juego"],
+	["rule:opp_no_search_draw", "hasta tu proximo turno, tu oponente no puede buscar cartas ni robar cartas por efectos"],
+	# "Ese Aliado no puede ser Anulado y entra en juego con Furia" tras buscarlo/jugarlo (el dragón emerge, orden
+	# restaurado, corvo campesino, behemot, vuelo de esporas): marcas para el próximo Aliado que se juegue.
+	["play_marks", "ese aliado (?<m>(?:no puede salir de juego hasta tu proximo turno|no puede ser anulado|sus habilidades no pueden ser canceladas este turno|entra en juego con furia|entra en juego sin habilidad por el turno|puede atacar ese turno|en la fase final, barajalo)(?:,? y (?:no puede salir de juego hasta tu proximo turno|no puede ser anulado|sus habilidades no pueden ser canceladas este turno|entra en juego con furia|entra en juego sin habilidad por el turno|puede atacar ese turno|en la fase final, barajalo))*)"],
 	# golpe de agua.
 	["special:shuffle_own_and_cheaper", "baraja una carta que controles y una carta oponente del mismo o menor coste"],
 	# nautilus: después de "Baraja hasta dos cartas que controles".
@@ -800,6 +817,14 @@ static func compile_clause(text: String) -> Dictionary:
 			sub.steps[0]["then"] = true
 		steps.append_array(sub.steps)
 
+	# "...y juégalo. Ese Aliado no puede ser Anulado": las marcas tienen que quedar puestas ANTES de jugarlo (van
+	# antes del paso que lo juega, y se limpian después).
+	for si in range(1, steps.size()):
+		if steps[si].op == "special" and steps[si].kind == "play_marks" and steps[si - 1].op in ["search", "play_from"]:
+			var marks_step: Dictionary = steps[si]
+			steps[si] = steps[si - 1]
+			steps[si - 1] = marks_step
+			steps.insert(si + 1, {"op": "special", "kind": "clear_play_marks", "amount": 1})
 	# "Elige un tipo de carta": qué le conviene al bot depende de lo que hace el paso siguiente.
 	for si in range(steps.size() - 1):
 		if steps[si].op == "special" and steps[si].kind == "choose_type":
@@ -985,7 +1010,7 @@ static func _had_timing_prefix(s: String) -> bool:
 static func _is_static(s: String) -> bool:
 	# "Tus Aliados ganan tanta Fuerza como coste tenga ese Aliado" (golpe eléctrico): lo que se refiere a lo elegido
 	# antes es parte del efecto.
-	if " ese aliado" in s or " ese tipo" in s:
+	if " ese aliado" in s or " ese tipo" in s or "esa carta" in s or "con ese nombre" in s:
 		return false
 	for p in STATIC_STARTS:
 		if s.begins_with(p):
@@ -1512,7 +1537,7 @@ static func _build(atom_name: String, m: RegExMatch) -> Dictionary:
 			each["amount"] = parse_amount(m.get_string("n"))
 		if prefix == "special":
 			each["amount"] = int(each.get("amount", 1))
-			for g in ["v", "cv", "cc", "own"]:  # Fuerza, filtro de coste y "que controles" del objetivo
+			for g in ["v", "cv", "cc", "own", "ng"]:  # Fuerza, filtro de coste, "que controles", "que no sea Oro"
 				if m.names.has(g) and not m.get_string(g).is_empty():
 					each[g] = m.get_string(g)
 		return each
@@ -1661,6 +1686,11 @@ static func _build(atom_name: String, m: RegExMatch) -> Dictionary:
 				"exclude_gold": false, "stat": "", "cmp": ">=", "value": 0}, "qty": {"mode": "set", "q": kuji_q, "key": "amount"}}
 		"opp_hand_exile":
 			return {"op": "hand_exile", "who": "opponent", "amount": parse_amount(m.get_string("n"))}
+		"play_marks":
+			var mk: String = m.get_string("m")
+			var marks := {"no_leave": "no puede salir" in mk, "no_annul": "no puede ser anulado" in mk, "no_cancel": "canceladas" in mk,
+				"furia": "con furia" in mk, "silenced": "sin habilidad" in mk, "can_attack": "puede atacar" in mk, "shuffle_final": "barajalo" in mk}
+			return {"op": "special", "kind": "play_marks", "amount": 1, "marks": marks}
 		"mass_buff_chosen_cost":
 			return {"op": "mass_buff", "verb": "buff", "side": "own", "others": false, "amount": 1, "keywords": [], "to_exile": false,
 				"permanent": false, "turn_only": false,
