@@ -88,6 +88,8 @@ static func reset_vars(obj: Object, keep: Array = []) -> int:
 		var def = fresh.get(prop_name)
 		if def is Object:
 			continue
+		if (cur is Array or cur is Dictionary) and cur.is_read_only():
+			continue  # una constante: no cambia entre partidas
 		# En el lugar: así un Array tipado sigue tipado.
 		if cur is Array:
 			cur.clear()

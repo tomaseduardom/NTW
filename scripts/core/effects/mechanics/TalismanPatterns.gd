@@ -314,11 +314,12 @@ static func _julio_verne(main: Node, card: Node, pid: int) -> void:
 			await EnterScript.bounce_to_owner_hand(main, c, card)
 	if names.is_empty():
 		return
+	var replay_box: Array = []  # la lambda captura por valor: se desconecta por aquí
 	var replay: Callable
 	replay = func(started: int, _turn: int) -> void:
 		if started != pid:
 			return
-		GameManager.turn_started.disconnect(replay)
+		GameManager.turn_started.disconnect(replay_box[0])
 		for n in names:
 			var node: Node = null
 			for h in PlayerSideScript.hand_cards(main, pid):
@@ -332,6 +333,7 @@ static func _julio_verne(main: Node, card: Node, pid: int) -> void:
 				for c in EnterScript._in_play(main, pid, func(x): return EnterScript._name(x) == n):
 					await _buff_turn(c, null, 1, true)
 					break
+	replay_box.append(replay)
 	GameManager.turn_started.connect(replay)
 
 
@@ -349,12 +351,14 @@ static func _marca_justos(main: Node, card: Node, _pid: int) -> void:
 static func _niebla_muerte(main: Node, card: Node, pid: int) -> void:
 	# "Las cartas que sean puestas en el Cementerio este turno pierden su habilidad por el turno."
 	var serial: int = GameManager.turn_serial
+	var mark_box: Array = []  # la lambda captura por valor: se desconecta por aquí
 	var mark: Callable
 	mark = func(_owner: int, data: Dictionary) -> void:
 		if GameManager.turn_serial != serial:
-			CardManager.card_put_in_cemetery.disconnect(mark)
+			CardManager.card_put_in_cemetery.disconnect(mark_box[0])
 			return
 		data["_silenced_turn"] = serial  # CardManager.is_cemetery_card_silenced
+	mark_box.append(mark)
 	CardManager.card_put_in_cemetery.connect(mark)
 	var small := _in_play_both(main, func(c): return c.get("card_type") != Constants.CardType.ORO and ContinuousEffectManager.cost_at_most(c, 3))
 	if PlayerSideScript.is_bot(pid):
@@ -537,11 +541,12 @@ static func _alma_viento(main: Node, card: Node, pid: int) -> void:
 	# oponente": cuando llega al Cementerio después de resolverse, sale de ahí como ese Oro.
 	var data: Dictionary = card.card_data if is_instance_valid(card) else {}
 	var name := str(data.get("nombre", ""))
+	var once_box: Array = []  # la lambda captura por valor: se desconecta por aquí
 	var once: Callable
 	once = func(owner_id: int, d: Dictionary) -> void:
 		if str(d.get("nombre", "")) != name:
 			return
-		CardManager.card_put_in_cemetery.disconnect(once)
+		CardManager.card_put_in_cemetery.disconnect(once_box[0])
 		if not CardManager.take_from_cemetery(owner_id, d) or not main._gold_manager:
 			return
 		var gold_data: Dictionary = d.duplicate()
@@ -551,6 +556,7 @@ static func _alma_viento(main: Node, card: Node, pid: int) -> void:
 		if is_instance_valid(gold):
 			gold.owner_id = owner_id
 			gold.set_meta("never_regroup", true)  # GoldManager._reset_gold / EasyBot.reset_gold
+	once_box.append(once)
 	CardManager.card_put_in_cemetery.connect(once)
 
 

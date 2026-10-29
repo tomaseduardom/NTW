@@ -313,13 +313,15 @@ static func quicavi(source_card: Node, ability: Dictionary) -> void:
 	if Constants.Keyword.EXHUMAR not in keywords and "EXHUMAR" not in keywords:
 		keywords.append(Constants.Keyword.EXHUMAR)
 	picked_data["keywords"] = keywords
+	var clear_it_box: Array = []  # la lambda captura por valor: se desconecta por aquí
 	var clear_it: Callable
 	clear_it = func(started_player_id: int, _turn: int) -> void:
 		if started_player_id != pid:
 			return
 		picked_data["keywords"] = picked_data.get("keywords", []).filter(func(k): return k != Constants.Keyword.EXHUMAR and k != "EXHUMAR")
-		if GameManager.turn_started.is_connected(clear_it):
-			GameManager.turn_started.disconnect(clear_it)
+		if GameManager.turn_started.is_connected(clear_it_box[0]):
+			GameManager.turn_started.disconnect(clear_it_box[0])
+	clear_it_box.append(clear_it)
 	GameManager.turn_started.connect(clear_it)
 	if PaymentManager.get("_exhumar") and PaymentManager._exhumar.has_method("invalidate_cache"):
 		PaymentManager._exhumar.invalidate_cache()

@@ -14,14 +14,16 @@ func add_blanket_leave_play_immunity(player_id: int) -> void:
 		return  # Ya activa — no hace falta una segunda conexión
 	_blanket_leave_play_immunity[player_id] = true
 	print("[EffectController] Inmunidad de salida del juego activada para J%d (hasta su próximo turno)" % (player_id + 1))
+	var clear_it_box: Array = []  # la lambda captura por valor: se desconecta por aquí
 	var clear_it: Callable
 	clear_it = func(started_player_id: int, _turn: int) -> void:
 		if started_player_id != player_id:
 			return
 		_blanket_leave_play_immunity[player_id] = false
-		if GameManager.turn_started.is_connected(clear_it):
-			GameManager.turn_started.disconnect(clear_it)
+		if GameManager.turn_started.is_connected(clear_it_box[0]):
+			GameManager.turn_started.disconnect(clear_it_box[0])
 		print("[EffectController] Inmunidad de salida del juego terminó para J%d" % (player_id + 1))
+	clear_it_box.append(clear_it)
 	GameManager.turn_started.connect(clear_it)
 
 
@@ -42,13 +44,15 @@ func add_single_card_leave_play_immunity(card: Node, player_id: int) -> void:
 	_single_card_leave_play_immunity[id] = true
 	var card_name: String = str(card.get("card_name")) if card.get("card_name") != null else "Carta"
 	print("[EffectController] Inmunidad de salida del juego activada para %s (hasta el próximo turno de J%d)" % [card_name, player_id + 1])
+	var clear_it_box: Array = []  # la lambda captura por valor: se desconecta por aquí
 	var clear_it: Callable
 	clear_it = func(started_player_id: int, _turn: int) -> void:
 		if started_player_id != player_id:
 			return
 		_single_card_leave_play_immunity.erase(id)
-		if GameManager.turn_started.is_connected(clear_it):
-			GameManager.turn_started.disconnect(clear_it)
+		if GameManager.turn_started.is_connected(clear_it_box[0]):
+			GameManager.turn_started.disconnect(clear_it_box[0])
+	clear_it_box.append(clear_it)
 	GameManager.turn_started.connect(clear_it)
 
 # =============================================================================

@@ -11,13 +11,15 @@ func add_legacy_targeted_prevention(card: Node, amount: int = 1) -> void:
 
 func activate_fision_shield(player_id: int) -> void:
 	_fision_shields[player_id] = true
+	var clear_it_box: Array = []  # la lambda captura por valor: se desconecta por aquí
 	var clear_it: Callable
 	clear_it = func(started_player_id: int, _turn: int) -> void:
 		if started_player_id != player_id:
 			return
 		_fision_shields.erase(player_id)
-		if GameManager.turn_started.is_connected(clear_it):
-			GameManager.turn_started.disconnect(clear_it)
+		if GameManager.turn_started.is_connected(clear_it_box[0]):
+			GameManager.turn_started.disconnect(clear_it_box[0])
+	clear_it_box.append(clear_it)
 	GameManager.turn_started.connect(clear_it)
 
 

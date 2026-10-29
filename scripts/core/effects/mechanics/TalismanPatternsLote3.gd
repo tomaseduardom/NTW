@@ -384,12 +384,14 @@ static func _amarre_bruja(main: Node, card: Node, pid: int) -> void:
 	if not is_instance_valid(target):
 		return
 	ContinuousEffectManager.gain_control_of_card(target, pid)
+	var release_box: Array = []  # la lambda captura por valor: se desconecta por aquí
 	var release: Callable
 	release = func(_p: int, left: Node, _z: int) -> void:
 		if left != anchor:
 			return
-		if EffectController.on_card_left_play.is_connected(release):
-			EffectController.on_card_left_play.disconnect(release)
+		if EffectController.on_card_left_play.is_connected(release_box[0]):
+			EffectController.on_card_left_play.disconnect(release_box[0])
 		if is_instance_valid(target) and target.get("current_zone") in Constants.ZONES_IN_PLAY and target.get("owner_id") != null:
 			ContinuousEffectManager.gain_control_of_card(target, int(target.owner_id))
+	release_box.append(release)
 	EffectController.on_card_left_play.connect(release)

@@ -392,13 +392,15 @@ func start_castillo_pick(main: Node, title: String, callback: Callable, own_only
 	pulse_opponent.tween_property(opponent_castillo, "modulate", Color(1.25, 1.25, 1.25, 1.0), 0.6).set_trans(Tween.TRANS_SINE)
 	pulse_opponent.tween_property(opponent_castillo, "modulate", Color(1.0, 1.0, 1.0, 1.0), 0.6).set_trans(Tween.TRANS_SINE)
 
+	var on_player_input_box: Array = []  # la lambda captura por valor: se desconecta por aquí
 	var on_player_input: Callable
+	var on_opponent_input_box: Array = []  # la lambda captura por valor: se desconecta por aquí
 	var on_opponent_input: Callable
 	_castillo_pick_cleanup = func() -> void:
-		if player_castillo.gui_input.is_connected(on_player_input):
-			player_castillo.gui_input.disconnect(on_player_input)
-		if opponent_castillo.gui_input.is_connected(on_opponent_input):
-			opponent_castillo.gui_input.disconnect(on_opponent_input)
+		if player_castillo.gui_input.is_connected(on_player_input_box[0]):
+			player_castillo.gui_input.disconnect(on_player_input_box[0])
+		if opponent_castillo.gui_input.is_connected(on_opponent_input_box[0]):
+			opponent_castillo.gui_input.disconnect(on_opponent_input_box[0])
 		player_castillo.mouse_filter = prev_player_filter
 		opponent_castillo.mouse_filter = prev_opponent_filter
 		player_castillo.mouse_default_cursor_shape = prev_player_cursor
@@ -413,9 +415,11 @@ func start_castillo_pick(main: Node, title: String, callback: Callable, own_only
 	on_player_input = func(ev: InputEvent) -> void:
 		if ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_LEFT:
 			_resolve_castillo_pick(true)
+	on_player_input_box.append(on_player_input)
 	on_opponent_input = func(ev: InputEvent) -> void:
 		if ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_LEFT:
 			_resolve_castillo_pick(false)
+	on_opponent_input_box.append(on_opponent_input)
 	player_castillo.gui_input.connect(on_player_input)
 	if own_only:
 		# Solo tu Castillo (p.ej. "Roba hasta N"): el rival no brilla ni se puede clickear.

@@ -39,12 +39,13 @@ static func _gold_to_ally_until_next_turn(main: Node, card: Node, pid: int, stre
 
 
 static func _revert_on_next_turn(main: Node, card: Node, pid: int, original: String) -> void:
+	var revert_box: Array = []  # la lambda captura por valor: se desconecta por aquí
 	var revert: Callable
 	revert = func(started: int, _turn: int) -> void:
 		if started != pid:
 			return
-		if GameManager.turn_started.is_connected(revert):
-			GameManager.turn_started.disconnect(revert)
+		if GameManager.turn_started.is_connected(revert_box[0]):
+			GameManager.turn_started.disconnect(revert_box[0])
 		if not is_instance_valid(card) or not (card.get("current_zone") in Constants.ZONES_IN_PLAY):
 			return
 		ContinuousEffectManager.remove_modifiers_from_source(card)
@@ -66,6 +67,7 @@ static func _revert_on_next_turn(main: Node, card: Node, pid: int, original: Str
 		if main._gold_manager:
 			main._gold_manager._update_gold_display()
 		main._update_debug("%s vuelve a ser un Oro" % _name(card))
+	revert_box.append(revert)
 	GameManager.turn_started.connect(revert)
 
 
