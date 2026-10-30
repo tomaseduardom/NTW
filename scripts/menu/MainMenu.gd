@@ -14,14 +14,10 @@ extends Control
 
 var _controls_dialog: ControlsDialog = null
 
-const GAME_SCENE := "res://scenes/game/Main.tscn"
-
-
 func _ready() -> void:
 	# Carga de la partida en segundo plano: load() de Main.tscn tarda unos 4,5 s (casi todo compilar
 	# scripts); mientras se mira el menú ya se va cargando.
-	if ResourceLoader.load_threaded_get_status(GAME_SCENE) == ResourceLoader.THREAD_LOAD_INVALID_RESOURCE:
-		ResourceLoader.load_threaded_request(GAME_SCENE)
+	GameSceneLoader.request()
 	# Conectar botones y aplicar estilos interactivos
 	var buttons = [play_button, shadowforge_button, decks_button, backs_button, controls_button, exit_button]
 	for btn in buttons:
@@ -215,7 +211,7 @@ func _open_play_mode_popup() -> void:
 	var online_action = func():
 		overlay.queue_free()
 		print("[MainMenu] Abriendo Jugar Online...")
-		get_tree().change_scene_to_file("res://scenes/menu/OnlineConnect.tscn")
+		GameSceneLoader.change_scene(get_tree(), "res://scenes/menu/OnlineConnect.tscn")
 
 	var card_online_node := _build_interactive_mode_card(
 		tex_card_online,
@@ -314,19 +310,19 @@ func _on_shadowforge_pressed() -> void:
 	"""Abre la pantalla de login real de ShadowForge: conectar tu cuenta para ver tus mazos privados
 	en el selector, en vez de editar un archivo a mano"""
 	print("[MainMenu] Abriendo ShadowForge...")
-	get_tree().change_scene_to_file("res://scenes/menu/ShadowForgeLogin.tscn")
+	GameSceneLoader.change_scene(get_tree(), "res://scenes/menu/ShadowForgeLogin.tscn")
 
 
 func _on_decks_pressed() -> void:
 	"""Abre el gestor de mazos"""
 	print("[MainMenu] Abriendo mazos...")
-	get_tree().change_scene_to_file("res://scenes/menu/DeckManager.tscn")
+	GameSceneLoader.change_scene(get_tree(), "res://scenes/menu/DeckManager.tscn")
 
 
 func _on_backs_pressed() -> void:
 	"""Abre el selector de dorsos"""
 	print("[MainMenu] Abriendo dorsos...")
-	get_tree().change_scene_to_file("res://scenes/menu/BackSelector.tscn")
+	GameSceneLoader.change_scene(get_tree(), "res://scenes/menu/BackSelector.tscn")
 
 
 func _on_controls_pressed() -> void:
@@ -348,16 +344,5 @@ func _on_exit_pressed() -> void:
 
 
 func _go_to_game() -> void:
-	"""Usa la escena ya cargada en segundo plano (ver _ready()); si todavía
-	está cargando, espera a que termine en vez de empezar de nuevo."""
-	var tree := get_tree()
-	var status := ResourceLoader.load_threaded_get_status(GAME_SCENE)
-	while status == ResourceLoader.THREAD_LOAD_IN_PROGRESS:
-		await tree.process_frame
-		status = ResourceLoader.load_threaded_get_status(GAME_SCENE)
-	if status == ResourceLoader.THREAD_LOAD_LOADED:
-		var packed := ResourceLoader.load_threaded_get(GAME_SCENE) as PackedScene
-		if packed:
-			tree.change_scene_to_packed(packed)
-			return
-	tree.change_scene_to_file(GAME_SCENE)
+	"""Usa la escena ya cargada en segundo plano (ver _ready())."""
+	GameSceneLoader.go_to_game(get_tree())

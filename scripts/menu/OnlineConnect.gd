@@ -253,7 +253,7 @@ func _on_relay_error(message: String) -> void:
 
 
 func _enter_match() -> void:
-	get_tree().change_scene_to_file("res://scenes/game/Main.tscn")
+	GameSceneLoader.go_to_game(get_tree())
 
 
 func _on_back_pressed() -> void:

@@ -685,7 +685,7 @@ func _go_to_game() -> void:
 	if tree == null:
 		tree = Engine.get_main_loop() as SceneTree
 	if tree:
-		tree.change_scene_to_file("res://scenes/game/Main.tscn")
+		GameSceneLoader.go_to_game(tree)
 	else:
 		push_error("[DeckManager] No se pudo obtener el SceneTree")
 
