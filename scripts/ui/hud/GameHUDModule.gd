@@ -9,6 +9,8 @@ const TEX_BTN_NORMAL := preload("res://assets/ui/hud/btn_paso_normal.png")
 const TEX_BTN_HOVER := preload("res://assets/ui/hud/btn_paso_hover.png")
 const TEX_BTN_PRESSED := preload("res://assets/ui/hud/btn_paso_pressed.png")
 const TEX_BTN_DISABLED := preload("res://assets/ui/hud/btn_paso_disabled.png")
+const TEX_BTN_RESPONSE := preload("res://assets/ui/hud/btn_paso_response.png")
+const TEX_BTN_RESPONSE_HOVER := preload("res://assets/ui/hud/btn_paso_response_hover.png")
 
 var _main: Node = null
 var _paso_button: Button = null
@@ -16,8 +18,10 @@ var _style_normal: StyleBoxTexture = null
 var _style_hover: StyleBoxTexture = null
 var _style_pressed: StyleBoxTexture = null
 var _style_disabled: StyleBoxTexture = null
+var _style_response: StyleBoxTexture = null
+var _style_response_hover: StyleBoxTexture = null
+var _is_in_response_mode: bool = false
 var _paso_glow_tween: Tween = null
-var _paso_green_aura: Panel = null
 var _paso_shadow_panel: Panel = null
 ## Generación de la cuenta regresiva del botón: sube en cada start/stop para que un bucle viejo deje
 ## de escribir el texto.
@@ -109,6 +113,8 @@ func _setup_paso_button() -> void:
 	_style_hover = _create_paso_style(TEX_BTN_HOVER)
 	_style_pressed = _create_paso_style(TEX_BTN_PRESSED)
 	_style_disabled = _create_paso_style(TEX_BTN_DISABLED)
+	_style_response = _create_paso_style(TEX_BTN_RESPONSE)
+	_style_response_hover = _create_paso_style(TEX_BTN_RESPONSE_HOVER)
 
 	_paso_button = Button.new()
 	_paso_button.text = _get_paso_label("Pasar")
@@ -132,15 +138,15 @@ func _setup_paso_button() -> void:
 	_paso_button.add_theme_constant_override("shadow_offset_x", 1)
 	_paso_button.add_theme_constant_override("shadow_offset_y", 2)
 
-	# Posición: alineado al margen derecho de la pantalla (290x46 px diegético de hierro forjado y bronce)
+	# Posición: alineado al margen derecho de la pantalla (bajado 25 px para despejar el campo)
 	_paso_button.anchor_left = 1.0
 	_paso_button.anchor_top = 0.5
 	_paso_button.anchor_right = 1.0
 	_paso_button.anchor_bottom = 0.5
 	_paso_button.offset_right = -20
 	_paso_button.offset_left = -310
-	_paso_button.offset_top = -23
-	_paso_button.offset_bottom = 23
+	_paso_button.offset_top = 2
+	_paso_button.offset_bottom = 48
 	_paso_button.pivot_offset = Vector2(145, 23)
 	_paso_button.mouse_filter = Control.MOUSE_FILTER_STOP
 	_paso_button.visible = false
@@ -166,50 +172,37 @@ func _setup_paso_button() -> void:
 	_paso_button.add_child(shadow)
 	_paso_shadow_panel = shadow
 
-	# Halo mágica verde esmeralda para ventanas de respuesta al oponente
-	var green_aura := Panel.new()
-	green_aura.name = "PasoButtonGreenAura"
-	green_aura.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	green_aura.set_anchors_preset(Control.PRESET_FULL_RECT)
-	green_aura.offset_left = 18.0
-	green_aura.offset_top = 4.0
-	green_aura.offset_right = -18.0
-	green_aura.offset_bottom = -4.0
-	var sb_aura := StyleBoxFlat.new()
-	sb_aura.bg_color = Color(0.12, 0.85, 0.42, 0.08)
-	sb_aura.set_border_width_all(2)
-	sb_aura.border_color = Color(0.35, 0.95, 0.55, 0.90)
-	sb_aura.set_corner_radius_all(10)
-	sb_aura.shadow_color = Color(0.12, 0.88, 0.45, 0.70)
-	sb_aura.shadow_size = 14
-	green_aura.add_theme_stylebox_override("panel", sb_aura)
-	green_aura.visible = false
-	_paso_button.add_child(green_aura)
-	_paso_green_aura = green_aura
-
 	_main.add_child(_paso_button)
 	_paso_button.pressed.connect(func(): _main._phase_flow._on_paso_pressed())
 
 	# Respuesta táctil y elevación 3D al interactuar con el cursor
 	_paso_button.mouse_entered.connect(func():
+		if _paso_button.disabled:
+			return
 		var tw = _paso_button.create_tween().set_parallel(true)
 		tw.tween_property(_paso_button, "scale", Vector2(1.025, 1.025), 0.12).set_ease(Tween.EASE_OUT)
 		tw.tween_property(sb_shadow, "shadow_size", 22, 0.12)
 		tw.tween_property(sb_shadow, "shadow_offset", Vector2(0, 10), 0.12)
 	)
 	_paso_button.mouse_exited.connect(func():
+		if _paso_button.disabled:
+			return
 		var tw = _paso_button.create_tween().set_parallel(true)
 		tw.tween_property(_paso_button, "scale", Vector2.ONE, 0.12).set_ease(Tween.EASE_OUT)
 		tw.tween_property(sb_shadow, "shadow_size", 18, 0.12)
 		tw.tween_property(sb_shadow, "shadow_offset", Vector2(0, 8), 0.12)
 	)
 	_paso_button.button_down.connect(func():
+		if _paso_button.disabled:
+			return
 		var tw = _paso_button.create_tween().set_parallel(true)
 		tw.tween_property(_paso_button, "scale", Vector2(0.985, 0.985), 0.06).set_ease(Tween.EASE_OUT)
 		tw.tween_property(sb_shadow, "shadow_size", 8, 0.06)
 		tw.tween_property(sb_shadow, "shadow_offset", Vector2(0, 3), 0.06)
 	)
 	_paso_button.button_up.connect(func():
+		if _paso_button.disabled:
+			return
 		var tw = _paso_button.create_tween().set_parallel(true)
 		var is_hov = _paso_button.is_hovered()
 		var target_scale = Vector2(1.025, 1.025) if is_hov else Vector2.ONE
@@ -235,75 +228,94 @@ func _on_keybindings_changed() -> void:
 
 
 func update_paso_button_state() -> void:
-	"""Muestra/oculta el botón según si es el turno del jugador en una fase accionable."""
+	"""Mantiene el botón siempre visible en mesa activa y actualiza su estado (habilitado/deshabilitado y texto)."""
 	if not _paso_button:
 		return
+	if not GameManager.is_game_active:
+		_paso_button.visible = false
+		return
+
+	_paso_button.visible = true
 	var phase = GameManager.current_phase
 
 	# Con ventana de prioridad activa (Bloqueo, Guerra de Talismanes, respuesta) actúa quien TIENE la
-	# prioridad, no el dueño del turno (p.ej. el defensor recibe la prioridad primero en Guerra de
-	# Talismanes, DAR 5.C3).
+	# prioridad, no el dueño del turno.
 	if PriorityManager.priority_window_active:
-		# Con una ventana de prioridad activa, _on_paso_pressed() solo pasa prioridad
-		# (PriorityManager.pass_priority()) en cualquier fase, así que el texto dice eso aunque sea tu
-		# Vigilia: el botón dice lo que el click va a hacer.
-		_paso_button.text = _get_paso_label("Pasar")
-		_paso_button.visible = GameManager.is_game_active and PriorityManager.current_priority_player == 0
-		# Diagnóstico: imprime el estado detrás de mostrar/ocultar el botón.
+		if PriorityManager.current_priority_player == 0:
+			_paso_button.disabled = false
+			_paso_button.text = _get_paso_label("Pasar")
+		else:
+			_paso_button.disabled = true
+			_paso_button.text = "Esperando..."
+			_paso_button.scale = Vector2.ONE
+			stop_paso_glow()
 		if Constants.VERBOSE_DIAG_LOGS:
-			print("[DIAG] update_paso_button_state (con ventana activa): visible=%s is_game_active=%s priority_player=%d fase=%s" % [
-				str(_paso_button.visible), str(GameManager.is_game_active), PriorityManager.current_priority_player,
+			print("[DIAG] update_paso_button_state (con ventana activa): disabled=%s priority_player=%d fase=%s" % [
+				str(_paso_button.disabled), PriorityManager.current_priority_player,
 				Constants.PHASE_NAMES.get(phase, "?")
 			])
 		return
 
-	# En Guerra de Talismanes/Bloqueo el botón queda visible sea de quien sea el turno: sin ventana
-	# activa, _on_paso_pressed() llama _try_recover_stuck_phase_priority_window()
-	# (PhaseFlowController.gd); si no hay nada que recuperar, avisa "Sin ventana de prioridad activa".
-	# active_player_id no sirve aquí: al defender, la prioridad te toca primero (DAR 5.C3).
-	# En Guerra de Talismanes (5.3.3) el botón dice "Daño": que ambos pasen seguido lleva a Asignación
-	# de Daño (5.3.4), como en Vigilia dice "Atacar".
-	if phase == Constants.Phase.GUERRA_TALISMANES:
-		_paso_button.text = _get_paso_label("Daño")
-	else:
-		_paso_button.text = _get_paso_label("Pasar")
-		if phase == Constants.Phase.VIGILIA:
-			# Sin ningún Aliado que pueda atacar: "Fase Final".
-			_paso_button.text = _get_paso_label("Atacar") if TurnManager.player_can_attack(GameManager.active_player_id) \
-				else _get_paso_label("Fase Final")
-
 	var is_player_turn = (GameManager.active_player_id == 0)
-	var relevant_phase = phase in [
-		Constants.Phase.VIGILIA,
-		Constants.Phase.ATAQUE,
-		Constants.Phase.FINAL
-	]
-	var recoverable_stuck_phase = phase in [
-		Constants.Phase.GUERRA_TALISMANES,
-		Constants.Phase.BLOQUEO
-	]
-	_paso_button.visible = GameManager.is_game_active and \
-		((is_player_turn and relevant_phase) or recoverable_stuck_phase)
+	if is_player_turn:
+		_paso_button.disabled = false
+		if phase == Constants.Phase.VIGILIA:
+			_paso_button.text = _get_paso_label("Atacar") if TurnManager.player_can_attack(0) \
+				else _get_paso_label("Fase Final")
+		elif phase == Constants.Phase.GUERRA_TALISMANES:
+			_paso_button.text = _get_paso_label("Daño")
+		elif phase == Constants.Phase.BLOQUEO:
+			_paso_button.text = _get_paso_label("Pasar")
+		elif phase == Constants.Phase.ATAQUE:
+			_paso_button.text = _get_paso_label("Pasar")
+		elif phase == Constants.Phase.FINAL:
+			_paso_button.text = _get_paso_label("Terminar")
+		else:
+			_paso_button.disabled = true
+			_paso_button.text = "Esperando..."
+			_paso_button.scale = Vector2.ONE
+			stop_paso_glow()
+	else:
+		if phase == Constants.Phase.GUERRA_TALISMANES:
+			_paso_button.disabled = false
+			_paso_button.text = _get_paso_label("Daño")
+		elif phase == Constants.Phase.BLOQUEO:
+			_paso_button.disabled = false
+			_paso_button.text = _get_paso_label("Pasar")
+		else:
+			_paso_button.disabled = true
+			_paso_button.text = "Turno Rival"
+			_paso_button.scale = Vector2.ONE
+			stop_paso_glow()
+
 	if Constants.VERBOSE_DIAG_LOGS:
-		print("[DIAG] update_paso_button_state (sin ventana activa): visible=%s is_game_active=%s is_player_turn=%s fase=%s relevant_phase=%s recoverable_stuck_phase=%s" % [
-			str(_paso_button.visible), str(GameManager.is_game_active), str(is_player_turn),
-			Constants.PHASE_NAMES.get(phase, "?"), str(relevant_phase), str(recoverable_stuck_phase)
+		print("[DIAG] update_paso_button_state (sin ventana activa): disabled=%s is_player_turn=%s fase=%s" % [
+			str(_paso_button.disabled), str(is_player_turn),
+			Constants.PHASE_NAMES.get(phase, "?")
 		])
 
 
-func hide_paso_button() -> void:
-	if _paso_button:
+func hide_paso_button(force: bool = false) -> void:
+	if not _paso_button:
+		return
+	if force or not GameManager.is_game_active:
 		_paso_button.visible = false
+	else:
+		_paso_button.visible = true
+		_paso_button.disabled = true
+		_paso_button.text = "Turno Rival" if GameManager.active_player_id != 0 else "Esperando..."
+		_paso_button.scale = Vector2.ONE
+		stop_paso_glow()
 
 
 func is_paso_button_ready() -> bool:
 	"""¿El botón ¿Paso?/Atacar está visible y puede clickearse ahora?: atajo de teclado Q — simula el
-	mismo click que el mouse, así que solo debe actuar cuando el botón real haría algo"""
-	return _paso_button != null and _paso_button.visible
+	mismo click que el mouse, así que solo debe actuar cuando el botón real está activo y habilitado."""
+	return _paso_button != null and _paso_button.visible and not _paso_button.disabled
 
 
 func start_paso_glow(is_response_window: bool = false) -> void:
-	"""Activa el brillo del botón. Si es ventana de respuesta al oponente, brilla con un hermoso halo verde esmeralda."""
+	"""Activa el brillo del botón. Si es ventana de respuesta al oponente, viste la textura de respuesta esmeralda."""
 	if not _paso_button:
 		return
 	if _paso_glow_tween and _paso_glow_tween.is_valid():
@@ -316,37 +328,40 @@ func start_paso_glow(is_response_window: bool = false) -> void:
 			or (PriorityManager.current_priority_context == PriorityManager.PriorityContext.GUERRA_TALISMANES and PriorityManager.current_stack_controller != 0)
 		)
 
+	_is_in_response_mode = is_response_window
+
 	if is_response_window:
-		if _paso_green_aura:
-			_paso_green_aura.visible = true
-			_paso_green_aura.modulate.a = 0.85
+		if _style_response:
+			_paso_button.add_theme_stylebox_override("normal", _style_response)
+		if _style_response_hover:
+			_paso_button.add_theme_stylebox_override("hover", _style_response_hover)
+			_paso_button.add_theme_stylebox_override("focus", _style_response_hover)
 		if _paso_shadow_panel:
 			var sb: StyleBoxFlat = _paso_shadow_panel.get_theme_stylebox("panel") as StyleBoxFlat
 			if sb:
-				sb.shadow_color = Color(0.10, 0.88, 0.42, 0.85)
-				sb.shadow_size = 24
-		_paso_button.add_theme_color_override("font_color", Color(0.85, 1.0, 0.90, 1.0))
+				sb.shadow_color = Color(0.12, 0.88, 0.45, 0.65)
+				sb.shadow_size = 22
+				sb.shadow_offset = Vector2(0, 8)
+		_paso_button.add_theme_color_override("font_color", Color(0.92, 1.0, 0.92, 1.0))
 		_paso_button.add_theme_color_override("font_shadow_color", Color(0.02, 0.20, 0.08, 0.95))
 
-		# Pulsación suave verde mágica
+		# Respiración suave sin teñir la placa oscura de verde
+		_paso_button.modulate = Color.WHITE
 		_paso_glow_tween = _paso_button.create_tween().set_loops()
-		_paso_glow_tween.tween_property(_paso_button, "modulate", Color(0.80, 1.25, 0.85, 1.0), 0.6).set_ease(Tween.EASE_IN_OUT).set_trans(Tween.TRANS_SINE)
-		if _paso_green_aura:
-			_paso_glow_tween.parallel().tween_property(_paso_green_aura, "modulate:a", 1.0, 0.6).set_ease(Tween.EASE_IN_OUT)
-		_paso_glow_tween.tween_property(_paso_button, "modulate", Color(0.60, 1.45, 0.72, 1.0), 0.6).set_ease(Tween.EASE_IN_OUT).set_trans(Tween.TRANS_SINE)
-		if _paso_green_aura:
-			_paso_glow_tween.parallel().tween_property(_paso_green_aura, "modulate:a", 0.50, 0.6).set_ease(Tween.EASE_IN_OUT)
+		_paso_glow_tween.tween_property(_paso_button, "modulate", Color(1.05, 1.18, 1.08, 1.0), 0.6).set_ease(Tween.EASE_IN_OUT).set_trans(Tween.TRANS_SINE)
+		_paso_glow_tween.tween_property(_paso_button, "modulate", Color.WHITE, 0.6).set_ease(Tween.EASE_IN_OUT).set_trans(Tween.TRANS_SINE)
 	else:
-		if _paso_green_aura:
-			_paso_green_aura.visible = false
 		_paso_button.modulate = Color.WHITE
 		if _paso_shadow_panel:
 			var sb: StyleBoxFlat = _paso_shadow_panel.get_theme_stylebox("panel") as StyleBoxFlat
 			if sb:
-				sb.shadow_color = Color(0, 0, 0, 0.88)
-				sb.shadow_size = 18
+				sb.shadow_color = Color(0.88, 0.74, 0.28, 0.45)
+				sb.shadow_size = 20
+				sb.shadow_offset = Vector2(0, 8)
 		if _style_hover:
 			_paso_button.add_theme_stylebox_override("normal", _style_hover)
+			_paso_button.add_theme_stylebox_override("hover", _style_hover)
+			_paso_button.add_theme_stylebox_override("focus", _style_hover)
 		_paso_button.add_theme_color_override("font_color", Color(1.0, 1.0, 0.95, 1.0))
 		_paso_button.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.98))
 
@@ -358,17 +373,20 @@ func stop_paso_glow() -> void:
 	_paso_glow_tween = null
 	if not _paso_button:
 		return
+	_is_in_response_mode = false
 	_paso_button.modulate = Color.WHITE
-	if _paso_green_aura:
-		_paso_green_aura.visible = false
 	if _paso_shadow_panel:
 		var sb: StyleBoxFlat = _paso_shadow_panel.get_theme_stylebox("panel") as StyleBoxFlat
 		if sb:
 			sb.shadow_color = Color(0, 0, 0, 0.88)
 			sb.shadow_size = 18
+			sb.shadow_offset = Vector2(0, 8)
 
 	if _style_normal:
 		_paso_button.add_theme_stylebox_override("normal", _style_normal)
+	if _style_hover:
+		_paso_button.add_theme_stylebox_override("hover", _style_hover)
+		_paso_button.add_theme_stylebox_override("focus", _style_hover)
 	_paso_button.add_theme_color_override("font_color", Color(1.0, 0.96, 0.84, 1.0))
 	_paso_button.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.98))
 
