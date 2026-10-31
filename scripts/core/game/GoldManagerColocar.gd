@@ -150,9 +150,9 @@ func _register_armeria_opponent_turn_trigger(card: Node) -> void:
 		var owner: int = card.owner_id if card.get("owner_id") != null else 0
 		if new_active_player == owner:
 			return  # es el turno DE ella, no el del oponente
-		if owner != 0:
+		if PlayerSideScript.is_bot(owner):
 			return  # el bot todavía no resuelve esta elección interactiva
-		await _resolve_armeria_barajar_desterrar()
+		await _resolve_armeria_barajar_desterrar(2, "Armería del Guerrero", owner)
 	GameManager.turn_started.connect(handler)
 
 

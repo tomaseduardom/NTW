@@ -19,8 +19,6 @@ const API_BASE_URL: String = "http://localhost:3000/api"
 # ESTADO
 # =============================================================================
 var _decks_loaded: Dictionary = {}  # player_id -> bool
-var _is_loading: bool = false
-var _pending_requests: Dictionary = {}  # player_id -> HTTPRequest
 
 # Almacén de mazos cargados (datos de cartas, no instancias)
 var loaded_decks: Dictionary = {}  # player_id -> Array[Dictionary] (card data)

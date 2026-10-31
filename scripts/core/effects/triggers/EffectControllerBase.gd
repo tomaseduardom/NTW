@@ -40,7 +40,6 @@ signal on_card_destroyed(player_id: int, card: Node)
 
 signal on_card_exiled(player_id: int, card: Node)
 
-signal on_card_returned_to_hand(player_id: int, card: Node)
 
 signal on_card_attacks(player_id: int, card: Node)  # DAR 5.3.1 — "cuando ataque"
 
@@ -632,13 +631,10 @@ func _pay_akari_shuffle_cost(source_card: Node) -> bool:
 		return false
 	var owner_id: int = source_card.owner_id if source_card.get("owner_id") != null else 0
 
-	var cost_candidates: Array = []
-	if main.player_hand:
-		for c in main.player_hand.cards:
-			cost_candidates.append(c)
-	for field in [main.player_field, main.player_linea_ataque, main.player_linea_apoyo]:
-		if field:
-			cost_candidates.append_array(field.get_children())
+	var controller: int = source_card.controller_id if source_card.get("controller_id") != null else owner_id
+	var cost_candidates: Array = PlayerSideScript.hand_cards(main, controller)
+	for field in PlayerSideScript.line_containers(main, controller):
+		cost_candidates.append_array(field.get_children())
 	if cost_candidates.is_empty():
 		main._update_debug("Almirante Akari: no tienes ninguna carta en tu mano o en juego para Barajar")
 		return false
@@ -648,13 +644,13 @@ func _pay_akari_shuffle_cost(source_card: Node) -> bool:
 	# Click directo sobre la mano/campo, sin modal de lista.
 	var cost_filter := func(c: Node) -> bool: return c in cost_candidates
 	var cost_node: Node = await main._card_interaction.await_target(
-		"Almirante Akari: elige una carta de tu mano o que controles para Barajar (costo)", cost_filter)
+		"Almirante Akari: elige una carta de tu mano o que controles para Barajar (costo)", cost_filter, true, controller)
 	if not cost_node or not is_instance_valid(cost_node):
 		return false
 
-	if main.player_hand and main.player_hand.cards.has(cost_node):
+	if cost_node in PlayerSideScript.hand_cards(main, controller):
 		var cost_data: Dictionary = cost_node.card_data.duplicate()
-		main.player_hand.remove_card(cost_node, true)
+		PlayerSideScript.hand(main, controller).remove_card(cost_node, true)
 		CardManager.get_deck(owner_id).append(cost_data)
 	else:
 		var cost_owner: int = cost_node.controller_id if cost_node.get("controller_id") != null else owner_id

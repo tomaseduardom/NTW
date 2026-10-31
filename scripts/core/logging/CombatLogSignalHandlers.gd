@@ -407,9 +407,6 @@ func _broadcast_action_to_all(action: Dictionary, result: Dictionary) -> void:
 	_main.emit_signal("public_action_occurred", sync_data)
 	_main.emit_signal("sync_to_opponent", "action_executed", sync_data)
 
-	# TODO: Integrar con NetworkManager para multiplayer real
-	# NetworkManager.broadcast_to_all_players(sync_data)
-
 
 func _broadcast_response_window(card_data: Dictionary, pending_actions: Array) -> void:
 	"""Broadcast ventana de respuesta a ambos jugadores"""

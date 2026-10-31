@@ -13,7 +13,6 @@ var _main: Node = null
 var selected_card: Node = null
 var is_placing_gold: bool = false
 var _card_clicked_this_frame: bool = false
-var _opponent_card_original_pos: Dictionary = {}
 ## Traba de reentrada por carta para _declare_attacker(): es async con varios await antes de
 ## GameManager.attackers.append(), y un segundo click (p.ej. el eco de card_double_clicked) podía
 ## entrar en paralelo y quedar rechazado con "no puede atacar todavía".

@@ -75,7 +75,7 @@ func resolve_next_trigger() -> Dictionary:
 	var controller_id: int = trigger.get("controller_id", 0)
 	var proxy_made := false
 
-	# Verificar que la carta sigue en juego
+	# Verificar que la carta sigue en juego5
 	if not is_instance_valid(raw_card):
 		# "Cuando salga del juego" de una carta ya liberada (carcosa Desterrada por su propio efecto): sobre un sustituto.
 		if trigger_type == "on_leave_play" and trigger.has("card_data") and _main.get_node_or_null("/root/Main"):

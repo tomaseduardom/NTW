@@ -19,9 +19,6 @@ signal stack_object_resolved(stack_object: Dictionary, result: Dictionary)
 signal stack_object_removed(stack_object: Dictionary, reason: String)
 signal stack_empty
 
-## Pasos individuales
-signal step_a_completed(stack_object: Dictionary)
-signal step_b_completed(stack_object: Dictionary, cost_paid: int)
 signal step_c_completed(stack_object: Dictionary, triggers_added: int)
 signal step_d_waiting(stack_object: Dictionary, priority_player: int)
 signal step_d_completed(stack_object: Dictionary, had_response: bool)
@@ -98,7 +95,6 @@ var _stack_id_counter: int = 0
 ## Estado actual de la pila
 var _is_resolving: bool = false
 var _is_waiting_priority: bool = false
-var _current_priority_player: int = -1
 
 # =============================================================================
 # TRACKING DE HABILIDADES ACTIVADAS ("Una vez por turno")

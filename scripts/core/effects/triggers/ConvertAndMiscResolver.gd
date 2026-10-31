@@ -26,20 +26,23 @@ func try_execute_mill_convert_to_ally_pattern(ability_text: String, card: Node, 
 	lugar;
 	- del tope de un Castillo: se sacan a ciegas del mazo elegido.
 	Ambas fuentes quedan clickeables a la vez (una carta en juego o un Panel de Castillo) y el
-	primer click decide (SelectionManager.start_castillo_pick()/cancel_castillo_pick() contra
-	CardInteractionModule.start_target_selection()/cancel_target_selection()).
+	primer click decide (CardInteractionModule.await_target_or_castillo_pick(), también para el Remoto y
+	el bot).
 	Las dos ramas terminan en el Convertir de DAR Sección 8 (is_converted +
 	KeywordManager.silence_card, giro de 180°) con Fuerza fija por modificador continuo
 	(LAYER_7A_CHAR_SETTING, 'set', sin source: permanente), para que el badge muestre el valor
 	efectivo.
 	Devuelve true si el patrón aplicaba."""
 	var lower := ability_text.to_lower()
-	if not ("del tope de un castillo" in lower and "gana su control" in lower):
+	if "cartas cuyos costes sumen" in lower and "en aliados sin habilidad y gana su control" in lower:
+		return await _convert_cost_sum_to_allies(ability_text, card, controller_id)
+	# La frase entera: Cthulhu tiene "del tope de un Castillo" y "gana su control" en dos habilidades distintas.
+	if not ("que no sean oro o del tope de un castillo" in lower and "gana su control" in lower):
 		return false
 	# Viejo del Saco tiene su propio patrón (mechanics/ConvertPatterns.gd).
 	if "en un aliado de fuerza 2 con la habilidad furia, imbloqueable" in lower:
 		return false
-	if controller_id != 0 or not is_instance_valid(card):
+	if not is_instance_valid(card):
 		return true
 	var main := _executor._main.get_node_or_null("/root/Main")
 	if not main:
@@ -91,43 +94,20 @@ func try_execute_mill_convert_to_ally_pattern(ability_text: String, card: Node, 
 		# digan lo contrario) — Sherlock puede convertirse a sí mismo.
 		return c.get("card_type") != Constants.CardType.ORO and not (c in picked)
 
-	# Carrera: el Castillo queda activo en paralelo mientras se espera el primer click de carta; el
-	# primero que resuelve cancela al otro. Estado en un Dictionary: los lambdas capturan las locales
-	# por valor (arquitectura.md §13.17).
-	var _state := {"race_done": false, "castillo_picked_own": true}
-	SelectionManager.start_castillo_pick(main, card.card_name if card.get("card_name") else "Sherlock Holmes",
-		func(picked_own: bool) -> void:
-			if _state["race_done"]:
-				return
-			_state["race_done"] = true
-			_state["castillo_picked_own"] = picked_own
-			main._card_interaction.cancel_target_selection())
-
-	var first_target: Node = null
-	while not _state["race_done"]:
-		var card_state := {"done": false, "chosen": null}
-		main._card_interaction.start_target_selection(
-			"Elige una carta en juego (no Oro) o un Castillo para Convertir", filter,
-			func(c: Node) -> void:
-				card_state.chosen = c
-				card_state.done = true)
-		while not card_state.done and not _state["race_done"]:
-			await main.get_tree().process_frame
-		if _state["race_done"]:
-			break
-		if card_state.chosen:
-			first_target = card_state.chosen
-			_state["race_done"] = true
-			SelectionManager.cancel_castillo_pick()
-		# Si card_state.chosen es null (ESC), se vuelve a armar el listener
-		# de cartas mientras el Castillo sigue esperando en paralelo — la
-		# habilidad no es 'puedes', tiene que resolverse por una fuente u otra.
+	# El primer click decide la fuente (una carta en juego o un Castillo). No es "puedes": sin cancelar.
+	var first: Dictionary = await main._card_interaction.await_target_or_castillo_pick(
+		"Elige una carta en juego (no Oro) o un Castillo para Convertir", filter,
+		card.card_name if card.get("card_name") else "Sherlock Holmes", false, false, controller_id)
+	var first_target: Node = first.get("card") if str(first.get("type", "")) == "card" else null
+	var _state := {"castillo_picked_own": bool(first.get("own", true))}
+	if first_target == null and str(first.get("type", "")) != "castillo":
+		return true
 
 	if first_target:
 		picked.append(first_target)
 		while picked.size() < max_amount:
 			var target: Node = await main._card_interaction.await_target(
-				"Elige otra carta en juego (no Oro) para Convertir — N para terminar", filter)
+				"Elige otra carta en juego (no Oro) para Convertir — N para terminar", filter, true, controller_id)
 			if not target or not is_instance_valid(target):
 				break
 			picked.append(target)
@@ -192,6 +172,61 @@ func try_execute_mill_convert_to_ally_pattern(ability_text: String, card: Node, 
 	return true
 
 
+func _convert_cost_sum_to_allies(ability_text: String, card: Node, controller_id: int) -> bool:
+	"""Cthulhu: "convierte hasta dos cartas cuyos costes sumen 3 o menos en Aliados sin habilidad y gana su
+	control". Cartas en juego que no sean Oro, de cualquier lado; las elige quien lo controla (Remoto por red,
+	bot solo). Misma conversión que Sherlock Holmes, sin fijar la Fuerza."""
+	if not is_instance_valid(card):
+		return true
+	var main := _executor._main.get_node_or_null("/root/Main")
+	if not main or not main._card_interaction:
+		return true
+	var m := RegEx.create_from_string("(?i)convierte hasta (\\w+) cartas cuyos costes sumen (\\d+) o menos").search(ability_text)
+	var max_n: int = UniversalCardParser._parse_amount(m.get_string(1)) if m else 2
+	var sum_max: int = int(m.get_string(2)) if m else 3
+	var cost_of := func(c: Node) -> int: return int(ContinuousEffectManager.get_modified_cost(c))
+	var candidates: Array = []
+	for cname in ["player_field", "player_linea_ataque", "player_linea_apoyo", "opponent_field", "opponent_linea_ataque",
+			"opponent_linea_apoyo"]:
+		var container: Node = main.get(cname)
+		if not container:
+			continue
+		for c in container.get_children():
+			if is_instance_valid(c) and c.get("card_type") != null and c.card_type != Constants.CardType.ORO \
+					and cost_of.call(c) <= sum_max:
+				candidates.append(c)
+	if candidates.is_empty():
+		return true
+	var fits := func(so_far: Array, c: Node) -> bool:
+		var total := 0
+		for x in so_far:
+			total += cost_of.call(x)
+		return so_far.size() < max_n and total + cost_of.call(c) <= sum_max
+	var picked: Array = await main._card_interaction.await_multi_target(
+		"%s: convierte hasta %d cartas cuyos costes sumen %d o menos" % [str(card.card_name), max_n, sum_max],
+		candidates, max_n, Callable(), fits, true, null, controller_id)
+	picked = picked.filter(func(c): return is_instance_valid(c))
+	if picked.is_empty():
+		return true
+	if await TriggerSystem.open_response_window(card, str(card.card_name), controller_id):
+		return true
+	var target_field: HBoxContainer = main.player_field if controller_id == 0 else main.opponent_field
+	for target_node in picked:
+		if not is_instance_valid(target_node):
+			continue
+		var old_parent = target_node.get_parent()
+		if old_parent and old_parent != target_field:
+			old_parent.remove_child(target_node)
+			target_field.add_child(target_node)
+		target_node.card_type = Constants.CardType.ALIADO
+		target_node.controller_id = controller_id
+		target_node.can_interact = (controller_id == 0)
+		target_node.set_zone(Constants.Zone.LINEA_DEFENSA)
+		target_node.is_converted = true
+		await KeywordManager.silence_card(target_node, card, "permanent")
+	return true
+
+
 # =============================================================================
 # PATRÓN "CUANDO HAGA DAÑO, PUEDES CONVERTIRLO EN UN ORO Y MOVERLO A TU ORO
 # PAGADO" (Jormundgander)
@@ -205,7 +240,7 @@ func try_execute_convert_ally_to_gold_pattern(ability_text: String, card: Node, 
 	var lower := ability_text.to_lower()
 	if not ("convertirlo en un oro" in lower and "oro pagado" in lower):
 		return false
-	if controller_id != 0 or not is_instance_valid(card):
+	if not is_instance_valid(card):
 		return true
 	# _executor._main es TriggerSystem, no Main (arquitectura.md §2): se busca Main antes de usar
 	# _gold_manager/_card_interaction, como try_execute_jabberwocky_convert_opponent_top_pattern().
@@ -220,7 +255,8 @@ func try_execute_convert_ally_to_gold_pattern(ability_text: String, card: Node, 
 		return true
 	var self_filter := func(c: Node) -> bool: return c == card
 	var accepted: Node = await main._card_interaction.await_target(
-		"%s: clickéala para convertirla en un Oro y moverla a tu Oro Pagado (N para declinar)" % card.card_name, self_filter)
+		"%s: clickéala para convertirla en un Oro y moverla a tu Oro Pagado (N para declinar)" % card.card_name, self_filter,
+		true, controller_id)
 	if not accepted or not is_instance_valid(accepted):
 		return true
 	if await TriggerSystem.open_response_window(card, str(card.card_name), controller_id):
@@ -276,7 +312,7 @@ func try_execute_no_allies_convert_castillo_top_pattern(ability_text: String, ca
 	var lower := ability_text.to_lower()
 	if not ("si no controlas aliados" in lower and "pon bajo tu control la primera carta de un castillo" in lower):
 		return false
-	if controller_id != 0 or not is_instance_valid(card):
+	if not is_instance_valid(card):
 		return true
 
 	if _executor._count_allies_in_play(controller_id) > 0:
@@ -304,6 +340,7 @@ func try_execute_no_allies_convert_castillo_top_pattern(ability_text: String, ca
 	new_data["esta_oculta"] = false
 	var token_node = main._create_card(new_data, false)
 	token_node.owner_id = controller_id
+	token_node.controller_id = controller_id
 	main._connect_card_signals(token_node)
 	var target_field: HBoxContainer = main.player_field if controller_id == 0 else main.opponent_field
 	target_field.add_child(token_node)
@@ -408,7 +445,7 @@ func try_execute_opponent_discard_and_draw_pattern(ability_text: String, card: N
 	return true
 
 
-func try_execute_name_a_card_pattern(ability_text: String, card: Node, _controller_id: int) -> bool:
+func try_execute_name_a_card_pattern(ability_text: String, card: Node, controller_id: int) -> bool:
 	"""Alicia en Wonderland: "nombra una carta para que pierda(n) su habilidad en todas las Zonas
 	mientras esta carta esté en juego". Se bloquea un NOMBRE, no una carta: afecta cualquier copia
 	en cualquier zona, también las que aparezcan después
@@ -420,7 +457,7 @@ func try_execute_name_a_card_pattern(ability_text: String, card: Node, _controll
 		return false
 
 	var picked: Dictionary = await _executor._main._card_name_search.open_and_wait(
-		"Escribe el nombre de una carta"
+		"Escribe el nombre de una carta", controller_id
 	)
 	if picked.is_empty():
 		return true  # el jugador canceló la búsqueda — el 'nombra' no se declinaba, pero sin nombre no hay nada que hacer
@@ -428,7 +465,7 @@ func try_execute_name_a_card_pattern(ability_text: String, card: Node, _controll
 	var picked_name: String = str(picked.get("nombre", ""))
 	if picked_name.is_empty():
 		return true
-	if await TriggerSystem.open_response_window(card, str(card.card_name), _controller_id):
+	if await TriggerSystem.open_response_window(card, str(card.card_name), controller_id):
 		return true
 
 	KeywordManager.lock_ability_by_name(picked_name, card)

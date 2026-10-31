@@ -70,7 +70,6 @@ var _named_ability_locks: Dictionary = {}
 var _instance_ability_locks: Dictionary = {}
 
 
-
 ## "Tus Aliados que porten Arma no pueden perder su habilidad" (p.ej. Manuel Bulnes) — lista de
 ## fuentes activas de esta protección. Array[Node] — sin unregister explícito, se auto-limpia
 ## comparando is_instance_valid/is_in_play en cada consulta.
@@ -104,9 +103,6 @@ func _ready() -> void:
 # =============================================================================
 # PARSING DE KEYWORDS
 # =============================================================================
-func parse_keywords_from_text(ability_text: String) -> Array:
-	"""Palabras clave impresas en el texto de una carta (KeywordParser)."""
-	return KeywordParser.own_keywords(ability_text)
 
 
 func parse_keywords_from_array(keywords_array: Array) -> Array:
@@ -654,16 +650,6 @@ func is_instance_locked(card: Node) -> bool:
 		else:
 			_instance_ability_locks[key] = still_valid
 	return any_active
-
-
-func is_errante(card: Node) -> bool:
-	"""Verifica Errante (solo 1 copia de esta carta en juego a la vez)"""
-	return has_keyword(card, Keyword.ERRANTE)
-
-
-func is_retador(card: Node) -> bool:
-	"""Verifica Retador (el atacante elige qué Aliado enemigo debe bloquearlo)"""
-	return has_keyword(card, Keyword.RETADOR)
 
 
 # =============================================================================

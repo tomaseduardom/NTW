@@ -8,8 +8,6 @@ class_name ZoneManager
 signal castillo_counts_changed(player_deck_size: int, opponent_deck_size: int)
 
 const CardScene = preload("res://scenes/cards/Card.tscn")
-## Tamaño inicial estándar del Castillo (DAR 4.1)
-const CASTILLO_INITIAL_SIZE: int = 42
 
 var _main: Node = null
 

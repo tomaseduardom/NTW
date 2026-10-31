@@ -273,11 +273,11 @@ func _activate_don_de_amma(source_card: Node, ability: Dictionary) -> void:
 		return
 
 	var to_exile: Node = ability_oros[0]
-	if ability_oros.size() > 1 and owner_id == 0 and _inspector._main._card_interaction:
+	if ability_oros.size() > 1 and not load("res://scripts/core/game/PlayerSide.gd").is_bot(owner_id) 			and _inspector._main._card_interaction:
 		# Click directo en la Reserva en vez del modal de lista viejo.
 		var oro_filter := func(c: Node) -> bool: return c in ability_oros
 		var picked_node: Node = await _inspector._main._card_interaction.await_target(
-			"Elige qué Oro con habilidad Desterrar de tu Reserva", oro_filter)
+			"Elige qué Oro con habilidad Desterrar de tu Reserva", oro_filter, true, owner_id)
 		if not picked_node or not is_instance_valid(picked_node):
 			return  # Canceló — no paga el costo, no hay búsqueda
 		to_exile = picked_node

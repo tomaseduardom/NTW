@@ -16,14 +16,10 @@ const VERBOSE_DIAG_LOGS: bool = false
 const DECK_SIZE: int = 50
 const MAX_COPIES_PER_CARD: int = 3
 const MAX_COPIES_UNIQUE: int = 1
-const SIDE_DECK_SIZE: int = 15
-const MIN_ALLIES_WEAPONS_TOTEMS: int = 17  # Imperio
-const MAX_RACELESS_ALLIES: int = 4  # Imperio Racial
 
 # =============================================================================
 # MANO Y ROBO
 # =============================================================================
-const STARTING_HAND_SIZE: int = 8
 const MAX_HAND_SIZE: int = 8
 const CARDS_DRAWN_PER_TURN: int = 1
 
@@ -94,16 +90,6 @@ const ZONES_IN_PLAY: Array = [
 	Zone.LINEA_APOYO
 ]
 
-# Zonas públicas (información visible para ambos jugadores)
-const ZONES_PUBLIC: Array = [
-	Zone.RESERVA_ORO,
-	Zone.ORO_PAGADO,
-	Zone.LINEA_DEFENSA,
-	Zone.LINEA_ATAQUE,
-	Zone.LINEA_APOYO,
-	Zone.CEMENTERIO,
-	Zone.DESTIERRO
-]
 
 # =============================================================================
 # FASES DEL TURNO (DAR Septiembre 2025 - Sección 5)
@@ -128,17 +114,6 @@ const PHASE_NAMES: Dictionary = {
 	Phase.FINAL: "Fase Final"
 }
 
-# Fases que son parte de la Batalla Mitológica (5.3)
-const BATTLE_PHASES: Array = [
-	Phase.ATAQUE,
-	Phase.BLOQUEO,
-	Phase.GUERRA_TALISMANES,
-	Phase.ASIGNACION_DANIO
-]
-
-# Alias para compatibilidad (deprecado, usar Phase)
-const TurnPhase = Phase
-const BattleStep = Phase
 
 # =============================================================================
 # HABILIDADES KEYWORD (DAR Sección 7-8)
@@ -157,27 +132,6 @@ enum Keyword {
 	RETADOR,            # El atacante elige qué Aliado enemigo debe bloquearlo
 }
 
-const KEYWORD_NAMES: Dictionary = {
-	Keyword.FURIA: "Furia",
-	Keyword.IMBLOQUEABLE: "Imbloqueable",
-	Keyword.INDESTRUCTIBLE: "Indestructible",
-	Keyword.INDESTERRABLE: "Indesterrable",
-	Keyword.UNICA: "Única",
-	Keyword.EXHUMAR: "Exhumar",
-	Keyword.ERRANTE: "Errante",
-	Keyword.RETADOR: "Retador",
-}
-
-const KEYWORD_DESCRIPTIONS: Dictionary = {
-	Keyword.FURIA: "Este Aliado no necesita pasar por una Fase de Agrupación para ser declarado Atacante.",
-	Keyword.IMBLOQUEABLE: "Este Aliado no puede ser bloqueado.",
-	Keyword.INDESTRUCTIBLE: "Esta carta no puede ser Destruida.",
-	Keyword.INDESTERRABLE: "Esta carta no puede ser Desterrada.",
-	Keyword.UNICA: "Solo puedes tener una copia de esta carta en tu mazo.",
-	Keyword.EXHUMAR: "Puedes jugar esta carta desde tu Cementerio pagando su coste.",
-	Keyword.ERRANTE: "Solo puede haber una copia de esta carta en juego al mismo tiempo.",
-	Keyword.RETADOR: "El controlador de este Aliado elige qué Aliado enemigo debe bloquearlo.",
-}
 
 # NOTA: "Inmune a X" y "portar múltiples armas" NO son keywords fijas en Mitos y Leyendas — son
 # texto libre de cada carta ("no puede ser afectada por talismanes", "tus aliados pueden portar un
@@ -205,34 +159,9 @@ enum Rarity {
 	SECRETA
 }
 
-const RARITY_NAMES: Dictionary = {
-	Rarity.COMUN: "Común",
-	Rarity.POCO_COMUN: "Poco Común",
-	Rarity.RARA: "Rara",
-	Rarity.ULTRA_RARA: "Ultra Rara",
-	Rarity.SECRETA: "Secreta"
-}
 
 # =============================================================================
 # SEÑALES GLOBALES (eventos del juego)
 # =============================================================================
 # Estas se usarán para el sistema de habilidades disparadas
 
-const GAME_EVENTS: Array[String] = [
-	"card_played",
-	"card_entered_play",
-	"card_destroyed",
-	"card_exiled",
-	"card_discarded",
-	"card_drawn",
-	"ally_attacked",
-	"ally_blocked",
-	"damage_dealt",
-	"damage_received",
-	"turn_started",
-	"turn_ended",
-	"phase_started",
-	"phase_ended",
-	"ability_activated",
-	"ability_triggered"
-]

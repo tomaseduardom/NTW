@@ -43,14 +43,6 @@ static func unpayable(main: Node, card: Node, steps: Array, pid: int) -> String:
 	return ""
 
 
-static func gold_extra(steps: Array) -> int:
-	var n := 0
-	for c in steps:
-		if c.op == "pay":
-			n += int(c.amount)
-	return n
-
-
 static func pay(main: Node, card: Node, steps: Array, pid: int) -> bool:
 	"""Paga lo que no es Oro (el Oro lo suma quien llama). Anota en la carta el coste de lo Destruido/Desterrado
 	(meta "extra_cost_paid_cost": duelo a siete pasos, "del mismo o menor coste que la carta destruida")."""

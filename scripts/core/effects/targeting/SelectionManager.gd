@@ -452,6 +452,9 @@ func _delegate_selection_to_remote(card_data_list: Array, mode: int, config: Dic
 		"can_cancel": can_cancel,
 	})
 	var intent: Dictionary = await NetworkClient.await_intent(["select_cards_choice"])
+	# Con la respuesta ya lista (TurnClock: se le acabó el tiempo al Remoto) await_intent vuelve en el mismo
+	# instante, antes de que el llamador espere la señal: como _auto_select_for_bot(), se emite un cuadro después.
+	await get_tree().process_frame
 
 	if bool(intent.get("cancelled", false)):
 		emit_signal("selection_cancelled")

@@ -177,7 +177,7 @@ func try_execute_metropolitan_enter_pattern(ability_text: String, card: Node, co
 	if choice == 0:
 		var predicate := func(card_type, _card_race, card_cost) -> bool:
 			return card_type == Constants.CardType.ALIADO and int(card_cost) >= 2
-		main._gold_manager.generar_oro_virtual_restringido(1, predicate, "metropolitan")
+		main._gold_manager.generar_oro_virtual_restringido(1, predicate, "metropolitan", controller_id)
 	else:
 		await ActionModule.draw(controller_id, 2, "metropolitan", true)
 	return true

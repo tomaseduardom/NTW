@@ -84,10 +84,10 @@ static func reset_vars(obj: Object, keep: Array = []) -> int:
 		if prop_name in keep:
 			continue
 		var cur = obj.get(prop_name)
-		if cur is Object:
+		if typeof(cur) == TYPE_OBJECT:  # también uno ya liberado ('is' falla con esos)
 			continue
 		var def = fresh.get(prop_name)
-		if def is Object:
+		if typeof(def) == TYPE_OBJECT:
 			continue
 		if (cur is Array or cur is Dictionary) and cur.is_read_only():
 			continue  # una constante: no cambia entre partidas

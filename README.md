@@ -1,4 +1,4 @@
-# NTW
+# WTN
 
 Simulador en línea para jugar el TCG chileno Mitos y Leyendas.
 

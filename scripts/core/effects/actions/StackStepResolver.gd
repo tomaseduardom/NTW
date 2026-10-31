@@ -118,6 +118,7 @@ func _execute_step_d(stack_obj: Dictionary) -> Dictionary:
 	# 1, RESPONSE_WINDOW = 2, DISCARD_PHASE = 3, BLOCK_DECLARATION = 4). El auto-pase del humano
 	# (PhaseFlowController._on_priority_changed_glow()) solo actúa en RESPONSE_WINDOW.
 	PriorityManager.start_priority_window(PriorityManager.PriorityContext.RESPONSE_WINDOW, opponent_id, controller_id)
+	stack_obj["_priority_gen"] = PriorityManager._window_generation
 
 	# ─────────────────────────────────────────────────────────────────────────
 	# Esperar hasta que ambos pasen o alguien responda
@@ -189,6 +190,10 @@ func _wait_for_priority_on_stack_object(stack_obj: Dictionary) -> Dictionary:
 		# Timeout
 		if timeout >= _main.PRIORITY_TIMEOUT:
 			print("[ActionPipeline] Timeout de prioridad")
+			# Cerrar la ventana si sigue siendo la de este objeto: abierta, nadie más podía actuar en el
+			# resto del turno (el Remoto, hasta que se le acababa el reloj).
+			if PriorityManager.priority_window_active 					and PriorityManager._window_generation == int(stack_obj.get("_priority_gen", -1)):
+				PriorityManager.force_close()
 			break
 
 	return result

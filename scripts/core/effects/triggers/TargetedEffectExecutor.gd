@@ -102,7 +102,7 @@ func execute_parsed_action(action: Dictionary, card: Node, _event_data: Dictiona
 			var deck: Array = CardManager.get_deck(controller_id)
 			var top_cards: Array = deck.slice(0, mini(amount, deck.size()))
 			if not top_cards.is_empty():
-				SelectionManager.open_reveal(top_cards, "Mirando %d carta(s) del tope de tu Castillo" % top_cards.size())
+				SelectionManager.open_reveal(top_cards, "Mirando %d carta(s) del tope de tu Castillo" % top_cards.size(), controller_id)
 
 		"REVEAL":
 			# Como LOOK, pero información pública (DAR): los dos jugadores ven las cartas. El overlay es
@@ -132,7 +132,7 @@ func execute_parsed_action(action: Dictionary, card: Node, _event_data: Dictiona
 			# conectado a GameManager.turn_started.
 			var main_gold := _main.get_node_or_null("/root/Main")
 			if main_gold and main_gold._gold_manager and main_gold._gold_manager.has_method("generar_oros_virtuales"):
-				main_gold._gold_manager.generar_oros_virtuales(amount)
+				main_gold._gold_manager.generar_oros_virtuales(amount, controller_id)
 			else:
 				push_warning("[TriggerSystem] No se pudo generar Oro Virtual: GoldManager no disponible")
 

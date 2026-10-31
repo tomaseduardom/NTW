@@ -24,7 +24,6 @@ const AbilityButtonPatternsDScript = preload("res://scripts/ui/inspection/Abilit
 # Caja de texto de habilidades en el arte impreso de la carta:
 # Margen lateral simétrico para centrar perfectamente el botón cubriendo todo el ancho de texto (sin recortar ni esquivar sellos).
 const ABILITY_TEXT_SIDE_MARGIN := 9.5  ## Margen lateral simétrico para centrar perfectamente el botón cubriendo todo el texto
-const ABILITY_TEXT_TOP_RATIO := 0.758  ## Ratio base del inicio del texto en la carta física (desplazado hacia arriba para dar respiro sobre la primera línea)
 const ABILITY_TEXT_BOTTOM_RATIO := 0.932  ## Base inferior de la caja de texto en la carta física
 const ABILITY_SEPARATION_GAP := 2.0  ## Separación vertical limpia (en unidades de carta) entre botones contiguos para evitar solapamientos
 const FONT_TITLE := preload("res://assets/fonts/Cinzel-Bold.ttf")
@@ -82,11 +81,6 @@ func setup(main: Node) -> void:
 
 	if not PriorityManager.priority_changed.is_connected(_on_priority_changed_refresh_glows):
 		PriorityManager.priority_changed.connect(_on_priority_changed_refresh_glows)
-
-	# Signo Amarillo: ventana de respuesta para triggers de entrada de Oro / fuera del juego, separada
-	# de step_d_waiting (la Pila de habilidades activadas y cartas jugadas).
-	if not TriggerSystem.waiting_for_responses.is_connected(_response_window._on_trigger_waiting_for_responses):
-		TriggerSystem.waiting_for_responses.connect(_response_window._on_trigger_waiting_for_responses)
 
 
 func _on_priority_changed_refresh_glows(_player_id: int) -> void:
@@ -713,6 +707,12 @@ func usable_abilities_for(source_card: Node, player_id: int) -> Array:
 		# botón aparece solo mientras respondes a algo del oponente (la prevención la ofrece el juego solo
 		# cuando corresponde).
 		if _is_response_only_ability(ability_raw_text) and not _responding_to_opponent(player_id):
+			continue
+		# Talismán de respuesta con habilidad desde la mano (Sacrificio Solar): respondiendo a algo del
+		# rival se juega (Anular/Cancelar); su habilidad se usa en tu turno o en la Guerra de Talismanes.
+		if source_zone == Constants.Zone.MANO and source_card.get("card_type") == Constants.CardType.TALISMAN \
+				and _responding_to_opponent(player_id) and _main._gold_manager \
+				and _main._gold_manager._is_response_only_talisman(source_card):
 			continue
 		if not in_play:
 			var zone_ok: bool = (source_zone == Constants.Zone.MANO and _ability_is_hand_usable(ability_raw_text)) \

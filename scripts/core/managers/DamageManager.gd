@@ -21,7 +21,6 @@ signal deck_empty(player_id: int)
 
 ## Combate
 signal combat_damage_calculated(attacker: Node, defender: Node, damage: int)
-signal combat_damage_applied(attacker: Node, target_id: int, damage: int)
 
 # =============================================================================
 # ENUMS

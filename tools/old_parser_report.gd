@@ -24,8 +24,6 @@ const FILTERS := ["de coste", "que no sea", "que no sean", "de fuerza", "sin hab
 	"del tope", "del fondo", "al azar", "aliado", "aliados", "oro", "oros", "arma", "armas", "totem", "talisman"]
 const CHOICES := ["elige", " o ", "si ", "por cada", "hasta mostrar", "tantas", "igual a", "cualquier cantidad",
 	"luego", "ademas", "cada jugador", "en su lugar"]
-## Lo que cada action_type entiende sin perder nada.
-const SIMPLE_OBJECTS := ["cartas", "carta"]
 
 
 func _ready() -> void:

@@ -18,7 +18,6 @@ signal payment_failed(card_data: Dictionary, reason: String)
 ## Exhumar
 signal exhumar_cards_available(player_id: int, cards: Array)
 signal exhumar_card_selected(card_data: Dictionary, player_id: int)
-signal exhumar_payment_confirmed(card_data: Dictionary, player_id: int)
 
 ## Coste Variable X
 signal x_value_requested(card_data: Dictionary, max_value: int)

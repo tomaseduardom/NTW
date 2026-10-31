@@ -12,7 +12,6 @@ var card_data: Dictionary = {}
 var player_id: int = 0
 var started_at: float = 0.0
 var steps: Array[Dictionary] = []
-var is_collapsed: bool = false
 var cost_breakdown: Dictionary = {}
 var has_x_cost: bool = false
 var instance_x: int = -1

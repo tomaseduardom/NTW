@@ -482,7 +482,7 @@ func try_execute_look_play_or_gold_pattern(ability_text: String, source_card: No
 			# (regla del usuario) — mismo camino que _place_card_as_gold.
 			await main._gold_manager._trigger_enter_play(gold_node, Constants.Zone.ORO_PAGADO)
 	elif main and main._gold_manager and main._gold_manager.has_method("play_card_for_free"):
-		await main._gold_manager.play_card_for_free(picked)
+		await main._gold_manager.play_card_for_free(picked, controller_id)
 
 	return true
 
@@ -537,7 +537,7 @@ func try_execute_look_play_or_hand_pattern(ability_text: String, source_card: No
 			# declinar el efecto. "Poner" es obligatorio si nada es jugable gratis.
 			"can_cancel": false,
 			"filter": is_eligible,
-		})
+		}, controller_id)
 
 		var state := {"resolved": false, "picked": {}, "to_hand": false}
 		var on_single := func(d: Dictionary):

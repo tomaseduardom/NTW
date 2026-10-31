@@ -18,14 +18,6 @@ var _progress_bar: ProgressBar = null
 var _tween_spinner: Tween = null
 var _tween_fade: Tween = null
 
-const TIPS := [
-	"Barajando los grimorios...",
-	"Convocando las fuerzas mitológicas...",
-	"Alineando las líneas de Ley...",
-	"Preparando el campo de batalla...",
-	"Consagrando la Reserva de Oro..."
-]
-
 
 func show_loading(parent: Node, title_text: String = "CARGANDO PARTIDA", initial_tip: String = "Preparando el campo de batalla...") -> void:
 	"""Muestra la pantalla de carga con fade-in."""

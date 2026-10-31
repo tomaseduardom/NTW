@@ -118,27 +118,3 @@ func _find_signo_amarillo_in_reserve(player_id: int) -> Node:
 		if "convertir este oro en un oro sin habilidad" in ability_text.to_lower():
 			return c
 	return null
-
-
-func _on_trigger_waiting_for_responses(trigger: Dictionary, responding_player: int) -> void:
-	"""Diálogo de respuesta para triggers de entrada de Oro / fuera del juego. Sin llamador:
-	TriggerSystem.waiting_for_responses ya no se emite (§10.53); Signo Amarillo para triggers se
-	ofrece por _offer_signo_amarillo_for_step_d(), que escucha ActionPipeline.step_d_waiting."""
-	if responding_player != 0:
-		return  # el bot no usa Signo Amarillo todavía
-	var signo_card := _find_signo_amarillo_in_reserve(responding_player)
-	if not signo_card:
-		return
-	var source_card: Node = trigger.get("card")
-	var card_name: String = str(source_card.card_name) if source_card and is_instance_valid(source_card) else "esta habilidad"
-	var use_it: bool = await SelectionManager.await_two_choice(
-		_inspector._main,
-		"¿Convertir %s en un Oro sin habilidad para cancelar %s?" % [str(signo_card.card_name), card_name],
-		"Sí, cancelar", "No")
-	if not TriggerSystem.awaiting_response:
-		return  # ya se resolvió solo (timeout de 8s) mientras decidías
-	if use_it:
-		signo_card.is_converted = true
-		TriggerSystem.cancel_current_trigger(signo_card)
-	else:
-		TriggerSystem.pass_response()

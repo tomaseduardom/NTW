@@ -77,23 +77,26 @@ func _ready() -> void:
 	print("[GameSettings] Initialized - Player back: ", player_card_back, ", Opponent back: ", opponent_card_back, ", Speed: ", animation_speed)
 
 
-## Carpeta de datos con el nombre anterior del proyecto (antes de llamarse NTW).
-const OLD_USER_DIR := "Godot/app_userdata/Mitos y Leyendas"
+## Carpetas de datos con los nombres anteriores del proyecto, de la más reciente a la más antigua.
+const OLD_USER_DIRS := ["Godot/app_userdata/NTW", "Godot/app_userdata/Mitos y Leyendas"]
 ## Lo que se regenera solo y no vale la pena copiar.
 const MIGRATE_SKIP := ["shader_cache", "vulkan", "logs", "objectdb_snapshots"]
 
 
 func _migrate_user_data() -> void:
-	"""El proyecto pasó a llamarse NTW y Godot guarda user:// en una carpeta con el nombre del
+	"""El proyecto pasó a llamarse WTN y Godot guarda user:// en una carpeta con el nombre del
 	proyecto: la primera vez se copian los mazos, ajustes, caché de cartas y sesión de ShadowForge
 	de la carpeta anterior. Una marca evita repetirlo."""
 	var marker := "user://.migrado_nombre_anterior"
 	if FileAccess.file_exists(marker):
 		return
-	var old_dir := OS.get_data_dir().path_join(OLD_USER_DIR)
-	if DirAccess.dir_exists_absolute(old_dir) and not FileAccess.file_exists(CONFIG_PATH):
-		var copied := _copy_dir(old_dir, ProjectSettings.globalize_path("user://"))
-		print("[GameSettings] Datos migrados desde '%s': %d archivo(s)" % [old_dir, copied])
+	if not FileAccess.file_exists(CONFIG_PATH):
+		for rel in OLD_USER_DIRS:
+			var old_dir := OS.get_data_dir().path_join(rel)
+			if DirAccess.dir_exists_absolute(old_dir):
+				var copied := _copy_dir(old_dir, ProjectSettings.globalize_path("user://"))
+				print("[GameSettings] Datos migrados desde '%s': %d archivo(s)" % [old_dir, copied])
+				break
 	var f := FileAccess.open(marker, FileAccess.WRITE)
 	if f:
 		f.store_string("ok")

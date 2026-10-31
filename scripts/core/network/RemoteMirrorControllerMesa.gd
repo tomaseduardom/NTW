@@ -54,7 +54,7 @@ func _show_priority_prompt(data: Dictionary) -> void:
 			actions[card_id] = {"op": "intent", "kind": "priority_response", "window_id": window_id,
 				"action": "play", "card_id": card_id}
 		_set_hand_actions(actions)
-		if not abilities.is_empty() and not _start_ability_pick(abilities, respond):
+		if not abilities.is_empty() and not _start_ability_pick(abilities, respond, actions):
 			_build_response_panel(str(data.get("context", "")), abilities, timeout, respond, pass_action)
 		_set_remote_paso(button_text, true, pass_action)
 	_priority_window_id = window_id
@@ -327,9 +327,12 @@ func _start_remote_castillo_pick(castillo_title: String, own_only: bool) -> void
 			"own": picked_own}))
 
 
-func _start_ability_pick(abilities: Array, respond: Callable) -> bool:
+func _start_ability_pick(abilities: Array, respond: Callable, plays: Dictionary = {}) -> bool:
 	"""Las cartas con una habilidad activada disponible brillan; clic en una:
-	si tiene una sola habilidad se usa directo, si tiene varias se elige cuál."""
+	si tiene una sola habilidad se usa directo, si tiene varias se elige cuál. 'plays' (card_id ->
+	intent de jugarla): una carta de la mano que además se puede jugar ahora (Sacrificio Solar: su
+	habilidad desde la mano y jugarlo como Talismán) pregunta qué hacer; si no, el primer clic usaba la
+	habilidad y no se podía jugar."""
 	var by_card: Dictionary = {}  # card_id -> [ability entries]
 	for a in abilities:
 		var card_id: String = str(a.get("card_id", ""))
@@ -338,11 +341,15 @@ func _start_ability_pick(abilities: Array, respond: Callable) -> bool:
 		by_card[card_id].append(a)
 	var on_card := func(card_id: String) -> void:
 		var options: Array = by_card.get(card_id, [])
-		if options.size() == 1:
+		var play: Dictionary = plays.get(card_id, {})
+		if options.size() == 1 and play.is_empty():
 			respond.call({"action": "ability", "card_id": card_id,
 				"ability_index": int(options[0].get("ability_index", 0))})
 			return
-		var vbox := _build_overlay("¿Qué habilidad usas?")
+		var vbox := _build_overlay("¿Qué habilidad usas?" if play.is_empty() else "¿Qué haces con esta carta?")
+		if not play.is_empty():
+			var play_text: String = "Ponerla como Oro" if str(play.get("kind", "")) == "place_gold" else "Jugar la carta"
+			_add_row_button(vbox, play_text, func(): _send_intent_and_close(play))
 		for opt in options:
 			var ability_index: int = int(opt.get("ability_index", 0))
 			_add_row_button(vbox, str(opt.get("effect_text", opt.get("cost_text", "Usar habilidad"))), func():

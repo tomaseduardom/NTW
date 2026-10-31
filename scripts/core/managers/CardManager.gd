@@ -411,6 +411,8 @@ func _resolve_weapon_survives_wielder(weapon: Node) -> void:
 	var main := get_node_or_null("/root/Main")
 	if not main:
 		return
+	var PlayerSide = load("res://scripts/core/game/PlayerSide.gd")
+	var pid: int = int(weapon.get("controller_id")) if weapon.get("controller_id") != null else 0
 
 	# Popup mínimo de 2 botones (mismo patrón que TargetedEffectExecutor.
 	# _choose_search_zone_owner()) — si no hay otro Aliado libre para
@@ -423,15 +425,21 @@ func _resolve_weapon_survives_wielder(weapon: Node) -> void:
 		other_wielders = main._gold_manager._get_eligible_weapon_wielders()
 
 	var to_hand := true
-	if not other_wielders.is_empty():
+	if not other_wielders.is_empty() and not PlayerSide.is_bot(pid):
 		to_hand = await SelectionManager.await_two_choice(
 			main, "%s: ¿Subir a tu mano o cambiar de portador?" % str(weapon.get("card_name")),
-			"Subir a la mano", "Cambiar de portador")
+			"Subir a la mano", "Cambiar de portador", pid)
 
 	if to_hand:
+		# A la mano de quien la controla (del jugador 1, boca abajo en su abanico).
 		var weapon_parent = weapon.get_parent()
 		if weapon_parent:
 			weapon_parent.remove_child(weapon)
+		if pid != 0:
+			var data: Dictionary = weapon.card_data.duplicate()
+			weapon.queue_free()
+			PlayerSide.put_in_hand(main, pid, data)
+			return
 		weapon.can_interact = true
 		weapon.scale = Vector2.ONE
 		weapon.base_scale = Vector2.ONE
@@ -446,7 +454,7 @@ func _resolve_weapon_survives_wielder(weapon: Node) -> void:
 		var filter := func(c: Node) -> bool:
 			return c in other_wielders
 		new_wielder = await main._card_interaction.await_target(
-			"Elige qué Aliado porta %s ahora" % str(weapon.get("card_name")), filter)
+			"Elige qué Aliado porta %s ahora" % str(weapon.get("card_name")), filter, true, pid)
 	if not new_wielder or not is_instance_valid(new_wielder):
 		# Canceló sin elegir — no queda otra que subirla a la mano igual,
 		# no puede quedar suelta en juego sin portador (DAR).

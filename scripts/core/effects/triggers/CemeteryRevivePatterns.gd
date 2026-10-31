@@ -4,7 +4,6 @@ extends RefCounted
 ## habilidad" que Belta: entra con el texto vacío. Se usa con preload.
 
 const PlayerSideScript = preload("res://scripts/core/game/PlayerSide.gd")
-const DISCARD_TEXT := "descartar una carta para poner este aliado en juego desde tu cementerio como un aliado sin habilidad"
 
 
 static func _main_node() -> Node:

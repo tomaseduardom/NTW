@@ -5,6 +5,8 @@ class_name BernardoAbilityHandler
 ## CardInspectionLayer._build_ability_buttons() lo detecta (is_bernardo_pattern) y lo manda aquí.
 ## Opera sobre CardInspectionLayer vía _inspector (y sobre Main vía _inspector._main).
 
+const PlayerSideScript = preload("res://scripts/core/game/PlayerSide.gd")
+
 var _inspector: CardInspectionLayer
 
 
@@ -20,14 +22,12 @@ func _activate_bernardo_shuffle_removal(source_card: Node, ability: Dictionary) 
 		return
 
 	var _main := _inspector._main
+	var pid: int = int(source_card.get("controller_id")) if source_card.get("controller_id") != null else 0
 	var candidates: Array = []
-	if _main.player_hand:
-		for c in _main.player_hand.cards:
-			if _bernardo_can_shuffle(c):
-				candidates.append(c)
-	for field in [_main.player_field, _main.player_linea_ataque]:
-		if not field:
-			continue
+	for c in PlayerSideScript.hand_cards(_main, pid):
+		if _bernardo_can_shuffle(c):
+			candidates.append(c)
+	for field in PlayerSideScript.ally_containers(_main, pid):
 		for c in field.get_children():
 			if c != source_card and _bernardo_can_shuffle(c):
 				candidates.append(c)
@@ -46,7 +46,7 @@ func _activate_bernardo_shuffle_removal(source_card: Node, ability: Dictionary) 
 	# Click directo sobre la mano/campo en vez del modal de lista viejo.
 	var cost_filter := func(c: Node) -> bool: return c in candidates
 	var cost_card: Node = await _main._card_interaction.await_target(
-		"Baraja un Arma o Caballero (coste de la habilidad)", cost_filter)
+		"Baraja un Arma o Caballero (coste de la habilidad)", cost_filter, true, pid)
 	if not cost_card or not is_instance_valid(cost_card):
 		return  # canceló — no se pagó nada, no se marca "una vez por turno"
 	# Revalidar source_card después del await: si Bernardo salió de juego mientras el jugador elegía,
@@ -99,12 +99,11 @@ func _bernardo_shuffle_into_deck(card: Node, owner_id: int) -> void:
 	# compact_all_fields() lee una referencia liberada.
 	CardManager._unequip_from_wielder(card)
 	var parent = card.get_parent()
-	if parent == _main.player_hand:
-		var idx = _main.player_hand.cards.find(card)
-		if idx >= 0:
-			_main.player_hand.cards.remove_at(idx)
-		_main.player_hand.remove_child(card)
-		_main.player_hand._arrange_cards()
+	var hand_pid: int = 0 if parent == _main.player_hand else (1 if parent == _main.get("_opponent_fan") else -1)
+	if hand_pid >= 0:
+		PlayerSideScript.remove_from_hand(_main, hand_pid, card)
+		if card.get_parent():
+			card.get_parent().remove_child(card)
 	elif parent:
 		parent.remove_child(card)
 	card.queue_free()
@@ -124,7 +123,7 @@ func _bernardo_banish_target(source_card: Node) -> void:
 			return false
 		return int(c.get("card_cost")) <= 3
 	var chosen: Node = await _inspector._main._card_interaction.await_target(
-		"Elige una carta de coste 3 o menos para Desterrar", filter)
+		"Elige una carta de coste 3 o menos para Desterrar", filter, true, _controller(source_card))
 	if chosen and is_instance_valid(chosen) and is_instance_valid(source_card):
 		await ActionModule.banish([chosen], source_card, true)
 
@@ -135,6 +134,10 @@ func _bernardo_cancel_ability_target(source_card: Node) -> void:
 	var filter := func(c: Node) -> bool:
 		return c.get("card_type") == Constants.CardType.ALIADO
 	var chosen: Node = await _inspector._main._card_interaction.await_target(
-		"Elige un Aliado que pierda su habilidad", filter)
+		"Elige un Aliado que pierda su habilidad", filter, true, _controller(source_card))
 	if chosen and is_instance_valid(chosen) and is_instance_valid(source_card):
 		await KeywordManager.silence_card(chosen, source_card, "permanent")
+
+
+func _controller(card: Node) -> int:
+	return int(card.get("controller_id")) if is_instance_valid(card) and card.get("controller_id") != null else 0

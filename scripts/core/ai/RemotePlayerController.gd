@@ -593,6 +593,8 @@ func on_priority_received() -> void:
 			if card and card in talisman_cards:
 				if card.get("card_type") != Constants.CardType.ARMA:
 					await _play_talisman_remote(card)
+					# Si no se pudo jugar, la ventana sigue siendo suya: pasa (si no, quedaba abierta).
+					_pass_if_still_current(window_id)
 					return
 				if await _play_weapon_remote(card):
 					return
@@ -671,7 +673,13 @@ func _playable_talismans_now(response_only: bool) -> Array:
 	var result: Array = []
 	var gm = _main._gold_manager
 	for c in _affordable_cards_in_hand([Constants.CardType.TALISMAN]):
-		if response_only and not (gm and gm._is_response_only_talisman(c)):
+		var instant: bool = gm != null and gm._is_response_only_talisman(c)
+		if response_only and not instant:
+			continue
+		# Mismas condiciones que GoldManager.play_card() para el Anfitrión: un Talismán de Anular/Cancelar
+		# solo en respuesta a algo del rival que pueda Anular o Cancelar (en la Guerra no se ofrece).
+		if instant and not (gm._responding_to_opponent(1) and load("res://scripts/core/effects/triggers/Deck170Patterns.gd") \
+				.annul_response_has_target(c, str(c.get("card_ability")), 1)):
 			continue
 		result.append(c)
 	return result

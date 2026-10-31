@@ -137,13 +137,6 @@ func _fit_scale() -> void:
 	CARD_H = 210.0 * _scale
 
 
-func _box(key: String) -> Dictionary:
-	for b in _cfg.boxes:
-		if b.key == key:
-			return b
-	return {}
-
-
 # --- Pasos -------------------------------------------------------------------------------
 func _in_ordering_phase() -> bool:
 	return _step >= _steps.size()

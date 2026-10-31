@@ -995,7 +995,7 @@ func check_libro_de_thoth_block(blocker: Node, blocker_owner: int) -> void:
 	if not has_libro:
 		return
 	var always_true := func(_t, _r, _c) -> bool: return true
-	generar_oro_virtual_restringido(1, always_true, "libro de thoth")
+	generar_oro_virtual_restringido(1, always_true, "libro de thoth", blocker_owner)
 
 
 func _discard_oro_from_reserva(oro_card: Node, controller_id: int) -> void:

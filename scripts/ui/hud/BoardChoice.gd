@@ -204,34 +204,3 @@ static func _outline(rect: Rect2) -> Control:
 	return p
 
 
-static func _fallback_rect(main: Node, source_card, vp: Vector2) -> Rect2:
-	if source_card is Control and is_instance_valid(source_card) and source_card.is_inside_tree() and source_card.is_visible_in_tree():
-		return source_card.get_global_rect()
-	return Rect2(Vector2(vp.x / 2.0 - 60.0, 70.0), Vector2(120, 10))
-
-
-## Ancla de una opción según lo que dice (siempre desde quien elige: "tu" = el lado de abajo).
-static func _anchor_for(text: String, main: Node) -> Dictionary:
-	var t := text.to_lower()
-	var rival: bool = "oponente" in t or "rival" in t
-	var side := "OpponentArea/Opponent" if rival else "PlayerArea/Player"
-	var key := ""
-	var path := ""
-	if "cementerio" in t:
-		key = "cem_r" if rival else "cem"
-		path = "GameBoard/%sCementerio" % side
-	elif "destierro" in t:
-		key = "exile_r" if rival else "exile"
-		path = "GameBoard/%sDestierro" % side
-	elif "roba" in t or "castillo" in t or "tope" in t or "fondo" in t or "bota" in t or "baraj" in t:
-		key = "castle_r" if rival else "castle"
-		path = "GameBoard/%sCastillo" % side
-	elif "mano" in t and not rival:
-		key = "hand"
-		path = "GameBoard/PlayerArea/PlayerHand"
-	if path.is_empty():
-		return {}
-	var node = main.get_node_or_null(path)
-	if not (node is Control) or not node.is_visible_in_tree():
-		return {}
-	return {"key": key, "rect": node.get_global_rect()}

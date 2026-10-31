@@ -5,7 +5,6 @@ class_name SelectionModule
 
 var _main: Node = null
 var _pending_exhume_player_id: int = 0
-var _pending_search_player_id: int = 0
 var _pending_search_callback: Callable = Callable()
 
 

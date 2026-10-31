@@ -93,8 +93,6 @@ const COLORS = {
 # =============================================================================
 var _log_entries: Array[Dictionary] = []
 var _max_entries: int = 500
-var _auto_scroll: bool = true
-var _show_timestamps: bool = true
 var _log_level: int = 0  # 0=all, 1=important, 2=critical
 ## Partida en línea, lado Remoto (RemoteMirrorController.setup()): el historial es el del Anfitrión,
 ## que llega por red (add_net_entry()); lo que se registraría localmente se descarta, salvo los grupos
@@ -174,9 +172,6 @@ func _broadcast_public_action(entry: Dictionary) -> void:
 
 	emit_signal("public_action_occurred", sync_data)
 	emit_signal("sync_to_opponent", entry.type, sync_data)
-
-	# TODO: Aquí se conectaría con el sistema de networking
-	# NetworkManager.broadcast_to_all(sync_data)
 
 
 func _broadcast_phase_change(phase: int) -> void:

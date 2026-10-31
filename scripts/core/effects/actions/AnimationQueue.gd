@@ -8,8 +8,6 @@ extends Node
 # =============================================================================
 signal queue_started
 signal queue_finished
-signal queue_paused
-signal queue_resumed
 
 signal animation_started(command: Dictionary)
 signal animation_finished(command: Dictionary)
@@ -60,8 +58,6 @@ var animation_speed: float = 1.0
 
 ## Delays entre animaciones (segundos)
 var delay_between_cards: float = 0.15
-var delay_between_batches: float = 0.3
-var delay_after_effect: float = 0.2
 
 ## Batch tracking
 var current_batch_id: String = ""

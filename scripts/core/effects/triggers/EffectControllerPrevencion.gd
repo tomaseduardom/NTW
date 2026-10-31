@@ -73,7 +73,7 @@ func offer_counter_annul(played_card) -> void:  # sin tipo: puede llegar ya libe
 		return
 	var played_owner: int = played_card.controller_id if played_card.get("controller_id") != null else 0
 	var defender_id: int = 1 - played_owner
-	if defender_id != 0:
+	if PlayerSideScript.is_bot(defender_id):
 		return  # el bot no responde todavía
 	var cost = played_card.get("card_cost")
 	if cost == null or int(cost) > 2:
@@ -82,8 +82,8 @@ func offer_counter_annul(played_card) -> void:  # sin tipo: puede llegar ya libe
 	var main := get_node_or_null("/root/Main")
 	if not main:
 		return
-	var fields: Array = [main.player_field, main.player_linea_ataque, main.player_linea_apoyo,
-		main.player_gold, main.player_oro_pagado]
+	var fields: Array = PlayerSideScript.line_containers(main, defender_id) + [
+		PlayerSideScript.gold_reserva(main, defender_id), PlayerSideScript.oro_pagado(main, defender_id)]
 	var akari: Node = null
 	for field in fields:
 		if not field:
@@ -102,7 +102,7 @@ func offer_counter_annul(played_card) -> void:  # sin tipo: puede llegar ya libe
 		return
 
 	var use_it: bool = await SelectionManager.await_two_choice(
-		main, "¿Usar Almirante Akari para Anular a %s?" % str(played_card.get("card_name")), "Sí", "No")
+		main, "¿Usar Almirante Akari para Anular a %s?" % str(played_card.get("card_name")), "Sí", "No", defender_id)
 	if not use_it:
 		return
 	var paid: bool = await _pay_akari_shuffle_cost(akari)
@@ -127,7 +127,7 @@ func offer_flechar_xoon_annul(played_card) -> void:  # sin tipo: puede llegar ya
 		return
 	var played_owner: int = played_card.controller_id if played_card.get("controller_id") != null else 0
 	var defender_id: int = 1 - played_owner
-	if defender_id != 0:
+	if PlayerSideScript.is_bot(defender_id):
 		return  # el bot no responde todavía
 	var cost = played_card.get("card_cost")
 	if cost == null or int(cost) > 2:
@@ -136,7 +136,7 @@ func offer_flechar_xoon_annul(played_card) -> void:  # sin tipo: puede llegar ya
 	var main := get_node_or_null("/root/Main")
 	if not main:
 		return
-	var fields: Array = [main.player_field, main.player_linea_ataque, main.player_linea_apoyo]
+	var fields: Array = PlayerSideScript.line_containers(main, defender_id)
 	var xoon: Node = null
 	for field in fields:
 		if not field:
@@ -155,7 +155,8 @@ func offer_flechar_xoon_annul(played_card) -> void:  # sin tipo: puede llegar ya
 		return
 
 	var use_it: bool = await SelectionManager.await_two_choice(
-		main, "¿Usar %s para Anular a %s?" % [str(xoon.get("card_name")), str(played_card.get("card_name"))], "Sí", "No")
+		main, "¿Usar %s para Anular a %s?" % [str(xoon.get("card_name")), str(played_card.get("card_name"))], "Sí", "No",
+		defender_id)
 	if not use_it:
 		return
 
@@ -173,7 +174,7 @@ func offer_flechar_xoon_annul(played_card) -> void:  # sin tipo: puede llegar ya
 		return
 	var cost_filter := func(c: Node) -> bool: return c in own_cards
 	var cost_node: Node = await main._card_interaction.await_target(
-		"Elige una carta que controles para subir a la mano de su dueño (costo)", cost_filter)
+		"Elige una carta que controles para subir a la mano de su dueño (costo)", cost_filter, true, defender_id)
 	if not cost_node or not is_instance_valid(cost_node):
 		return
 

@@ -36,9 +36,6 @@ var game_board: Node = null
 # Flag para el primer turno (no se roba carta, no hay agrupación)
 var is_first_turn: bool = true
 
-# Prioridad en Guerra de Talismanes
-var priority_player_id: int = 0
-var players_passed_priority: Array[bool] = [false, false]
 
 # =============================================================================
 # INICIALIZACIÓN

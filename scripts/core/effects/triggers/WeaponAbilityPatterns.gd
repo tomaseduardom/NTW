@@ -95,7 +95,7 @@ func try_execute_canon_naval_final_pattern(ability_text: String, card: Node, con
 
 	await ActionModule.mill(controller_id, 2, false, "Cañón Naval", true)
 	var always_true := func(_t, _r, _c) -> bool: return true
-	main._gold_manager.generar_oro_virtual_restringido(1, always_true, "Cañón Naval")
+	main._gold_manager.generar_oro_virtual_restringido(1, always_true, "Cañón Naval", controller_id)
 	return true
 
 

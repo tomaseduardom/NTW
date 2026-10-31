@@ -659,13 +659,6 @@ static func _guitarra_final(main: Node, card: Node, pid: int) -> void:
 	await ActionModule.draw(pid, 1, _name(card), true)
 
 
-## Gehena (su Fase Final) y Azi Demoniaco (el Oro): ya resueltos por el intérprete o aquí.
-static func _gehena_final(main: Node, card: Node, pid: int) -> void:
-	if main._gold_manager:
-		await main._gold_manager.agrupar_oros(pid, 1)
-	await ActionModule.draw(pid, 1, _name(card), true)
-
-
 static func _azi_gold_final(main: Node, card: Node, pid: int) -> void:
 	var picks: Array = await EnterScript._pick_cemetery(pid, [1 - pid, pid], "%s: Baraja o Destierra una carta de un Cementerio" % _name(card), 1, 1)
 	for pk in picks:

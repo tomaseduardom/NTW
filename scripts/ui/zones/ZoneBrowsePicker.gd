@@ -16,14 +16,6 @@ const CardScene = preload("res://scenes/cards/Card.tscn")
 const VIEWER_SCALE_MIN := 0.80
 const VIEWER_SCALE_MAX := 1.15
 const VIEWER_GOLD := Color(0.85, 0.72, 0.28)
-const TYPE_FILTERS := [
-	["Todas", -1],
-	["Aliados", Constants.CardType.ALIADO],
-	["Talismanes", Constants.CardType.TALISMAN],
-	["Armas", Constants.CardType.ARMA],
-	["Tótems", Constants.CardType.TOTEM],
-	["Oros", Constants.CardType.ORO],
-]
 const ZONE_PANEL_NAMES := {
 	Constants.Zone.CASTILLO: "Castillo",
 	Constants.Zone.CEMENTERIO: "Cementerio",

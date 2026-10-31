@@ -19,7 +19,6 @@ signal damage_to_castle(player_id: int, total_damage: int, sources: Array)
 signal on_damage_assigned(total_damage: int)  # Emitida con el daño total calculado
 signal destruction_prevented(card: Node, reason: String)  # Carta salvada por Indestructible
 signal player_defeated(player_id: int)  # Jugador perdió por Castillo vacío (DAR 2.1)
-signal card_milled_as_damage(player_id: int, card: Node, destination: int)
 signal combat_finished(result: Dictionary)
 
 # =============================================================================

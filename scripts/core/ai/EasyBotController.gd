@@ -111,11 +111,15 @@ func _place_gold_card(gold_card: Node) -> void:
 	if _main._gold_manager:
 		_main._gold_manager._register_gold_placed(1)
 	_main._update_debug("Oponente pone un Oro (Reserva: %d)" % GameState.get_oro_reserva(1))
-	# Consistente con _play_ally/play_free_ally_from_data/put_free_gold_in_pagado_from_data (las 3 SÍ
-	# lo emiten) — sin esto, GameStateBroadcaster (multiplayer remoto) no se enteraba de que el Oro del
-	# jugador 1 entró en juego, y ContinuousEffectManager/CardEffectSystem tampoco recalculaban nada
-	# para él.
-	EffectController.emit_signal("on_card_entered_play", 1, gold_card, Constants.Zone.RESERVA_ORO)
+	# Mismo camino que el Oro del Anfitrión (GoldManagerColocar._place_card_as_gold()): ventana de
+	# respuesta y "Cuando entra en juego" (Drácula: Roba dos). _trigger_enter_play() emite
+	# on_card_entered_play (GameStateBroadcaster, CardEffectSystem).
+	if _main._gold_manager:
+		if _main._gold_manager._is_become_opponent_gold_copy_text(gold_card):
+			await _main._gold_manager._resolve_become_opponent_gold_copy(gold_card)
+		await _main._gold_manager._trigger_enter_play(gold_card, Constants.Zone.RESERVA_ORO)
+	else:
+		EffectController.emit_signal("on_card_entered_play", 1, gold_card, Constants.Zone.RESERVA_ORO)
 
 
 func _pay_oro_for_bot(coste: int) -> void:

@@ -41,10 +41,6 @@ signal trigger_activated(card: Card, trigger_type: String, event_data: Dictionar
 			if was_hidden and not esta_oculta:
 				_image_loader._load_card_image()
 
-# Alias para compatibilidad
-var face_down: bool:
-	get: return esta_oculta
-	set(value): esta_oculta = value
 
 var _is_ready: bool = false
 
@@ -153,7 +149,6 @@ const DRAG_THRESHOLD: float = 8.0
 var _drag_start_pos: Vector2 = Vector2.ZERO
 var _drag_pending: bool = false  # esperando confirmar si es drag o click
 
-var target_position: Vector2 = Vector2.ZERO
 var target_rotation: float = 0.0
 var target_scale: Vector2 = Vector2.ONE
 

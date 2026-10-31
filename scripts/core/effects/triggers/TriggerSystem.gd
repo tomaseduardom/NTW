@@ -11,7 +11,6 @@ signal trigger_cancelled(card: Node, trigger_type: String, cancelled_by: Node)
 signal all_triggers_resolved
 
 # Ventana de respuesta (DAR Sección 8 - Cancelar)
-signal waiting_for_responses(trigger: Dictionary, responding_player: int)
 signal response_window_closed(trigger: Dictionary, was_cancelled: bool)
 
 # =============================================================================
@@ -33,7 +32,6 @@ var is_resolving: bool = false
 ## Ventana de respuesta
 var awaiting_response: bool = false
 var current_trigger_for_response: Dictionary = {}
-var response_timeout: float = 10.0  # Segundos para responder
 
 ## Señales para buffs
 signal buff_applied(target: Node, buff: Dictionary)
