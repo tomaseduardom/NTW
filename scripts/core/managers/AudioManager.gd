@@ -213,6 +213,54 @@ func set_click_style(style: ClickSoundStyle) -> void:
 	current_click_style = style
 
 
+func set_click_style_by_name(style_name: String) -> void:
+	match style_name.to_lower():
+		"stone":
+			current_click_style = ClickSoundStyle.STONE
+		"coin":
+			current_click_style = ClickSoundStyle.COIN
+		_:
+			current_click_style = ClickSoundStyle.WOOD
+
+
+func is_music_muted() -> bool:
+	return GameSettings.music_volume <= 0.01
+
+
+func is_sfx_muted() -> bool:
+	return GameSettings.sfx_volume <= 0.01
+
+
+func toggle_mute_music() -> bool:
+	if is_music_muted():
+		var restored: float = 0.8
+		if GameSettings.has_meta(&"prev_music_volume"):
+			restored = float(GameSettings.get_meta(&"prev_music_volume"))
+		if restored <= 0.05:
+			restored = 0.8
+		GameSettings.set_music_volume(restored)
+		return false
+	else:
+		GameSettings.set_meta(&"prev_music_volume", GameSettings.music_volume)
+		GameSettings.set_music_volume(0.0)
+		return true
+
+
+func toggle_mute_sfx() -> bool:
+	if is_sfx_muted():
+		var restored: float = 1.0
+		if GameSettings.has_meta(&"prev_sfx_volume"):
+			restored = float(GameSettings.get_meta(&"prev_sfx_volume"))
+		if restored <= 0.05:
+			restored = 1.0
+		GameSettings.set_sfx_volume(restored)
+		return false
+	else:
+		GameSettings.set_meta(&"prev_sfx_volume", GameSettings.sfx_volume)
+		GameSettings.set_sfx_volume(0.0)
+		return true
+
+
 func play_sfx(stream: AudioStream, pitch_scale: float = 1.0, volume_db: float = 0.0) -> void:
 	"""Reproduce un efecto de sonido descartable en el bus SFX."""
 	if not stream:

@@ -57,6 +57,7 @@ var opponent_card_back: String = "dorso_1"
 var master_volume: float = 1.0
 var music_volume: float = 0.8
 var sfx_volume: float = 1.0
+var button_sound_style: String = "wood"
 
 ## Velocidad de Animación (1.0, 1.5, 2.0)
 var animation_speed: float = 1.0
@@ -130,6 +131,7 @@ func _load_config() -> void:
 		master_volume = config.get_value("audio", "master_volume", 1.0)
 		music_volume = config.get_value("audio", "music_volume", 0.8)
 		sfx_volume = config.get_value("audio", "sfx_volume", 1.0)
+		button_sound_style = config.get_value("audio", "button_sound_style", "wood")
 		for action in DEFAULT_KEYBINDINGS.keys():
 			keybindings[action] = int(config.get_value("controls", action, DEFAULT_KEYBINDINGS[action]))
 
@@ -144,6 +146,7 @@ func _save_config() -> void:
 	config.set_value("audio", "master_volume", master_volume)
 	config.set_value("audio", "music_volume", music_volume)
 	config.set_value("audio", "sfx_volume", sfx_volume)
+	config.set_value("audio", "button_sound_style", button_sound_style)
 	for action in keybindings.keys():
 		config.set_value("controls", action, keybindings[action])
 	config.save(CONFIG_PATH)
@@ -205,6 +208,9 @@ func _apply_all_audio_settings() -> void:
 	apply_audio_bus_volume("Master", master_volume)
 	apply_audio_bus_volume("Music", music_volume)
 	apply_audio_bus_volume("SFX", sfx_volume)
+	var am = get_node_or_null("/root/AudioManager")
+	if am and am.has_method("set_click_style_by_name"):
+		am.set_click_style_by_name(button_sound_style)
 
 
 func _apply_animation_speed() -> void:
@@ -243,6 +249,14 @@ func set_sfx_volume(val: float) -> void:
 	apply_audio_bus_volume("SFX", sfx_volume)
 	_save_config()
 	audio_volume_changed.emit("SFX", sfx_volume)
+
+
+func set_button_sound_style(val: String) -> void:
+	button_sound_style = val
+	_save_config()
+	var am = get_node_or_null("/root/AudioManager")
+	if am and am.has_method("set_click_style_by_name"):
+		am.set_click_style_by_name(button_sound_style)
 
 
 func set_animation_speed(val: float) -> void:

@@ -1,10 +1,13 @@
 extends CanvasLayer
 class_name ControlsDialog
-## ControlsDialog — Diálogo modal para reasignar atajos de teclado y controles.
+## ControlsDialog — Diálogo modal para reasignar atajos de teclado y controles,
+## y configurar los niveles de audio, música y estilo sonoro medieval.
 ## Diseñado con la estética medieval de tableta de piedra, pergamino envejecido
 ## y botones de piedra cincelada basada fielmente en docs/referencias/Configuracion.jpg.
 
 signal closed
+
+enum Tab { CONTROLS, AUDIO }
 
 const FONT_TITLE := preload("res://assets/fonts/Cinzel-Bold.ttf")
 const FONT_TEXT := preload("res://assets/fonts/Marcellus-Regular.ttf")
@@ -22,9 +25,32 @@ const MODAL_HEIGHT: float = 794.0
 
 var _backdrop: ColorRect = null
 var _modal_panel: Control = null
+
+# Pestañas
+var _current_tab: Tab = Tab.CONTROLS
+var _tab_controls_btn: Button = null
+var _tab_audio_btn: Button = null
+
+# Contenedores de contenido
+var _controls_container: VBoxContainer = null
+var _audio_container: VBoxContainer = null
+
+# Controles de teclas
 var _action_buttons: Dictionary = {}
 var _listening_action: String = ""
 var _listen_tween: Tween = null
+
+# Controles de audio
+var _master_slider: HSlider = null
+var _master_val_lbl: Label = null
+var _music_slider: HSlider = null
+var _music_val_lbl: Label = null
+var _music_mute_btn: Button = null
+var _sfx_slider: HSlider = null
+var _sfx_val_lbl: Label = null
+var _sfx_mute_btn: Button = null
+var _style_buttons: Dictionary = {}
+
 var _btn_close: Button = null
 var _btn_reset: Button = null
 
@@ -37,12 +63,16 @@ func _init() -> void:
 func _ready() -> void:
 	_build_ui()
 	_refresh_buttons()
+	_refresh_audio_ui()
+	_update_tab_view()
 
 
 func open_dialog() -> void:
 	visible = true
 	_listening_action = ""
 	_refresh_buttons()
+	_refresh_audio_ui()
+	_update_tab_view()
 
 	# Animación de apertura suave
 	_backdrop.modulate.a = 0.0
@@ -94,7 +124,6 @@ func _input(event: InputEvent) -> void:
 
 
 func _assign_key(action: String, new_keycode: int) -> void:
-	# Si otra acción ya usaba esta tecla, intercambiar para evitar duplicados
 	for other_action in GameSettings.DEFAULT_KEYBINDINGS.keys():
 		if other_action != action and GameSettings.get_key(other_action) == new_keycode:
 			var current_key = GameSettings.get_key(action)
@@ -114,6 +143,10 @@ func _cancel_listening() -> void:
 		_listen_tween.kill()
 	_refresh_buttons()
 
+
+# =============================================================================
+# CONSTRUCCIÓN DE INTERFAZ
+# =============================================================================
 
 func _build_ui() -> void:
 	# 1. Telón oscuro de fondo
@@ -147,7 +180,7 @@ func _build_ui() -> void:
 	_modal_panel.pivot_offset = Vector2(MODAL_WIDTH * 0.5, MODAL_HEIGHT * 0.5)
 	add_child(_modal_panel)
 
-	# 3. Fondo texturizado de la tableta de piedra con pergamino y bordes tallados
+	# 3. Fondo texturizado de la tableta de piedra con pergamino
 	var bg_rect = TextureRect.new()
 	bg_rect.name = "TabletBackground"
 	bg_rect.texture = TEX_BG
@@ -158,22 +191,50 @@ func _build_ui() -> void:
 	bg_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_modal_panel.add_child(bg_rect)
 
-	# 4. Contenedor de las 5 filas de acciones sobre el pergamino
-	var rows_container = VBoxContainer.new()
-	rows_container.name = "ActionRowsContainer"
-	rows_container.offset_left = 145.0
-	rows_container.offset_top = 194.0
-	rows_container.offset_right = 1123.0
-	rows_container.offset_bottom = 600.0
-	rows_container.add_theme_constant_override("separation", 24)
-	_modal_panel.add_child(rows_container)
+	# 4. Barra de Pestañas (Selector entre ATAJOS y AUDIO)
+	var tabs_hbox = HBoxContainer.new()
+	tabs_hbox.name = "TabsBar"
+	tabs_hbox.offset_left = 180.0
+	tabs_hbox.offset_top = 135.0
+	tabs_hbox.offset_right = 1088.0
+	tabs_hbox.offset_bottom = 182.0
+	tabs_hbox.add_theme_constant_override("separation", 28)
+	tabs_hbox.alignment = BoxContainer.ALIGNMENT_CENTER
+	_modal_panel.add_child(tabs_hbox)
+
+	_tab_controls_btn = _create_tab_button("⌨  ATAJOS DE TECLADO", Tab.CONTROLS)
+	tabs_hbox.add_child(_tab_controls_btn)
+
+	_tab_audio_btn = _create_tab_button("🔊  AJUSTES DE AUDIO", Tab.AUDIO)
+	tabs_hbox.add_child(_tab_audio_btn)
+
+	# 5. Contenedor de Atajos de Teclado
+	_controls_container = VBoxContainer.new()
+	_controls_container.name = "ActionRowsContainer"
+	_controls_container.offset_left = 145.0
+	_controls_container.offset_top = 196.0
+	_controls_container.offset_right = 1123.0
+	_controls_container.offset_bottom = 615.0
+	_controls_container.add_theme_constant_override("separation", 22)
+	_modal_panel.add_child(_controls_container)
 
 	for action in GameSettings.DEFAULT_KEYBINDINGS.keys():
 		var row = _create_action_row(action)
-		rows_container.add_child(row)
+		_controls_container.add_child(row)
 
-	# 5. Botones interactivos inferiores (RESTAURAR DEFECTO y CERRAR)
-	# Coordenadas y dimensiones exactas al píxel de la tableta de piedra (sin costuras ni cortes)
+	# 6. Contenedor de Ajustes de Audio
+	_audio_container = VBoxContainer.new()
+	_audio_container.name = "AudioSettingsContainer"
+	_audio_container.offset_left = 145.0
+	_audio_container.offset_top = 196.0
+	_audio_container.offset_right = 1123.0
+	_audio_container.offset_bottom = 615.0
+	_audio_container.add_theme_constant_override("separation", 18)
+	_modal_panel.add_child(_audio_container)
+
+	_build_audio_rows()
+
+	# 7. Botones interactivos inferiores (RESTAURAR DEFECTO y CERRAR)
 	_btn_reset = _create_bottom_interactive_button(
 		Rect2(221.0, 672.0, 396.0, 107.0),
 		TEX_BTN_RESET,
@@ -191,12 +252,410 @@ func _build_ui() -> void:
 	_modal_panel.add_child(_btn_close)
 
 
+# =============================================================================
+# PESTAÑAS (TABS)
+# =============================================================================
+
+func _create_tab_button(text: String, tab_id: Tab) -> Button:
+	var btn = Button.new()
+	btn.text = text
+	btn.custom_minimum_size = Vector2(360, 44)
+	btn.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	btn.add_theme_font_override("font", FONT_TITLE)
+	btn.add_theme_font_size_override("font_size", 16)
+	btn.pressed.connect(_on_tab_pressed.bind(tab_id))
+	return btn
+
+
+func _on_tab_pressed(tab_id: Tab) -> void:
+	if _listening_action != "":
+		_cancel_listening()
+	_current_tab = tab_id
+	_update_tab_view()
+
+
+func _update_tab_view() -> void:
+	var is_ctrl = (_current_tab == Tab.CONTROLS)
+	_controls_container.visible = is_ctrl
+	_audio_container.visible = not is_ctrl
+
+	_style_tab_btn(_tab_controls_btn, is_ctrl)
+	_style_tab_btn(_tab_audio_btn, not is_ctrl)
+
+
+func _style_tab_btn(btn: Button, active: bool) -> void:
+	if not btn:
+		return
+	var sb = StyleBoxFlat.new()
+	sb.set_corner_radius_all(8)
+
+	if active:
+		sb.bg_color = Color(0.12, 0.15, 0.22, 0.96)
+		sb.border_color = Color(0.88, 0.74, 0.28, 1.0)
+		sb.set_border_width_all(2)
+		sb.shadow_color = Color(0.88, 0.74, 0.28, 0.40)
+		sb.shadow_size = 8
+		btn.add_theme_color_override("font_color", Color(1.0, 0.94, 0.75, 1.0))
+		btn.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.85))
+	else:
+		sb.bg_color = Color(0.18, 0.16, 0.14, 0.85)
+		sb.border_color = Color(0.48, 0.42, 0.32, 0.75)
+		sb.set_border_width_all(1)
+		sb.shadow_color = Color(0, 0, 0, 0.35)
+		sb.shadow_size = 4
+		btn.add_theme_color_override("font_color", Color(0.68, 0.62, 0.52, 1.0))
+		btn.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.5))
+
+	btn.add_theme_stylebox_override("normal", sb)
+	btn.add_theme_stylebox_override("hover", sb)
+	btn.add_theme_stylebox_override("pressed", sb)
+	btn.add_theme_stylebox_override("focus", sb)
+
+
+# =============================================================================
+# APARTADO DE AJUSTES DE AUDIO
+# =============================================================================
+
+func _build_audio_rows() -> void:
+	# Fila 1: Música de Fondo (con Slider y botón Silenciar/Activar)
+	var music_data = _create_audio_slider_row(
+		"MÚSICA DE FONDO",
+		"Banda sonora ambiental medieval y temas de batalla",
+		GameSettings.music_volume,
+		_on_music_slider_changed,
+		_on_music_mute_toggled
+	)
+	_music_slider = music_data.slider
+	_music_val_lbl = music_data.label
+	_music_mute_btn = music_data.mute_btn
+	_audio_container.add_child(music_data.row)
+
+	# Fila 2: Efectos de Sonido SFX (con Slider y botón Silenciar/Activar)
+	var sfx_data = _create_audio_slider_row(
+		"EFECTOS DE SONIDO (SFX)",
+		"Respuesta sonora de botones, cartas y acciones de combate",
+		GameSettings.sfx_volume,
+		_on_sfx_slider_changed,
+		_on_sfx_mute_toggled
+	)
+	_sfx_slider = sfx_data.slider
+	_sfx_val_lbl = sfx_data.label
+	_sfx_mute_btn = sfx_data.mute_btn
+	_audio_container.add_child(sfx_data.row)
+
+	# Fila 3: Volumen General Master
+	var master_data = _create_audio_slider_row(
+		"VOLUMEN GENERAL (MASTER)",
+		"Nivel general de volumen para toda la aplicación",
+		GameSettings.master_volume,
+		_on_master_slider_changed,
+		null
+	)
+	_master_slider = master_data.slider
+	_master_val_lbl = master_data.label
+	_audio_container.add_child(master_data.row)
+
+	# Fila 4: Estilo de Sonido de los Botones (Age of Empires II / Piedra / Monedas)
+	var style_row = _create_sound_style_selector_row()
+	_audio_container.add_child(style_row)
+
+
+func _create_audio_slider_row(
+	title_text: String,
+	desc_text: String,
+	current_val: float,
+	slider_callback: Callable,
+	mute_callback: Variant
+) -> Dictionary:
+	var hbox = HBoxContainer.new()
+	hbox.alignment = BoxContainer.ALIGNMENT_CENTER
+	hbox.custom_minimum_size = Vector2(0, 68)
+
+	# Columna izquierda: Título y descripción
+	var text_vbox = VBoxContainer.new()
+	text_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	text_vbox.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	text_vbox.add_theme_constant_override("separation", 2)
+	hbox.add_child(text_vbox)
+
+	var title_lbl = Label.new()
+	title_lbl.text = title_text
+	title_lbl.add_theme_font_override("font", FONT_TITLE)
+	title_lbl.add_theme_font_size_override("font_size", 18)
+	title_lbl.add_theme_color_override("font_color", Color(0.12, 0.10, 0.08, 1.0))
+	title_lbl.add_theme_color_override("font_shadow_color", Color(1.0, 0.95, 0.85, 0.50))
+	title_lbl.add_theme_constant_override("shadow_offset_y", 1)
+	text_vbox.add_child(title_lbl)
+
+	var desc_lbl = Label.new()
+	desc_lbl.text = desc_text
+	desc_lbl.add_theme_font_override("font", FONT_TEXT)
+	desc_lbl.add_theme_font_size_override("font_size", 14)
+	desc_lbl.add_theme_color_override("font_color", Color(0.26, 0.22, 0.18, 0.95))
+	text_vbox.add_child(desc_lbl)
+
+	# Columna derecha: Controles interactivos (Botón Mute + Slider + Porcentaje)
+	var controls_hbox = HBoxContainer.new()
+	controls_hbox.add_theme_constant_override("separation", 14)
+	controls_hbox.alignment = BoxContainer.ALIGNMENT_CENTER
+	hbox.add_child(controls_hbox)
+
+	var mute_btn: Button = null
+	if mute_callback != null and mute_callback is Callable:
+		mute_btn = Button.new()
+		mute_btn.custom_minimum_size = Vector2(136, 42)
+		mute_btn.text = "SILENCIAR"
+		mute_btn.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+		mute_btn.add_theme_font_override("font", FONT_TITLE)
+		mute_btn.add_theme_font_size_override("font_size", 13)
+		_style_secondary_button(mute_btn)
+		mute_btn.pressed.connect(mute_callback)
+		controls_hbox.add_child(mute_btn)
+
+	var slider = HSlider.new()
+	slider.custom_minimum_size = Vector2(230, 24)
+	slider.min_value = 0.0
+	slider.max_value = 100.0
+	slider.step = 1.0
+	slider.value = current_val * 100.0
+	slider.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	slider.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	slider.value_changed.connect(slider_callback)
+	_style_medieval_slider(slider)
+	controls_hbox.add_child(slider)
+
+	var val_lbl = Label.new()
+	val_lbl.text = "%d%%" % int(slider.value)
+	val_lbl.custom_minimum_size = Vector2(55, 0)
+	val_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	val_lbl.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	val_lbl.add_theme_font_override("font", FONT_TITLE)
+	val_lbl.add_theme_font_size_override("font_size", 16)
+	val_lbl.add_theme_color_override("font_color", Color(0.16, 0.12, 0.08, 1.0))
+	controls_hbox.add_child(val_lbl)
+
+	return {
+		"row": hbox,
+		"slider": slider,
+		"label": val_lbl,
+		"mute_btn": mute_btn
+	}
+
+
+func _create_sound_style_selector_row() -> HBoxContainer:
+	var hbox = HBoxContainer.new()
+	hbox.alignment = BoxContainer.ALIGNMENT_CENTER
+	hbox.custom_minimum_size = Vector2(0, 68)
+
+	var text_vbox = VBoxContainer.new()
+	text_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	text_vbox.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	text_vbox.add_theme_constant_override("separation", 2)
+	hbox.add_child(text_vbox)
+
+	var title_lbl = Label.new()
+	title_lbl.text = "ESTILO DE CLICK DE BOTONES"
+	title_lbl.add_theme_font_override("font", FONT_TITLE)
+	title_lbl.add_theme_font_size_override("font_size", 18)
+	title_lbl.add_theme_color_override("font_color", Color(0.12, 0.10, 0.08, 1.0))
+	title_lbl.add_theme_color_override("font_shadow_color", Color(1.0, 0.95, 0.85, 0.50))
+	title_lbl.add_theme_constant_override("shadow_offset_y", 1)
+	text_vbox.add_child(title_lbl)
+
+	var desc_lbl = Label.new()
+	desc_lbl.text = "Textura acústica profunda al pulsar botones e interactuar"
+	desc_lbl.add_theme_font_override("font", FONT_TEXT)
+	desc_lbl.add_theme_font_size_override("font_size", 14)
+	desc_lbl.add_theme_color_override("font_color", Color(0.26, 0.22, 0.18, 0.95))
+	text_vbox.add_child(desc_lbl)
+
+	var buttons_hbox = HBoxContainer.new()
+	buttons_hbox.add_theme_constant_override("separation", 10)
+	buttons_hbox.alignment = BoxContainer.ALIGNMENT_CENTER
+	hbox.add_child(buttons_hbox)
+
+	var styles = [
+		{"id": "wood", "label": "MADERA (AOE II)"},
+		{"id": "stone", "label": "PIEDRA"},
+		{"id": "coin", "label": "MONEDAS"}
+	]
+
+	for s in styles:
+		var btn = Button.new()
+		btn.text = s.label
+		btn.custom_minimum_size = Vector2(142, 42)
+		btn.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+		btn.add_theme_font_override("font", FONT_TITLE)
+		btn.add_theme_font_size_override("font_size", 12)
+		btn.pressed.connect(_on_sound_style_selected.bind(s.id))
+		buttons_hbox.add_child(btn)
+		_style_buttons[s.id] = btn
+
+	return hbox
+
+
+func _style_secondary_button(btn: Button) -> void:
+	var sb = StyleBoxFlat.new()
+	sb.bg_color = Color(0.14, 0.16, 0.22, 0.95)
+	sb.border_color = Color(0.55, 0.48, 0.35, 0.85)
+	sb.set_border_width_all(1)
+	sb.set_corner_radius_all(6)
+
+	var sb_hov = StyleBoxFlat.new()
+	sb_hov.bg_color = Color(0.20, 0.26, 0.36, 1.0)
+	sb_hov.border_color = Color(1.0, 0.88, 0.48, 1.0)
+	sb_hov.set_border_width_all(2)
+	sb_hov.set_corner_radius_all(6)
+
+	btn.add_theme_stylebox_override("normal", sb)
+	btn.add_theme_stylebox_override("hover", sb_hov)
+	btn.add_theme_stylebox_override("pressed", sb)
+	btn.add_theme_stylebox_override("focus", sb_hov)
+	btn.add_theme_color_override("font_color", Color(0.92, 0.88, 0.78, 1.0))
+	btn.add_theme_color_override("font_hover_color", Color.WHITE)
+
+
+func _style_medieval_slider(slider: HSlider) -> void:
+	var track_sb = StyleBoxFlat.new()
+	track_sb.bg_color = Color(0.20, 0.16, 0.12, 0.92)
+	track_sb.border_color = Color(0.60, 0.50, 0.35, 0.85)
+	track_sb.set_border_width_all(1)
+	track_sb.set_corner_radius_all(4)
+	track_sb.content_margin_top = 4.0
+	track_sb.content_margin_bottom = 4.0
+
+	var fill_sb = StyleBoxFlat.new()
+	fill_sb.bg_color = Color(0.88, 0.74, 0.28, 1.0)
+	fill_sb.set_corner_radius_all(4)
+	fill_sb.content_margin_top = 4.0
+	fill_sb.content_margin_bottom = 4.0
+
+	slider.add_theme_stylebox_override("slider", track_sb)
+	slider.add_theme_stylebox_override("grabber_area", fill_sb)
+	slider.add_theme_stylebox_override("grabber_area_highlight", fill_sb)
+
+
+func _on_sound_style_selected(style_id: String) -> void:
+	GameSettings.set_button_sound_style(style_id)
+	_refresh_style_buttons()
+	# Muestra de sonido inmediata para feedback del usuario
+	var am = get_node_or_null("/root/AudioManager")
+	if am:
+		am.play_ui_click()
+
+
+func _refresh_style_buttons() -> void:
+	var current = GameSettings.button_sound_style
+	for style_id in _style_buttons.keys():
+		var btn: Button = _style_buttons[style_id]
+		var is_active = (style_id == current)
+
+		var sb = StyleBoxFlat.new()
+		sb.set_corner_radius_all(6)
+		if is_active:
+			sb.bg_color = Color(0.12, 0.15, 0.22, 0.98)
+			sb.border_color = Color(0.88, 0.74, 0.28, 1.0)
+			sb.set_border_width_all(2)
+			sb.shadow_color = Color(0.88, 0.74, 0.28, 0.35)
+			sb.shadow_size = 6
+			btn.add_theme_color_override("font_color", Color(1.0, 0.94, 0.75, 1.0))
+		else:
+			sb.bg_color = Color(0.16, 0.15, 0.14, 0.80)
+			sb.border_color = Color(0.48, 0.42, 0.32, 0.75)
+			sb.set_border_width_all(1)
+			btn.add_theme_color_override("font_color", Color(0.68, 0.62, 0.52, 1.0))
+
+		btn.add_theme_stylebox_override("normal", sb)
+		btn.add_theme_stylebox_override("hover", sb)
+		btn.add_theme_stylebox_override("pressed", sb)
+		btn.add_theme_stylebox_override("focus", sb)
+
+
+func _refresh_audio_ui() -> void:
+	if _master_slider:
+		_master_slider.value = GameSettings.master_volume * 100.0
+		_master_val_lbl.text = "%d%%" % int(_master_slider.value)
+
+	if _music_slider:
+		_music_slider.value = GameSettings.music_volume * 100.0
+		_music_val_lbl.text = "%d%%" % int(_music_slider.value)
+
+	if _sfx_slider:
+		_sfx_slider.value = GameSettings.sfx_volume * 100.0
+		_sfx_val_lbl.text = "%d%%" % int(_sfx_slider.value)
+
+	if _music_mute_btn:
+		_music_mute_btn.text = "ACTIVAR" if GameSettings.music_volume <= 0.01 else "SILENCIAR"
+
+	if _sfx_mute_btn:
+		_sfx_mute_btn.text = "ACTIVAR" if GameSettings.sfx_volume <= 0.01 else "SILENCIAR"
+
+	_refresh_style_buttons()
+
+
+func _on_master_slider_changed(val: float) -> void:
+	if _master_val_lbl:
+		_master_val_lbl.text = "%d%%" % int(val)
+	GameSettings.set_master_volume(val / 100.0)
+
+
+func _on_music_slider_changed(val: float) -> void:
+	if _music_val_lbl:
+		_music_val_lbl.text = "%d%%" % int(val)
+	GameSettings.set_music_volume(val / 100.0)
+	if _music_mute_btn:
+		_music_mute_btn.text = "ACTIVAR" if val <= 1.0 else "SILENCIAR"
+
+
+func _on_sfx_slider_changed(val: float) -> void:
+	if _sfx_val_lbl:
+		_sfx_val_lbl.text = "%d%%" % int(val)
+	GameSettings.set_sfx_volume(val / 100.0)
+	if _sfx_mute_btn:
+		_sfx_mute_btn.text = "ACTIVAR" if val <= 1.0 else "SILENCIAR"
+
+
+func _on_music_mute_toggled() -> void:
+	var am = get_node_or_null("/root/AudioManager")
+	if am and am.has_method("toggle_mute_music"):
+		am.toggle_mute_music()
+	else:
+		if GameSettings.music_volume > 0.01:
+			GameSettings.set_meta(&"prev_music_vol", GameSettings.music_volume)
+			GameSettings.set_music_volume(0.0)
+		else:
+			var prev = 0.8
+			if GameSettings.has_meta(&"prev_music_vol"):
+				prev = float(GameSettings.get_meta(&"prev_music_vol"))
+			GameSettings.set_music_volume(maxf(prev, 0.8))
+	_refresh_audio_ui()
+
+
+func _on_sfx_mute_toggled() -> void:
+	var am = get_node_or_null("/root/AudioManager")
+	if am and am.has_method("toggle_mute_sfx"):
+		am.toggle_mute_sfx()
+	else:
+		if GameSettings.sfx_volume > 0.01:
+			GameSettings.set_meta(&"prev_sfx_vol", GameSettings.sfx_volume)
+			GameSettings.set_sfx_volume(0.0)
+		else:
+			var prev = 1.0
+			if GameSettings.has_meta(&"prev_sfx_vol"):
+				prev = float(GameSettings.get_meta(&"prev_sfx_vol"))
+			GameSettings.set_sfx_volume(maxf(prev, 1.0))
+	_refresh_audio_ui()
+
+
+# =============================================================================
+# FILAS DE ATAJOS DE TECLADO (CONTROLES)
+# =============================================================================
+
 func _create_action_row(action: String) -> HBoxContainer:
 	var hbox = HBoxContainer.new()
 	hbox.alignment = BoxContainer.ALIGNMENT_CENTER
 	hbox.custom_minimum_size = Vector2(0, 59)
 
-	# Columna izquierda: Título y descripción de la acción
 	var text_vbox = VBoxContainer.new()
 	text_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	text_vbox.size_flags_vertical = Control.SIZE_SHRINK_CENTER
@@ -220,7 +679,6 @@ func _create_action_row(action: String) -> HBoxContainer:
 	action_desc.add_theme_color_override("font_color", Color(0.26, 0.22, 0.18, 0.95))
 	text_vbox.add_child(action_desc)
 
-	# Columna derecha: Botón de piedra cincelada
 	var key_btn = Button.new()
 	key_btn.custom_minimum_size = Vector2(305, 59)
 	key_btn.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
@@ -247,7 +705,6 @@ func _create_action_row(action: String) -> HBoxContainer:
 	key_btn.add_theme_stylebox_override("pressed", style_p)
 	key_btn.add_theme_stylebox_override("focus", style_h)
 
-	# Letras talladas en piedra: carbón oscuro con bisel de luz superior
 	key_btn.add_theme_color_override("font_color", Color(0.12, 0.10, 0.08, 1.0))
 	key_btn.add_theme_color_override("font_hover_color", Color(1.0, 0.95, 0.82, 1.0))
 	key_btn.add_theme_color_override("font_pressed_color", Color(0.90, 0.75, 0.35, 1.0))
@@ -304,11 +761,18 @@ func _refresh_buttons() -> void:
 
 
 func _on_reset_pressed() -> void:
-	_listening_action = ""
-	if _listen_tween and _listen_tween.is_valid():
-		_listen_tween.kill()
-	GameSettings.reset_keybindings_to_default()
-	_refresh_buttons()
+	if _current_tab == Tab.CONTROLS:
+		_listening_action = ""
+		if _listen_tween and _listen_tween.is_valid():
+			_listen_tween.kill()
+		GameSettings.reset_keybindings_to_default()
+		_refresh_buttons()
+	elif _current_tab == Tab.AUDIO:
+		GameSettings.set_master_volume(1.0)
+		GameSettings.set_music_volume(0.8)
+		GameSettings.set_sfx_volume(1.0)
+		GameSettings.set_button_sound_style("wood")
+		_refresh_audio_ui()
 
 
 func _create_bottom_interactive_button(
@@ -324,7 +788,6 @@ func _create_bottom_interactive_button(
 	btn.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 	btn.focus_mode = Control.FOCUS_NONE
 
-	# Estilos usando la textura exacta: sin recuadros amarillos
 	var style_tex = StyleBoxTexture.new()
 	style_tex.texture = texture
 	style_tex.axis_stretch_horizontal = StyleBoxTexture.AXIS_STRETCH_MODE_STRETCH
@@ -335,8 +798,6 @@ func _create_bottom_interactive_button(
 	btn.add_theme_stylebox_override("pressed", style_tex)
 	btn.add_theme_stylebox_override("focus", style_tex)
 
-	# Interacción táctil medieval fluida y elegante:
-	# Modulación de resplandor dorado cálido y pulsación física sin distorsión de escala
 	var base_pos: Vector2 = rect.position
 	btn.mouse_entered.connect(func():
 		var tw = btn.create_tween().set_parallel(true)
