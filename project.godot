@@ -24,6 +24,7 @@ config/icon="res://icon.svg"
 [autoload]
 
 GameSettings="*res://scripts/core/config/GameSettings.gd"
+AudioManager="*res://scripts/core/managers/AudioManager.gd"
 Constants="*res://scripts/core/config/Constants.gd"
 GameState="*res://scripts/core/config/GameState.gd"
 CardDatabase="*res://scripts/core/cards/CardDatabase.gd"
