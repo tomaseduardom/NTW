@@ -223,6 +223,25 @@ func set_click_style_by_name(style_name: String) -> void:
 			current_click_style = ClickSoundStyle.WOOD
 
 
+func is_master_muted() -> bool:
+	return GameSettings.master_volume <= 0.01
+
+
+func toggle_mute_master() -> bool:
+	if is_master_muted():
+		var restored: float = 1.0
+		if GameSettings.has_meta(&"prev_master_volume"):
+			restored = float(GameSettings.get_meta(&"prev_master_volume"))
+		if restored <= 0.05:
+			restored = 1.0
+		GameSettings.set_master_volume(restored)
+		return false
+	else:
+		GameSettings.set_meta(&"prev_master_volume", GameSettings.master_volume)
+		GameSettings.set_master_volume(0.0)
+		return true
+
+
 func is_music_muted() -> bool:
 	return GameSettings.music_volume <= 0.01
 

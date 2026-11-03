@@ -26,10 +26,11 @@ const MODAL_HEIGHT: float = 794.0
 var _backdrop: ColorRect = null
 var _modal_panel: Control = null
 
-# Pestañas
+# Pestañas y subtítulo dinámico
 var _current_tab: Tab = Tab.CONTROLS
 var _tab_controls_btn: Button = null
 var _tab_audio_btn: Button = null
+var _subtitle_lbl: Label = null
 
 # Contenedores de contenido
 var _controls_container: VBoxContainer = null
@@ -43,12 +44,16 @@ var _listen_tween: Tween = null
 # Controles de audio
 var _master_slider: HSlider = null
 var _master_val_lbl: Label = null
+var _master_mute_btn: Button = null
+
 var _music_slider: HSlider = null
 var _music_val_lbl: Label = null
 var _music_mute_btn: Button = null
+
 var _sfx_slider: HSlider = null
 var _sfx_val_lbl: Label = null
 var _sfx_mute_btn: Button = null
+
 var _style_buttons: Dictionary = {}
 
 var _btn_close: Button = null
@@ -191,14 +196,14 @@ func _build_ui() -> void:
 	bg_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_modal_panel.add_child(bg_rect)
 
-	# 4. Barra de Pestañas (Selector entre ATAJOS y AUDIO)
+	# 4. Barra de Pestañas (centrada en la viga superior de piedra, sin solapamientos)
 	var tabs_hbox = HBoxContainer.new()
 	tabs_hbox.name = "TabsBar"
-	tabs_hbox.offset_left = 180.0
-	tabs_hbox.offset_top = 135.0
-	tabs_hbox.offset_right = 1088.0
-	tabs_hbox.offset_bottom = 182.0
-	tabs_hbox.add_theme_constant_override("separation", 28)
+	tabs_hbox.offset_left = 220.0
+	tabs_hbox.offset_top = 126.0
+	tabs_hbox.offset_right = 1060.0
+	tabs_hbox.offset_bottom = 170.0
+	tabs_hbox.add_theme_constant_override("separation", 24)
 	tabs_hbox.alignment = BoxContainer.ALIGNMENT_CENTER
 	_modal_panel.add_child(tabs_hbox)
 
@@ -208,33 +213,47 @@ func _build_ui() -> void:
 	_tab_audio_btn = _create_tab_button("🔊  AJUSTES DE AUDIO", Tab.AUDIO)
 	tabs_hbox.add_child(_tab_audio_btn)
 
-	# 5. Contenedor de Atajos de Teclado
+	# 5. Subtítulo dinámico sobre el pergamino
+	_subtitle_lbl = Label.new()
+	_subtitle_lbl.name = "SectionSubtitle"
+	_subtitle_lbl.offset_left = 145.0
+	_subtitle_lbl.offset_top = 184.0
+	_subtitle_lbl.offset_right = 1123.0
+	_subtitle_lbl.offset_bottom = 212.0
+	_subtitle_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_subtitle_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_subtitle_lbl.add_theme_font_override("font", FONT_TEXT)
+	_subtitle_lbl.add_theme_font_size_override("font_size", 15)
+	_subtitle_lbl.add_theme_color_override("font_color", Color(0.32, 0.26, 0.18, 1.0))
+	_modal_panel.add_child(_subtitle_lbl)
+
+	# 6. Contenedor de Atajos de Teclado
 	_controls_container = VBoxContainer.new()
 	_controls_container.name = "ActionRowsContainer"
 	_controls_container.offset_left = 145.0
-	_controls_container.offset_top = 196.0
+	_controls_container.offset_top = 220.0
 	_controls_container.offset_right = 1123.0
-	_controls_container.offset_bottom = 615.0
-	_controls_container.add_theme_constant_override("separation", 22)
+	_controls_container.offset_bottom = 625.0
+	_controls_container.add_theme_constant_override("separation", 18)
 	_modal_panel.add_child(_controls_container)
 
 	for action in GameSettings.DEFAULT_KEYBINDINGS.keys():
 		var row = _create_action_row(action)
 		_controls_container.add_child(row)
 
-	# 6. Contenedor de Ajustes de Audio
+	# 7. Contenedor de Ajustes de Audio
 	_audio_container = VBoxContainer.new()
 	_audio_container.name = "AudioSettingsContainer"
 	_audio_container.offset_left = 145.0
-	_audio_container.offset_top = 196.0
+	_audio_container.offset_top = 220.0
 	_audio_container.offset_right = 1123.0
-	_audio_container.offset_bottom = 615.0
-	_audio_container.add_theme_constant_override("separation", 18)
+	_audio_container.offset_bottom = 625.0
+	_audio_container.add_theme_constant_override("separation", 16)
 	_modal_panel.add_child(_audio_container)
 
 	_build_audio_rows()
 
-	# 7. Botones interactivos inferiores (RESTAURAR DEFECTO y CERRAR)
+	# 8. Botones interactivos inferiores (RESTAURAR DEFECTO y CERRAR)
 	_btn_reset = _create_bottom_interactive_button(
 		Rect2(221.0, 672.0, 396.0, 107.0),
 		TEX_BTN_RESET,
@@ -259,10 +278,10 @@ func _build_ui() -> void:
 func _create_tab_button(text: String, tab_id: Tab) -> Button:
 	var btn = Button.new()
 	btn.text = text
-	btn.custom_minimum_size = Vector2(360, 44)
+	btn.custom_minimum_size = Vector2(340, 44)
 	btn.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 	btn.add_theme_font_override("font", FONT_TITLE)
-	btn.add_theme_font_size_override("font_size", 16)
+	btn.add_theme_font_size_override("font_size", 15)
 	btn.pressed.connect(_on_tab_pressed.bind(tab_id))
 	return btn
 
@@ -279,6 +298,12 @@ func _update_tab_view() -> void:
 	_controls_container.visible = is_ctrl
 	_audio_container.visible = not is_ctrl
 
+	if _subtitle_lbl:
+		if is_ctrl:
+			_subtitle_lbl.text = "Haz clic en una tecla para reasignarla. Presiona ESC para cancelar."
+		else:
+			_subtitle_lbl.text = "Ajusta los niveles de volumen y personaliza la respuesta sonora del juego."
+
 	_style_tab_btn(_tab_controls_btn, is_ctrl)
 	_style_tab_btn(_tab_audio_btn, not is_ctrl)
 
@@ -290,21 +315,23 @@ func _style_tab_btn(btn: Button, active: bool) -> void:
 	sb.set_corner_radius_all(8)
 
 	if active:
-		sb.bg_color = Color(0.12, 0.15, 0.22, 0.96)
+		sb.bg_color = Color(0.10, 0.13, 0.20, 0.98)
 		sb.border_color = Color(0.88, 0.74, 0.28, 1.0)
 		sb.set_border_width_all(2)
-		sb.shadow_color = Color(0.88, 0.74, 0.28, 0.40)
+		sb.shadow_color = Color(0.88, 0.74, 0.28, 0.35)
 		sb.shadow_size = 8
-		btn.add_theme_color_override("font_color", Color(1.0, 0.94, 0.75, 1.0))
-		btn.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.85))
+		btn.add_theme_color_override("font_color", Color(1.0, 0.92, 0.65, 1.0))
+		btn.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.90))
+		btn.add_theme_constant_override("shadow_offset_y", 1)
 	else:
-		sb.bg_color = Color(0.18, 0.16, 0.14, 0.85)
-		sb.border_color = Color(0.48, 0.42, 0.32, 0.75)
+		sb.bg_color = Color(0.15, 0.14, 0.13, 0.85)
+		sb.border_color = Color(0.48, 0.42, 0.32, 0.70)
 		sb.set_border_width_all(1)
-		sb.shadow_color = Color(0, 0, 0, 0.35)
+		sb.shadow_color = Color(0, 0, 0, 0.45)
 		sb.shadow_size = 4
-		btn.add_theme_color_override("font_color", Color(0.68, 0.62, 0.52, 1.0))
-		btn.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.5))
+		btn.add_theme_color_override("font_color", Color(0.72, 0.66, 0.56, 1.0))
+		btn.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.50))
+		btn.add_theme_constant_override("shadow_offset_y", 1)
 
 	btn.add_theme_stylebox_override("normal", sb)
 	btn.add_theme_stylebox_override("hover", sb)
@@ -317,7 +344,7 @@ func _style_tab_btn(btn: Button, active: bool) -> void:
 # =============================================================================
 
 func _build_audio_rows() -> void:
-	# Fila 1: Música de Fondo (con Slider y botón Silenciar/Activar)
+	# Fila 1: Música de Fondo
 	var music_data = _create_audio_slider_row(
 		"MÚSICA DE FONDO",
 		"Banda sonora ambiental medieval y temas de batalla",
@@ -330,7 +357,7 @@ func _build_audio_rows() -> void:
 	_music_mute_btn = music_data.mute_btn
 	_audio_container.add_child(music_data.row)
 
-	# Fila 2: Efectos de Sonido SFX (con Slider y botón Silenciar/Activar)
+	# Fila 2: Efectos de Sonido SFX
 	var sfx_data = _create_audio_slider_row(
 		"EFECTOS DE SONIDO (SFX)",
 		"Respuesta sonora de botones, cartas y acciones de combate",
@@ -343,16 +370,17 @@ func _build_audio_rows() -> void:
 	_sfx_mute_btn = sfx_data.mute_btn
 	_audio_container.add_child(sfx_data.row)
 
-	# Fila 3: Volumen General Master
+	# Fila 3: Volumen General Master (con botón Silenciar Todo)
 	var master_data = _create_audio_slider_row(
 		"VOLUMEN GENERAL (MASTER)",
 		"Nivel general de volumen para toda la aplicación",
 		GameSettings.master_volume,
 		_on_master_slider_changed,
-		null
+		_on_master_mute_toggled
 	)
 	_master_slider = master_data.slider
 	_master_val_lbl = master_data.label
+	_master_mute_btn = master_data.mute_btn
 	_audio_container.add_child(master_data.row)
 
 	# Fila 4: Estilo de Sonido de los Botones (Age of Empires II / Piedra / Monedas)
@@ -369,10 +397,12 @@ func _create_audio_slider_row(
 ) -> Dictionary:
 	var hbox = HBoxContainer.new()
 	hbox.alignment = BoxContainer.ALIGNMENT_CENTER
-	hbox.custom_minimum_size = Vector2(0, 68)
+	hbox.custom_minimum_size = Vector2(0, 72)
+	hbox.add_theme_constant_override("separation", 28)
 
-	# Columna izquierda: Título y descripción
+	# Columna izquierda: Título y descripción (anchura fija equilibrada)
 	var text_vbox = VBoxContainer.new()
+	text_vbox.custom_minimum_size = Vector2(440, 0)
 	text_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	text_vbox.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	text_vbox.add_theme_constant_override("separation", 2)
@@ -381,39 +411,43 @@ func _create_audio_slider_row(
 	var title_lbl = Label.new()
 	title_lbl.text = title_text
 	title_lbl.add_theme_font_override("font", FONT_TITLE)
-	title_lbl.add_theme_font_size_override("font_size", 18)
-	title_lbl.add_theme_color_override("font_color", Color(0.12, 0.10, 0.08, 1.0))
-	title_lbl.add_theme_color_override("font_shadow_color", Color(1.0, 0.95, 0.85, 0.50))
-	title_lbl.add_theme_constant_override("shadow_offset_y", 1)
+	title_lbl.add_theme_font_size_override("font_size", 17)
+	# Tinta oscura profunda y nítida sobre pergamino, SIN sombras que emborronen
+	title_lbl.add_theme_color_override("font_color", Color(0.16, 0.12, 0.08, 1.0))
 	text_vbox.add_child(title_lbl)
 
 	var desc_lbl = Label.new()
 	desc_lbl.text = desc_text
 	desc_lbl.add_theme_font_override("font", FONT_TEXT)
 	desc_lbl.add_theme_font_size_override("font_size", 14)
-	desc_lbl.add_theme_color_override("font_color", Color(0.26, 0.22, 0.18, 0.95))
+	desc_lbl.add_theme_color_override("font_color", Color(0.36, 0.30, 0.24, 0.95))
 	text_vbox.add_child(desc_lbl)
 
-	# Columna derecha: Controles interactivos (Botón Mute + Slider + Porcentaje)
+	# Columna derecha: Controles interactivos (ancho exactamente alineado de 480 px)
 	var controls_hbox = HBoxContainer.new()
-	controls_hbox.add_theme_constant_override("separation", 14)
-	controls_hbox.alignment = BoxContainer.ALIGNMENT_CENTER
+	controls_hbox.custom_minimum_size = Vector2(480, 0)
+	controls_hbox.add_theme_constant_override("separation", 16)
+	controls_hbox.alignment = BoxContainer.ALIGNMENT_END
 	hbox.add_child(controls_hbox)
 
 	var mute_btn: Button = null
 	if mute_callback != null and mute_callback is Callable:
 		mute_btn = Button.new()
-		mute_btn.custom_minimum_size = Vector2(136, 42)
+		mute_btn.custom_minimum_size = Vector2(130, 42)
 		mute_btn.text = "SILENCIAR"
 		mute_btn.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 		mute_btn.add_theme_font_override("font", FONT_TITLE)
 		mute_btn.add_theme_font_size_override("font_size", 13)
-		_style_secondary_button(mute_btn)
+		_style_action_button(mute_btn, false)
 		mute_btn.pressed.connect(mute_callback)
 		controls_hbox.add_child(mute_btn)
+	else:
+		var spacer = Control.new()
+		spacer.custom_minimum_size = Vector2(130, 42)
+		controls_hbox.add_child(spacer)
 
 	var slider = HSlider.new()
-	slider.custom_minimum_size = Vector2(230, 24)
+	slider.custom_minimum_size = Vector2(240, 24)
 	slider.min_value = 0.0
 	slider.max_value = 100.0
 	slider.step = 1.0
@@ -426,12 +460,12 @@ func _create_audio_slider_row(
 
 	var val_lbl = Label.new()
 	val_lbl.text = "%d%%" % int(slider.value)
-	val_lbl.custom_minimum_size = Vector2(55, 0)
+	val_lbl.custom_minimum_size = Vector2(50, 0)
 	val_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	val_lbl.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	val_lbl.add_theme_font_override("font", FONT_TITLE)
 	val_lbl.add_theme_font_size_override("font_size", 16)
-	val_lbl.add_theme_color_override("font_color", Color(0.16, 0.12, 0.08, 1.0))
+	val_lbl.add_theme_color_override("font_color", Color(0.18, 0.14, 0.10, 1.0))
 	controls_hbox.add_child(val_lbl)
 
 	return {
@@ -445,9 +479,11 @@ func _create_audio_slider_row(
 func _create_sound_style_selector_row() -> HBoxContainer:
 	var hbox = HBoxContainer.new()
 	hbox.alignment = BoxContainer.ALIGNMENT_CENTER
-	hbox.custom_minimum_size = Vector2(0, 68)
+	hbox.custom_minimum_size = Vector2(0, 72)
+	hbox.add_theme_constant_override("separation", 28)
 
 	var text_vbox = VBoxContainer.new()
+	text_vbox.custom_minimum_size = Vector2(440, 0)
 	text_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	text_vbox.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	text_vbox.add_theme_constant_override("separation", 2)
@@ -456,22 +492,21 @@ func _create_sound_style_selector_row() -> HBoxContainer:
 	var title_lbl = Label.new()
 	title_lbl.text = "ESTILO DE CLICK DE BOTONES"
 	title_lbl.add_theme_font_override("font", FONT_TITLE)
-	title_lbl.add_theme_font_size_override("font_size", 18)
-	title_lbl.add_theme_color_override("font_color", Color(0.12, 0.10, 0.08, 1.0))
-	title_lbl.add_theme_color_override("font_shadow_color", Color(1.0, 0.95, 0.85, 0.50))
-	title_lbl.add_theme_constant_override("shadow_offset_y", 1)
+	title_lbl.add_theme_font_size_override("font_size", 17)
+	title_lbl.add_theme_color_override("font_color", Color(0.16, 0.12, 0.08, 1.0))
 	text_vbox.add_child(title_lbl)
 
 	var desc_lbl = Label.new()
 	desc_lbl.text = "Textura acústica profunda al pulsar botones e interactuar"
 	desc_lbl.add_theme_font_override("font", FONT_TEXT)
 	desc_lbl.add_theme_font_size_override("font_size", 14)
-	desc_lbl.add_theme_color_override("font_color", Color(0.26, 0.22, 0.18, 0.95))
+	desc_lbl.add_theme_color_override("font_color", Color(0.36, 0.30, 0.24, 0.95))
 	text_vbox.add_child(desc_lbl)
 
 	var buttons_hbox = HBoxContainer.new()
-	buttons_hbox.add_theme_constant_override("separation", 10)
-	buttons_hbox.alignment = BoxContainer.ALIGNMENT_CENTER
+	buttons_hbox.custom_minimum_size = Vector2(480, 0)
+	buttons_hbox.add_theme_constant_override("separation", 14)
+	buttons_hbox.alignment = BoxContainer.ALIGNMENT_END
 	hbox.add_child(buttons_hbox)
 
 	var styles = [
@@ -483,10 +518,10 @@ func _create_sound_style_selector_row() -> HBoxContainer:
 	for s in styles:
 		var btn = Button.new()
 		btn.text = s.label
-		btn.custom_minimum_size = Vector2(142, 42)
+		btn.custom_minimum_size = Vector2(148, 42)
 		btn.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 		btn.add_theme_font_override("font", FONT_TITLE)
-		btn.add_theme_font_size_override("font_size", 12)
+		btn.add_theme_font_size_override("font_size", 13)
 		btn.pressed.connect(_on_sound_style_selected.bind(s.id))
 		buttons_hbox.add_child(btn)
 		_style_buttons[s.id] = btn
@@ -494,38 +529,55 @@ func _create_sound_style_selector_row() -> HBoxContainer:
 	return hbox
 
 
-func _style_secondary_button(btn: Button) -> void:
+func _style_action_button(btn: Button, is_active: bool) -> void:
 	var sb = StyleBoxFlat.new()
-	sb.bg_color = Color(0.14, 0.16, 0.22, 0.95)
-	sb.border_color = Color(0.55, 0.48, 0.35, 0.85)
-	sb.set_border_width_all(1)
 	sb.set_corner_radius_all(6)
 
 	var sb_hov = StyleBoxFlat.new()
-	sb_hov.bg_color = Color(0.20, 0.26, 0.36, 1.0)
+	sb_hov.set_corner_radius_all(6)
+	sb_hov.bg_color = Color(0.18, 0.24, 0.35, 1.0)
 	sb_hov.border_color = Color(1.0, 0.88, 0.48, 1.0)
 	sb_hov.set_border_width_all(2)
-	sb_hov.set_corner_radius_all(6)
+	sb_hov.shadow_color = Color(0.88, 0.74, 0.28, 0.35)
+	sb_hov.shadow_size = 8
 
+	if is_active:
+		sb.bg_color = Color(0.16, 0.14, 0.10, 0.98)
+		sb.border_color = Color(0.88, 0.74, 0.28, 1.0)
+		sb.set_border_width_all(2)
+		sb.shadow_color = Color(0.88, 0.74, 0.28, 0.40)
+		sb.shadow_size = 8
+		btn.add_theme_color_override("font_color", Color(1.0, 0.92, 0.65, 1.0))
+		btn.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.90))
+		btn.add_theme_constant_override("shadow_offset_y", 1)
+	else:
+		sb.bg_color = Color(0.12, 0.15, 0.22, 0.95)
+		sb.border_color = Color(0.55, 0.48, 0.35, 0.85)
+		sb.set_border_width_all(1.5)
+		sb.shadow_color = Color(0, 0, 0, 0.45)
+		sb.shadow_size = 4
+		btn.add_theme_color_override("font_color", Color(0.96, 0.92, 0.82, 1.0))
+		btn.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.80))
+		btn.add_theme_constant_override("shadow_offset_y", 1)
+
+	btn.add_theme_color_override("font_hover_color", Color(1.0, 1.0, 1.0, 1.0))
 	btn.add_theme_stylebox_override("normal", sb)
 	btn.add_theme_stylebox_override("hover", sb_hov)
 	btn.add_theme_stylebox_override("pressed", sb)
 	btn.add_theme_stylebox_override("focus", sb_hov)
-	btn.add_theme_color_override("font_color", Color(0.92, 0.88, 0.78, 1.0))
-	btn.add_theme_color_override("font_hover_color", Color.WHITE)
 
 
 func _style_medieval_slider(slider: HSlider) -> void:
 	var track_sb = StyleBoxFlat.new()
-	track_sb.bg_color = Color(0.20, 0.16, 0.12, 0.92)
-	track_sb.border_color = Color(0.60, 0.50, 0.35, 0.85)
+	track_sb.bg_color = Color(0.22, 0.18, 0.14, 0.95)
+	track_sb.border_color = Color(0.55, 0.45, 0.30, 0.90)
 	track_sb.set_border_width_all(1)
 	track_sb.set_corner_radius_all(4)
 	track_sb.content_margin_top = 4.0
 	track_sb.content_margin_bottom = 4.0
 
 	var fill_sb = StyleBoxFlat.new()
-	fill_sb.bg_color = Color(0.88, 0.74, 0.28, 1.0)
+	fill_sb.bg_color = Color(0.82, 0.68, 0.30, 1.0)
 	fill_sb.set_corner_radius_all(4)
 	fill_sb.content_margin_top = 4.0
 	fill_sb.content_margin_bottom = 4.0
@@ -538,7 +590,6 @@ func _style_medieval_slider(slider: HSlider) -> void:
 func _on_sound_style_selected(style_id: String) -> void:
 	GameSettings.set_button_sound_style(style_id)
 	_refresh_style_buttons()
-	# Muestra de sonido inmediata para feedback del usuario
 	var am = get_node_or_null("/root/AudioManager")
 	if am:
 		am.play_ui_click()
@@ -549,26 +600,7 @@ func _refresh_style_buttons() -> void:
 	for style_id in _style_buttons.keys():
 		var btn: Button = _style_buttons[style_id]
 		var is_active = (style_id == current)
-
-		var sb = StyleBoxFlat.new()
-		sb.set_corner_radius_all(6)
-		if is_active:
-			sb.bg_color = Color(0.12, 0.15, 0.22, 0.98)
-			sb.border_color = Color(0.88, 0.74, 0.28, 1.0)
-			sb.set_border_width_all(2)
-			sb.shadow_color = Color(0.88, 0.74, 0.28, 0.35)
-			sb.shadow_size = 6
-			btn.add_theme_color_override("font_color", Color(1.0, 0.94, 0.75, 1.0))
-		else:
-			sb.bg_color = Color(0.16, 0.15, 0.14, 0.80)
-			sb.border_color = Color(0.48, 0.42, 0.32, 0.75)
-			sb.set_border_width_all(1)
-			btn.add_theme_color_override("font_color", Color(0.68, 0.62, 0.52, 1.0))
-
-		btn.add_theme_stylebox_override("normal", sb)
-		btn.add_theme_stylebox_override("hover", sb)
-		btn.add_theme_stylebox_override("pressed", sb)
-		btn.add_theme_stylebox_override("focus", sb)
+		_style_action_button(btn, is_active)
 
 
 func _refresh_audio_ui() -> void:
@@ -584,11 +616,20 @@ func _refresh_audio_ui() -> void:
 		_sfx_slider.value = GameSettings.sfx_volume * 100.0
 		_sfx_val_lbl.text = "%d%%" % int(_sfx_slider.value)
 
+	if _master_mute_btn:
+		var is_muted = GameSettings.master_volume <= 0.01
+		_master_mute_btn.text = "ACTIVAR" if is_muted else "SILENCIAR"
+		_style_action_button(_master_mute_btn, is_muted)
+
 	if _music_mute_btn:
-		_music_mute_btn.text = "ACTIVAR" if GameSettings.music_volume <= 0.01 else "SILENCIAR"
+		var is_muted = GameSettings.music_volume <= 0.01
+		_music_mute_btn.text = "ACTIVAR" if is_muted else "SILENCIAR"
+		_style_action_button(_music_mute_btn, is_muted)
 
 	if _sfx_mute_btn:
-		_sfx_mute_btn.text = "ACTIVAR" if GameSettings.sfx_volume <= 0.01 else "SILENCIAR"
+		var is_muted = GameSettings.sfx_volume <= 0.01
+		_sfx_mute_btn.text = "ACTIVAR" if is_muted else "SILENCIAR"
+		_style_action_button(_sfx_mute_btn, is_muted)
 
 	_refresh_style_buttons()
 
@@ -597,6 +638,10 @@ func _on_master_slider_changed(val: float) -> void:
 	if _master_val_lbl:
 		_master_val_lbl.text = "%d%%" % int(val)
 	GameSettings.set_master_volume(val / 100.0)
+	if _master_mute_btn:
+		var is_muted = val <= 1.0
+		_master_mute_btn.text = "ACTIVAR" if is_muted else "SILENCIAR"
+		_style_action_button(_master_mute_btn, is_muted)
 
 
 func _on_music_slider_changed(val: float) -> void:
@@ -604,7 +649,9 @@ func _on_music_slider_changed(val: float) -> void:
 		_music_val_lbl.text = "%d%%" % int(val)
 	GameSettings.set_music_volume(val / 100.0)
 	if _music_mute_btn:
-		_music_mute_btn.text = "ACTIVAR" if val <= 1.0 else "SILENCIAR"
+		var is_muted = val <= 1.0
+		_music_mute_btn.text = "ACTIVAR" if is_muted else "SILENCIAR"
+		_style_action_button(_music_mute_btn, is_muted)
 
 
 func _on_sfx_slider_changed(val: float) -> void:
@@ -612,7 +659,25 @@ func _on_sfx_slider_changed(val: float) -> void:
 		_sfx_val_lbl.text = "%d%%" % int(val)
 	GameSettings.set_sfx_volume(val / 100.0)
 	if _sfx_mute_btn:
-		_sfx_mute_btn.text = "ACTIVAR" if val <= 1.0 else "SILENCIAR"
+		var is_muted = val <= 1.0
+		_sfx_mute_btn.text = "ACTIVAR" if is_muted else "SILENCIAR"
+		_style_action_button(_sfx_mute_btn, is_muted)
+
+
+func _on_master_mute_toggled() -> void:
+	var am = get_node_or_null("/root/AudioManager")
+	if am and am.has_method("toggle_mute_master"):
+		am.toggle_mute_master()
+	else:
+		if GameSettings.master_volume > 0.01:
+			GameSettings.set_meta(&"prev_master_vol", GameSettings.master_volume)
+			GameSettings.set_master_volume(0.0)
+		else:
+			var prev = 1.0
+			if GameSettings.has_meta(&"prev_master_vol"):
+				prev = float(GameSettings.get_meta(&"prev_master_vol"))
+			GameSettings.set_master_volume(maxf(prev, 1.0))
+	_refresh_audio_ui()
 
 
 func _on_music_mute_toggled() -> void:
@@ -655,6 +720,7 @@ func _create_action_row(action: String) -> HBoxContainer:
 	var hbox = HBoxContainer.new()
 	hbox.alignment = BoxContainer.ALIGNMENT_CENTER
 	hbox.custom_minimum_size = Vector2(0, 59)
+	hbox.add_theme_constant_override("separation", 28)
 
 	var text_vbox = VBoxContainer.new()
 	text_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -667,16 +733,14 @@ func _create_action_row(action: String) -> HBoxContainer:
 	action_name.text = raw_name.to_upper()
 	action_name.add_theme_font_override("font", FONT_TITLE)
 	action_name.add_theme_font_size_override("font_size", 18)
-	action_name.add_theme_color_override("font_color", Color(0.12, 0.10, 0.08, 1.0))
-	action_name.add_theme_color_override("font_shadow_color", Color(1.0, 0.95, 0.85, 0.50))
-	action_name.add_theme_constant_override("shadow_offset_y", 1)
+	action_name.add_theme_color_override("font_color", Color(0.16, 0.12, 0.08, 1.0))
 	text_vbox.add_child(action_name)
 
 	var action_desc = Label.new()
 	action_desc.text = GameSettings.ACTION_DESCRIPTIONS.get(action, "")
 	action_desc.add_theme_font_override("font", FONT_TEXT)
 	action_desc.add_theme_font_size_override("font_size", 14)
-	action_desc.add_theme_color_override("font_color", Color(0.26, 0.22, 0.18, 0.95))
+	action_desc.add_theme_color_override("font_color", Color(0.36, 0.30, 0.24, 0.95))
 	text_vbox.add_child(action_desc)
 
 	var key_btn = Button.new()
@@ -709,8 +773,6 @@ func _create_action_row(action: String) -> HBoxContainer:
 	key_btn.add_theme_color_override("font_hover_color", Color(1.0, 0.95, 0.82, 1.0))
 	key_btn.add_theme_color_override("font_pressed_color", Color(0.90, 0.75, 0.35, 1.0))
 	key_btn.add_theme_color_override("font_focus_color", Color(1.0, 0.95, 0.82, 1.0))
-	key_btn.add_theme_color_override("font_shadow_color", Color(1.0, 1.0, 1.0, 0.35))
-	key_btn.add_theme_constant_override("shadow_offset_y", 1)
 
 	key_btn.pressed.connect(_on_action_button_pressed.bind(action))
 	hbox.add_child(key_btn)
@@ -757,7 +819,6 @@ func _refresh_buttons() -> void:
 		var key_name: String = GameSettings.get_key_display_string(keycode)
 		btn.text = "[ %s ]" % key_name
 		btn.add_theme_color_override("font_color", Color(0.12, 0.10, 0.08, 1.0))
-		btn.add_theme_color_override("font_shadow_color", Color(1.0, 1.0, 1.0, 0.35))
 
 
 func _on_reset_pressed() -> void:
