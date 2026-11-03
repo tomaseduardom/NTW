@@ -587,6 +587,8 @@ func activate_ability_for(source_card: Node, ability: Dictionary, controller_id:
 	var captured: Dictionary = ability.duplicate()
 	var captured_card_data: Dictionary = source_card.card_data.duplicate()
 	var ability_lower: String = str(captured.get("raw_text", "")).to_lower()
+	var prev_actor: int = _main.debug_actor
+	_main.debug_actor = controller_id
 	var btn := Button.new()
 	var panel := Control.new()
 	var handled := false
@@ -600,6 +602,26 @@ func activate_ability_for(source_card: Node, ability: Dictionary, controller_id:
 	if not handled:
 		var context := {"controller_id": controller_id, "source_card_node": source_card}
 		await _button_support._activate_ability_via_pipeline(source_card, captured_card_data, captured, context)
+	_main.debug_actor = prev_actor
+
+
+func _remote_offered_abilities(source_card: Node) -> Array:
+	"""Cliente Remoto: las habilidades que el Anfitrión le ofrece ahora para esta carta, con el mismo
+	formato que usable_abilities_for() (el Remoto no corre la partida y no puede validarlas)."""
+	if NetworkClient.room_code == "" or NetworkClient.is_host or not _main.get("_remote_mirror"):
+		return []
+	var entries: Array = _main._remote_mirror.offered_abilities_for(source_card)
+	if entries.is_empty():
+		return []
+	var parsed := UniversalCardParser.parse_abilities(str(source_card.card_data.get("habilidad", "")),
+		str(source_card.card_data.get("id", "")))
+	var out: Array = []
+	for e in entries:
+		for a in parsed:
+			if int(a.get("ability_index", -1)) == int(e.get("ability_index", -2)):
+				out.append({"ability": a, "validation": {"can": true}, "remote_card_id": str(e.get("card_id", ""))})
+				break
+	return out
 
 
 func _is_response_only_ability(raw_text: String) -> bool:
@@ -723,6 +745,9 @@ func usable_abilities_for(source_card: Node, player_id: int) -> Array:
 		elif _ability_is_hand_or_cementerio_only(ability_raw_text):
 			# Con la carta ya en juego, una habilidad que dice "de tu mano" / "de tu Cementerio" sin "o en
 			# juego" (la primera de Tyet, cancelar ataque de Drácula) no aplica.
+			continue
+		# Cancelar un ataque (Drácula) solo tiene sentido con Aliados atacando.
+		if "cancelar el ataque" in ability_raw_text.to_lower() and GameManager.attackers.is_empty():
 			continue
 		var validation = _button_support._validate_ability(ability, source_card, player_id)
 		if validation.get("can", false):
@@ -898,7 +923,8 @@ func _calculate_ability_line_offsets(habilidad_text: String, all_parsed: Array, 
 
 
 func _build_ability_buttons(source_card: Node) -> void:
-	var usable_abilities: Array = usable_abilities_for(source_card, 0)
+	var remote_offers: Array = _remote_offered_abilities(source_card)
+	var usable_abilities: Array = remote_offers if not remote_offers.is_empty() else usable_abilities_for(source_card, 0)
 	if usable_abilities.is_empty():
 		return
 	var card_id: String = str(source_card.card_data.get("id", ""))
@@ -948,6 +974,7 @@ func _build_ability_buttons(source_card: Node) -> void:
 		valid_entries.append({
 			"ability": ability,
 			"validation": validation,
+			"remote_card_id": entry.get("remote_card_id", ""),
 			"idx": idx,
 			"y0": y_range.x,
 			"y1": y_range.y,
@@ -992,6 +1019,15 @@ func _build_ability_buttons(source_card: Node) -> void:
 		var captured           = ability.duplicate()
 		var captured_card_data = source_card.card_data.duplicate()
 		var card_for_glow      = source_card  # capturado antes del cierre
+		# Cliente Remoto: la habilidad la resuelve el Anfitrión (RemoteMirrorController).
+		var remote_card_id: String = str(item.get("remote_card_id", ""))
+		if not remote_card_id.is_empty():
+			var remote_index: int = int(item["idx"])
+			btn.pressed.connect(func():
+				close_card_inspection()
+				_main._remote_mirror.use_offered_ability(remote_card_id, remote_index))
+			panel.add_child(btn)
+			continue
 		# Terminal P-12: cuenta las habilidades usadas desde fuera del juego.
 		if not (source_card.get("current_zone") in Constants.ZONES_IN_PLAY):
 			btn.pressed.connect(func(): TurnLimits.note_outside_ability(0))

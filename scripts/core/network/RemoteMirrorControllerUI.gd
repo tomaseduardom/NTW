@@ -184,4 +184,10 @@ func _clear_board_pick() -> void:
 		node.can_interact = _hand_card_nodes.has(card_id)
 	_pick_targets = {}
 	_pick_multi = {}
+	for card_id in _offered_abilities:
+		var node: Node = _visible_node(card_id)
+		if node:
+			node.set_activatable(false, CardBadges.GLOW_COLOR_GOLD, &"remote_pick")
+	_offered_abilities = {}
+	_offered_respond = Callable()
 	SelectionManager.cancel_castillo_pick()

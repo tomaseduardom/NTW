@@ -148,7 +148,7 @@ func _run() -> void:
 	_parser_cases()
 	for test in [_printed_and_weapons, _conditional_keywords, _silence, _removal_auras, _strength_auras,
 			_parser_guard, _exhumar, _mass_buff, _event_triggers, _real_equip, _combat_rules, _santos, _keyword_grants, _per_each, _badge_refresh, _if_annulled, _turn_end, _no_shuffle,
-			_castle_locks, _hand_lock, _affect_tax, _crono_diamante, _compiled_choices, _batch5, _sandraudiga, _cuervo_nocturno, _amazona_fase_final, _iga_ryu, _estacion_fantasma, _corte_letal, _camilo_castle_look, _activated_costs, _compiled_prevention]:
+			_castle_locks, _hand_lock, _affect_tax, _crono_diamante, _compiled_choices, _batch5, _sandraudiga, _cuervo_nocturno, _amazona_fase_final, _iga_ryu, _estacion_fantasma, _corte_letal, _camilo_castle_look, _activated_costs, _compiled_prevention, _sariel_enfrentados]:
 		reset()
 		await test.call()
 	reset()
@@ -612,6 +612,45 @@ func _badge_refresh() -> void:
 		await get_tree().process_frame
 	check("el contador de Fuerza se refresca solo al cambiar el Cementerio",
 		[hanzaki._badges.strength_badge.visible, str(hanzaki._badges._strength_plaque_lbl.text)], [true, "+2"])
+
+
+func _sariel_enfrentados() -> void:
+	# Dos Sariel enfrentados ("Los Aliados oponentes ... pierden 1 de Fuerza y si tienen Fuerza 1 o menos
+	# no pueden utilizar su habilidad"): la Fuerza calculada a mitad de la evaluación de SilenceAuras
+	# alternaba con la real y el Anfitrión recalculaba sin parar (partida en línea congelada).
+	# Tablero de la partida en línea que se congelaba (Talismán Control contra sí mismo).
+	var sariel := put(data("Sariel", Constants.CardType.ALIADO), 0)
+	equip(data("espada vikinga"), put(data("Ursitoare"), 0))
+	equip(data("espada vikinga"), sariel)
+	put(data("sombrerero loco"), 0)
+	put(data("nyssara cautiva"), 0)
+	for n in ["nyssara cautiva", "sombrerero loco", "reina nyssara", "Yomiel"]:
+		put(data(n), 1)
+	var sariel_rival := put(data("Sariel", Constants.CardType.ALIADO), 1)
+	var sombrerero := put(data("sombrerero loco"), 1)
+	sariel_rival.set_meta("entered_play_seq", 1 << 30)  # el último en entrar: la regla de bucles lo apaga a él
+	var t0 := Time.get_ticks_msec()
+	KeywordManager.queue_aura_refresh()
+	for i in 5:
+		await get_tree().process_frame
+	for c in _created:
+		strength(c)
+	var ms := Time.get_ticks_msec() - t0
+	print("Sariel enfrentados: %d ms" % ms)
+	check("Sariel enfrentados: recalcular todo el tablero tarda menos de 1 s", ms < 1000, true)
+	var changes := [0]
+	var on_change := func(_c, _s, _a, _b): changes[0] += 1
+	ContinuousEffectManager.card_stats_changed.connect(on_change)
+	for i in 20:
+		await get_tree().process_frame
+	ContinuousEffectManager.card_stats_changed.disconnect(on_change)
+	check("Sariel enfrentados: la Fuerza no cambia sola frame a frame", changes[0], 0)
+	# Bucle entre los dos Sariel (DAR 7.7): el rival entró último y su aura no aplica. Los Aliados rivales
+	# quedan con Fuerza 1 o menos y sin habilidad, así que el propio no pierde Fuerza: 2 + 2 (Espada).
+	check("Sariel enfrentados: la Fuerza es estable", [strength(sariel), strength(sariel)], [4, 4])
+	check("Sariel enfrentados: los rivales con Fuerza 1 o menos quedan sin habilidad",
+		[KeywordManager.is_silenced(sariel_rival), KeywordManager.is_silenced(sombrerero)], [true, true])
+	check("Sariel enfrentados: el propio conserva su habilidad", KeywordManager.is_silenced(sariel), false)
 
 
 # =============================================================================

@@ -63,6 +63,7 @@ func _on_phase_state_machine(new_phase: Constants.Phase) -> void:
 
 	GameManager.current_phase = new_phase
 	UIManager.announce_phase(new_phase)
+	_send_to_remote({"op": "phase", "phase": int(new_phase)})
 	_main._update_buttons_for_phase(new_phase)
 	_main._game_hud.update_paso_button_state()
 
@@ -72,7 +73,7 @@ func _on_phase_state_machine(new_phase: Constants.Phase) -> void:
 
 		Constants.Phase.AGRUPACION:
 			GameManager.agrupacion_busy = true
-			_main._game_hud.show_phase_announcement("AGRUPACIÓN")
+			_announce_phase("AGRUPACIÓN")
 			# Línea de Ataque → Línea de Defensa (DAR): un Aliado que atacó en
 			# el turno anterior de este jugador se queda "comprometido" en
 			# Ataque hasta esta Agrupación — igual que el Oro Pagado. Se lee
@@ -92,7 +93,7 @@ func _on_phase_state_machine(new_phase: Constants.Phase) -> void:
 			GameManager.agrupacion_busy = false  # recién ahora GameManager pasa a la Vigilia
 
 		Constants.Phase.VIGILIA:
-			_main._game_hud.show_phase_announcement("VIGILIA")
+			_announce_phase("VIGILIA")
 			TurnManager._reset_oro_tracking()
 			# "En tu Vigilia" (p.ej. Mariano Osorio): mismo patrón que Agrupación/Fase Final.
 			await TriggerSystem.resolve_vigilia_triggers(GameManager.active_player_id)
@@ -102,7 +103,7 @@ func _on_phase_state_machine(new_phase: Constants.Phase) -> void:
 				await _main._easy_bot.take_vigilia_actions()
 
 		Constants.Phase.ATAQUE:
-			_main._game_hud.show_phase_announcement("BATALLA MITOLÓGICA")
+			_announce_phase("BATALLA MITOLÓGICA")
 			# "Al comienzo del Ataque" (p.ej. almirante akari) se resuelve al confirmar atacantes
 			# (GameManager.confirm_attackers()): sin ataque, no hay. Sin ningún Aliado que pueda atacar,
 			# directo a la Fase Final.
@@ -119,16 +120,16 @@ func _on_phase_state_machine(new_phase: Constants.Phase) -> void:
 				await _main._easy_bot.take_ataque_actions()
 
 		Constants.Phase.BLOQUEO:
-			_main._game_hud.show_phase_announcement("BLOQUEO")
+			_announce_phase("BLOQUEO")
 
 		Constants.Phase.GUERRA_TALISMANES:
-			_main._game_hud.show_phase_announcement("GUERRA DE TALISMANES")
+			_announce_phase("GUERRA DE TALISMANES")
 
 		Constants.Phase.ASIGNACION_DANIO:
-			_main._game_hud.show_phase_announcement("ASIGNACIÓN DE DAÑO")
+			_announce_phase("ASIGNACIÓN DE DAÑO")
 
 		Constants.Phase.FINAL:
-			_main._game_hud.show_phase_announcement("FASE FINAL")
+			_announce_phase("FASE FINAL")
 			if GameManager.active_player_id == 1:
 				await _resolve_fase_final(1)
 
@@ -140,6 +141,18 @@ func _active_player_can_attack() -> bool:
 
 func _on_turn_started(player_id: int, turn_number: int) -> void:
 	UIManager.announce_turn(player_id, turn_number)
+	_send_to_remote({"op": "turn", "player_id": player_id, "turn": turn_number})
+
+
+## Texto grande de la fase en el centro de la pantalla, también en la del Remoto.
+func _announce_phase(text: String) -> void:
+	_main._game_hud.show_phase_announcement(text)
+	_send_to_remote({"op": "phase_announce", "text": text})
+
+
+func _send_to_remote(msg: Dictionary) -> void:
+	if NetworkClient.room_code != "" and NetworkClient.is_host:
+		NetworkClient.send_message(msg)
 
 
 func _on_priority_changed_bot_autopass(player_id: int) -> void:
@@ -540,7 +553,7 @@ func _resolve_fase_final(player_id: int) -> void:
 
 	await _enforce_hand_limit(player_id)
 
-	_main._game_hud.show_phase_announcement("FIN DEL TURNO")
+	_announce_phase("FIN DEL TURNO")
 	await get_tree().create_timer(1.2).timeout
 
 	# (El CombatLog ya dice "── Fin del turno de Jugador N ──".)

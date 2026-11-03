@@ -208,6 +208,8 @@ static func _try_signo_amarillo_cancel(card: Node, lower: String, controller_id:
 		return false
 	var main := _main_node()
 	var obj: Dictionary = StackAnnulScript.find_target(controller_id, false, true, func(o: Dictionary) -> bool:
+		if StackAnnulScript.protected_from_cancel(o):
+			return false  # Drácula: no se convierte Signo Amarillo para nada
 		if StackAnnulScript.type_of(o) == Constants.CardType.ORO:
 			return true
 		var node = StackAnnulScript.card_of(o)

@@ -20,6 +20,7 @@ func setup(main: Node) -> void:
 	# El historial del Remoto es el del Anfitrión (op "log"); CombatLog es autoload: se reinicia en
 	# cada partida.
 	CombatLog.remote_mirror = _active
+	UIManager.remote_mirror = _active
 	if not _active:
 		return
 	NetworkClient.message_received.connect(_on_message)
@@ -121,8 +122,25 @@ func _on_message(data: Dictionary) -> void:
 			var waiting := _main.get_node_or_null("/root/MatchLoadingOverlay")
 			if waiting:
 				waiting.hide_loading()
+		"zone_counts":
+			_apply_zone_counts(data)
+		"board_ids":
+			_apply_board_ids(data)
 		"dice_roll":
 			_show_dice_roll_mirror(data)
+		# Fase y turno del Anfitrión (PhaseFlowController): mismos textos que en su pantalla.
+		"phase":
+			var phase: int = int(data.get("phase", -1))
+			if Constants.PHASE_NAMES.has(phase):
+				UIManager.announce_phase(phase)
+		"turn":
+			# player_id viene del lado del Anfitrión: el jugador 1 es quien mira.
+			UIManager.announce_turn(1 - int(data.get("player_id", 0)), int(data.get("turn", 0)))
+		"debug":
+			_main._update_debug(str(data.get("text", "")).left(300))
+		"phase_announce":
+			if _main._game_hud:
+				_main._game_hud.show_phase_announcement(str(data.get("text", "")).left(40))
 		"idle_attack_cards":
 			_apply_idle_attack_cards(data.get("card_ids", []))
 		"hand_shown":
@@ -133,7 +151,7 @@ func _on_message(data: Dictionary) -> void:
 				_disabled_ids[str(id)] = true
 			for nodes in [_card_nodes, _hand_card_nodes]:
 				for card_id in nodes:
-					var node: Node = nodes[card_id]
+					var node = nodes[card_id]
 					if is_instance_valid(node):
 						node.remote_ability_disabled = _disabled_ids.has(card_id)
 
@@ -164,9 +182,11 @@ func _show_dice_roll_mirror(data: Dictionary) -> void:
 	_main.add_child(dice_duel)
 	# Solo muestra la espera si no llegó ningún prompt real mientras corría la animación: el mulligan
 	# puede llegar durante los dados y la pantalla de carga (MatchLoadingOverlay, una capa encima) lo
-	# dejaba tapado.
+	# dejaba tapado. El mulligan no usa _current_overlay sino mulligan_overlay de Main.tscn.
 	dice_duel.duel_completed.connect(func(_winner_id: int):
-		if loading_overlay and not (_current_overlay and is_instance_valid(_current_overlay)):
+		var prompt_open: bool = (_current_overlay and is_instance_valid(_current_overlay)) \
+			or _main.mulligan_overlay.visible or _mulligan_loading != ""
+		if loading_overlay and not prompt_open:
 			loading_overlay.show_loading(_main, "ESPERANDO JUGADOR",
 				"El Anfitrión está preparando su mano...")
 	)
@@ -215,6 +235,20 @@ func _apply_move_card(data: Dictionary) -> void:
 		_main._connect_card_signals(node)
 		_card_nodes[card_id] = node
 
+	# Arma equipada: detrás de su portador, asomando por abajo, como GoldManager._equip_weapon().
+	var wielder = _card_nodes.get(str(data.get("wielder_id", "")), null)
+	if is_instance_valid(wielder) and wielder != node:
+		var slot: int = wielder.get_children().filter(func(c): return c is Node and c.get("card_data") != null).size()
+		wielder.add_child(node)
+		wielder.move_child(node, 0)
+		node.top_level = false
+		node.set_zone(zone)
+		node.scale = wielder.base_scale
+		node.base_scale = wielder.base_scale
+		node.position = Vector2(0.0, Constants.WEAPON_OFFSET_Y + slot * Constants.WEAPON_STACK_STEP_Y)
+		node.remote_ability_disabled = _disabled_ids.has(card_id)
+		return
+
 	var container: Node = _container_for(own, zone)
 	if not container:
 		node.queue_free()
@@ -238,12 +272,59 @@ func _apply_move_card(data: Dictionary) -> void:
 	node.base_scale = target_scale
 
 
+## GameStateBroadcaster._process(): mano del Anfitrión (dorsos en _opponent_fan) y contadores de
+## Cementerio/Destierro.
+func _apply_zone_counts(data: Dictionary) -> void:
+	if data.has("own_castle"):
+		UIManager.sync_castillo_counts(int(data.own_castle), int(data.get("rival_castle", 0)))
+	UIManager.update_cementerio_count(0, int(data.get("own_cemetery", 0)))
+	UIManager.update_cementerio_count(1, int(data.get("rival_cemetery", 0)))
+	UIManager.update_destierro_count(0, int(data.get("own_exile", 0)))
+	UIManager.update_destierro_count(1, int(data.get("rival_exile", 0)))
+	var fan = _main.get("_opponent_fan")
+	if not fan:
+		return
+	var want: int = maxi(0, int(data.get("rival_hand", 0)))
+	while fan.get_card_count() > want:
+		fan.remove_card(fan.get_cards().back(), true)
+	while fan.get_card_count() < want:
+		var back: Node = _main._create_card({"nombre": "", "tipo": Constants.CardType.ALIADO, "coste": 0,
+			"fuerza": 0, "habilidad": ""}, true)
+		back.can_interact = false
+		back.drag_enabled = false
+		fan.add_card(back)
+
+
+## Cartas en juego según el Anfitrión: las que el Remoto todavía muestra y ya no están se borran (salieron
+## por un camino que no mandó remove_card).
+func _apply_board_ids(data: Dictionary) -> void:
+	var alive := {}
+	for id in data.get("card_ids", []):
+		alive[str(id)] = true
+	for id in _card_nodes.keys():
+		if alive.has(id):
+			continue
+		var node = _card_nodes[id]
+		if not is_instance_valid(node):
+			_card_nodes.erase(id)
+			continue
+		push_warning("[RemoteMirror] Carta fantasma borrada: %s (%s)" % [
+			str(node.get("card_name")) if is_instance_valid(node) else "?", id])
+		_apply_remove_card({"card_id": id})
+
+
 func _apply_remove_card(data: Dictionary) -> void:
 	var card_id: String = str(data.get("card_id", ""))
 	if card_id.is_empty():
 		return
-	var node: Node = _card_nodes.get(card_id, null)
-	if node and is_instance_valid(node):
+	var node = _card_nodes.get(card_id, null)
+	if is_instance_valid(node):
+		# Sus Armas colgadas (_apply_move_card con wielder_id) se van con él: sin esto quedaban
+		# entradas liberadas en _card_nodes.
+		for id in _card_nodes.keys():
+			var child = _card_nodes[id]
+			if id != card_id and is_instance_valid(child) and child.get_parent() == node:
+				_card_nodes.erase(id)
 		var parent = node.get_parent()
 		if parent:
 			parent.remove_child(node)

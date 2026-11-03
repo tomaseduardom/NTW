@@ -392,7 +392,10 @@ func _move_equipped_weapons_with(player_id: int, card: Node, mover: Callable) ->
 		if player_id == 0 and _weapon_survives_wielder_death(weapon):
 			await _resolve_weapon_survives_wielder(weapon)
 			continue
-		await mover.call(player_id, weapon)
+		# Al Cementerio/Destierro de SU dueño: un Arma propia portada por un Aliado rival no va al del
+		# portador (el conteo de cartas por jugador quedaba 49/51).
+		var weapon_owner: int = int(weapon.owner_id) if weapon.get("owner_id") != null else player_id
+		await mover.call(weapon_owner, weapon)
 
 
 func _weapon_survives_wielder_death(weapon: Node) -> bool:

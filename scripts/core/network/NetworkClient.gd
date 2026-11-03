@@ -54,6 +54,9 @@ var forced_intent: Callable = Callable()
 ## Anfitrión: el jugador local se quedó sin tiempo (TurnClock): las ventanas abiertas se resuelven
 ## con su opción por defecto (ui_forced()).
 var local_timeout: bool = false
+## Sin sala: las ventanas propias se cierran solas con su opción por defecto, como con local_timeout.
+## Solo lo usa el simulador de partidas (tools/sim/sim_match.gd).
+var sim_force_ui: bool = false
 ## Ventanas propias abiertas esperando una elección (RevealWindow, CastleLookWindow, BoardChoice,
 ## ZoneBrowsePicker, CardNameSearchDialog): TurnClock las cuenta como "el jugador local decide".
 var local_waits: int = 0
@@ -104,7 +107,7 @@ func ui_forced(open_gen: int) -> bool:
 	"""Para el bucle de espera de una ventana: true si debe cerrarse ya con su opción por defecto.
 	'open_gen' es force_gen al abrirla."""
 	if room_code == "":
-		return false
+		return sim_force_ui
 	if is_host:
 		return local_timeout
 	return force_gen != open_gen

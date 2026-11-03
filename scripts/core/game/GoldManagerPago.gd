@@ -313,6 +313,7 @@ func _mover_oro_a_pagado(card: Node) -> bool:
 	reserva_container.remove_child(card)
 	card.can_interact = false
 	pagado_container.add_child(card)
+	card.set_zone(Constants.Zone.ORO_PAGADO)
 	update_gold_containers_spacing()
 	await get_tree().process_frame
 	var end_pos = card.global_position
@@ -449,6 +450,7 @@ func _mover_oro_a_reserva(card: Node) -> void:
 	_main.player_oro_pagado.remove_child(card)
 	card.can_interact = false
 	_main.player_gold.add_child(card)
+	card.set_zone(Constants.Zone.RESERVA_ORO)
 	update_gold_containers_spacing()
 	await get_tree().process_frame
 	var end_pos = card.global_position

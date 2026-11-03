@@ -229,8 +229,13 @@ func pass_priority() -> void:
 	if player_passed[0] and player_passed[1]:
 		if Constants.VERBOSE_DIAG_LOGS:
 			print("[PriorityManager] Ambos jugadores pasaron consecutivamente → Fase termina")
+		# Los oyentes pueden abrir otra ventana sin esperar nada (Bloqueo → confirm_blockers → Guerra de
+		# Talismanes, _on_phase_changed()): esa ya no es la que se cierra aquí. Sin esta guarda la Guerra
+		# arrancaba sin ventana y había que destrabarla con ¿Paso? (_try_recover_stuck_phase_priority_window).
+		var generation: int = _window_generation
 		emit_signal("both_players_passed")
-		_close_priority_window(false)  # false: señal ya emitida arriba, evitar doble disparo
+		if _window_generation == generation:
+			_close_priority_window(false)  # false: señal ya emitida arriba, evitar doble disparo
 		return
 
 	# Pasar prioridad al otro jugador

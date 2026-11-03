@@ -153,10 +153,10 @@ func end_collecting_and_queue() -> void:
 	emit_signal("triggers_pending", pending_active_triggers, pending_opponent_triggers)
 
 	# Con varios triggers simultáneos del jugador activo, él elige el orden (DAR 7.4; p.ej. Espada de
-	# O'Higgins y Capitán O'Brien en Fase Final: barajar el Cementerio antes de robar). Solo elige el
-	# humano; el oponente resuelve en orden de llegada.
-	if pending_active_triggers.size() > 1 and active_player == 0:
-		pending_active_triggers = await _prompt_trigger_order(pending_active_triggers)
+	# O'Higgins y Capitán O'Brien en Fase Final: barajar el Cementerio antes de robar). Elige el
+	# humano (el Anfitrión o el Remoto); el bot y el oponente resuelven en orden de llegada.
+	if pending_active_triggers.size() > 1 and not PlayerSideScript.is_bot(active_player):
+		pending_active_triggers = await _prompt_trigger_order(pending_active_triggers, active_player)
 
 	# Añadir triggers del jugador activo primero
 	for trigger in pending_active_triggers:
@@ -170,7 +170,7 @@ func end_collecting_and_queue() -> void:
 	print("[TriggerSystem] Cola de triggers: %d total" % trigger_queue.size())
 
 
-func _prompt_trigger_order(triggers: Array[Dictionary]) -> Array[Dictionary]:
+func _prompt_trigger_order(triggers: Array[Dictionary], chooser_id: int = 0) -> Array[Dictionary]:
 	"""Elegir el orden de resolución de varios triggers propios clickeando las cartas que van a
 	disparar, una tras otra. Devuelve los mismos triggers en el orden elegido (o el original si
 	algo falla, para no perder ninguno). Tipado Array[Dictionary] porque el llamador lo asigna a
@@ -192,7 +192,7 @@ func _prompt_trigger_order(triggers: Array[Dictionary]) -> Array[Dictionary]:
 	# (celeste/rojo).
 	var chosen: Array = await main._card_interaction.await_multi_target(
 		"Elige el orden en que se resuelven (clickea primero la que quieras que actúe antes)",
-		candidates, candidates.size(), Callable(), Callable(), false, CardBadges.GLOW_COLOR_GOLD)
+		candidates, candidates.size(), Callable(), Callable(), false, CardBadges.GLOW_COLOR_GOLD, chooser_id)
 
 	var ordered: Array[Dictionary] = []
 	for card in chosen:

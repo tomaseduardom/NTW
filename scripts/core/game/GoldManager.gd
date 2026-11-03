@@ -201,7 +201,10 @@ func play_card(card: Node) -> bool:
 		await _equip_weapon(card, chosen_wielder)
 	else:
 		await _play_card_to_field(card)
-	_apply_play_marks_after(card, player_id, marks)
+	# Un Talismán ya resuelto puede estar liberado: pasarlo a un parámetro tipado Node revienta y se
+	# saltaba end_guerra_action().
+	if is_instance_valid(card):
+		_apply_play_marks_after(card, player_id, marks)
 	PriorityManager.end_guerra_action()
 	return true
 
@@ -1209,6 +1212,12 @@ func _play_talisman(card: Node) -> void:
 			await EffectController.exile_card(true_owner_annulled, card, true)
 		else:
 			await EffectController.destroy_card(true_owner_annulled, card, false)
+		_update_gold_display()
+		_main._update_buttons_for_phase(GameManager.current_phase)
+		return
+
+	# Su propio efecto ya lo sacó de la Línea de Apoyo y lo liberó: no queda nada que mover.
+	if not is_instance_valid(card):
 		_update_gold_display()
 		_main._update_buttons_for_phase(GameManager.current_phase)
 		return

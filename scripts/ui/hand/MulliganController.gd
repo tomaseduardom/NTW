@@ -126,6 +126,8 @@ func _acquire_reveal(host: bool) -> void:
 	if host:
 		_host_reveal_waiting = true
 	while _reveal_busy or (not host and _host_reveal_waiting):
+		if not is_inside_tree():
+			return  # se salió de la partida mientras esperaba
 		await get_tree().process_frame
 	_reveal_busy = true
 	if host:
@@ -136,6 +138,8 @@ func _acquire_reveal(host: bool) -> void:
 ## le toque el turno de mostrar, hasta que cierra la ventana.
 func remote_reveal_to_host(hand_data: Array) -> void:
 	await _acquire_reveal(false)
+	if not is_inside_tree():
+		return
 	var loading := get_node_or_null("/root/MatchLoadingOverlay")
 	var was_waiting: bool = not is_in_mulligan and not _remote_mulligan_done  # tapado por "ESPERANDO JUGADOR"
 	if loading and was_waiting:
@@ -164,6 +168,8 @@ func on_free_mulligan_pressed() -> void:
 		var label_text: String = _main.mulligan_cards_label.text
 		_main.mulligan_cards_label.text = "Esperando para mostrar tu mano..." if _reveal_busy else "Tu oponente está viendo tu mano..."
 		await _acquire_reveal(true)
+		if not is_inside_tree():
+			return
 		_main.mulligan_cards_label.text = "Tu oponente está viendo tu mano..."
 		NetworkClient.send_message({"op": "hand_shown", "title": "Tu oponente muestra su mano (mulligan gratis)",
 			"cards": mulligan_hand_data.map(func(d): return (d as Dictionary).duplicate(true))})
@@ -211,6 +217,8 @@ func _end_mulligan_phase() -> void:
 				loading.show_loading(_main, "ESPERANDO JUGADOR",
 					"Tu mano ya está lista — esperando a que el otro jugador elija la suya...")
 			while not _remote_mulligan_done:
+				if not is_inside_tree():
+					return  # se salió de la partida mientras esperaba al otro jugador
 				await get_tree().process_frame
 			if loading:
 				loading.hide_loading()

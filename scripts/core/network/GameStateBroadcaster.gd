@@ -57,12 +57,70 @@ func _start_hand_sync() -> void:
 		_on_hand_card_added(c)
 	_sync_cards_already_in_play()
 	_watch_in_play_containers()
+	_sync_started = true
 	# Contadores de Castillo (§47): públicos para ambos (solo el tamaño, nunca
 	# el contenido). Mismo momento que la mano — el mulligan baraja y redibuja
 	# antes de game_started, así que el primer conteo útil es este.
 	if _main.get("_zone_manager") and _main._zone_manager:
 		_main._zone_manager.castillo_counts_changed.connect(_on_castillo_counts_changed)
 		_on_castillo_counts_changed(_main.player_deck.size(), _main.opponent_deck.size())
+
+
+## Lo que no tiene señal propia hacia el Remoto: cuántas cartas tiene el Anfitrión en la mano y los
+## contadores de Castillo/Cementerio/Destierro ("zone_counts"), y la lista de cartas en juego ("board_ids"),
+## con la que el Remoto borra las que salieron por un camino que no mandó remove_card. Se revisa cada
+## SYNC_POLL_S y se manda solo si cambió; la lista, además, solo cuando quedó igual dos revisiones
+## seguidas (una carta a mitad de un movimiento no está en ningún contenedor).
+const SYNC_POLL_S := 0.25
+var _sync_started: bool = false
+var _sync_poll: float = 0.0
+var _last_counts: Dictionary = {}
+var _pending_board_ids: Array = []
+var _last_board_ids: Array = []
+
+
+func _process(delta: float) -> void:
+	if not _active or not _sync_started or not _main:
+		return
+	_sync_poll += delta
+	if _sync_poll < SYNC_POLL_S:
+		return
+	_sync_poll = 0.0
+	# "own"/"rival" relativos al Remoto (el jugador 1 del Anfitrión).
+	var counts := {
+		"rival_hand": _main.player_hand.cards.size() if _main.get("player_hand") else 0,
+		"own_cemetery": CardManager.get_cemetery_count(1), "rival_cemetery": CardManager.get_cemetery_count(0),
+		"own_exile": CardManager.get_exile_count(1), "rival_exile": CardManager.get_exile_count(0),
+		# El daño de combate (CardManager.take_damage) cambia el Castillo sin pasar por
+		# ZoneManager._update_castillo_counts(): castillo_counts sola no alcanza.
+		"own_castle": _main.opponent_deck.size(), "rival_castle": _main.player_deck.size(),
+	}
+	if counts != _last_counts:
+		_last_counts = counts
+		var msg := counts.duplicate()
+		msg["op"] = "zone_counts"
+		NetworkClient.send_message(msg)
+	var ids: Array = []
+	for prop in WATCHED_CONTAINERS:
+		var container: Node = _main.get(prop)
+		if not container:
+			continue
+		for c in container.get_children():
+			if not is_instance_valid(c) or c.is_queued_for_deletion() or c.get("card_data") == null:
+				continue
+			ids.append(str(c.get_instance_id()))
+			var weapons = c.get("equipped_weapons")
+			if weapons is Array:
+				for w in weapons:
+					if is_instance_valid(w):
+						ids.append(str(w.get_instance_id()))
+	ids.sort()
+	if ids != _pending_board_ids:
+		_pending_board_ids = ids
+		return
+	if ids != _last_board_ids:
+		_last_board_ids = ids
+		NetworkClient.send_message({"op": "board_ids", "card_ids": ids})
 
 
 func _on_castillo_counts_changed(player_deck_size: int, opponent_deck_size: int) -> void:
@@ -150,13 +208,18 @@ func _on_card_entered_play(player_id: int, card: Node, zone: int) -> void:
 	# ver docs/plans/2026-09-09-multiplayer-remoto-design.md.
 	var own_for_remote: bool = (player_id == 1)
 	var card_data: Dictionary = card.card_data.duplicate() if card.get("card_data") != null else {}
-	NetworkClient.send_message({
+	var msg := {
 		"op": "move_card",
 		"card_id": str(card.get_instance_id()),
 		"own": own_for_remote,
 		"zone": zone,
 		"data": card_data,
-	})
+	}
+	# Arma equipada: el Remoto la cuelga de su portador (si no, se veía como una carta suelta en la Línea).
+	var wielder = card.get("wielder")
+	if wielder is Node and is_instance_valid(wielder):
+		msg["wielder_id"] = str(wielder.get_instance_id())
+	NetworkClient.send_message(msg)
 	_queue_disabled_sync()
 
 

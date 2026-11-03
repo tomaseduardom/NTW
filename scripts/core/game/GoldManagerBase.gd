@@ -321,13 +321,16 @@ func lock_name_from_playing(card_name: String, target_player_id: int, locking_pl
 	var key := "%d|%s" % [target_player_id, card_name.strip_edges().to_lower()]
 	_play_locked_names[key] = true
 	print("[GoldManager] '%s' no puede jugarse (J%d) hasta el próximo turno de J%d" % [card_name, target_player_id + 1, locking_player_id + 1])
+	# La lambda captura clear_it todavía vacío: se desconecta por clear_it_box, como en EffectController.
+	var clear_it_box: Array = []
 	var clear_it: Callable
 	clear_it = func(started_player_id: int, _turn: int) -> void:
 		if started_player_id != locking_player_id:
 			return
 		_play_locked_names.erase(key)
-		if GameManager.turn_started.is_connected(clear_it):
-			GameManager.turn_started.disconnect(clear_it)
+		if GameManager.turn_started.is_connected(clear_it_box[0]):
+			GameManager.turn_started.disconnect(clear_it_box[0])
+	clear_it_box.append(clear_it)
 	GameManager.turn_started.connect(clear_it)
 
 
@@ -377,15 +380,15 @@ func _register_gold_placed(player_id: int) -> void:
 func _check_reactive_second_gold_triggers(placer_id: int) -> void:
 	"""Don de Amma: "cuando tu oponente ponga su segundo Oro en juego este turno, puedes poner este
 	Oro desde tu mano o Cementerio en tu Oro Pagado". Solo cuenta el segundo Oro exacto de
-	placer_id. Solo se le pregunta al jugador humano (reactor_id == 0). Límite: solo
+	placer_id. Se le pregunta a quien reacciona, Anfitrión o Remoto (el bot no lo usa). Límite: solo
 	_place_card_as_gold() registra Oros colocados."""
 	var reactor_id: int = 1 - placer_id
 	if oro_colocado_conteo.get(placer_id, 0) != 2:
 		return
-	if reactor_id != 0:
+	if PlayerSideScript.is_bot(reactor_id):
 		return
 	var candidates: Array = []
-	for card_data in _main.player_hand.cards.map(func(c): return c.card_data):
+	for card_data in PlayerSideScript.hand_cards(_main, reactor_id).map(func(c): return c.card_data):
 		candidates.append({"data": card_data, "from": "mano"})
 	for card_data in CardManager.get_cemetery(reactor_id):
 		candidates.append({"data": card_data, "from": "cementerio"})
@@ -411,7 +414,8 @@ func _offer_reactive_second_gold_to_pagado(reactor_id: int, card_data: Dictionar
 	if confirm_btn:
 		confirm_btn.visible = false
 	var accepted: Dictionary = await SelectionManager.await_single_pick(
-		[card_data], "%s: puedes ponerlo en tu Oro Pagado (tu oponente ya puso su 2do Oro)" % card_data.get("nombre", "Oro"), true, 0)
+		[card_data], "%s: puedes ponerlo en tu Oro Pagado (tu oponente ya puso su 2do Oro)" % card_data.get("nombre", "Oro"), true, 0,
+		Callable(), reactor_id)
 	if confirm_btn:
 		confirm_btn.visible = true
 	if accepted.is_empty():
@@ -419,16 +423,12 @@ func _offer_reactive_second_gold_to_pagado(reactor_id: int, card_data: Dictionar
 
 	if from_zone == "mano":
 		var hand_card: Node = null
-		for c in _main.player_hand.cards:
+		for c in PlayerSideScript.hand_cards(_main, reactor_id):
 			if c.card_data == card_data:
 				hand_card = c
 				break
 		if hand_card:
-			var idx = _main.player_hand.cards.find(hand_card)
-			if idx >= 0:
-				_main.player_hand.cards.remove_at(idx)
-			_main.player_hand.remove_child(hand_card)
-			_main.player_hand._arrange_cards()
+			PlayerSideScript.remove_from_hand(_main, reactor_id, hand_card)
 			hand_card.queue_free()
 	else:
 		var cemetery: Array = CardManager.get_cemetery(reactor_id)
@@ -698,7 +698,8 @@ func _trigger_enter_play(card: Node, zone: int = Constants.Zone.LINEA_DEFENSA) -
 		# Los Siete Sellos: solo si el efecto del Sello se resolvió de verdad (no si lo
 		# anularon/cancelaron).
 		if not _was_annulled_or_cancelled:
-			await _check_los_siete_sellos_trigger(card, _sello_controller_id)
+			if is_instance_valid(card):  # su efecto pudo haberlo liberado
+				await _check_los_siete_sellos_trigger(card, _sello_controller_id)
 			limited_t.fire("talisman_resolved", {"pid": _sello_controller_id, "name": talisman_name, "owner": talisman_owner})  # baron de gossler
 		return _was_annulled_or_cancelled
 

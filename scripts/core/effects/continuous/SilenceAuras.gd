@@ -36,6 +36,11 @@ static var _stack: Array = []
 static var _memo: Dictionary = {}
 static var _cycle: Array = []
 static var _disabled: Dictionary = {}
+## Resultados de silenced() desde fuera de una evaluación, y las fuentes que la regla de bucles apagó en ellos.
+static var _top_cache: Dictionary = {}
+static var _top_disabled: Dictionary = {}
+static var _top_gen: int = -1
+static var _top_frame: int = -1
 ## Silenciadas por aura en el último refresco visual.
 static var last_silenced: Dictionary = {}
 static var _entry_seq: int = 0
@@ -52,6 +57,10 @@ static func reset_match() -> void:
 	_memo = {}
 	_cycle = []
 	_disabled = {}
+	_top_cache = {}
+	_top_disabled = {}
+	_top_gen = -1
+	_top_frame = -1
 	last_silenced = {}
 	_entry_seq = 0
 
@@ -64,6 +73,11 @@ static func mark_entered(card: Node) -> void:
 
 static func invalidate() -> void:
 	_gen += 1
+
+
+## Hay una evaluación en curso: la Fuerza que se calcule ahora puede depender de un círculo a medio resolver.
+static func evaluating() -> bool:
+	return _depth > 0
 
 
 # -----------------------------------------------------------------------------
@@ -357,6 +371,18 @@ static func silenced(card: Node) -> bool:
 		return false
 	if _depth > 0:
 		return _eval(card, sources)
+	# Mismo criterio que _get_sources(): vale hasta el próximo invalidate() o el próximo frame. Cada cálculo
+	# de Fuerza pregunta por cada fuente de sus modificadores y, con auras que miran la Fuerza, cada
+	# respuesta recalcula medio tablero.
+	var frame: int = Engine.get_process_frames()
+	if _top_gen != _gen or _top_frame != frame:
+		_top_gen = _gen
+		_top_frame = frame
+		_top_cache.clear()
+		_top_disabled.clear()
+	var id: int = card.get_instance_id()
+	if _top_cache.has(id):
+		return _top_cache[id]
 	_disabled.clear()
 	var result := false
 	for _attempt in range(sources.size() + 1):
@@ -372,6 +398,8 @@ static func silenced(card: Node) -> bool:
 		# La Fuerza calculada con el círculo a medio resolver no vale.
 		ContinuousEffectManager._calculated_cache.clear()
 	_memo.clear()
+	_top_cache[id] = result
+	_top_disabled.merge(_disabled)
 	return result
 
 
@@ -379,11 +407,17 @@ static func _eval(card: Node, sources: Array) -> bool:
 	var id: int = card.get_instance_id()
 	if _memo.has(id):
 		return _memo[id]
+	# Con un círculo ya detectado, este intento se descarta (silenced() reintenta sin la última en entrar):
+	# seguir evaluando sin memo crecía exponencialmente cuando el círculo pasa por la Fuerza ("si tienen
+	# Fuerza 1 o menos", dos Sariel enfrentados) y congelaba la partida decenas de segundos por acción.
+	if not _cycle.is_empty():
+		return false
 	var at: int = _stack.find(card)
 	if at >= 0:
-		# Solo es un bucle de la regla si en el círculo hay auras de silencio (no, p.ej., una carta cuya
-		# Fuerza depende de su propia habilidad).
-		if _cycle.is_empty() and _stack.slice(at).any(func(c): return c in _sources):
+		# Solo es un bucle de la regla si en el círculo hay dos o más auras de silencio que se quitan la
+		# habilidad entre sí. Con una sola es una carta cuya habilidad depende de sí misma (Sariel → Fuerza
+		# del rival → su propio "pierden 1 de Fuerza"): se asume que la tiene, sin apagarla.
+		if _cycle.is_empty() and _stack.slice(at).filter(func(c): return c in _sources).size() >= 2:
 			_cycle = _stack.slice(at)
 		return false
 	_stack.append(card)
@@ -424,7 +458,7 @@ static func _last_entered(cards: Array) -> Node:
 static func loop_disabled() -> Array:
 	var out: Array = []
 	for src in _get_sources():
-		if is_instance_valid(src) and _disabled.has(src.get_instance_id()):
+		if is_instance_valid(src) and _top_disabled.has(src.get_instance_id()):
 			out.append(src)
 	return out
 

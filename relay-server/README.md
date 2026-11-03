@@ -39,6 +39,14 @@ Reconexión: si un jugador pierde la conexión en plena partida, el relay le gua
 (`rejoin` con el token que le dio al crear/unirse). Los mensajes van numerados de los dos lados para
 no perder ni repetir nada. Ver los comentarios de `server.js`.
 
+## Pruebas
+
+```
+npm test
+```
+
+Levanta el relay en un puerto libre y prueba salas, reenvío, ops de control, reconexión (lo pendiente llega una sola vez y en orden), espera vencida y límites (`test/relay.test.js`, con `node --test`).
+
 ## Protocolo
 
 Ver los comentarios al principio de `server.js` — es el único documento fuente de verdad del

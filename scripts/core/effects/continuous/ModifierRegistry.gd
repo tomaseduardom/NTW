@@ -9,6 +9,7 @@ class_name ModifierRegistry
 ## reestructuración).
 
 const StrengthAuras = preload("res://scripts/core/cards/StrengthAuras.gd")
+const SilenceAurasScript = preload("res://scripts/core/effects/continuous/SilenceAuras.gd")
 
 var _main: Node
 
@@ -307,6 +308,12 @@ func _get_modified_stat(card: Node, stat: String) -> int:
 
 	# El valor mínimo de fuerza/coste es 0
 	current_value = max(0, current_value)
+
+	# Calculada a mitad de una evaluación de SilenceAuras ("¿tiene Fuerza 1 o menos?" con un círculo de
+	# auras a medio resolver, p.ej. dos Sariel enfrentados): es provisoria. Guardarla como valor previo y
+	# avisar el cambio hacía que el contador alternara entre la provisoria y la real sin parar.
+	if SilenceAurasScript.evaluating():
+		return current_value
 
 	# Guardar en cache
 	if not _main._calculated_cache.has(card_id):

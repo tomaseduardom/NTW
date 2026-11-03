@@ -59,7 +59,7 @@ static func reorder_new_triggers(queue_before: int, controller_id: int) -> void:
 	var fresh: Array[Dictionary] = []
 	for k in range(queue_before, q.size()):
 		fresh.append(q[k])
-	var ordered: Array = await TriggerSystem._prompt_trigger_order(fresh)
+	var ordered: Array = await TriggerSystem._prompt_trigger_order(fresh, controller_id)
 	for k in range(ordered.size()):
 		q[queue_before + k] = ordered[k]
 

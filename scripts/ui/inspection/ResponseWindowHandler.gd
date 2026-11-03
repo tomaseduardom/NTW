@@ -5,6 +5,8 @@ class_name ResponseWindowHandler
 ## (_offer_signo_amarillo_for_step_d()). Opera sobre CardInspectionLayer vía _inspector (y sobre
 ## Main vía _inspector._main).
 
+const StackAnnulScript = preload("res://scripts/core/effects/StackAnnul.gd")
+
 var _inspector: CardInspectionLayer
 
 
@@ -92,8 +94,14 @@ func _bot_pass_after(delay: float, scheduled_for_generation: int) -> void:
 func _qualifies_for_signo_amarillo(stack_obj: Dictionary) -> bool:
 	"""¿La fuente de este objeto de la Pila es un Oro, o una carta fuera del juego
 	(Mano/Destierro/Cementerio/Castillo)? Esas dos categorías son las que Signo Amarillo puede
-	cancelar (texto real de la carta)."""
+	cancelar (texto real de la carta). Solo habilidades del rival que se puedan cancelar: poner un Oro
+	en juego no es una habilidad (cancelarlo lo Anulaba y el Oro iba al Cementerio) y las de Drácula
+	"no pueden ser canceladas"."""
+	if StackAnnulScript.is_card_play(stack_obj) or StackAnnulScript.protected_from_cancel(stack_obj):
+		return false
 	var context: Dictionary = stack_obj.get("context", {})
+	if int(context.get("controller_id", -1)) == 0:
+		return false
 	var source_data: Dictionary = context.get("source_card", stack_obj.get("card_data", {}))
 	if source_data.get("tipo", -1) == Constants.CardType.ORO:
 		return true

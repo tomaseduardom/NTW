@@ -328,40 +328,64 @@ func _start_remote_castillo_pick(castillo_title: String, own_only: bool) -> void
 
 
 func _start_ability_pick(abilities: Array, respond: Callable, plays: Dictionary = {}) -> bool:
-	"""Las cartas con una habilidad activada disponible brillan; clic en una:
-	si tiene una sola habilidad se usa directo, si tiene varias se elige cuál. 'plays' (card_id ->
-	intent de jugarla): una carta de la mano que además se puede jugar ahora (Sacrificio Solar: su
-	habilidad desde la mano y jugarlo como Talismán) pregunta qué hacer; si no, el primer clic usaba la
-	habilidad y no se podía jugar."""
+	"""Las cartas con una habilidad activada disponible brillan en dorado. Igual que el Anfitrión, la
+	habilidad se usa con su botón en la inspección (clic derecho, ver offered_abilities_for()); clic
+	simple también la usa si la carta no se puede jugar ahora. Una carta que además se puede jugar
+	('plays', card_id -> intent) se juega con doble clic, sin preguntar. false si alguna carta no está a
+	la vista (Cementerio/Destierro): el llamador muestra el panel de respuesta."""
 	var by_card: Dictionary = {}  # card_id -> [ability entries]
 	for a in abilities:
 		var card_id: String = str(a.get("card_id", ""))
 		if not by_card.has(card_id):
 			by_card[card_id] = []
 		by_card[card_id].append(a)
+	_offered_abilities = by_card
+	_offered_respond = respond
 	var on_card := func(card_id: String) -> void:
 		var options: Array = by_card.get(card_id, [])
-		var play: Dictionary = plays.get(card_id, {})
-		if options.size() == 1 and play.is_empty():
+		if options.size() == 1:
 			respond.call({"action": "ability", "card_id": card_id,
 				"ability_index": int(options[0].get("ability_index", 0))})
 			return
-		var vbox := _build_overlay("¿Qué habilidad usas?" if play.is_empty() else "¿Qué haces con esta carta?")
-		if not play.is_empty():
-			var play_text: String = "Ponerla como Oro" if str(play.get("kind", "")) == "place_gold" else "Jugar la carta"
-			_add_row_button(vbox, play_text, func(): _send_intent_and_close(play))
+		var vbox := _build_overlay("¿Qué habilidad usas?")
 		for opt in options:
 			var ability_index: int = int(opt.get("ability_index", 0))
 			_add_row_button(vbox, str(opt.get("effect_text", opt.get("cost_text", "Usar habilidad"))), func():
 				respond.call({"action": "ability", "card_id": card_id, "ability_index": ability_index}))
 		_add_row_button(vbox, "Volver", func(): _close_current_overlay())
-	if not _start_board_pick(by_card.keys(), on_card):
-		return false
+	var all_visible := true
 	for card_id in by_card:
 		var node: Node = _visible_node(card_id)
-		if node:
-			node.set_activatable(true, CardBadges.GLOW_COLOR_GOLD, &"remote_pick")
-	return true
+		if not node:
+			all_visible = false
+			continue
+		if not plays.has(card_id):
+			_start_board_pick([card_id], on_card)
+		node.set_activatable(true, CardBadges.GLOW_COLOR_GOLD, &"remote_pick")
+	return all_visible
+
+
+## Habilidades ofrecidas ahora para esta carta (botones de la inspección). Las del Cementerio o el
+## Destierro no tienen Nodo espejado: se reconocen por el id de la carta.
+func offered_abilities_for(card: Node) -> Array:
+	if not is_instance_valid(card) or not _offered_respond.is_valid():
+		return []
+	var card_id: String = _visible_id_of(card)
+	if not card_id.is_empty():
+		return _offered_abilities.get(card_id, [])
+	var data_id: String = str(card.card_data.get("id", "")) if card.get("card_data") is Dictionary else ""
+	for id in _offered_abilities:
+		if _visible_node(id):
+			continue
+		var entries: Array = _offered_abilities[id]
+		if not entries.is_empty() and str(entries[0].get("id", "")) == data_id:
+			return entries
+	return []
+
+
+func use_offered_ability(card_id: String, ability_index: int) -> void:
+	if _offered_respond.is_valid():
+		_offered_respond.call({"action": "ability", "card_id": card_id, "ability_index": ability_index})
 
 # =============================================================================
 # SELECTOR DE ZONAS (ActionSearch._delegate_zone_pick_to_remote) — el Remoto corre el mismo

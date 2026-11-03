@@ -115,17 +115,15 @@ func _show_vigilia_prompt(data: Dictionary) -> void:
 			var card_id: String = str(card.get("card_id", ""))
 			actions[card_id] = {"op": "intent", "kind": "play_card", "card_id": card_id}
 	_set_hand_actions(actions)
-	# Habilidades activadas de sus cartas en juego: brillan en dorado; clic en la carta para usarla
-	# (misma UI que en las ventanas de respuesta).
-	# Una carta de la mano que también se puede jugar pregunta qué hacer (_start_ability_pick con
-	# 'actions'): si no, el primer clic del doble clic usaba la habilidad.
+	# Habilidades activadas: brillan en dorado y se usan desde la inspección (clic derecho), como el
+	# Anfitrión; una carta que también se puede jugar se juega con doble clic (_start_ability_pick).
 	var abilities: Array = data.get("abilities", [])
 	if not abilities.is_empty():
 		_start_ability_pick(abilities, func(choice: Dictionary) -> void:
 			_send_intent_and_close({"op": "intent", "kind": "activate_ability",
 				"card_id": str(choice.get("card_id", "")), "ability_index": int(choice.get("ability_index", 0))}), actions)
 	_main._update_debug("Tu Vigilia — Oro disponible: %d. Doble clic en una carta brillante para jugarla%s." % [
-		int(data.get("gold_reserva", 0)), "; clic en una carta dorada para usar su habilidad" if not abilities.is_empty() else ""])
+		int(data.get("gold_reserva", 0)), "; clic derecho en una carta dorada para usar su habilidad" if not abilities.is_empty() else ""])
 	_set_remote_paso("Atacar [P]" if data.get("can_attack", true) else "Fase Final [P]", false, func():
 		_send_intent_and_close({"op": "intent", "kind": "end_vigilia"}))
 

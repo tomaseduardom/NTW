@@ -210,7 +210,8 @@ func _animate_opponent_card_draw(card: Node) -> void:
 
 func _update_castillo_counts() -> void:
 	"""Actualiza los contadores de cartas en los Castillos."""
-	UIManager.sync_castillo_counts(_main.player_deck.size(), _main.opponent_deck.size())
+	if not UIManager.remote_mirror:  # en el Remoto los manda el Anfitrión
+		UIManager.sync_castillo_counts(_main.player_deck.size(), _main.opponent_deck.size())
 	castillo_counts_changed.emit(_main.player_deck.size(), _main.opponent_deck.size())
 	# Único punto de verdad para "el Castillo cambió" (robo normal, Destierra N del tope de Aho, la
 	# habilidad de La Ouija, etc.) — refrescar aquí el revelado del tope evita tener que llamarlo a

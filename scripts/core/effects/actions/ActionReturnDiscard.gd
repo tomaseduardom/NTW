@@ -29,7 +29,9 @@ func return_to_deck(card: Node, player_id: int, to_top: bool = true, source: Nod
 	if card.get("equipped_weapons"):
 		for weapon in card.equipped_weapons.duplicate():
 			if is_instance_valid(weapon):
-				await return_to_deck(weapon, player_id, to_top, source)
+				# Al Castillo de su dueño, que puede no ser el del portador (Arma propia en un Aliado rival).
+				var weapon_owner: int = int(weapon.owner_id) if weapon.get("owner_id") != null else player_id
+				await return_to_deck(weapon, weapon_owner, to_top, source)
 
 	var card_data: Dictionary = card.card_data.duplicate() if card.get("card_data") else {}
 	card_data["esta_oculta"] = true  # el Castillo es una zona privada, a diferencia del Cementerio/Destierro

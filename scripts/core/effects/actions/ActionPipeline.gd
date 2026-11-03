@@ -853,14 +853,16 @@ func _handle_annulled_object(stack_obj: Dictionary) -> void:
 	# MARCAR BLOQUE COMO ANULADO EN COMBATLOG
 	# ─────────────────────────────────────────────────────────────────────────
 	var block_id = stack_obj.get("log_block_id", -1)
-	var annuller_data = stack_obj.get("annuller", {})
+	# "annuller" nace en null (_create_stack_object): un objeto marcado was_annulled sin anulador dejaba
+	# la Pila repitiendo este error sin fin.
+	var annuller_data: Dictionary = stack_obj.annuller if stack_obj.get("annuller") is Dictionary else {}
 	var annuller_name = annuller_data.get("nombre", annuller_data.get("name", "carta"))
 
 	if block_id >= 0:
 		CombatLog.annul_block(block_id, annuller_name, "")
 		CombatLog.complete_block(block_id, false, {"annulled": true})
 
-	emit_signal("object_annulled", stack_obj, stack_obj.annuller)
+	emit_signal("object_annulled", stack_obj, annuller_data)
 
 	# Al Cementerio sin resolver (CardManager.add_to_cemetery()). Si la ventana es de una carta real
 	# (source_card_node), quien la abrió la manda a su destino al recibir object_annulled

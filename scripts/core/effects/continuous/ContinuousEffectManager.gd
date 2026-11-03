@@ -226,8 +226,10 @@ func register_modifier(params: Dictionary) -> String:
 ## pirata wokou, lobo malvado, Dinosaurio Megalosaurus: "cuando un Aliado gane Fuerza (permanentemente)".
 ## Las auras (PERMANENT con otra carta como fuente) no cuentan: se vuelven a registrar al recalcular.
 func _note_strength_gain(params: Dictionary, mod_id: String) -> void:
+	# "value" puede ser un Callable (Fuerza dinámica, ContinuousEffectParser): no es una ganancia fija.
+	var value = params.get("value", 0)
 	if mod_id.is_empty() or params.get("type") != ModifierType.STRENGTH or params.get("operation", "add") != "add" \
-			or int(params.get("value", 0)) <= 0:
+			or not (value is int or value is float) or int(value) <= 0:
 		return
 	var target = params.get("target")
 	if not is_instance_valid(target) or target.get("card_type") != Constants.CardType.ALIADO:

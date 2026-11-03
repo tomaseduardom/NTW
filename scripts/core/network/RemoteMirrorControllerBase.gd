@@ -71,6 +71,12 @@ var _pick_targets: Dictionary = {}
 
 var _pick_multi: Dictionary = {}
 
+## Habilidades que el Anfitrión ofrece ahora (card_id -> entradas del prompt) y cómo responder: los
+## botones de la inspección (clic derecho) las usan igual que en la pantalla del Anfitrión.
+var _offered_abilities: Dictionary = {}
+
+var _offered_respond: Callable = Callable()
+
 ## Aliados en la Línea de Ataque que no atacan, según el Anfitrión: tono azul hielo
 ## (CardInteractionModule.IDLE_ATTACK_TINT).
 var _idle_attack_ids: Dictionary = {}

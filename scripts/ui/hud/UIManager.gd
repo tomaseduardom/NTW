@@ -28,6 +28,10 @@ var opponent_oro_reserva_label: Label = null
 var opponent_oro_pagado_label: Label = null
 
 var _is_ready: bool = false
+## Remoto (RemoteMirrorController.setup): los contadores de Castillo, Cementerio y Destierro son los del
+## Anfitrión (castillo_counts, zone_counts). Su CardManager local no es la partida: si se lo escuchaba,
+## pisaba el número del Anfitrión y quedaba mal hasta el próximo cambio.
+var remote_mirror: bool = false
 var _active_tweens: Dictionary = {}
 # Cache de contadores de zonas para evitar leer .text del Label
 var _zone_counts: Dictionary = {
@@ -82,12 +86,12 @@ func setup(refs: Dictionary) -> void:
 
 func _connect_signals() -> void:
 	"""Conecta señales de singletons para actualizaciones reactivas."""
-	if not CardManager.deck_count_changed.is_connected(update_castillo_count):
-		CardManager.deck_count_changed.connect(update_castillo_count)
-	if not CardManager.cemetery_count_changed.is_connected(update_cementerio_count):
-		CardManager.cemetery_count_changed.connect(update_cementerio_count)
-	if not CardManager.exile_count_changed.is_connected(update_destierro_count):
-		CardManager.exile_count_changed.connect(update_destierro_count)
+	if not CardManager.deck_count_changed.is_connected(_on_local_castillo_count):
+		CardManager.deck_count_changed.connect(_on_local_castillo_count)
+	if not CardManager.cemetery_count_changed.is_connected(_on_local_cementerio_count):
+		CardManager.cemetery_count_changed.connect(_on_local_cementerio_count)
+	if not CardManager.exile_count_changed.is_connected(_on_local_destierro_count):
+		CardManager.exile_count_changed.connect(_on_local_destierro_count)
 
 	if not GameState.oro_reserva_changed.is_connected(update_oro_reserva):
 		GameState.oro_reserva_changed.connect(update_oro_reserva)
@@ -112,6 +116,21 @@ func announce_turn(player_id: int, turn_number: int) -> void:
 func show_debug(msg: String) -> void:
 	"""Actualiza el label de debug."""
 	_set_label(debug_label, msg)
+
+
+func _on_local_castillo_count(player_id: int, count: int) -> void:
+	if not remote_mirror:
+		update_castillo_count(player_id, count)
+
+
+func _on_local_cementerio_count(player_id: int, count: int) -> void:
+	if not remote_mirror:
+		update_cementerio_count(player_id, count)
+
+
+func _on_local_destierro_count(player_id: int, count: int) -> void:
+	if not remote_mirror:
+		update_destierro_count(player_id, count)
 
 
 func update_castillo_count(player_id: int, count: int) -> void:

@@ -311,8 +311,20 @@ func _sync_oro_ui() -> void:
 var _last_debug_text: String = ""
 
 
+## Jugador que está usando una habilidad fuera de la Pila (CardInspectionLayer.activate_ability_for()),
+## para mandarle al Remoto los avisos de sus propias acciones; -1 si nadie.
+var debug_actor: int = -1
+
+
 func _update_debug(text: String) -> void:
 	UIManager.show_debug(text)
+	# En línea, los avisos de un efecto o habilidad del jugador 1 ("Oro insuficiente", "no hay objetivo")
+	# también van a su pantalla.
+	if NetworkClient.room_code != "" and NetworkClient.is_host:
+		var ctx: Dictionary = load("res://scripts/core/effects/EffectContext.gd").current()
+		var actor: int = int(ctx.controller_id) if not ctx.is_empty() else debug_actor
+		if actor == 1:
+			NetworkClient.send_message({"op": "debug", "text": text.left(300)})
 	# ("quitar el log redundante, hay bastante"): un rechazo repetido (clicks fallidos seguidos, p.ej.
 	# "Objetivo no válido" varias veces) imprimía la misma línea una vez por click — la UI ya se
 	# actualiza igual (el jugador ve el mensaje en pantalla cada vez), solo se evita reimprimir la
