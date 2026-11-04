@@ -38,6 +38,9 @@ const CREDENTIALS_PATH: String = "user://shadowforge_credentials.json"
 const TOKEN_PATH: String = "user://shadowforge_token.json"
 
 var _token: String = ""
+## Cuenta de la sesión guardada (sus mazos locales, DeckLoader.get_account_decks()). Vacío con un token de una
+## versión anterior, que no lo guardaba.
+var _username: String = ""
 ## Solo en memoria, hasta el próximo login() (ver save_credentials()).
 var _pending_username: String = ""
 var _pending_password: String = ""
@@ -90,22 +93,28 @@ func _load_saved_token() -> void:
 	file.close()
 	if json is Dictionary and String(json.get("token", "")) != "":
 		_token = json.token
+		_username = str(json.get("username", ""))
 		print("[ExternalApiClient] Token cargado desde user://shadowforge_token.json")
 
 
 func _save_token(token: String) -> void:
 	_token = token
+	_username = _pending_username
 	var file = FileAccess.open(TOKEN_PATH, FileAccess.WRITE)
 	if not file:
 		push_error("[ExternalApiClient] No se pudo guardar el token")
 		return
-	file.store_string(JSON.stringify({"token": token, "saved_at": Time.get_unix_time_from_system()}))
+	file.store_string(JSON.stringify({"token": token, "username": _username, "saved_at": Time.get_unix_time_from_system()}))
 	file.close()
 	print("[ExternalApiClient] Token guardado")
 
 
 func is_authenticated() -> bool:
 	return not _token.is_empty()
+
+
+func get_username() -> String:
+	return _username
 
 
 func save_credentials(username: String, password: String) -> void:
@@ -120,6 +129,7 @@ func logout() -> void:
 	limpia el estado en memoria. La próxima llamada autenticada vuelve a
 	pedir login (con credenciales vacías, así que falla hasta que el
 	jugador inicie sesión de nuevo desde ShadowForgeLogin.gd)."""
+	_username = ""
 	_token = ""
 	_remove_token_file()
 	save_credentials("", "")

@@ -35,6 +35,7 @@ func _ready() -> void:
 	_history()
 	_match_reset()
 	_compiler()
+	_account_decks()
 	print("Core: %d/%d casos OK" % [passed, passed + failed])
 	get_tree().quit(1 if failed > 0 else 0)
 
@@ -260,3 +261,41 @@ func _compiler() -> void:
 	# "de tu mano o Cementerio" sigue en su patrón (no es solo de la mano).
 	check("no compila: de tu mano o Cementerio",
 		EffectCompilerScript.compile_clause("Una vez por turno, puedes Desterrar una carta de tu mano o Cementerio para Desterrar una carta oponente de coste 3 o menos.").get("ok", false), false)
+
+
+func _account_decks() -> void:
+	# Mazos locales por cuenta (DeckLoader.get_account_decks), en una carpeta aparte para no tocar los
+	# del jugador.
+	var root := "user://test_mazos_por_cuenta/"
+	_remove_tree(root)
+	DirAccess.make_dir_recursive_absolute(root)
+	for slug in ["suelto-a", "suelto-b", "preset-x"]:
+		var f := FileAccess.open(root.path_join(slug + ".json"), FileAccess.WRITE)
+		f.store_string(JSON.stringify({"slug": slug, "nombre": slug, "entries": []}))
+		f.close()
+	var saved_root: String = DeckLoader.decks_root
+	DeckLoader.decks_root = root
+	var slugs := func(decks: Array) -> Array:
+		var out: Array = decks.map(func(m): return str(m.slug))
+		out.sort()
+		return out
+	check("sin cuenta conocida: se ven los mazos sueltos (no los presets)", slugs.call(DeckLoader.get_account_decks("")), ["suelto-a", "suelto-b"])
+	check("la primera cuenta se queda con los sueltos", slugs.call(DeckLoader.get_account_decks("Tomás.S")), ["suelto-a", "suelto-b"])
+	check("el preset sigue en la raíz", FileAccess.file_exists(root.path_join("preset-x.json")), true)
+	check("otra cuenta no ve los mazos de la primera", DeckLoader.get_account_decks("otra").size(), 0)
+	check("sin sesión: los de la última cuenta usada", DeckLoader.get_last_account(), "otra")
+	DeckLoader.get_account_decks("Tomás.S")
+	check("sin sesión, tras volver a la primera: sus mazos", slugs.call(DeckLoader.get_account_decks("")), ["suelto-a", "suelto-b"])
+	check("carpeta de cuenta sin caracteres raros", DeckLoader.account_decks_path("../Tomás S"), root.path_join("_tom_s_s"))
+	DeckLoader.decks_root = saved_root
+	_remove_tree(root)
+
+
+func _remove_tree(path: String) -> void:
+	if not DirAccess.dir_exists_absolute(path):
+		return
+	for d in DirAccess.get_directories_at(path):
+		_remove_tree(path.path_join(d))
+	for f in DirAccess.get_files_at(path):
+		DirAccess.remove_absolute(path.path_join(f))
+	DirAccess.remove_absolute(path)

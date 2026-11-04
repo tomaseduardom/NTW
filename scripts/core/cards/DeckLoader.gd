@@ -353,18 +353,23 @@ func get_bundled_decks() -> Array:
 # MAZOS LOCALES — Guardar y cargar desde user://decks/
 # =============================================================================
 const LOCAL_DECKS_PATH: String = "user://decks/"
+## Carpeta de los mazos locales por cuenta y del archivo con la última cuenta usada en este computador
+## (sus mazos se ven sin sesión). Variable para que las pruebas usen una carpeta aparte.
+var decks_root: String = LOCAL_DECKS_PATH
+const LAST_ACCOUNT_FILE: String = "ultima_cuenta.txt"
 
-func get_local_decks() -> Array:
-	"""Devuelve lista de mazos guardados localmente [{slug, nombre, arquetipo, formato}]."""
+func get_local_decks(path: String = LOCAL_DECKS_PATH) -> Array:
+	"""Devuelve lista de mazos guardados localmente [{slug, nombre, arquetipo, formato}]: los de la
+	raíz de user://decks/ (presets importados) o, con 'path', los de la carpeta de una cuenta."""
 	var result: Array = []
-	var dir = DirAccess.open(LOCAL_DECKS_PATH)
+	var dir = DirAccess.open(path)
 	if dir == null:
 		return result
 	dir.list_dir_begin()
 	var fname = dir.get_next()
 	while fname != "":
 		if not dir.current_is_dir() and fname.ends_with(".json"):
-			var file = FileAccess.open(LOCAL_DECKS_PATH + fname, FileAccess.READ)
+			var file = FileAccess.open(path.path_join(fname), FileAccess.READ)
 			if file:
 				var data = JSON.parse_string(file.get_as_text())
 				file.close()
@@ -380,6 +385,59 @@ func get_local_decks() -> Array:
 		fname = dir.get_next()
 	print("[DeckLoader] %d mazos locales encontrados" % result.size())
 	return result
+
+
+# Mazos locales por cuenta: user://decks/<cuenta>/. La raíz queda para los presets importados
+# (preset-*.json, tools/import_public_deck.ps1), que ve cualquiera.
+func account_decks_path(account: String) -> String:
+	"""Carpeta de mazos locales de una cuenta de ShadowForge ("" si no hay cuenta)."""
+	var folder := ""
+	for ch in account.strip_edges().to_lower():
+		folder += ch if (ch >= "a" and ch <= "z") or (ch >= "0" and ch <= "9") or ch in ["_", "-", "."] else "_"
+	folder = folder.lstrip(".")
+	return "" if folder.is_empty() else decks_root.path_join(folder)
+
+
+func get_last_account() -> String:
+	var last := decks_root.path_join(LAST_ACCOUNT_FILE)
+	if not FileAccess.file_exists(last):
+		return ""
+	return FileAccess.get_file_as_string(last).strip_edges()
+
+
+func get_account_decks(account: String) -> Array:
+	"""Mazos locales de 'account' (con sesión) o, sin sesión (""), de la última cuenta usada. Los
+	mazos que estaban sueltos en la raíz (de antes de separarlos por cuenta) pasan a la primera
+	cuenta que inicia sesión. Sin cuenta conocida todavía, se muestran esos sueltos."""
+	if account.is_empty():
+		account = get_last_account()
+	var path := account_decks_path(account)
+	if path.is_empty():
+		return get_local_decks(decks_root).filter(func(m): return not str(m.get("slug", "")).begins_with("preset-"))
+	DirAccess.make_dir_recursive_absolute(path)
+	_claim_loose_decks(path)
+	var f := FileAccess.open(decks_root.path_join(LAST_ACCOUNT_FILE), FileAccess.WRITE)
+	if f:
+		f.store_string(account.strip_edges())
+		f.close()
+	return get_local_decks(path)
+
+
+func _claim_loose_decks(path: String) -> void:
+	"""Mueve a 'path' los mazos sueltos de la raíz (no preset-*), solo si ninguna cuenta los tomó."""
+	var root := DirAccess.open(decks_root)
+	if root == null:
+		return
+	for d in root.get_directories():
+		if decks_root.path_join(d) != path and not DirAccess.get_files_at(decks_root.path_join(d)).is_empty():
+			return  # otra cuenta ya los reclamó
+	var moved := 0
+	for fname in root.get_files():
+		if fname.ends_with(".json") and not fname.begins_with("preset-"):
+			if root.rename(fname, path.path_join(fname)) == OK:
+				moved += 1
+	if moved > 0:
+		print("[DeckLoader] %d mazos locales sueltos pasan a %s" % [moved, path])
 
 
 # =============================================================================

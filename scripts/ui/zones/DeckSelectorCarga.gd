@@ -53,6 +53,8 @@ func _on_external_decks_received(decks: Array) -> void:
 		d["_is_external"] = true
 		d["_shadowforge_kind"] = "my"
 		_mazos.append(d)
+	# Orden: tus mazos de ShadowForge, tus mazos locales (de esta cuenta), los presets y, al final, los públicos.
+	_mazos.append_array(_get_account_local_decks(_api_client_username()))
 	_mazos.append_array(_get_preset_decks())
 	if _mazos.is_empty():
 		push_warning("[DeckSelector] Sin mazos propios ni presets — probando mazos locales")
@@ -160,6 +162,9 @@ func _load_local_fallback() -> void:
 	else:
 		_mazos = []
 
+	# Sin sesión: también los mazos locales de la última cuenta usada en este computador.
+	for m in _get_account_local_decks(""):
+		_mazos.append(m)
 	for m in _mazos:
 		m["_is_external"] = false
 
@@ -184,3 +189,31 @@ func _populate_with_error() -> void:
 	_player_row.add_child(err)
 	if _parchment_label:
 		_parchment_label.text = "SIN MAZOS DISPONIBLES"
+
+
+func _api_client_username() -> String:
+	var api_client = _get_autoload("ExternalApiClient")
+	return str(api_client.get_username()) if api_client and api_client.has_method("get_username") else ""
+
+
+func _get_account_local_decks(account: String) -> Array:
+	"""Mazos locales de la cuenta (DeckLoader.get_account_decks()), sin repetir los que ya están en
+	_mazos con el mismo nombre (sus mazos de ShadowForge) o el mismo slug."""
+	var loader = _get_autoload("DeckLoader")
+	if not loader or not loader.has_method("get_account_decks"):
+		return []
+	var seen := {}
+	for m in _mazos:
+		seen[str(m.get("slug", "")).to_lower()] = true
+		seen[str(m.get("nombre", m.get("name", ""))).strip_edges().to_lower()] = true
+	var result: Array = []
+	for m in loader.get_account_decks(account):
+		var slug := str(m.get("slug", "")).to_lower()
+		var nombre := str(m.get("nombre", "")).strip_edges().to_lower()
+		if (slug != "" and seen.has(slug)) or (nombre != "" and seen.has(nombre)):
+			continue
+		m["_is_external"] = false
+		m["_shadowforge_kind"] = "local"
+		seen[slug] = true
+		result.append(m)
+	return result
