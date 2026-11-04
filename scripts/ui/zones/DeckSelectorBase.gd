@@ -163,6 +163,12 @@ var _deck_sub_banner: Label = null
 # Pergamino inferior izquierdo
 var _parchment_label: Label = null
 
+# Pedestal inferior derecho (Temporizador de turno / Sin tiempo)
+var _btn_timer_pedestal: Control = null
+var _btn_timer_clicker: Button = null
+var _timer_status_label: Label = null
+var _timer_hint_label: Label = null
+
 var _mazos: Array = []
 
 var _selected_player_idx: int = -1

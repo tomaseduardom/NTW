@@ -8,6 +8,7 @@ signal card_back_changed(back_id: String)
 signal audio_volume_changed(bus_name: String, volume_linear: float)
 signal animation_speed_changed(speed: float)
 signal keybindings_changed
+signal match_timer_changed(enabled: bool)
 
 # =============================================================================
 # CONSTANTES
@@ -61,6 +62,9 @@ var button_sound_style: String = "wood"
 
 ## Velocidad de Animación (1.0, 1.5, 2.0)
 var animation_speed: float = 1.0
+
+## Temporizador de Turno en Partidas (true = activo con 60s, false = sin tiempo / infinito)
+var match_timer_enabled: bool = true
 
 ## Atajos de Teclado
 var keybindings: Dictionary = DEFAULT_KEYBINDINGS.duplicate()
@@ -128,6 +132,7 @@ func _load_config() -> void:
 		player_card_back = config.get_value("game", "player_card_back", "dorso_1")
 		opponent_card_back = config.get_value("game", "opponent_card_back", "dorso_1")
 		animation_speed = config.get_value("game", "animation_speed", 1.0)
+		match_timer_enabled = bool(config.get_value("game", "match_timer_enabled", true))
 		master_volume = config.get_value("audio", "master_volume", 1.0)
 		music_volume = config.get_value("audio", "music_volume", 0.8)
 		sfx_volume = config.get_value("audio", "sfx_volume", 1.0)
@@ -143,6 +148,7 @@ func _save_config() -> void:
 	config.set_value("game", "player_card_back", player_card_back)
 	config.set_value("game", "opponent_card_back", opponent_card_back)
 	config.set_value("game", "animation_speed", animation_speed)
+	config.set_value("game", "match_timer_enabled", match_timer_enabled)
 	config.set_value("audio", "master_volume", master_volume)
 	config.set_value("audio", "music_volume", music_volume)
 	config.set_value("audio", "sfx_volume", sfx_volume)
@@ -150,6 +156,12 @@ func _save_config() -> void:
 	for action in keybindings.keys():
 		config.set_value("controls", action, keybindings[action])
 	config.save(CONFIG_PATH)
+
+
+func set_match_timer_enabled(enabled: bool) -> void:
+	match_timer_enabled = enabled
+	_save_config()
+	match_timer_changed.emit(enabled)
 
 
 # =============================================================================

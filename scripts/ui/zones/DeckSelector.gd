@@ -100,8 +100,16 @@ func _build_ui(parent: Node) -> void:
 	# 5. Pedestal de Mazos Disponibles (esquina inferior izquierda)
 	_build_available_decks_pedestal()
 
-	# 6. Botones de Pedestal Orgánicos (100% limpios, sin cajas de colores)
+	# 6. Pedestal de Temporizador / Reloj de Turno (esquina inferior derecha)
+	_build_timer_pedestal()
+
+	# 7. Botones de Pedestal Orgánicos (100% limpios, sin cajas de colores)
 	_build_clean_action_buttons()
+
+	# Escuchar configuración de partida online si estamos en sala
+	if NetworkClient.room_code != "":
+		if not NetworkClient.message_received.is_connected(_on_network_message_deck_selector):
+			NetworkClient.message_received.connect(_on_network_message_deck_selector)
 
 
 func _build_circular_nav_button(glyph: String, pos_offset: Vector2) -> Button:
@@ -273,6 +281,186 @@ func _build_available_decks_pedestal() -> void:
 	_parchment_label.add_theme_constant_override("shadow_offset_y", 2)
 	_parchment_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_btn_available_decks.add_child(_parchment_label)
+
+
+func _build_timer_pedestal() -> void:
+	"""Crea el pedestal diegético interactivo de 'Temporizador' en la meseta derecha del altar.
+	Permite al anfitrión (o jugador local) activar o desactivar el límite de tiempo de turno."""
+	_btn_timer_pedestal = Control.new()
+	_btn_timer_pedestal.name = "PedestalTemporizador"
+	_btn_timer_pedestal.set_anchor(SIDE_LEFT, 0.5)
+	_btn_timer_pedestal.set_anchor(SIDE_RIGHT, 0.5)
+	_btn_timer_pedestal.set_anchor(SIDE_TOP, 0.5)
+	_btn_timer_pedestal.set_anchor(SIDE_BOTTOM, 0.5)
+	_btn_timer_pedestal.set_offset(SIDE_LEFT, 230)
+	_btn_timer_pedestal.set_offset(SIDE_RIGHT, 550)
+	_btn_timer_pedestal.set_offset(SIDE_TOP, 224)
+	_btn_timer_pedestal.set_offset(SIDE_BOTTOM, 331)
+	_btn_timer_pedestal.pivot_offset = Vector2(160.0, 53.5)
+	_btn_timer_pedestal.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_overlay.add_child(_btn_timer_pedestal)
+
+	# Contenedor para micro-animación táctil al interactuar
+	var timer_fx = Control.new()
+	timer_fx.name = "TimerFX"
+	timer_fx.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	timer_fx.pivot_offset = Vector2(160.0, 53.5)
+	timer_fx.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_btn_timer_pedestal.add_child(timer_fx)
+
+	# Placa base de piedra idéntica a la meseta izquierda
+	var plaque_tex = TextureRect.new()
+	plaque_tex.name = "ButtonTexture"
+	plaque_tex.texture = TEX_BTN_PLAQUE_BLANK
+	plaque_tex.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	plaque_tex.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	plaque_tex.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+	plaque_tex.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	timer_fx.add_child(plaque_tex)
+
+	# VBoxContainer de textos informativos centrados
+	var text_vbox = VBoxContainer.new()
+	text_vbox.name = "TimerVBox"
+	text_vbox.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	text_vbox.alignment = BoxContainer.ALIGNMENT_CENTER
+	text_vbox.add_theme_constant_override("separation", 1)
+	text_vbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	timer_fx.add_child(text_vbox)
+
+	var title_lbl = Label.new()
+	title_lbl.name = "TimerTitle"
+	title_lbl.text = "TEMPORIZADOR"
+	title_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	title_lbl.add_theme_font_override("font", FONT_TITLE)
+	title_lbl.add_theme_font_size_override("font_size", 13)
+	title_lbl.add_theme_color_override("font_color", Color(0.88, 0.76, 0.45, 1.0))
+	title_lbl.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.98))
+	title_lbl.add_theme_constant_override("shadow_offset_x", 1)
+	title_lbl.add_theme_constant_override("shadow_offset_y", 1)
+	title_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	text_vbox.add_child(title_lbl)
+
+	_timer_status_label = Label.new()
+	_timer_status_label.name = "TimerStatus"
+	_timer_status_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_timer_status_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_timer_status_label.pivot_offset = Vector2(160.0, 12.0)
+	_timer_status_label.add_theme_font_override("font", FONT_TITLE)
+	_timer_status_label.add_theme_font_size_override("font_size", 17)
+	_timer_status_label.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.98))
+	_timer_status_label.add_theme_constant_override("shadow_offset_x", 1)
+	_timer_status_label.add_theme_constant_override("shadow_offset_y", 2)
+	_timer_status_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	text_vbox.add_child(_timer_status_label)
+
+	_timer_hint_label = Label.new()
+	_timer_hint_label.name = "TimerHint"
+	_timer_hint_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_timer_hint_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_timer_hint_label.add_theme_font_override("font", FONT_MEDIEVAL)
+	_timer_hint_label.add_theme_font_size_override("font_size", 11)
+	_timer_hint_label.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.95))
+	_timer_hint_label.add_theme_constant_override("shadow_offset_x", 1)
+	_timer_hint_label.add_theme_constant_override("shadow_offset_y", 1)
+	_timer_hint_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	text_vbox.add_child(_timer_hint_label)
+
+	# Botón invisible táctil
+	var is_remote_guest: bool = (NetworkClient.room_code != "" and not NetworkClient.is_host)
+	_btn_timer_clicker = Button.new()
+	_btn_timer_clicker.name = "TimerClicker"
+	_btn_timer_clicker.flat = true
+	_btn_timer_clicker.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	if not is_remote_guest:
+		_btn_timer_clicker.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+		_btn_timer_clicker.pressed.connect(_on_timer_pedestal_pressed)
+		_btn_timer_clicker.mouse_entered.connect(func():
+			var tw = timer_fx.create_tween()
+			tw.tween_property(timer_fx, "scale", Vector2(1.025, 1.025), 0.12).set_ease(Tween.EASE_OUT)
+		)
+		_btn_timer_clicker.mouse_exited.connect(func():
+			var tw = timer_fx.create_tween()
+			tw.tween_property(timer_fx, "scale", Vector2(1.0, 1.0), 0.12).set_ease(Tween.EASE_OUT)
+		)
+		_btn_timer_clicker.button_down.connect(func():
+			var tw = timer_fx.create_tween()
+			tw.tween_property(timer_fx, "scale", Vector2(0.975, 0.975), 0.06).set_ease(Tween.EASE_OUT)
+		)
+		_btn_timer_clicker.button_up.connect(func():
+			var tw = timer_fx.create_tween()
+			tw.tween_property(timer_fx, "scale", Vector2(1.025, 1.025), 0.1).set_ease(Tween.EASE_OUT)
+		)
+	else:
+		_btn_timer_clicker.mouse_default_cursor_shape = Control.CURSOR_ARROW
+
+	_btn_timer_pedestal.add_child(_btn_timer_clicker)
+
+	# Si es invitado en sala, revisar si ya se recibió la configuración del anfitrión
+	if is_remote_guest:
+		var cfg: Dictionary = NetworkClient.last_message_by_op.get("match_config", {})
+		if not cfg.is_empty() and cfg.has("timer_enabled"):
+			NetworkClient.match_timer_enabled = bool(cfg.get("timer_enabled", true))
+
+	_update_timer_pedestal_ui()
+
+
+func _on_timer_pedestal_pressed() -> void:
+	if NetworkClient.room_code != "" and not NetworkClient.is_host:
+		return
+	
+	var new_val: bool = not GameSettings.match_timer_enabled
+	GameSettings.set_match_timer_enabled(new_val)
+	_update_timer_pedestal_ui()
+
+	var am = get_node_or_null("/root/AudioManager")
+	if am and am.has_method("play_ui_click"):
+		am.play_ui_click()
+
+	if NetworkClient.room_code != "" and NetworkClient.is_host:
+		NetworkClient.send_message({
+			"op": "match_config",
+			"timer_enabled": new_val
+		})
+
+
+func _update_timer_pedestal_ui() -> void:
+	if not is_instance_valid(_timer_status_label):
+		return
+	
+	var is_remote_guest: bool = (NetworkClient.room_code != "" and not NetworkClient.is_host)
+	var timer_enabled: bool = NetworkClient.match_timer_enabled if is_remote_guest else GameSettings.match_timer_enabled
+
+	if timer_enabled:
+		_timer_status_label.text = "SÍ  (60s)"
+		_timer_status_label.add_theme_color_override("font_color", Color(0.35, 0.92, 0.65, 1.0))
+	else:
+		_timer_status_label.text = "NO  (Sin tiempo)"
+		_timer_status_label.add_theme_color_override("font_color", Color(0.96, 0.68, 0.38, 1.0))
+
+	if is_instance_valid(_timer_hint_label):
+		if is_remote_guest:
+			_timer_hint_label.text = "(Fijado por el Anfitrión)"
+			_timer_hint_label.add_theme_color_override("font_color", Color(0.60, 0.56, 0.48, 0.75))
+		else:
+			_timer_hint_label.text = "(Toca para cambiar)"
+			_timer_hint_label.add_theme_color_override("font_color", Color(0.72, 0.68, 0.58, 0.85))
+
+	var tw = _timer_status_label.create_tween()
+	tw.tween_property(_timer_status_label, "scale", Vector2(1.08, 1.08), 0.08).set_trans(Tween.TRANS_QUAD)
+	tw.tween_property(_timer_status_label, "scale", Vector2(1.0, 1.0), 0.12).set_trans(Tween.TRANS_QUAD)
+
+
+func _on_network_message_deck_selector(data: Dictionary) -> void:
+	if data.get("op", "") == "match_config":
+		if data.has("timer_enabled"):
+			NetworkClient.match_timer_enabled = bool(data.get("timer_enabled", true))
+			_update_timer_pedestal_ui()
+
+
+func _exit_tree() -> void:
+	if NetworkClient.message_received.is_connected(_on_network_message_deck_selector):
+		NetworkClient.message_received.disconnect(_on_network_message_deck_selector)
 
 
 func _build_clean_action_buttons() -> void:

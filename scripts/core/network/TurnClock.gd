@@ -49,6 +49,12 @@ var _last_sent: Dictionary = {}
 var hand_limit_pid: int = -1
 
 
+func _is_timer_enabled() -> bool:
+	if _host:
+		return GameSettings.match_timer_enabled
+	return NetworkClient.match_timer_enabled
+
+
 func setup(main: Node) -> void:
 	_main = main
 	_active = NetworkClient.room_code != ""
@@ -56,11 +62,18 @@ func setup(main: Node) -> void:
 		set_process(false)
 		return
 	_host = NetworkClient.is_host
+	if not _is_timer_enabled():
+		var panel := _main.get_node_or_null("TurnTimer")
+		if panel:
+			panel.visible = false
 	if _host:
 		GameManager.turn_started.connect(_on_turn_started)
 		EffectController.on_card_entered_play.connect(_on_card_entered_play)
 		GameState.oro_pagado_changed.connect(_on_oro_pagado_changed)
-		NetworkClient.forced_intent = _forced_intent
+		if _is_timer_enabled():
+			NetworkClient.forced_intent = _forced_intent
+		else:
+			_broadcast(true)
 	else:
 		NetworkClient.message_received.connect(_on_message)
 		set_process(false)
@@ -131,6 +144,8 @@ func _opp_deciding() -> bool:
 
 
 func _out_of_time(player_id: int) -> bool:
+	if not _is_timer_enabled():
+		return false
 	if player_id == _active_pid:
 		return _expired
 	return _opp_remaining <= 0.0
@@ -148,6 +163,9 @@ func _grace_left() -> int:
 
 func _process(delta: float) -> void:
 	if not _host or not GameManager.is_game_active:
+		NetworkClient.local_timeout = false
+		return
+	if not _is_timer_enabled():
 		NetworkClient.local_timeout = false
 		return
 	var opp_deciding := _opp_deciding()
@@ -350,6 +368,7 @@ func _intent(kind: String, extra: Dictionary = {}) -> Dictionary:
 func _broadcast(force: bool) -> void:
 	var state := {
 		"op": "clock",
+		"timer_enabled": _is_timer_enabled(),
 		"remote_turn": _active_pid == 1,
 		"remaining": ceili(_remaining),
 		"expired": _expired,
@@ -367,7 +386,21 @@ func _broadcast(force: bool) -> void:
 # REMOTO
 # =============================================================================
 func _on_message(data: Dictionary) -> void:
+	if data.get("op", "") == "match_config":
+		if data.has("timer_enabled"):
+			NetworkClient.match_timer_enabled = bool(data.get("timer_enabled", true))
+			var panel := _main.get_node_or_null("TurnTimer")
+			if panel and not NetworkClient.match_timer_enabled:
+				panel.visible = false
+		return
 	if data.get("op", "") != "clock":
+		return
+	if data.has("timer_enabled"):
+		NetworkClient.match_timer_enabled = bool(data.get("timer_enabled", true))
+	if not _is_timer_enabled():
+		var panel := _main.get_node_or_null("TurnTimer")
+		if panel:
+			panel.visible = false
 		return
 	var remote_turn := bool(data.get("remote_turn", false))
 	_update_display(remote_turn, float(data.get("remaining", 0)), bool(data.get("expired", false)),
@@ -384,6 +417,9 @@ func _update_display(own_turn: bool, remaining: float, expired: bool, grace: int
 	de respuesta (own_is_opp: ese rival es quien mira)."""
 	var panel := _main.get_node_or_null("TurnTimer")
 	if not panel:
+		return
+	if not _is_timer_enabled():
+		panel.visible = false
 		return
 	panel.visible = true
 	var icon: Label = panel.get_node_or_null("VBox/TimerIcon")

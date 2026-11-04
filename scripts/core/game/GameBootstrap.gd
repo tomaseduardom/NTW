@@ -191,12 +191,15 @@ func _local_hello() -> Dictionary:
 		"version": str(ProjectSettings.get_setting("application/config/version", "")),
 		"protocol": NET_PROTOCOL,
 		"cards": FileAccess.get_md5(CardDatabase.BUNDLED_CARDS_PATH),
+		"timer_enabled": GameSettings.match_timer_enabled if NetworkClient.is_host else true,
 	}
 
 
 func _on_network_hello(data: Dictionary) -> void:
 	if data.get("op", "") != "hello" or _peer_hello_ok or _match_cancelled:
 		return
+	if data.has("timer_enabled") and not NetworkClient.is_host:
+		NetworkClient.match_timer_enabled = bool(data.get("timer_enabled", true))
 	var own := _local_hello()
 	var peer_version := str(data.get("version", "?")).left(32)
 	var errors: Array = []

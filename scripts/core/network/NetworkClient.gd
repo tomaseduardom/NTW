@@ -39,6 +39,8 @@ var _socket: WebSocketPeer = null
 var is_host: bool = false
 var room_code: String = ""
 var peer_present: bool = false
+## Temporizador de la partida (definido por el anfitrión, replicado al remoto)
+var match_timer_enabled: bool = true
 
 # Último mensaje de juego recibido por "op": un mensaje puede llegar antes de que el receptor
 # escuche (p.ej. el Remoto manda su mazo apenas confirma, y el Anfitrión empieza a escuchar
@@ -213,6 +215,7 @@ func disconnect_from_relay() -> void:
 	is_host = false
 	room_code = ""
 	peer_present = false
+	match_timer_enabled = true
 	_announced_connected = false
 	_reset_clock_state()
 	_reset_session()
