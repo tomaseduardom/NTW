@@ -6,6 +6,7 @@ class_name ResponseWindowHandler
 ## Main vía _inspector._main).
 
 const StackAnnulScript = preload("res://scripts/core/effects/StackAnnul.gd")
+const EffectContextScript = preload("res://scripts/core/effects/EffectContext.gd")
 
 var _inspector: CardInspectionLayer
 
@@ -53,10 +54,14 @@ func _offer_signo_amarillo_for_step_d(stack_obj: Dictionary) -> void:
 	var scheduled_for_generation: int = PriorityManager._window_generation
 	PriorityManager.suppress_human_autopass = true
 	var ability_name: String = stack_obj.get("name", "esta habilidad")
+	# Responde el jugador 0 con su Signo Amarillo, no quien controla el objeto de la Pila (detector de
+	# paridad, EffectContext).
+	var ctx_token: int = EffectContextScript.push(signo_card, 0, "respuesta")
 	var use_it: bool = await SelectionManager.await_two_choice(
 		_inspector._main,
 		"¿Convertir %s en un Oro sin habilidad para cancelar %s?" % [str(signo_card.card_name), ability_name],
 		"Sí, cancelar", "No")
+	EffectContextScript.pop(ctx_token)
 	if PriorityManager._window_generation == scheduled_for_generation:
 		PriorityManager.suppress_human_autopass = false
 	if not use_it:

@@ -11,6 +11,8 @@ class_name EffectContext
 ## elige/paga el jugador 0, imprime "[PARIDAD]" con la carta y lo pedido: casi siempre un patrón
 ## viejo escrito solo para el Anfitrión. Es heurístico (hay casos legítimos: "tu oponente elige",
 ## prevenciones del rival), así que solo avisa. Funciona también contra el bot.
+## Las respuestas del rival a un efecto (Signo Amarillo en el Paso D, Colapso Global) empujan su propio
+## contexto ("respuesta", controlado por quien responde): sus elecciones no se avisan.
 ## Ventana de respuesta única por efecto (§59: el rival responde después de que se declaran los
 ## objetivos). Cada entrada lleva 'window': "pending", "done" o "cancelled".
 ## TriggerSystem.open_response_window() la consulta: si ya se abrió no abre otra; si estaba

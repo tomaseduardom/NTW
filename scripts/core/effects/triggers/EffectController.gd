@@ -198,10 +198,26 @@ func offer_colapso_global(searcher_id: int) -> bool:
 			break
 	if colapso == null:
 		return false
+	# Responde la víctima: lo que elige y paga es suyo, aunque la búsqueda sea del otro (EffectContext,
+	# detector de paridad).
+	var ctx_token: int = EffectContextScript.push(colapso, victim, "respuesta")
+	var cdata: Dictionary = await _respond_colapso_global(main, colapso, hand, searcher_id, victim)
+	EffectContextScript.pop(ctx_token)
+	if cdata.is_empty():
+		return false
+	# Fuera de la respuesta: el aviso es para quien buscaba.
+	if not PlayerSideScript.is_bot(searcher_id):
+		SelectionManager.open_reveal([cdata], "Tu oponente jugó Colapso Global: se previene tu búsqueda", searcher_id)
+	await ActionModule.draw(victim, 1, "Colapso Global", true)
+	return true
+
+
+## Colapso Global jugado (sus datos) o {} si no se respondió.
+func _respond_colapso_global(main: Node, colapso: Node, hand: Array, searcher_id: int, victim: int) -> Dictionary:
 	var others: Array = hand.filter(func(c): return c != colapso)
 	var can_pay: bool = main._gold_manager.puede_pagar(int(colapso.get("card_cost")), Constants.CardType.TALISMAN, "", -1, victim)
 	if others.is_empty() and not can_pay:
-		return false
+		return {}
 	var use_banish: bool = not others.is_empty()
 	if PlayerSideScript.is_bot(victim):
 		pass  # el bot lo usa siempre que puede
@@ -210,7 +226,7 @@ func offer_colapso_global(searcher_id: int) -> bool:
 		var label_pay := "Jugar Colapso Global pagando %d Oro" % int(colapso.get("card_cost"))
 		if not await SelectionManager.await_two_choice(main, "Tu oponente va a mirar tu mano o buscar cartas",
 				label_banish if use_banish else label_pay, "No responder", victim):
-			return false
+			return {}
 		if use_banish and can_pay:
 			use_banish = await SelectionManager.await_two_choice(main, "Colapso Global", label_banish, label_pay, victim)
 	if use_banish:
@@ -219,7 +235,7 @@ func offer_colapso_global(searcher_id: int) -> bool:
 			paid = await main._card_interaction.await_target("Colapso Global: Destierra una carta de tu mano",
 				func(c: Node) -> bool: return c in others, false, victim)
 		if paid == null or not is_instance_valid(paid):
-			return false
+			return {}
 		var pdata: Dictionary = paid.card_data.duplicate()
 		PlayerSideScript.remove_from_hand(main, victim, paid)
 		if is_instance_valid(paid):
@@ -240,10 +256,7 @@ func offer_colapso_global(searcher_id: int) -> bool:
 	# Que se vea en la mesa: si no, quien buscaba solo ve que su efecto no hizo nada (ángel redentor).
 	CombatLog.add_entry("search", "%s juega %s: se previene que %s mire su mano o busque cartas" % [
 		CombatLog.format_player(victim), CombatLog.format_card(str(cdata.get("nombre", "Colapso Global"))), CombatLog.format_player(searcher_id)])
-	if not PlayerSideScript.is_bot(searcher_id):
-		SelectionManager.open_reveal([cdata], "Tu oponente jugó Colapso Global: se previene tu búsqueda", searcher_id)
-	await ActionModule.draw(victim, 1, "Colapso Global", true)
-	return true
+	return cdata
 
 
 ## Prevenir daño al Castillo con un Oro:

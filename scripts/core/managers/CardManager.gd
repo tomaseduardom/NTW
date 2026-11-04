@@ -389,7 +389,8 @@ func _move_equipped_weapons_with(player_id: int, card: Node, mover: Callable) ->
 	for weapon in card.equipped_weapons.duplicate():
 		if not is_instance_valid(weapon):
 			continue
-		if player_id == 0 and _weapon_survives_wielder_death(weapon):
+		# Elige quien controla el Arma: el Anfitrión, el Remoto (por red) o el bot.
+		if _weapon_survives_wielder_death(weapon):
 			await _resolve_weapon_survives_wielder(weapon)
 			continue
 		# Al Cementerio/Destierro de SU dueño: un Arma propia portada por un Aliado rival no va al del
@@ -409,8 +410,8 @@ func _weapon_survives_wielder_death(weapon: Node) -> bool:
 
 func _resolve_weapon_survives_wielder(weapon: Node) -> void:
 	""""Cuando el portador fuera a salir del juego, súbela a tu mano o cámbiala de portador" (p.ej.
-	Aho): reemplaza la regla de que el Arma sigue a su portador. Solo elige el humano; para el
-	rival se aplica la regla por defecto."""
+	Aho): reemplaza la regla de que el Arma sigue a su portador. Elige quien la controla (pid): el
+	Anfitrión, el Remoto (await_two_choice/await_target la delegan por red) o el bot (a la mano)."""
 	var main := get_node_or_null("/root/Main")
 	if not main:
 		return
@@ -426,6 +427,9 @@ func _resolve_weapon_survives_wielder(weapon: Node) -> void:
 	var other_wielders: Array = []
 	if main._gold_manager and main._gold_manager.has_method("_get_eligible_weapon_wielders"):
 		other_wielders = main._gold_manager._get_eligible_weapon_wielders()
+	# El portador que sale del juego no cuenta, aunque tenga lugar para otra Arma.
+	var dying = weapon.get_parent()
+	other_wielders.erase(dying)
 
 	var to_hand := true
 	if not other_wielders.is_empty() and not PlayerSide.is_bot(pid):

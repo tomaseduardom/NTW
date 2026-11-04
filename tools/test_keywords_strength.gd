@@ -148,7 +148,7 @@ func _run() -> void:
 	_parser_cases()
 	for test in [_printed_and_weapons, _conditional_keywords, _silence, _removal_auras, _strength_auras,
 			_parser_guard, _exhumar, _mass_buff, _event_triggers, _real_equip, _combat_rules, _santos, _keyword_grants, _per_each, _badge_refresh, _if_annulled, _turn_end, _no_shuffle,
-			_castle_locks, _hand_lock, _affect_tax, _crono_diamante, _compiled_choices, _batch5, _sandraudiga, _cuervo_nocturno, _amazona_fase_final, _iga_ryu, _estacion_fantasma, _corte_letal, _camilo_castle_look, _activated_costs, _compiled_prevention, _sariel_enfrentados]:
+			_castle_locks, _hand_lock, _affect_tax, _crono_diamante, _compiled_choices, _batch5, _sandraudiga, _cuervo_nocturno, _amazona_fase_final, _iga_ryu, _estacion_fantasma, _corte_letal, _camilo_castle_look, _activated_costs, _compiled_prevention, _sariel_enfrentados, _aura_solo_aliados]:
 		reset()
 		await test.call()
 	reset()
@@ -1190,3 +1190,14 @@ func _camilo_castle_look() -> void:
 	check("camilo henriquez: Destierra y luego mira cuatro (dos al Destierro, dos a la mano)",
 		[ok, main._opponent_fan.cards.size() - hand_before, CardManager.get_exile(1).size() - exile_before],
 		[true, 2, 2])
+
+
+func _aura_solo_aliados() -> void:
+	# Las auras de Fuerza sin filtro de tipo eran para todo lo que estuviera en juego: un Talismán que se
+	# resolvía en la Línea de Apoyo o un Tótem también "ganaban" o "perdían" Fuerza.
+	put(fake("Fuente", 2, 2, "Tus Aliados ganan 1 de Fuerza."), 0)
+	var ally := put(fake("Aliado", 2, 2), 0)
+	var talisman := put(fake("Talisman", 1, 0, "", "", Constants.CardType.TALISMAN), 0, "apoyo")
+	var totem := put(fake("Totem", 1, 0, "", "", Constants.CardType.TOTEM), 0, "apoyo")
+	check("aura de Fuerza: el Aliado la recibe", strength(ally), 3)
+	check("aura de Fuerza: un Talismán o Tótem no", [strength(talisman), strength(totem)], [0, 0])

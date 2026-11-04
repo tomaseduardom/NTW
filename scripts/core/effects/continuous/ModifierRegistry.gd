@@ -430,6 +430,12 @@ func _card_matches_global_target(card: Node, target_type: String, modifier: Dict
 	"""Verifica si una carta coincide con un target global"""
 	var source = modifier.source
 	var filter = modifier.filter
+	# Las auras de Fuerza ("Tus Aliados ganan...", "Los Aliados oponentes pierden...") son de Aliados: sin
+	# filtro de tipo, un Talismán que se resolvía en la Línea de Apoyo o un Arma también las recibían.
+	if modifier.get("stat") == "strength" and target_type.to_upper() not in ["SELF", "ESTA"] \
+			and not (filter is Dictionary and filter.has("type")) \
+			and card and card.get("card_type") != Constants.CardType.ALIADO:
+		return false
 
 	match target_type.to_upper():
 		"ALL":

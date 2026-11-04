@@ -43,7 +43,7 @@ func _ready() -> void:
 	NetworkClient.sim_force_ui = true  # ventanas propias (BoardChoice, RevealWindow...): opción por defecto
 	_driving = true
 	for test in [_robar_talisman, _robar_aliado, _destruir, _destruir_con_filtro, _desterrar, _subir_a_la_mano,
-			_descartar, _descartar_talismanes, _pagar_y_reagrupar, _anular_en_respuesta, _arma_en_aliado_rival]:
+			_descartar, _descartar_talismanes, _pagar_y_reagrupar, _anular_en_respuesta, _arma_en_aliado_rival, _arma_sobrevive_del_rival]:
 		await clear_board()
 		await test.call()
 		await settle()
@@ -380,3 +380,20 @@ func _arma_en_aliado_rival() -> void:
 	check("Arma propia en Aliado rival: cada carta al Cementerio de su dueño",
 		[zone_names(CardManager.get_cemetery(1)), zone_names(CardManager.get_cemetery(0)).has("Arma propia")],
 		[["Portador rival"], true])
+
+
+func _arma_sobrevive_del_rival() -> void:
+	# Paridad: "Cuando el portador fuera a salir del juego, súbela a tu mano o cámbiala de portador" (Aho)
+	# solo se aplicaba al jugador 0; la del jugador 1 (bot o Remoto) seguía a su portador al Cementerio.
+	var ally := put(fake("Portador", 2, 2), 1)
+	var weapon: Node = main._create_card(fake("Arma fiel", 1, 0,
+		"Cuando el portador fuera a salir del juego, súbela a tu mano o cámbiala de portador.", Constants.CardType.ARMA), false)
+	weapon.owner_id = 1
+	weapon.controller_id = 1
+	main._connect_card_signals(weapon)
+	await main._gold_manager._equip_weapon(weapon, ally, false)
+	await settle()
+	pick(["Portador"])
+	await play_free(data("Bola de Fuego"))
+	check("Arma que sobrevive al portador, del jugador 1: vuelve a su mano",
+		[zone_names(CardManager.get_cemetery(1)), hand_names(1)], [["Portador"], ["Arma fiel"]])
