@@ -2,6 +2,7 @@ extends EasyBotController
 class_name RemotePlayerController
 
 const PhaseStartWindowScript = preload("res://scripts/core/game/PhaseStartWindow.gd")
+const PlayableGlowScript = preload("res://scripts/core/game/PlayableGlow.gd")
 const BlockScript = preload("res://scripts/core/effects/triggers/BlockPatterns.gd")  # bloquear a varios (Elías)
 ## RemotePlayerController — reemplaza a EasyBotController cuando el jugador 1 es una persona
 ## conectada por red (NetworkClient). Extiende EasyBotController y sobreescribe cada punto de
@@ -413,7 +414,13 @@ func _collect_activatable_abilities() -> Array:
 		# usable_abilities_for() ya descarta las que no controla el jugador 1
 		# (controller_id), así que las del lado del Anfitrión solo entran si
 		# el Remoto las controla (p.ej. jugadas con Miguel).
+		var in_hand: bool = card.get("current_zone") == Constants.Zone.MANO
 		for entry in _main._card_inspector.usable_abilities_for(card, 1):
+			# Desde la mano, Anular/Cancelar solo si hay algo que afectar (Espada Vikinga): así brilla lo
+			# mismo que en la mano del Anfitrión (PlayableGlow.hand_abilities()).
+			if in_hand and not PlayableGlowScript._annul_clause_has_target(card,
+					str(entry.ability.get("raw_text", "")).to_lower(), 1):
+				continue
 			candidates.append({"card": card, "ability": entry.ability})
 	return candidates
 
@@ -670,19 +677,8 @@ func _playable_talismans_now(response_only: bool) -> Array:
 	"""Talismanes de la mano del Remoto que puede pagar y jugar en esta
 	ventana: solo los de respuesta instantánea (Red de Plata, Sacrificio
 	Solar...) en una Ventana de Respuesta; cualquiera en Guerra de Talismanes."""
-	var result: Array = []
-	var gm = _main._gold_manager
-	for c in _affordable_cards_in_hand([Constants.CardType.TALISMAN]):
-		var instant: bool = gm != null and gm._is_response_only_talisman(c)
-		if response_only and not instant:
-			continue
-		# Mismas condiciones que GoldManager.play_card() para el Anfitrión: un Talismán de Anular/Cancelar
-		# solo en respuesta a algo del rival que pueda Anular o Cancelar (en la Guerra no se ofrece).
-		if instant and not (gm._responding_to_opponent(1) and load("res://scripts/core/effects/triggers/Deck170Patterns.gd") \
-				.annul_response_has_target(c, str(c.get("card_ability")), 1)):
-			continue
-		result.append(c)
-	return result
+	# Mismo cálculo que el brillo de la mano del Anfitrión (PlayableGlow).
+	return PlayableGlowScript.response_talismans(_main, 1, response_only)
 
 
 func _block_options() -> Array:

@@ -709,6 +709,10 @@ func offer_prevention_for_player(target_owner_id: int, effect_source: Node, effe
 		var ability_text: String = str(card.card_ability) if card.get("card_ability") != null else ""
 		if ability_text.is_empty():
 			continue
+		# Una carta que se paga a sí misma para prevenir (Legión Paladín: "Puedes Desterrarlo para prevenir
+		# que un Aliado que controles salga del juego") no se previene a sí misma: igual sale del juego.
+		if applies_arg is Node and card == applies_arg and effect_tag == "leave_play":
+			continue
 		for entry in _prevention_registry:
 			var zones: String = str(entry.get("zones", "play"))
 			if from_hand and zones == "play":
@@ -743,6 +747,28 @@ func offer_prevention_for_player(target_owner_id: int, effect_source: Node, effe
 
 
 func _offer_prevention_choice(target_owner_id: int, candidates: Array) -> bool:
+	# Las cartas con las que puedes prevenir brillan en dorado mientras decides (en el Remoto, sus
+	# nodos espejados: op "glow_cards").
+	_glow_prevention_candidates(target_owner_id, candidates, true)
+	var prevented: bool = await _offer_prevention_choice_inner(target_owner_id, candidates)
+	_glow_prevention_candidates(target_owner_id, candidates, false)
+	return prevented
+
+
+func _glow_prevention_candidates(target_owner_id: int, candidates: Array, on: bool) -> void:
+	var ids: Array = []
+	for c in candidates:
+		var card = c.get("card")
+		if not is_instance_valid(card):
+			continue
+		ids.append(str(card.get_instance_id()))
+		if target_owner_id == 0 and card.has_method("set_activatable"):
+			card.set_activatable(on, CardBadges.GLOW_COLOR_GOLD, &"prevention")
+	if PlayerSideScript.is_remote(target_owner_id) and not ids.is_empty():
+		NetworkClient.send_message({"op": "glow_cards", "card_ids": ids, "on": on})
+
+
+func _offer_prevention_choice_inner(target_owner_id: int, candidates: Array) -> bool:
 	# Remoto: elige él, por red.
 	if PlayerSideScript.is_remote(target_owner_id):
 		var main_r := get_node_or_null("/root/Main")

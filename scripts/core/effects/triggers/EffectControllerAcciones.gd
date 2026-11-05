@@ -238,8 +238,10 @@ func destroy_card(player_id: int, card: Node, is_being_destroyed: bool = true, s
 	is_being_destroyed = false: GoldManager._play_talisman() reusa esta función para mandar un
 	Talismán resuelto al Cementerio (mismos contadores y señales); no es una destrucción en
 	términos DAR, así que solo cambia el texto del log.
-	Devuelve true si se destruyó."""
-	if await _try_consume_leave_play_prevention(player_id, card, source):
+	Devuelve true si se destruyó.
+	Sin destrucción en términos DAR (un Aliado Anulado al jugarse, un Talismán resuelto) no hay salida
+	del juego que prevenir: Legión Paladín ofrecía prevenir su propia Anulación con él mismo."""
+	if is_being_destroyed and await _try_consume_leave_play_prevention(player_id, card, source):
 		return false
 
 	# Guardar zona origen

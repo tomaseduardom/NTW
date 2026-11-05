@@ -3,6 +3,8 @@ class_name PhaseFlowController
 ## PhaseFlowController — Gestiona el ciclo de fases DAR, prioridad y flujo de turno.
 ## Se instancia como hijo de Main en _ready().
 
+const PlayableGlowScript = preload("res://scripts/core/game/PlayableGlow.gd")
+
 var _main: Node = null
 var _last_state_machine_phase: int = -1
 
@@ -226,6 +228,9 @@ func _on_priority_changed_glow(player_id: int) -> void:
 	el juego parecía trabado. Si la prioridad pasa al oponente (bot) dentro
 	de la misma ventana, el brillo se apaga hasta que vuelva a ser el turno
 	del humano de actuar."""
+	# Cartas de tu mano que puedes jugar en esta ventana: dorado si es una respuesta, celeste si es del
+	# comienzo de la fase (PlayableGlow).
+	PlayableGlowScript.refresh_hand(_main, 0)
 	# La visibilidad del botón depende de quién tiene la prioridad ahora (update_paso_button_state()):
 	# se refresca en cada cambio de prioridad dentro de la fase, no solo al cambiar de fase.
 	_main._game_hud.update_paso_button_state()
@@ -280,6 +285,7 @@ func _on_priority_window_closed_glow() -> void:
 	_main._game_hud.stop_paso_glow()
 	_main._game_hud.stop_paso_countdown()
 	_main._game_hud.update_paso_button_state()
+	PlayableGlowScript.refresh_hand(_main, 0)
 
 
 # =============================================================================

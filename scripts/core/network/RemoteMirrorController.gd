@@ -126,6 +126,12 @@ func _on_message(data: Dictionary) -> void:
 			_apply_zone_counts(data)
 		"zone_contents":
 			_apply_zone_contents(data)
+		"glow_cards":
+			# Cartas con las que el Remoto puede prevenir el efecto en curso (EffectController).
+			for id in data.get("card_ids", []):
+				var node: Node = _visible_node(str(id))
+				if node:
+					node.set_activatable(bool(data.get("on", false)), CardBadges.GLOW_COLOR_GOLD, &"prevention")
 		"effects":
 			if _main.get("_action_log_drawer"):
 				_main._action_log_drawer.set_remote_effects(data.get("items", []))

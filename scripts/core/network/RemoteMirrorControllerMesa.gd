@@ -53,7 +53,9 @@ func _show_priority_prompt(data: Dictionary) -> void:
 			var card_id: String = str(card.get("card_id", ""))
 			actions[card_id] = {"op": "intent", "kind": "priority_response", "window_id": window_id,
 				"action": "play", "card_id": card_id}
-		_set_hand_actions(actions)
+		# Como el Anfitrión (PlayableGlow): celeste lo del comienzo de la fase, dorado una respuesta.
+		var phase_start: bool = str(data.get("context", "")) == "Comienzo de Fase"
+		_set_hand_actions(actions, CardBadges.GLOW_COLOR_CELESTE if phase_start else CardBadges.GLOW_COLOR_GOLD)
 		if not abilities.is_empty() and not _start_ability_pick(abilities, respond, actions):
 			_build_response_panel(str(data.get("context", "")), abilities, timeout, respond, pass_action)
 		_set_remote_paso(button_text, true, pass_action)
@@ -121,13 +123,13 @@ func on_card_double_clicked(card: Node) -> void:
 	_send_intent_and_close(_hand_actions[card_id])
 
 
-func _set_hand_actions(actions: Dictionary) -> void:
+func _set_hand_actions(actions: Dictionary, color: Color = CardBadges.GLOW_COLOR_CELESTE) -> void:
 	_clear_hand_actions()
 	_hand_actions = actions
 	for card_id in _hand_actions:
 		var node: Node = _hand_card_nodes.get(card_id, null)
 		if node and is_instance_valid(node):
-			node.set_activatable(true, CardBadges.GLOW_COLOR_CELESTE, &"remote_playable")
+			node.set_activatable(true, color, &"remote_playable")
 
 
 func on_card_clicked(card: Node) -> void:

@@ -27,6 +27,8 @@ var _picks: Array = []
 var _annul_next := ""
 ## Se abrió el selector de zonas (una búsqueda en el Castillo o el Cementerio).
 var browse_opened := false
+## Se ofreció prevenir con una carta propia en juego (brilla con motivo "prevention").
+var prevention_offered := false
 ## Cada selección que se abrió: {prompt, validas (nombres)}.
 var prompts: Array = []
 
@@ -45,7 +47,7 @@ func _ready() -> void:
 	NetworkClient.sim_force_ui = true  # ventanas propias (BoardChoice, RevealWindow...): opción por defecto
 	_driving = true
 	for test in [_robar_talisman, _robar_aliado, _destruir, _destruir_con_filtro, _desterrar, _subir_a_la_mano,
-			_descartar, _descartar_talismanes, _pagar_y_reagrupar, _anular_en_respuesta, _arma_en_aliado_rival, _arma_sobrevive_del_rival, _colapso_global_con_respuesta, _colapso_global_anulado]:
+			_descartar, _descartar_talismanes, _pagar_y_reagrupar, _anular_en_respuesta, _arma_en_aliado_rival, _arma_sobrevive_del_rival, _colapso_global_con_respuesta, _colapso_global_anulado, _brillo_jugables, _brillo_espada_vikinga, _espada_vikinga_anula, _legion_paladin_anulado]:
 		await clear_board()
 		await test.call()
 		await settle()
@@ -93,6 +95,9 @@ func _process(_delta: float) -> void:
 
 
 func _answer() -> void:
+	for c in main.player_field.get_children():
+		if is_instance_valid(c) and c.get("_badges") and c._badges._activatable_reasons.has(&"prevention"):
+			prevention_offered = true
 	if main.get("_zone_browse_picker") and main._zone_browse_picker.is_active():
 		browse_opened = true
 		main._zone_browse_picker.skip_optional()
@@ -439,3 +444,79 @@ func _colapso_global_anulado() -> void:
 	# La búsqueda sigue: se abre la elección del Castillo de Guillatún (el guion no elige nada).
 	check("Colapso Global Anulado: la búsqueda sigue y el Talismán va al Cementerio",
 		[browse_opened, zone_names(CardManager.get_cemetery(1)).has("Colapso Global")], [true, true])
+
+
+func _brillo_jugables() -> void:
+	# Lo que se puede jugar fuera de la Vigilia brilla en la mano: celeste al comienzo de una fase,
+	# dorado una respuesta (PlayableGlow). Se mira apenas se abre la ventana (el guion pasa enseguida).
+	var Ctx = PriorityManager.PriorityContext
+	var al_comienzo: Node = PlayerSideScript.put_in_hand(main, 0, fake("Madrugador", 0, 1, "Puedes jugarlo al comienzo de cualquier Fase."))
+	var anular: Node = PlayerSideScript.put_in_hand(main, 0, fake("Anulacion", 0, 0, "Anula un Aliado.", Constants.CardType.TALISMAN))
+	var comun: Node = PlayerSideScript.put_in_hand(main, 0, fake("Comun", 0, 1))
+	var glow := func(c: Node): return c._badges._activatable_reasons.get(&"playable_now", null)
+	_driving = false
+	PriorityManager.start_priority_window(Ctx.PHASE_START, 0)
+	check("comienzo de fase: brilla en celeste lo que se puede jugar", [glow.call(al_comienzo), glow.call(comun)],
+		[CardBadges.GLOW_COLOR_CELESTE, null])
+	PriorityManager.force_close()
+	check("al cerrar la ventana se apaga", glow.call(al_comienzo), null)
+	ActionPipeline._stack.append({"id": 9101, "name": "Aliado rival", "card_data": {"nombre": "Aliado rival",
+		"tipo": Constants.CardType.ALIADO, "coste": 2}, "context": {"controller_id": 1, "window_kind": "carta"}})
+	PriorityManager.start_priority_window(Ctx.RESPONSE_WINDOW, 0, 1)
+	check("respuesta a una carta rival: la Anulación brilla en dorado", [glow.call(anular), glow.call(al_comienzo)],
+		[CardBadges.GLOW_COLOR_GOLD, null])
+	PriorityManager.force_close()
+	ActionPipeline._stack.clear()
+	_driving = true
+
+
+func _brillo_espada_vikinga() -> void:
+	# Espada Vikinga: "Puedes pagar un Oro y Desterrar esta carta de tu mano para Anular una carta de
+	# coste 1." Brilla en dorado en tu mano solo si en la Pila hay una carta rival de coste 1.
+	var Ctx = PriorityManager.PriorityContext
+	var espada: Node = PlayerSideScript.put_in_hand(main, 0, data("Espada Vikinga"))
+	var glow := func(c: Node): return c._badges._activatable_reasons.get(&"playable_now", null)
+	_driving = false
+	for coste in [3, 1]:
+		ActionPipeline._stack.append({"id": 9200 + coste, "name": "Aliado rival", "card_data": {"nombre": "Aliado rival",
+			"tipo": Constants.CardType.ALIADO, "coste": coste}, "context": {"controller_id": 1, "window_kind": "carta"}})
+		PriorityManager.start_priority_window(Ctx.RESPONSE_WINDOW, 0, 1)
+		check("Espada Vikinga en la mano, rival juega una carta de coste %d" % coste, glow.call(espada),
+			CardBadges.GLOW_COLOR_GOLD if coste == 1 else null)
+		PriorityManager.force_close()
+		ActionPipeline._stack.clear()
+	_driving = true
+
+
+func _espada_vikinga_anula() -> void:
+	# Su habilidad desde la mano ahora es una habilidad activada (antes no tenía botón): paga un Oro, se
+	# Destierra y Anula la carta de coste 1.
+	var espada: Node = PlayerSideScript.put_in_hand(main, 0, data("Espada Vikinga"))
+	# Un objeto de Pila completo: la Pila lo procesa de verdad cuando resuelve la habilidad.
+	var obj: Dictionary = ActionPipeline._create_stack_object(ActionPipeline.StackObjectType.TRIGGERED_ABILITY,
+		{"nombre": "Aliado rival", "tipo": Constants.CardType.ALIADO, "coste": 1}, {"controller_id": 1, "window_kind": "carta"})
+	ActionPipeline._stack.append(obj)
+	_driving = false
+	PriorityManager.start_priority_window(PriorityManager.PriorityContext.RESPONSE_WINDOW, 0, 1)
+	var usable: Array = main._card_inspector.usable_abilities_for(espada, 0)
+	check("Espada Vikinga: su habilidad desde la mano se puede usar", usable.size(), 1)
+	_driving = true
+	if not usable.is_empty():
+		await main._card_inspector.activate_ability_for(espada, usable[0].ability, 0)
+	await settle()
+	check("Espada Vikinga: Anula la carta y se Destierra",
+		[obj.get("was_annulled", false), zone_names(CardManager.get_exile(0)).has(str(data("Espada Vikinga").nombre))], [true, true])
+	PriorityManager.force_close()
+	await settle()
+
+
+func _legion_paladin_anulado() -> void:
+	# Anulado al jugarse, Legión Paladín no ofrece prevenir su salida con él mismo: no salió del juego,
+	# nunca entró.
+	prevention_offered = false
+	_annul_next = "legion paladin"
+	await play_free(data("legion paladin"))
+	_annul_next = ""
+	check("Legión Paladín Anulado: no se ofrece Prevención y va al Cementerio",
+		[prevention_offered, board_names(0), zone_names(CardManager.get_cemetery(0)).size()],
+		[false, [], 1])

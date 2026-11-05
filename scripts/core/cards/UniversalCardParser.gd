@@ -561,7 +561,9 @@ func parse_abilities(text: String, card_id: String = "") -> Array[Dictionary]:
 			or "puedes pagarlo" in lower_s)
 		# "Puedes Desterrarlo/Desterrarla..." (Legión Paladín, Ramón Freire; Estaca en femenino): coste de
 		# autodesterrarse, sin "una vez por turno" ni ':'.
-		var pays_self_banish: bool = "puedes desterrarlo" in lower_s or "puedes desterrarla" in lower_s
+		# Espada Vikinga: "Puedes pagar un Oro y Desterrar esta carta de tu mano para Anular...".
+		var pays_self_banish: bool = "puedes desterrarlo" in lower_s or "puedes desterrarla" in lower_s \
+			or "desterrar esta carta de tu mano" in lower_s
 		# "Puedes poner esta y otra carta de tu mano en el fondo de tu Castillo..." (Tyet): coste de
 		# mandar esta carta (+ otra) al fondo del mazo.
 		var pays_self_to_deck_bottom: bool = "poner esta" in lower_s and "fondo de tu castillo" in lower_s
