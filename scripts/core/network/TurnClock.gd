@@ -16,7 +16,7 @@ class_name TurnClock
 ## - Fase Final del jugador activo sin tiempo: FINAL_GRACE segundos para descartar por límite de
 ##   mano; después se descartan las primeras cartas de la izquierda.
 
-const TURN_SECONDS := 60.0
+const TURN_SECONDS := 120.0
 const OPP_SECONDS := 30.0
 const ACTION_BONUS := 2.0
 const FINAL_GRACE := 10.0
