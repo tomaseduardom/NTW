@@ -25,6 +25,8 @@ var _driving := false
 var _picks: Array = []
 ## Nombre del próximo objeto de la Pila que el rival Anula en su ventana de respuesta.
 var _annul_next := ""
+## Se abrió el selector de zonas (una búsqueda en el Castillo o el Cementerio).
+var browse_opened := false
 ## Cada selección que se abrió: {prompt, validas (nombres)}.
 var prompts: Array = []
 
@@ -43,7 +45,7 @@ func _ready() -> void:
 	NetworkClient.sim_force_ui = true  # ventanas propias (BoardChoice, RevealWindow...): opción por defecto
 	_driving = true
 	for test in [_robar_talisman, _robar_aliado, _destruir, _destruir_con_filtro, _desterrar, _subir_a_la_mano,
-			_descartar, _descartar_talismanes, _pagar_y_reagrupar, _anular_en_respuesta, _arma_en_aliado_rival, _arma_sobrevive_del_rival]:
+			_descartar, _descartar_talismanes, _pagar_y_reagrupar, _anular_en_respuesta, _arma_en_aliado_rival, _arma_sobrevive_del_rival, _colapso_global_con_respuesta, _colapso_global_anulado]:
 		await clear_board()
 		await test.call()
 		await settle()
@@ -91,6 +93,10 @@ func _process(_delta: float) -> void:
 
 
 func _answer() -> void:
+	if main.get("_zone_browse_picker") and main._zone_browse_picker.is_active():
+		browse_opened = true
+		main._zone_browse_picker.skip_optional()
+		return
 	var ci = main._card_interaction
 	var dialogs = SelectionManager._dialogs
 	if dialogs and dialogs._castillo_pick_active:
@@ -126,7 +132,7 @@ func _answer() -> void:
 		return
 	# El rival Anula el objeto en el tope de la Pila durante su ventana de respuesta (como StackAnnul.apply).
 	var top: Dictionary = ActionPipeline._get_stack_top()
-	if _annul_next != "" and str(top.get("name", "")) == _annul_next and PriorityManager.current_stack_controller == 0:
+	if _annul_next != "" and str(top.get("name", "")) == _annul_next:
 		top["was_annulled"] = true
 		top["annuller"] = {"nombre": "Prueba"}
 		_annul_next = ""
@@ -397,3 +403,39 @@ func _arma_sobrevive_del_rival() -> void:
 	await play_free(data("Bola de Fuego"))
 	check("Arma que sobrevive al portador, del jugador 1: vuelve a su mano",
 		[zone_names(CardManager.get_cemetery(1)), hand_names(1)], [["Portador"], ["Arma fiel"]])
+
+
+## Nombres de los objetos que pasaron por la Pila mientras corre 'body'.
+func stack_names(body: Callable) -> Array:
+	var names: Array = []
+	var on_added := func(obj: Dictionary): names.append(str(obj.get("name", "")))
+	ActionPipeline.stack_object_added.connect(on_added)
+	await body.call()
+	ActionPipeline.stack_object_added.disconnect(on_added)
+	return names
+
+
+func _colapso_global_con_respuesta() -> void:
+	# El rival previene la búsqueda con Colapso Global: es un Talismán jugado, así que quien buscaba
+	# tiene su ventana de respuesta (antes no había ninguna).
+	PlayerSideScript.put_in_hand(main, 1, data("Colapso Global"))
+	PlayerSideScript.put_in_hand(main, 1, fake("Para desterrar", 1, 1))
+	var names: Array = await stack_names(func(): await play_free(data("Guillatún")))
+	check("Colapso Global: abre una ventana de respuesta para quien buscaba",
+		names.any(func(n): return "Colapso Global" in n), true)
+	check("Colapso Global: previene la búsqueda y va al Cementerio",
+		[hand_names(0).size(), zone_names(CardManager.get_cemetery(1)).has("Colapso Global")], [0, true])
+
+
+func _colapso_global_anulado() -> void:
+	PlayerSideScript.put_in_hand(main, 1, data("Colapso Global"))
+	PlayerSideScript.put_in_hand(main, 1, fake("Para desterrar", 1, 1))
+	_annul_next = "efecto de Colapso Global (Talismán)"
+	browse_opened = false
+	NetworkClient.sim_force_ui = false  # que el selector del Castillo quede abierto y se vea
+	await play_free(data("Guillatún"))
+	NetworkClient.sim_force_ui = true
+	_annul_next = ""
+	# La búsqueda sigue: se abre la elección del Castillo de Guillatún (el guion no elige nada).
+	check("Colapso Global Anulado: la búsqueda sigue y el Talismán va al Cementerio",
+		[browse_opened, zone_names(CardManager.get_cemetery(1)).has("Colapso Global")], [true, true])

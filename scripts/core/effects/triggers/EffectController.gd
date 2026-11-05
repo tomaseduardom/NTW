@@ -199,8 +199,8 @@ func offer_colapso_global(searcher_id: int) -> bool:
 	if colapso == null:
 		return false
 	# Responde la víctima: lo que elige y paga es suyo, aunque la búsqueda sea del otro (EffectContext,
-	# detector de paridad).
-	var ctx_token: int = EffectContextScript.push(colapso, victim, "respuesta")
+	# detector de paridad). Su ventana de respuesta queda pendiente: se abre al jugarlo.
+	var ctx_token: int = EffectContextScript.push(colapso, victim, "Talismán", "pending")
 	var cdata: Dictionary = await _respond_colapso_global(main, colapso, hand, searcher_id, victim)
 	EffectContextScript.pop(ctx_token)
 	if cdata.is_empty():
@@ -247,11 +247,17 @@ func _respond_colapso_global(main: Node, colapso: Node, hand: Array, searcher_id
 		await main._gold_manager.pagar_coste(int(colapso.get("card_cost")), Constants.CardType.TALISMAN, "", -1, victim)
 	var cdata: Dictionary = colapso.card_data.duplicate()
 	PlayerSideScript.remove_from_hand(main, victim, colapso)
+	# Es un Talismán jugado: quien buscaba puede responderle (Anularlo) antes de que prevenga la búsqueda.
+	# Fuera de la mano mientras tanto, como cualquier Talismán en la Pila.
+	var annulled: bool = await TriggerSystem.open_response_window(colapso, str(cdata.get("nombre", "Colapso Global")), victim)
 	if is_instance_valid(colapso):
 		CardManager._disconnect_card_interaction_signals(colapso)
 		colapso.queue_free()
 	cdata["esta_oculta"] = false
 	CardManager.add_to_cemetery(victim, cdata)
+	if annulled:
+		main._update_debug("Colapso Global fue Anulado: la búsqueda sigue")
+		return {}
 	main._update_debug("Colapso Global: se previene la búsqueda o mirada del oponente")
 	# Que se vea en la mesa: si no, quien buscaba solo ve que su efecto no hizo nada (ángel redentor).
 	CombatLog.add_entry("search", "%s juega %s: se previene que %s mire su mano o busque cartas" % [

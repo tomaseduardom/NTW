@@ -75,6 +75,9 @@ const SYNC_POLL_S := 0.25
 var _sync_started: bool = false
 var _sync_poll: float = 0.0
 var _last_counts: Dictionary = {}
+var _last_contents_sig: String = ""
+var _last_effects_sig: String = ""
+var _effects_poll: float = 0.0
 var _pending_board_ids: Array = []
 var _last_board_ids: Array = []
 
@@ -86,6 +89,10 @@ func _process(delta: float) -> void:
 	if _sync_poll < SYNC_POLL_S:
 		return
 	_sync_poll = 0.0
+	_effects_poll += SYNC_POLL_S
+	if _effects_poll >= 1.0:
+		_effects_poll = 0.0
+		_sync_effects()
 	# "own"/"rival" relativos al Remoto (el jugador 1 del Anfitrión).
 	var counts := {
 		"rival_hand": _main.player_hand.cards.size() if _main.get("player_hand") else 0,
@@ -100,6 +107,7 @@ func _process(delta: float) -> void:
 		var msg := counts.duplicate()
 		msg["op"] = "zone_counts"
 		NetworkClient.send_message(msg)
+	_sync_zone_contents()
 	var ids: Array = []
 	for prop in WATCHED_CONTAINERS:
 		var container: Node = _main.get(prop)
@@ -291,3 +299,36 @@ func _send_disabled_cards() -> void:
 		return
 	_last_disabled_ids = ids
 	NetworkClient.send_message({"op": "disabled_cards", "card_ids": ids})
+
+
+func _sync_zone_contents() -> void:
+	"""Qué cartas hay en los Cementerios y Destierros (información pública): el visor de zonas del
+	Remoto las muestra desde su CardManager, que sin esto quedaba vacío. Se manda solo si cambió."""
+	var zones := {
+		"own_cemetery": CardManager.get_cemetery(1), "rival_cemetery": CardManager.get_cemetery(0),
+		"own_exile": CardManager.get_exile(1), "rival_exile": CardManager.get_exile(0),
+	}
+	var sig := ""
+	for k in zones:
+		sig += "%s:%s|" % [k, ",".join(zones[k].map(func(d): return str(d.get("id", d.get("nombre", "?")))))]
+	if sig == _last_contents_sig:
+		return
+	_last_contents_sig = sig
+	var msg := {"op": "zone_contents"}
+	for k in zones:
+		msg[k] = zones[k].map(func(d): return d.duplicate(true) if d is Dictionary else {})
+	NetworkClient.send_message(msg)
+
+
+func _sync_effects() -> void:
+	"""El panel de Efectos Activos del Remoto (ActionLogDrawer): sus Fuerzas, silencios y reglas los
+	calcula el Anfitrión. Una vez por segundo, solo si cambió."""
+	var drawer = _main.get("_action_log_drawer")
+	if not drawer or not drawer.has_method("export_for_remote"):
+		return
+	var items: Array = drawer.export_for_remote()
+	var sig := JSON.stringify(items)
+	if sig == _last_effects_sig:
+		return
+	_last_effects_sig = sig
+	NetworkClient.send_message({"op": "effects", "items": items})

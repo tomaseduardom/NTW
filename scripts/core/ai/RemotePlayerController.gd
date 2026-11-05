@@ -543,7 +543,7 @@ func on_priority_received() -> void:
 				talisman_cards.append_array(_affordable_cards_in_hand([Constants.CardType.ARMA]))
 		PriorityManager.PriorityContext.PHASE_START:
 			# Comienzo de fase: las cartas que su texto deja jugar ahora (PhaseStartWindow), cualquier tipo.
-			# 5 s, como el Anfitrión.
+			# TIMEOUT (10 s), como el Anfitrión.
 			timeout = PhaseStartWindowScript.TIMEOUT
 			talisman_cards = PhaseStartWindowScript.playable_cards(1)
 		PriorityManager.PriorityContext.BLOCK_DECLARATION:

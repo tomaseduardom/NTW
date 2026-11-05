@@ -124,6 +124,11 @@ func _on_message(data: Dictionary) -> void:
 				waiting.hide_loading()
 		"zone_counts":
 			_apply_zone_counts(data)
+		"zone_contents":
+			_apply_zone_contents(data)
+		"effects":
+			if _main.get("_action_log_drawer"):
+				_main._action_log_drawer.set_remote_effects(data.get("items", []))
 		"board_ids":
 			_apply_board_ids(data)
 		"dice_roll":
@@ -293,6 +298,21 @@ func _apply_zone_counts(data: Dictionary) -> void:
 		back.can_interact = false
 		back.drag_enabled = false
 		fan.add_card(back)
+
+
+## Cementerios y Destierros según el Anfitrión, en el CardManager local: de ahí los lee el visor de zonas
+## (ZoneViewerModule). "own" = el Remoto = su jugador 0.
+func _apply_zone_contents(data: Dictionary) -> void:
+	for pair in [["own_cemetery", 0, true], ["rival_cemetery", 1, true], ["own_exile", 0, false], ["rival_exile", 1, false]]:
+		var zone: Array = CardManager.get_cemetery(pair[1]) if pair[2] else CardManager.get_exile(pair[1])
+		zone.clear()
+		for d in data.get(pair[0], []):
+			if d is Dictionary:
+				zone.append(d)
+		if pair[2]:
+			CardManager._update_cemetery_visual(pair[1])
+		else:
+			CardManager._emit_exile_changed(pair[1])
 
 
 ## Cartas en juego según el Anfitrión: las que el Remoto todavía muestra y ya no están se borran (salieron

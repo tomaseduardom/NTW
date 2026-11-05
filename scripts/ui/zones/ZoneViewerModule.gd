@@ -581,6 +581,9 @@ func _create_popup_card(card_data: Dictionary, player_id: int, zone_type: String
 			_main._card_inspector.on_card_right_clicked(card)
 	)
 
+	# En el Remoto el visor solo muestra: jugar desde una zona lo decide el Anfitrión (sus prompts).
+	if UIManager.remote_mirror:
+		is_own_zone = false
 	var is_exhumable := is_own_zone and zone_type == "cemetery" and PaymentManager.card_has_exhumar(card_data, player_id)
 	var is_exile_playable := is_own_zone and zone_type == "exile" and PaymentManager.card_playable_from_exile(card_data)
 	var is_top_playable := is_own_zone and zone_type == "castillo_top" and CastleTopPlay.escritura_can_play(card_data, player_id)

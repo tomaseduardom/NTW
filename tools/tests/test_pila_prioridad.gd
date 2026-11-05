@@ -29,6 +29,7 @@ func _ready() -> void:
 	await _stack_annul()
 	await _stack_cancel()
 	await _stack_three_layers()
+	_annul_targets()
 	print("PilaPrioridad: %d/%d casos OK" % [passed, passed + failed])
 	get_tree().quit(1 if failed > 0 else 0)
 
@@ -240,3 +241,17 @@ func _stack_three_layers() -> void:
 	disconnect_record()
 	check("tres capas: C, B anulado, A", log, ["C:resuelto", "B:anulado", "A:resuelto"])
 	CardManager.get_cemetery(1).clear()
+
+
+func _annul_targets() -> void:
+	# Un Oro no se juega: su ventana no es una jugada que se pueda Anular (StackAnnul.find_target).
+	var StackAnnulScript = load("res://scripts/core/effects/StackAnnul.gd")
+	var oro := {"id": 9001, "name": "Oro", "card_data": {"nombre": "Oro", "tipo": Constants.CardType.ORO},
+		"context": {"controller_id": 0, "window_kind": "carta"}}
+	var aliado := {"id": 9002, "name": "Aliado", "card_data": {"nombre": "Aliado", "tipo": Constants.CardType.ALIADO},
+		"context": {"controller_id": 0, "window_kind": "carta"}}
+	ActionPipeline._stack.append(oro)
+	check("Anular: un Oro puesto en juego no se puede Anular", StackAnnulScript.find_target(1, true, false).is_empty(), true)
+	ActionPipeline._stack.append(aliado)
+	check("Anular: un Aliado jugado sí", StackAnnulScript.find_target(1, true, false).get("id", -1), 9002)
+	ActionPipeline._stack.clear()

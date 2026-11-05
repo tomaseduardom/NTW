@@ -61,6 +61,30 @@ func _input(event: InputEvent) -> void:
 			KEY_F12:
 				var dp = _main.get_node_or_null("UI/DebugPanel")
 				if dp: dp.visible = !dp.visible
+			KEY_ESCAPE:
+				# Igual que con Enter arriba: si la pantalla de fin de partida
+				# está visible, que sea ella la que decida qué hacer con
+				# Escape (ir al menú) en vez de abrir el Pausa Menu encima.
+				if _main._game_over_overlay and is_instance_valid(_main._game_over_overlay) and _main._game_over_overlay.visible:
+					return
+				get_viewport().set_input_as_handled()
+				if _main._card_inspector and _main._card_inspector.inspected_card:
+					_main._card_inspector.close_card_inspection()
+				elif _main._zone_browse_picker and _main._zone_browse_picker.has_method("_close_viewer") and _main._zone_browse_picker._viewer and is_instance_valid(_main._zone_browse_picker._viewer):
+					_main._zone_browse_picker._close_viewer()
+				elif _main._action_log_drawer and _main._action_log_drawer.is_open():
+					_main._action_log_drawer.close_drawer()
+				elif _main._card_interaction and _main._card_interaction.is_selecting_target:
+					_main._card_interaction.cancel_target_selection()
+				elif _main._card_interaction and _main._card_interaction.is_placing_gold:
+					_main._card_interaction.is_placing_gold = false
+					_main._update_debug("Modo Oro cancelado")
+				elif _main._remote_mirror and _main._remote_mirror.skip_optional():
+					pass  # Remoto: termina la selección opcional abierta, como en el Anfitrión
+				elif _main._scene_setup and _main._scene_setup.pause_menu and _main._scene_setup.pause_menu.is_open():
+					_main._scene_setup.pause_menu.handle_escape()
+				elif _main._scene_setup:
+					_main._scene_setup.toggle_pause_menu()
 			_:
 				# Atajos configurables por el usuario vía GameSettings
 				var key_pasar: int = GameSettings.get_key("pasar")
@@ -80,35 +104,12 @@ func _input(event: InputEvent) -> void:
 						_main._card_interaction.cancel_target_selection()
 						get_viewport().set_input_as_handled()
 					elif _main._remote_mirror and _main._remote_mirror.skip_optional():
-						_main._remote_mirror.skip_optional()
 						get_viewport().set_input_as_handled()
 				elif event.keycode == key_historial:
 					# Abrir/cerrar drawer de Historial y Estado de juego
 					if _main._action_log_drawer:
 						_main._action_log_drawer.toggle_drawer()
 						get_viewport().set_input_as_handled()
-			KEY_ESCAPE:
-				# Igual que con Enter arriba: si la pantalla de fin de partida
-				# está visible, que sea ella la que decida qué hacer con
-				# Escape (ir al menú) en vez de abrir el Pausa Menu encima.
-				if _main._game_over_overlay and is_instance_valid(_main._game_over_overlay) and _main._game_over_overlay.visible:
-					return
-				get_viewport().set_input_as_handled()
-				if _main._card_inspector and _main._card_inspector.inspected_card:
-					_main._card_inspector.close_card_inspection()
-				elif _main._zone_browse_picker and _main._zone_browse_picker.has_method("_close_viewer") and _main._zone_browse_picker._viewer and is_instance_valid(_main._zone_browse_picker._viewer):
-					_main._zone_browse_picker._close_viewer()
-				elif _main._action_log_drawer and _main._action_log_drawer.is_open():
-					_main._action_log_drawer.close_drawer()
-				elif _main._card_interaction and _main._card_interaction.is_selecting_target:
-					_main._card_interaction.cancel_target_selection()
-				elif _main._card_interaction and _main._card_interaction.is_placing_gold:
-					_main._card_interaction.is_placing_gold = false
-					_main._update_debug("Modo Oro cancelado")
-				elif _main._scene_setup and _main._scene_setup.pause_menu and _main._scene_setup.pause_menu.is_open():
-					_main._scene_setup.pause_menu.handle_escape()
-				elif _main._scene_setup:
-					_main._scene_setup.toggle_pause_menu()
 
 
 func _handle_enter_press() -> void:

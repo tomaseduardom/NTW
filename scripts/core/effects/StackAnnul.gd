@@ -2,7 +2,7 @@ extends RefCounted
 ## StackAnnul — Anular / Cancelar sobre la PILA real (docs/revision-mazo-170.md). Si en la pila hay
 ## un objeto del rival que el texto puede anular/cancelar, se marca y el dueño de esa ventana lo
 ## maneja:
-## - Anular una carta jugada (Aliado, Arma, Tótem, Oro con ventana, Talismán): no resuelve; el
+## - Anular una carta jugada (Aliado, Arma, Tótem, Talismán; un Oro no se juega, no se Anula): no resuelve; el
 ## Aliado ya en el tablero se destruye (sin su "Cuando entra en juego") y el Talismán va al
 ## Cementerio (GoldManager._trigger_enter_play / TriggerSystem.open_response_window).
 ## - Cancelar una habilidad (disparada o activada): no ocurre.
@@ -49,6 +49,10 @@ static func find_target(controller_id: int, want_card: bool, want_ability: bool,
 			continue
 		var card_play: bool = is_card_play(obj)
 		if (card_play and not want_card) or (not card_play and not want_ability):
+			continue
+		# Un Oro no se juega: se pone en juego, así que no hay jugada que Anular (sus habilidades sí se
+		# pueden Cancelar).
+		if card_play and type_of(obj) == Constants.CardType.ORO:
 			continue
 		if filter.is_valid() and not filter.call(obj):
 			continue

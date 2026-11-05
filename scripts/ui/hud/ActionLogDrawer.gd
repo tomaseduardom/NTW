@@ -411,6 +411,8 @@ func _collect_active_effects() -> Array[Dictionary]:
 	var list: Array[Dictionary] = []
 	if not _main:
 		return list
+	if UIManager.remote_mirror:
+		return _remote_effects_list()
 
 	# 1. TÓTEMS EN LÍNEA DE APOYO (Tuyo y Rival)
 	for side_id in [0, 1]:
@@ -908,3 +910,50 @@ func _inspect_card_from_log(card_name: String, card_node: Node = null) -> void:
 			_main._card_inspector.inspect_card(card_node)
 		elif not card_name.is_empty():
 			_main._card_inspector.inspect_card_by_name(card_name)
+
+
+# =============================================================================
+# REMOTO: la lista la calcula el Anfitrión (sus Fuerzas, silencios y reglas no existen en el Remoto)
+# =============================================================================
+## Lo último que mandó el Anfitrión (GameStateBroadcaster, op "effects"), ya desde el lado del Remoto.
+var _remote_effects: Array = []
+
+
+func export_for_remote() -> Array:
+	"""La lista de efectos vista desde el Remoto, para mandarla por red: la carta por su id de nodo
+	(el que usa RemoteMirrorController._card_nodes), el color como texto y TUYO/RIVAL invertidos."""
+	var out: Array = []
+	for e in _collect_active_effects():
+		var node = e.get("card_node")
+		out.append({
+			"card_ref": str(node.get_instance_id()) if node is Node and is_instance_valid(node) else "",
+			"card_id": str(e.get("card_id", "")),
+			"card_name": str(e.get("card_name", "")),
+			"controller_id": 1 - int(e.get("controller_id", 0)),
+			"category": str(e.get("category", "")),
+			"badge_color": (e.get("badge_color", Color.WHITE) as Color).to_html(),
+			"summary": str(e.get("summary", "")),
+			"details": (e.get("details", []) as Array).map(func(d): return str(d)),
+		})
+	return out
+
+
+func set_remote_effects(items: Array) -> void:
+	_remote_effects = items
+	if _is_open:
+		_refresh_feed()
+
+
+func _remote_effects_list() -> Array[Dictionary]:
+	var list: Array[Dictionary] = []
+	var nodes: Dictionary = _main._remote_mirror._card_nodes if _main.get("_remote_mirror") else {}
+	for e in _remote_effects:
+		if not e is Dictionary:
+			continue
+		var d: Dictionary = e.duplicate()
+		var node = nodes.get(str(e.get("card_ref", "")))
+		d["card_node"] = node if is_instance_valid(node) else null
+		d["badge_color"] = Color.html(str(e.get("badge_color", "ffffff")))
+		d["controller_id"] = int(e.get("controller_id", 0))
+		list.append(d)
+	return list

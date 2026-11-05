@@ -330,6 +330,10 @@ func _auto_resolve_host() -> void:
 func _p1_brain(kinds: Array) -> Dictionary:
 	var prompt: Dictionary = NetworkClient.last_prompt
 	var turn: int = GameManager.turn_serial
+	# Comienzo de fase con cartas jugables: decide el Remoto de verdad (_remote_phase_start_play()).
+	if "priority_response" in kinds and str(prompt.get("kind", "")) == "priority" \
+			and str(prompt.get("context", "")) == "Comienzo de Fase" and not (prompt.get("talismans", []) as Array).is_empty():
+		return {}
 	if "play_card" in kinds or "place_gold" in kinds:
 		var used: int = int(_p1_actions.get(turn, 0))
 		var golds: Array = prompt.get("gold_candidates", [])
@@ -658,6 +662,9 @@ func _on_remote_message(data: Dictionary) -> void:
 		"sim_end":
 			result["anfitrion"] = data.get("result", {})
 			_end("fin (aviso del Anfitrión)")
+		"prompt":
+			if str(data.get("kind", "")) == "priority" and str(data.get("context", "")) == "Comienzo de Fase":
+				_remote_phase_start_play(data)
 
 
 func _compare(data: Dictionary) -> void:
@@ -749,3 +756,18 @@ func _finish(reason: String) -> void:
 	f.close()
 	print("SIM FIN: %s ganador=%d turnos=%d" % [reason, _winner, GameManager.current_turn])
 	get_tree().quit(0)
+
+
+func _remote_phase_start_play(data: Dictionary) -> void:
+	"""Remoto: en el comienzo de una fase juega la primera carta que el Anfitrión ofrece, con el doble
+	clic de su mano real (RemoteMirrorController.on_card_double_clicked)."""
+	var cards: Array = data.get("talismans", [])
+	if cards.is_empty():
+		return
+	await get_tree().create_timer(0.3).timeout
+	var id := str(cards[0].get("card_id", ""))
+	var node = main._remote_mirror._hand_card_nodes.get(id)
+	print("SIM FASE: el Remoto juega %s al comienzo de %s (nodo en su mano: %s)" % [
+		str(cards[0].get("nombre", "?")), str(data.get("context", "")), str(is_instance_valid(node))])
+	if is_instance_valid(node):
+		main._remote_mirror.on_card_double_clicked(node)

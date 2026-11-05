@@ -18,7 +18,7 @@ extends RefCounted
 ## Se usa con preload / load.
 
 const PlayerSideScript = preload("res://scripts/core/game/PlayerSide.gd")
-const TIMEOUT := 5.0
+const TIMEOUT := 10.0  # el Anfitrión y el Remoto (con la demora de red) deciden si juegan algo
 
 static var _running: bool = false
 static var _phase: int = -1
@@ -196,7 +196,7 @@ static func run(phase: int) -> void:
 
 
 ## Quién decide en la ventana (PriorityManager.priority_changed): el bot juega
-## una carta si puede, si no pasa; el Anfitrión tiene 5 s.
+## una carta si puede, si no pasa; el Anfitrión tiene TIMEOUT (10 s).
 static func on_priority(pid: int) -> void:
 	if not _running or PriorityManager.current_priority_context != PriorityManager.PriorityContext.PHASE_START:
 		return
